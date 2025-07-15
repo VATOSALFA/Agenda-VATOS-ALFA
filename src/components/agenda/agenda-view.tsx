@@ -15,7 +15,10 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store } from 'lucide-react';
+import { format, addDays, subDays } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
 
 const barbers = [
   { id: 1, name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
@@ -55,7 +58,10 @@ export default function AgendaView() {
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
   const HOURLY_SLOT_HEIGHT = 48; // in pixels, corresponds to h-12
-  const HALF_HOUR_HEIGHT = HOURLY_SLOT_HEIGHT / 2;
+  
+  const handleSetToday = () => setDate(new Date());
+  const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
+  const handleNextDay = () => setDate(d => addDays(d || new Date(), 1));
 
   const calculatePosition = (start: number, duration: number) => {
     const top = (start - 9) * HOURLY_SLOT_HEIGHT;
@@ -63,8 +69,12 @@ export default function AgendaView() {
     return { top: `${top}px`, height: `${height}px` };
   };
 
+  const selectedDateFormatted = date 
+    ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
+    : '';
+
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-slate-50">
+    <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]">
       <aside className="w-full lg:w-80 space-y-6 flex-shrink-0">
         <Card className="shadow-md bg-white rounded-lg">
             <CardContent className="p-2">
@@ -73,6 +83,7 @@ export default function AgendaView() {
                     selected={date}
                     onSelect={setDate}
                     className="rounded-md"
+                    locale={es}
                     components={{
                       IconLeft: () => <ChevronLeft className="h-4 w-4" />,
                       IconRight: () => <ChevronRight className="h-4 w-4" />,
@@ -114,14 +125,32 @@ export default function AgendaView() {
             </CardContent>
         </Card>
       </aside>
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col">
+        {/* Agenda Navigation Header */}
+        <div className="flex items-center gap-4 mb-4 pb-4 border-b">
+            <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
+            <div className='flex items-center gap-2'>
+                 <Button variant="ghost" size="icon" onClick={handlePrevDay}>
+                    <ChevronLeft className="h-5 w-5" />
+                </Button>
+                 <Button variant="ghost" size="icon" onClick={handleNextDay}>
+                    <ChevronRight className="h-5 w-5" />
+                </Button>
+            </div>
+            <div>
+                 <h2 className="text-lg font-semibold text-[#202A49] capitalize">{selectedDateFormatted}</h2>
+                 <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Store className='w-4 h-4'/> VATOS ALFA Principal
+                 </p>
+            </div>
+        </div>
         <ScrollArea className="h-full">
             <div className="flex">
                 {/* Time Column */}
-                <div className="sticky left-0 z-20 bg-slate-50 w-16 flex-shrink-0">
-                     <div className="h-20 border-b">&nbsp;</div> {/* Header Spacer */}
+                <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
+                     <div className="h-20 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                      {hours.map((hour) => (
-                        <div key={hour} className="h-[48px] text-right pr-2 border-b">
+                        <div key={hour} className="h-[48px] text-right pr-2 border-b border-border">
                             <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                         </div>
                     ))}
@@ -153,7 +182,7 @@ export default function AgendaView() {
                             <div className="relative bg-white/60">
                                 {/* Background Grid Lines */}
                                 {hours.map((hour) => (
-                                    <div key={hour} className="h-[48px] border-b"></div>
+                                    <div key={hour} className="h-[48px] border-b border-border"></div>
                                 ))}
 
                                 {/* Appointments */}

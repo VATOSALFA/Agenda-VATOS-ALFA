@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -50,11 +51,11 @@ interface CartItem { id: string; nombre: string; precio: number; cantidad: numbe
 
 // Hardcoded services for now
 const services: Service[] = [
-  { id: 'serv_01', name: 'Corte clásico', precio: 10000 },
-  { id: 'serv_02', name: 'Fade', precio: 15000 },
-  { id: 'serv_03', name: 'Afeitado', precio: 8000 },
-  { id: 'serv_04', name: 'Diseño de cejas', precio: 5000 },
-  { id: 'serv_05', name: 'Paquete VIP', precio: 25000 },
+  { id: 'serv_01', nombre: 'Corte clásico', precio: 10000 },
+  { id: 'serv_02', nombre: 'Fade', precio: 15000 },
+  { id: 'serv_03', nombre: 'Afeitado', precio: 8000 },
+  { id: 'serv_04', nombre: 'Diseño de cejas', precio: 5000 },
+  { id: 'serv_05', nombre: 'Paquete VIP', precio: 25000 },
 ];
 
 const saleSchema = z.object({
@@ -130,6 +131,13 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     }
     setStep(2);
   };
+
+  const form = useForm<SaleFormData>({
+    resolver: zodResolver(saleSchema),
+    defaultValues: {
+        notas: '',
+    },
+  });
 
   const resetFlow = () => {
     setCart([]);

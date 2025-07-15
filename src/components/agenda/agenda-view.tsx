@@ -38,26 +38,11 @@ const appointments = [
     { id: 7, barberId: 3, customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-gray-200 border-gray-400 text-gray-800' },
 ];
 
-const TimeSlot = ({ hour }: { hour: number }) => (
-  <div className="h-[48px] border-b border-border text-right pr-2">
-    <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
-  </div>
-);
-
-const HourGridLines = ({ hours }: { hours: number[] }) => (
-    <div className="col-start-1 col-end-2 row-start-2">
-        {hours.map((hour) => (
-             <div key={hour} className="h-[48px] border-b border-border"></div>
-        ))}
-    </div>
-);
-
-
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
-  const HOURLY_SLOT_HEIGHT = 48; // in pixels, corresponds to h-12
+  const HOURLY_SLOT_HEIGHT = 48; // in pixels, corresponds to h-[48px]
   
   const handleSetToday = () => setDate(new Date());
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
@@ -127,7 +112,7 @@ export default function AgendaView() {
       </aside>
       <main className="flex-1 flex flex-col">
         {/* Agenda Navigation Header */}
-        <div className="flex items-center gap-4 mb-4 pb-4 border-b">
+        <div className="flex items-center gap-4 mb-4 pb-4 border-b h-[90px]">
             <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
             <div className='flex items-center gap-2'>
                  <Button variant="ghost" size="icon" onClick={handlePrevDay}>
@@ -138,7 +123,7 @@ export default function AgendaView() {
                 </Button>
             </div>
             <div>
-                 <h2 className="text-lg font-semibold text-[#202A49] capitalize">{selectedDateFormatted}</h2>
+                 <h2 className="text-xl font-semibold text-[#202A49] capitalize">{selectedDateFormatted}</h2>
                  <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Store className='w-4 h-4'/> VATOS ALFA Principal
                  </p>
@@ -148,7 +133,7 @@ export default function AgendaView() {
             <div className="flex">
                 {/* Time Column */}
                 <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
-                     <div className="h-20 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
+                     <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                      {hours.map((hour) => (
                         <div key={hour} className="h-[48px] text-right pr-2 border-b border-border">
                             <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
@@ -161,13 +146,13 @@ export default function AgendaView() {
                     {barbers.map((barber) => (
                         <div key={barber.id} className="w-64 flex-shrink-0">
                             {/* Barber Header */}
-                            <div className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-20">
-                                <Avatar className="h-10 w-10">
+                            <div className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14">
+                                <Avatar className="h-8 w-8">
                                     <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                     <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <p className="font-semibold text-base text-gray-800">{barber.name}</p>
+                                    <p className="font-semibold text-sm text-gray-800">{barber.name}</p>
                                     <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} 
                                         className={cn(
                                             'text-xs py-0.5 px-2 font-medium',

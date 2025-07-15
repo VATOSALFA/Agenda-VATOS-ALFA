@@ -13,16 +13,25 @@ import type { Client } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
+import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+
+  const handleViewDetails = (client: Client) => {
+    setSelectedClient(client);
+    setIsDetailModalOpen(true);
+  };
 
   const filteredClients = clients.filter(client =>
     (client.nombre.toLowerCase() + ' ' + client.apellido.toLowerCase()).includes(searchTerm.toLowerCase()) ||
-    client.telefono.includes(searchTerm) ||
-    client.correo.toLowerCase().includes(searchTerm.toLowerCase())
+    (client.telefono && client.telefono.includes(searchTerm)) ||
+    (client.correo && client.correo.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -90,13 +99,15 @@ export default function ClientsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Ver Ficha</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewDetails(client)}>Ver Ficha</DropdownMenuItem>
                           <DropdownMenuItem>Editar</DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <a href={`https://wa.me/${client.telefono.replace(/\s+/g, '')}`} target="_blank" rel="noopener noreferrer">
-                              Enviar WhatsApp
-                            </a>
-                          </DropdownMenuItem>
+                          {client.telefono && (
+                            <DropdownMenuItem>
+                              <a href={`https://wa.me/${client.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
+                                Enviar WhatsApp
+                              </a>
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem className="text-destructive hover:!text-destructive">Eliminar</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -114,6 +125,14 @@ export default function ClientsPage() {
             <NewClientForm onFormSubmit={() => setIsClientModalOpen(false)} />
         </DialogContent>
       </Dialog>
+      
+      {selectedClient && (
+        <ClientDetailModal 
+          client={selectedClient} 
+          isOpen={isDetailModalOpen} 
+          onOpenChange={setIsDetailModalOpen}
+        />
+      )}
     </>
   );
 }

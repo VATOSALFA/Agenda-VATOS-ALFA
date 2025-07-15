@@ -1,11 +1,12 @@
 
+
 export interface Client {
   id: string;
   nombre: string;
   apellido: string;
   correo: string;
   telefono: string;
-  fecha_nacimiento?: string;
+  fecha_nacimiento?: string | { seconds: number; nanoseconds: number; };
   notas?: string;
   creado_en: any; // Firestore Timestamp
 }

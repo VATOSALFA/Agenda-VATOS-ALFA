@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
+import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
 import { format } from "date-fns";
 import { es } from 'date-fns/locale';
 import {
@@ -41,11 +42,11 @@ export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const { toast } = useToast();
 
-  // We add a state to force re-render after deletion
   const [queryKey, setQueryKey] = useState(0);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
@@ -63,7 +64,6 @@ export default function ClientsPage() {
         title: "Cliente Eliminado",
         description: `${clientToDelete.nombre} ${clientToDelete.apellido} ha sido eliminado permanentemente.`,
       });
-      // Changing the key will re-trigger the useFirestoreQuery hook
       setQueryKey(prevKey => prevKey + 1);
     } catch (error) {
       console.error("Error deleting client: ", error);
@@ -77,6 +77,10 @@ export default function ClientsPage() {
     }
   };
 
+  const handleDataUpdated = () => {
+    setQueryKey(prevKey => prevKey + 1);
+  };
+
 
   const filteredClients = useMemo(() => {
     return clients.filter(client =>
@@ -88,11 +92,9 @@ export default function ClientsPage() {
 
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
-    // Handle Firestore Timestamp
     if (date.seconds) {
       return format(new Date(date.seconds * 1000), 'PPP', { locale: es });
     }
-    // Handle ISO string
     if (typeof date === 'string') {
         try {
             const parsedDate = new Date(date);
@@ -100,7 +102,6 @@ export default function ClientsPage() {
                  return format(parsedDate, 'PPP', { locale: es });
             }
         } catch (e) {
-            // Not a valid date string, return original
             return date;
         }
     }
@@ -169,7 +170,7 @@ export default function ClientsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => toast({ title: "Próximamente...", description: "Funcionalidad para combinar clientes duplicados."})}>
+                  <DropdownMenuItem onSelect={() => setIsCombineModalOpen(true)}>
                     <Combine className="mr-2 h-4 w-4" />
                     <span>Combinar clientes</span>
                   </DropdownMenuItem>
@@ -275,7 +276,7 @@ export default function ClientsPage() {
         <DialogContent className="sm:max-w-lg">
             <NewClientForm onFormSubmit={() => {
                 setIsClientModalOpen(false);
-                setQueryKey(prev => prev + 1);
+                handleDataUpdated();
             }} />
         </DialogContent>
       </Dialog>
@@ -286,6 +287,14 @@ export default function ClientsPage() {
           isOpen={isDetailModalOpen} 
           onOpenChange={setIsDetailModalOpen}
         />
+      )}
+
+      {isCombineModalOpen && (
+          <CombineClientsModal
+              isOpen={isCombineModalOpen}
+              onOpenChange={setIsCombineModalOpen}
+              onClientsCombined={handleDataUpdated}
+          />
       )}
 
       {clientToDelete && (

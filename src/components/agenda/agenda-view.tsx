@@ -15,11 +15,12 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import Link from 'next/link';
 
 const barbers = [
   { id: 1, name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
@@ -41,6 +42,7 @@ const appointments = [
 
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [hoveredBarberId, setHoveredBarberId] = useState<number | null>(null);
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
   const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -68,7 +70,7 @@ export default function AgendaView() {
   return (
     <TooltipProvider>
       <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]">
-        <aside className="w-full lg:w-64 space-y-6 flex-shrink-0">
+        <aside className="w-full lg:w-[250px] space-y-6 flex-shrink-0">
            <Card className="shadow-md bg-white rounded-lg">
               <CardHeader>
                   <CardTitle className="text-base font-semibold text-gray-800">Filtros</CardTitle>
@@ -102,8 +104,8 @@ export default function AgendaView() {
                   </div>
               </CardContent>
           </Card>
-          <Card className="shadow-md bg-white rounded-lg">
-              <CardContent className="p-2 h-auto">
+          <Card className="shadow-md bg-white rounded-lg h-auto">
+              <CardContent className="p-2">
                   <Calendar
                       mode="single"
                       selected={date}
@@ -153,13 +155,17 @@ export default function AgendaView() {
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6">
                       {barbers.map((barber) => (
                           <div key={barber.id} className="w-64 flex-shrink-0">
-                              {/* Barber Header */}
-                              <div className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14">
+                              {/* Professional Header */}
+                              <div 
+                                className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
+                                onMouseEnter={() => setHoveredBarberId(barber.id)}
+                                onMouseLeave={() => setHoveredBarberId(null)}
+                              >
                                   <Avatar className="h-8 w-8">
                                       <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                       <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                   </Avatar>
-                                  <div>
+                                  <div className="flex-grow">
                                       <p className="font-semibold text-sm text-gray-800">{barber.name}</p>
                                       <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} 
                                           className={cn(
@@ -169,6 +175,20 @@ export default function AgendaView() {
                                           )}
                                       >{barber.status}</Badge>
                                   </div>
+                                  {hoveredBarberId === barber.id && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Link href={`/agenda/semanal/${barber.id}`} passHref>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                            </Link>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Ver agenda semanal</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                  )}
                               </div>
 
                               {/* Appointments Grid */}

@@ -87,10 +87,10 @@ export default function AgendaView() {
                       </Select>
                   </div>
                   <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-600">Barbero</label>
+                      <label className="text-sm font-medium text-gray-600">Profesional</label>
                       <Select defaultValue="todos">
                       <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Seleccionar barbero" />
+                          <SelectValue placeholder="Seleccionar profesional" />
                       </SelectTrigger>
                       <SelectContent>
                           <SelectItem value="todos">Todos</SelectItem>

@@ -372,7 +372,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         
         {step === 1 && (
             <SheetFooter className="p-6 bg-background border-t">
-                 <Button type="button" className="w-full text-lg py-6 bg-[#7C3AED] hover:bg-[#7C3AED]/90 text-white" onClick={handleNextStep} disabled={cart.length === 0}>
+                 <Button type="button" className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-white" onClick={handleNextStep} disabled={cart.length === 0}>
                     Continuar
                 </Button>
             </SheetFooter>

@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const products = [
   { id: 'PROD001', name: 'Cera Moldeadora "El Patrón"', category: 'Ceras', brand: 'Vatos Alfa Originals', presentation: '150g', price: 15990, stock: 45 },
@@ -58,11 +59,11 @@ export default function ProductsPage() {
                   <TableCell>${product.price.toLocaleString('es-CL')}</TableCell>
                   <TableCell>
                     <Badge variant={product.stock > 10 ? 'default' : product.stock > 0 ? 'secondary' : 'destructive'} 
-                    className={
-                        product.stock > 10 ? 'bg-green-500/20 text-green-300 border-green-500/50' : 
-                        product.stock > 0 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50' : 
-                        'bg-red-500/20 text-red-300 border-red-500/50'
-                    }
+                     className={cn(
+                        product.stock > 10 && 'bg-green-100 text-green-800',
+                        product.stock > 0 && product.stock <=10 && 'bg-yellow-100 text-yellow-800',
+                        product.stock === 0 && 'bg-red-100 text-red-800'
+                     )}
                     >
                         {product.stock} unidades
                     </Badge>

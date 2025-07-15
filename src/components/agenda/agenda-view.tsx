@@ -21,18 +21,18 @@ const barbers = [
 ];
 
 const appointments = [
-    { id: 1, barberId: 1, customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-green-900/50 border-green-400' },
-    { id: 2, barberId: 1, customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-blue-900/50 border-blue-400' },
-    { id: 3, barberId: 2, customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-yellow-900/50 border-yellow-400' },
-    { id: 4, barberId: 3, customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-green-900/50 border-green-400' },
-    { id: 5, barberId: 1, customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-900/50 border-purple-400' },
-    { id: 6, barberId: 2, customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-900/50 border-pink-400' },
-    { id: 7, barberId: 3, customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-red-900/50 border-red-400' },
+    { id: 1, barberId: 1, customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-primary/80 border-primary' },
+    { id: 2, barberId: 1, customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-secondary/80 border-secondary' },
+    { id: 3, barberId: 2, customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-green-500/80 border-green-500' },
+    { id: 4, barberId: 3, customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-primary/80 border-primary' },
+    { id: 5, barberId: 1, customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-500/80 border-purple-500' },
+    { id: 6, barberId: 2, customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-500/80 border-pink-500' },
+    { id: 7, barberId: 3, customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-destructive/80 border-destructive' },
 ];
 
 const TimeSlot = ({ hour }: { hour: number }) => (
-  <div className="h-16 border-t border-border/20 text-right pr-2">
-    <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
+  <div className="h-16 border-t border-border text-right pr-2 pt-1">
+    <span className="text-xs text-muted-foreground relative -top-3">{`${hour}:00`}</span>
   </div>
 );
 
@@ -92,14 +92,19 @@ export default function AgendaView() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-[900px]">
             {barbers.map((barber) => (
                 <div key={barber.id}>
-                    <div className="flex items-center space-x-3 p-2 rounded-t-lg bg-card sticky top-0 z-10">
+                    <div className="flex items-center space-x-3 p-2 rounded-t-lg bg-card sticky top-0 z-10 border-b">
                         <Avatar>
                             <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                             <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                         </Avatar>
                         <div>
                             <p className="font-semibold">{barber.name}</p>
-                            <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} className={barber.status === 'disponible' ? 'bg-green-500/20 text-green-300 border-green-500/50' : 'bg-red-500/20 text-red-300 border-red-500/50'}>{barber.status}</Badge>
+                            <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} 
+                                className={cn(
+                                    barber.status === 'disponible' && 'bg-green-100 text-green-800 border-green-200',
+                                    barber.status !== 'disponible' && 'bg-red-100 text-red-800 border-red-200'
+                                )}
+                            >{barber.status}</Badge>
                         </div>
                     </div>
                     <div className="relative bg-card/50 rounded-b-lg">

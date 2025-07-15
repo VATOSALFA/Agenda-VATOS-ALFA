@@ -80,24 +80,24 @@ export default function RemindersPage() {
         <CardContent className="space-y-6">
             <div>
                 <div className="flex justify-between mb-1">
-                    <span className="text-base font-medium text-green-400">Enviados y Entregados</span>
-                    <span className="text-sm font-medium text-green-400">139 (94.5%)</span>
+                    <span className="text-base font-medium text-green-600">Enviados y Entregados</span>
+                    <span className="text-sm font-medium text-green-600">139 (94.5%)</span>
                 </div>
-                <Progress value={94.5} className="[&>div]:bg-green-400" />
+                <Progress value={94.5} className="[&>div]:bg-green-500" />
             </div>
             <div>
                 <div className="flex justify-between mb-1">
-                    <span className="text-base font-medium text-red-400">Envíos Fallidos</span>
-                    <span className="text-sm font-medium text-red-400">5 (3.4%)</span>
+                    <span className="text-base font-medium text-red-600">Envíos Fallidos</span>
+                    <span className="text-sm font-medium text-red-600">5 (3.4%)</span>
                 </div>
-                <Progress value={3.4} className="[&>div]:bg-red-400" />
+                <Progress value={3.4} className="[&>div]:bg-red-500" />
             </div>
             <div>
                 <div className="flex justify-between mb-1">
-                    <span className="text-base font-medium text-yellow-400">Pendientes de Envío</span>
-                    <span className="text-sm font-medium text-yellow-400">3 (2.1%)</span>
+                    <span className="text-base font-medium text-yellow-600">Pendientes de Envío</span>
+                    <span className="text-sm font-medium text-yellow-600">3 (2.1%)</span>
                 </div>
-                <Progress value={2.1} className="[&>div]:bg-yellow-400" />
+                <Progress value={2.1} className="[&>div]:bg-yellow-500" />
             </div>
         </CardContent>
       </Card>

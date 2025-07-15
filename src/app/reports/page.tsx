@@ -21,7 +21,7 @@ const reservationSourceData = [
     { name: 'Walk-in', value: 100 },
 ];
 
-const COLORS = ['#D4AF37', '#B0B0B0', '#6b7280', '#4b5563'];
+const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
 
 export default function ReportsPage() {
     return (
@@ -75,10 +75,10 @@ export default function ReportsPage() {
                             <CardContent className="pl-2">
                                 <ResponsiveContainer width="100%" height={350}>
                                     <RechartsBarChart data={salesData}>
-                                        <XAxis dataKey="day" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                        <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
-                                        <Tooltip cursor={{ fill: 'rgba(212, 175, 55, 0.1)' }} contentStyle={{ backgroundColor: 'black', border: '1px solid #4A5568' }}/>
-                                        <Bar dataKey="total" fill="#D4AF37" radius={[4, 4, 0, 0]} />
+                                        <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                                        <Tooltip cursor={{ fill: 'hsla(var(--primary), 0.1)' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}/>
+                                        <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                                     </RechartsBarChart>
                                 </ResponsiveContainer>
                             </CardContent>
@@ -96,7 +96,7 @@ export default function ReportsPage() {
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <Tooltip contentStyle={{ backgroundColor: 'black', border: '1px solid #4A5568' }} />
+                                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
                                         <Legend />
                                     </RechartsPieChart>
                                 </ResponsiveContainer>

@@ -34,8 +34,8 @@ const appointments = [
 ];
 
 const TimeSlot = ({ hour }: { hour: number }) => (
-  <div className="h-20 border-t border-border text-right pr-2">
-    <span className="text-xs text-muted-foreground relative -top-2.5">{`${hour}:00`}</span>
+  <div className="h-12 border-t border-border text-right pr-2">
+    <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
   </div>
 );
 
@@ -121,12 +121,11 @@ export default function AgendaView() {
                             {appointments.filter(a => a.barberId === barber.id).map(appointment => (
                                 <div key={appointment.id} 
                                     className={cn(
-                                        "absolute w-[calc(100%-12px)] ml-[6px] p-2 rounded-md text-xs border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02]", 
+                                        "absolute w-[calc(100%-12px)] ml-[6px] py-1 px-2.5 rounded-md text-xs border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center", 
                                         appointment.color
                                     )} style={{
-                                    top: `${(appointment.start - 9) * 5}rem`,
-                                    height: `${appointment.duration * 5}rem`,
-                                    maxHeight: '60px',
+                                    top: `${(appointment.start - 9) * 3}rem`,
+                                    height: `${appointment.duration * 3}rem`,
                                 }}>
                                     <p className="font-bold text-sm truncate">{appointment.customer}</p>
                                     <p className="truncate">{appointment.service}</p>

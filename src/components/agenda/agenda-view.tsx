@@ -21,6 +21,8 @@ const barbers = [
   { id: 1, name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
   { id: 2, name: 'El Sicario', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man serious' },
   { id: 3, name: 'El Padrino', status: 'ocupado', avatar: 'https://placehold.co/100x100', dataAiHint: 'stylish man' },
+  { id: 4, name: 'Barbero Extra', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man portrait' },
+  { id: 5, name: 'Otro Barbero', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'cool man' },
 ];
 
 const appointments = [
@@ -34,15 +36,32 @@ const appointments = [
 ];
 
 const TimeSlot = ({ hour }: { hour: number }) => (
-  <div className="h-12 border-t border-border text-right pr-2">
+  <div className="h-[48px] border-b border-border text-right pr-2">
     <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
   </div>
 );
 
+const HourGridLines = ({ hours }: { hours: number[] }) => (
+    <div className="col-start-1 col-end-2 row-start-2">
+        {hours.map((hour) => (
+             <div key={hour} className="h-[48px] border-b border-border"></div>
+        ))}
+    </div>
+);
+
+
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
+
+  const HOURLY_SLOT_HEIGHT = 48; // in pixels, corresponds to h-12
+  const HALF_HOUR_HEIGHT = HOURLY_SLOT_HEIGHT / 2;
+
+  const calculatePosition = (start: number, duration: number) => {
+    const top = (start - 9) * HOURLY_SLOT_HEIGHT;
+    const height = duration * HOURLY_SLOT_HEIGHT;
+    return { top: `${top}px`, height: `${height}px` };
+  };
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-slate-50">
@@ -95,45 +114,64 @@ export default function AgendaView() {
             </CardContent>
         </Card>
       </aside>
-      <main className="flex-1 overflow-x-auto">
+      <main className="flex-1">
         <ScrollArea className="h-full">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 min-w-max pb-4">
-                {barbers.map((barber) => (
-                    <div key={barber.id} className="w-72 flex-shrink-0">
-                        <div className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b">
-                            <Avatar className="h-10 w-10">
-                                <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <p className="font-semibold text-base text-gray-800">{barber.name}</p>
-                                <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} 
-                                    className={cn(
-                                        'text-xs py-0.5 px-2 font-medium',
-                                        barber.status === 'disponible' && 'bg-green-100 text-green-800 border-green-200',
-                                        barber.status !== 'disponible' && 'bg-red-100 text-red-800 border-red-200'
-                                    )}
-                                >{barber.status}</Badge>
+            <div className="flex">
+                {/* Time Column */}
+                <div className="sticky left-0 z-20 bg-slate-50 w-16 flex-shrink-0">
+                     <div className="h-20 border-b">&nbsp;</div> {/* Header Spacer */}
+                     {hours.map((hour) => (
+                        <div key={hour} className="h-[48px] text-right pr-2 border-b">
+                            <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Barbers Columns */}
+                <div className="flex-grow grid grid-flow-col auto-cols-min gap-6">
+                    {barbers.map((barber) => (
+                        <div key={barber.id} className="w-64 flex-shrink-0">
+                            {/* Barber Header */}
+                            <div className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-20">
+                                <Avatar className="h-10 w-10">
+                                    <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="font-semibold text-base text-gray-800">{barber.name}</p>
+                                    <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} 
+                                        className={cn(
+                                            'text-xs py-0.5 px-2 font-medium',
+                                            barber.status === 'disponible' && 'bg-green-100 text-green-800 border-green-200',
+                                            barber.status !== 'disponible' && 'bg-red-100 text-red-800 border-red-200'
+                                        )}
+                                    >{barber.status}</Badge>
+                                </div>
+                            </div>
+
+                            {/* Appointments Grid */}
+                            <div className="relative bg-white/60">
+                                {/* Background Grid Lines */}
+                                {hours.map((hour) => (
+                                    <div key={hour} className="h-[48px] border-b"></div>
+                                ))}
+
+                                {/* Appointments */}
+                                {appointments.filter(a => a.barberId === barber.id).map(appointment => (
+                                    <div key={appointment.id} 
+                                        className={cn(
+                                            "absolute w-[calc(100%-8px)] ml-[4px] rounded-[6px] text-[13px] border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-[6px] px-2", 
+                                            appointment.color,
+                                            'text-[#1A1A1A]'
+                                        )} style={calculatePosition(appointment.start, appointment.duration)}>
+                                        <p className="font-bold truncate">{appointment.customer}</p>
+                                        <p className="truncate">{appointment.service}</p>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                        <div className="relative bg-white/60 rounded-b-lg">
-                            {hours.map((hour) => <TimeSlot key={hour} hour={hour} />)}
-                            {appointments.filter(a => a.barberId === barber.id).map(appointment => (
-                                <div key={appointment.id} 
-                                    className={cn(
-                                        "absolute w-[calc(100%-12px)] ml-[6px] py-1 px-2.5 rounded-md text-xs border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center", 
-                                        appointment.color
-                                    )} style={{
-                                    top: `${(appointment.start - 9) * 3}rem`,
-                                    height: `${appointment.duration * 3}rem`,
-                                }}>
-                                    <p className="font-bold text-sm truncate">{appointment.customer}</p>
-                                    <p className="truncate">{appointment.service}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
         </ScrollArea>
       </main>

@@ -13,20 +13,51 @@ interface UseFirestoreQuery<T> {
 
 export function useFirestoreQuery<T>(
   collectionName: string,
-  key?: any, // Key to re-trigger the query
-  ...queryConstraints: QueryConstraint[]
+  ...queryConstraints: (QueryConstraint | undefined)[]
+): UseFirestoreQuery<T>;
+export function useFirestoreQuery<T>(
+  collectionName: string,
+  key?: any,
+  ...queryConstraints: (QueryConstraint | undefined)[]
+): UseFirestoreQuery<T>;
+
+
+export function useFirestoreQuery<T>(
+  collectionName: string,
+  keyOrConstraint?: any | QueryConstraint,
+  ...queryConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
+  let key: any;
+  let constraints: (QueryConstraint | undefined)[];
+
+  if (keyOrConstraint && typeof keyOrConstraint === 'object' && 'type' in keyOrConstraint) {
+      constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
+      key = collectionName; // default key if not provided
+  } else {
+      constraints = queryConstraints;
+      key = keyOrConstraint;
+  }
+  
+  const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
+
   useEffect(() => {
+    // If a constraint is undefined, it means a condition is not met (e.g., client ID not ready).
+    // In this case, we don't fetch and return empty data.
+    if (constraints.some(c => c === undefined)) {
+        setData([]);
+        setLoading(false);
+        return;
+    }
+
     setLoading(true);
     setError(null);
     
-    const q = query(collection(db, collectionName), ...queryConstraints);
+    const q = query(collection(db, collectionName), ...finalConstraints);
     
-    // Use onSnapshot for real-time updates
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const items = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -40,11 +71,11 @@ export function useFirestoreQuery<T>(
       setLoading(false);
     });
 
-    // Cleanup subscription on component unmount
     return () => unsubscribe();
     
+  // We serialize the constraints to use them as a dependency
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, key]); // Re-run effect if collectionName or the key changes
+  }, [collectionName, key, JSON.stringify(finalConstraints.map(c => c.toString()))]);
 
   return { data, loading, error };
 }

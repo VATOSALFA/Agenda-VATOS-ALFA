@@ -14,6 +14,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where } from 'firebase/firestore';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
 
 interface ClientDetailModalProps {
   client: Client;
@@ -50,23 +51,28 @@ const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label:
 export function ClientDetailModal({ client, isOpen, onOpenChange }: ClientDetailModalProps) {
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>(
     'reservas',
-    where('cliente_id', '==', client.id)
+    isOpen ? where('cliente_id', '==', client.id) : undefined
   );
 
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    where('cliente_id', '==', client.id)
+    isOpen ? where('cliente_id', '==', client.id) : undefined
   );
 
-  const formatDate = (date: any) => {
+  const formatDate = (date: any, includeTime = false) => {
     if (!date) return 'N/A';
-    if (typeof date === 'string') {
-      return format(parseISO(date), 'PPP', { locale: es });
+    let dateObj: Date;
+    if (date.seconds) { // Firestore Timestamp
+      dateObj = new Date(date.seconds * 1000);
+    } else if (typeof date === 'string') { // ISO String
+      dateObj = parseISO(date);
+    } else {
+        return 'Fecha inválida';
     }
-    if (date.seconds) {
-      return format(new Date(date.seconds * 1000), 'PPP p', { locale: es });
-    }
-    return 'Fecha inválida';
+    
+    if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+    
+    return format(dateObj, includeTime ? 'PPP p' : 'PPP', { locale: es });
   };
   
   return (
@@ -144,7 +150,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange }: ClientDetail
                         <Card key={sale.id} className="bg-card/70">
                            <CardHeader className="flex flex-row justify-between items-center p-4">
                                 <div>
-                                    <CardTitle className="text-lg">{formatDate(sale.fecha_hora_venta)}</CardTitle>
+                                    <CardTitle className="text-lg">{formatDate(sale.fecha_hora_venta, true)}</CardTitle>
                                     <CardDescription>Total: ${sale.total.toLocaleString('es-CL')} ({sale.metodo_pago})</CardDescription>
                                 </div>
                            </CardHeader>

@@ -88,13 +88,19 @@ export default function ClientsPage() {
 
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
+    // Handle Firestore Timestamp
     if (date.seconds) {
       return format(new Date(date.seconds * 1000), 'PPP', { locale: es });
     }
+    // Handle ISO string
     if (typeof date === 'string') {
         try {
-            return format(new Date(date), 'PPP', { locale: es });
+            const parsedDate = new Date(date);
+            if (!isNaN(parsedDate.getTime())) {
+                 return format(parsedDate, 'PPP', { locale: es });
+            }
         } catch (e) {
+            // Not a valid date string, return original
             return date;
         }
     }

@@ -1,18 +1,10 @@
+
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, LineChart, PieChart, Users, Wallet } from "lucide-react";
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, Pie, PieChart as RechartsPieChart, Cell, Line, LineChart as RechartsLineChart } from 'recharts';
-
-const salesData = [
-  { day: 'Lunes', total: Math.floor(Math.random() * 200000) + 100000 },
-  { day: 'Martes', total: Math.floor(Math.random() * 200000) + 100000 },
-  { day: 'Miércoles', total: Math.floor(Math.random() * 200000) + 100000 },
-  { day: 'Jueves', total: Math.floor(Math.random() * 200000) + 100000 },
-  { day: 'Viernes', total: Math.floor(Math.random() * 200000) + 100000 },
-  { day: 'Sábado', total: Math.floor(Math.random() * 200000) + 100000 },
-  { day: 'Domingo', total: Math.floor(Math.random() * 50000) + 10000 },
-];
+import { useState, useEffect } from "react";
 
 const reservationSourceData = [
     { name: 'Agenda Online', value: 400 },
@@ -24,6 +16,23 @@ const reservationSourceData = [
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
 
 export default function ReportsPage() {
+    const [salesData, setSalesData] = useState<any[]>([]);
+
+    useEffect(() => {
+        // Generate random data on the client-side to avoid hydration errors
+        const generateSalesData = () => [
+            { day: 'Lunes', total: Math.floor(Math.random() * 200000) + 100000 },
+            { day: 'Martes', total: Math.floor(Math.random() * 200000) + 100000 },
+            { day: 'Miércoles', total: Math.floor(Math.random() * 200000) + 100000 },
+            { day: 'Jueves', total: Math.floor(Math.random() * 200000) + 100000 },
+            { day: 'Viernes', total: Math.floor(Math.random() * 200000) + 100000 },
+            { day: 'Sábado', total: Math.floor(Math.random() * 200000) + 100000 },
+            { day: 'Domingo', total: Math.floor(Math.random() * 50000) + 10000 },
+        ];
+        setSalesData(generateSalesData());
+    }, []);
+
+
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Reportes y Métricas</h2>

@@ -40,7 +40,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, PlusCircle, X, ShoppingCart, Users, Scissors, CreditCard, Loader2 } from 'lucide-react';
+import { Search, PlusCircle, X, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
 
 // Types
 interface Client { id: string; nombre: string; apellido: string; }
@@ -92,6 +92,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     if (!products) return [];
     return products.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, products]);
+
 
   const addToCart = (item: Product | Service, tipo: 'producto' | 'servicio') => {
     setCart(prev => {
@@ -202,10 +203,51 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     }
   }
 
+  const ResumenCarrito = () => (
+    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
+      <div className="p-4 border-b">
+        <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
+      </div>
+      <ScrollArea className="flex-grow">
+        <div className="p-4 space-y-4">
+          {cart.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
+          ) : cart.map(item => (
+            <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
+              <div>
+                <p className="font-medium capitalize">{item.nombre}</p>
+                <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio.toLocaleString('es-CL')}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
+                  <span className="w-5 text-center font-bold">{item.cantidad}</span>
+                  <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold">${(item.precio * item.cantidad).toLocaleString('es-CL')}</p>
+                <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+      {cart.length > 0 && (
+        <div className="p-4 border-t space-y-4">
+          <div className="flex justify-between font-semibold text-xl">
+            <span>Total:</span>
+            <span className="text-primary">${total.toLocaleString('es-CL')}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-4xl w-full flex flex-col p-0">
-        <SheetHeader className="p-6">
+      <SheetContent className="sm:max-w-4xl w-full flex flex-col p-0 shadow-2xl">
+        <SheetHeader className="p-6 border-b">
           <SheetTitle>Registrar Nueva Venta</SheetTitle>
           <SheetDescription>
             {step === 1 ? 'Busca y agrega servicios o productos al carrito.' : 'Completa los detalles para finalizar la venta.'}
@@ -213,7 +255,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         </SheetHeader>
         
         {step === 1 && (
-            <div className="flex-grow grid grid-cols-3 gap-6 px-6 overflow-hidden">
+            <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
                 {/* Item Selection */}
                 <div className="col-span-2 flex flex-col">
                     <div className="relative mb-4">
@@ -225,11 +267,11 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                             <TabsTrigger value="servicios">Servicios</TabsTrigger>
                             <TabsTrigger value="productos">Productos</TabsTrigger>
                         </TabsList>
-                        <ScrollArea className="flex-grow mt-4">
+                        <ScrollArea className="flex-grow mt-4 pr-4">
                             <TabsContent value="servicios" className="mt-0">
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {filteredServices.map(service => (
-                                    <Card key={service.id} className="cursor-pointer hover:border-primary" onClick={() => addToCart(service, 'servicio')}>
+                                    <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
                                         <CardContent className="p-4">
                                             <p className="font-semibold">{service.nombre}</p>
                                             <p className="text-sm text-primary">${service.precio.toLocaleString('es-CL')}</p>
@@ -242,7 +284,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {(productsLoading ? Array.from({length: 6}) : filteredProducts).map((product, idx) => (
                                      product ? (
-                                    <Card key={product.id} className="cursor-pointer hover:border-primary" onClick={() => addToCart(product, 'producto')}>
+                                    <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                         <CardContent className="p-4">
                                             <p className="font-semibold">{product.nombre}</p>
                                             <p className="text-sm text-primary">${product.precio.toLocaleString('es-CL')}</p>
@@ -259,42 +301,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                     </Tabs>
                 </div>
                 {/* Cart */}
-                <div className="col-span-1 bg-card/50 rounded-lg flex flex-col">
-                    <div className="p-4 border-b">
-                        <h3 className="font-semibold flex items-center"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
-                    </div>
-                    <ScrollArea className="flex-grow">
-                        <div className="p-4 space-y-4">
-                        {cart.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
-                        ) : cart.map(item => (
-                            <div key={item.id} className="flex items-start justify-between">
-                                <div>
-                                    <p className="font-medium">{item.nombre}</p>
-                                    <p className="text-sm text-muted-foreground">${item.precio.toLocaleString('es-CL')}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3"/></Button>
-                                        <span className="w-4 text-center">{item.cantidad}</span>
-                                        <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3"/></Button>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-semibold">${(item.precio * item.cantidad).toLocaleString('es-CL')}</p>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive" onClick={() => removeFromCart(item.id)}><X className="h-4 w-4" /></Button>
-                                </div>
-                            </div>
-                        ))}
-                        </div>
-                    </ScrollArea>
-                    {cart.length > 0 && (
-                        <div className="p-4 border-t space-y-2">
-                            <div className="flex justify-between font-semibold text-lg">
-                                <span>Total:</span>
-                                <span>${total.toLocaleString('es-CL')}</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                <ResumenCarrito />
             </div>
         )}
 
@@ -347,29 +354,11 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                         )} />
                     </div>
                     {/* Order Summary */}
-                    <div className="bg-card/50 rounded-lg flex flex-col h-fit">
-                        <div className="p-4 border-b"><h3 className="font-semibold">Resumen del Pedido</h3></div>
-                        <ScrollArea className="flex-grow">
-                            <div className="p-4 space-y-3">
-                            {cart.map(item => (
-                                <div key={item.id} className="flex justify-between items-center text-sm">
-                                    <p>{item.nombre} <span className="text-muted-foreground">x{item.cantidad}</span></p>
-                                    <p className="font-medium">${(item.precio * item.cantidad).toLocaleString('es-CL')}</p>
-                                </div>
-                            ))}
-                            </div>
-                        </ScrollArea>
-                        <div className="p-4 border-t">
-                            <div className="flex justify-between font-bold text-xl">
-                                <span>Total:</span>
-                                <span className="text-primary">${total.toLocaleString('es-CL')}</span>
-                            </div>
-                        </div>
-                    </div>
+                    <ResumenCarrito />
                 </div>
-                 <SheetFooter className="p-6 bg-card mt-auto">
+                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                     <Button variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                    <Button type="submit" disabled={isSubmitting} style={{ backgroundColor: '#7C3AED', color: 'white' }}>
+                    <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Finalizar Venta
                     </Button>
@@ -379,9 +368,9 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         )}
         
         {step === 1 && (
-            <SheetFooter className="p-6 bg-card">
-                 <Button className="w-full" style={{ backgroundColor: '#7C3AED', color: 'white' }} onClick={handleNextStep} disabled={cart.length === 0}>
-                    Continuar
+            <SheetFooter className="p-6 bg-background border-t">
+                 <Button className="w-full text-lg py-6" style={{ backgroundColor: '#7C3AED', color: 'white' }} onClick={handleNextStep} disabled={cart.length === 0}>
+                    Continuar al Pago
                 </Button>
             </SheetFooter>
         )}

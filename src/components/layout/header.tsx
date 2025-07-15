@@ -23,6 +23,7 @@ import {
   Banknote,
   ChevronDown,
   Wallet,
+  Lock,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -39,6 +40,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
+import { BlockScheduleForm } from '../reservations/block-schedule-form';
 
 
 const mainNavLinks = [
@@ -66,6 +68,7 @@ const salesNavLinks = [
 export default function Header() {
   const pathname = usePathname();
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
 
   return (
     <>
@@ -139,8 +142,8 @@ export default function Header() {
                   <Calendar className="mr-2 h-4 w-4" />
                   <span>Crear nueva reserva</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Clock className="mr-2 h-4 w-4" />
+                <DropdownMenuItem onSelect={() => setIsBlockScheduleModalOpen(true)}>
+                  <Lock className="mr-2 h-4 w-4" />
                   <span>Bloquear horario</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
@@ -191,6 +194,11 @@ export default function Header() {
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
         <DialogContent className="sm:max-w-xl">
           <NewReservationForm onFormSubmit={() => setIsReservationModalOpen(false)} />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isBlockScheduleModalOpen} onOpenChange={setIsBlockScheduleModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <BlockScheduleForm onFormSubmit={() => setIsBlockScheduleModalOpen(false)} />
         </DialogContent>
       </Dialog>
     </>

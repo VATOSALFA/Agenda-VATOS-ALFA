@@ -103,7 +103,7 @@ export default function AgendaView() {
               </CardContent>
           </Card>
           <Card className="shadow-md bg-white rounded-lg">
-              <CardContent className="p-2">
+              <CardContent className="p-2 h-auto">
                   <Calendar
                       mode="single"
                       selected={date}

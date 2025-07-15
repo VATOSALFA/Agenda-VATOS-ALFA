@@ -1,7 +1,8 @@
+
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { collection, getDocs, query, where, QueryConstraint } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { collection, getDocs, query, QueryConstraint, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface UseFirestoreQuery<T> {
@@ -12,6 +13,7 @@ interface UseFirestoreQuery<T> {
 
 export function useFirestoreQuery<T>(
   collectionName: string,
+  key?: any, // Key to re-trigger the query
   ...queryConstraints: QueryConstraint[]
 ): UseFirestoreQuery<T> {
   const [data, setData] = useState<T[]>([]);
@@ -19,28 +21,30 @@ export function useFirestoreQuery<T>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const q = query(collection(db, collectionName), ...queryConstraints);
-        const querySnapshot = await getDocs(q);
-        const items = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as T[];
-        setData(items);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-        console.error(`Error fetching from ${collectionName}:`, err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    setLoading(true);
+    setError(null);
     
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName]);
+    const q = query(collection(db, collectionName), ...queryConstraints);
+    
+    // Use onSnapshot for real-time updates
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const items = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as T[];
+      setData(items);
+      setLoading(false);
+    }, (err) => {
+      setError(err instanceof Error ? err : new Error('An unknown error occurred'));
+      console.error(`Error fetching from ${collectionName}:`, err);
+      setLoading(false);
+    });
+
+    // Cleanup subscription on component unmount
+    return () => unsubscribe();
+    
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, key]); // Re-run effect if collectionName or the key changes
 
   return { data, loading, error };
 }

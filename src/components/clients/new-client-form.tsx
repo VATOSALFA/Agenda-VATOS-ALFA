@@ -26,6 +26,7 @@ import {
 import { DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { es } from 'date-fns/locale';
 
 const clientSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
@@ -165,18 +166,22 @@ export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
                           !field.value && "text-muted-foreground"
                         )}
                       >
-                        {field.value ? format(field.value, 'PPP') : <span>Selecciona una fecha</span>}
+                        {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
+                      locale={es}
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) => date > new Date()}
                       initialFocus
+                      captionLayout="dropdown-buttons"
+                      fromYear={1950}
+                      toYear={new Date().getFullYear()}
                     />
                   </PopoverContent>
                 </Popover>

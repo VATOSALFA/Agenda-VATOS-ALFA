@@ -18,28 +18,29 @@ export function useFirestoreQuery<T>(
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const q = query(collection(db, collectionName), ...queryConstraints);
-      const querySnapshot = await getDocs(q);
-      const items = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as T[];
-      setData(items);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-      console.error(`Error fetching from ${collectionName}:`, err);
-    } finally {
-      setLoading(false);
-    }
-  }, [collectionName, ...queryConstraints.map(c => c.type + c.toString())]); // Basic memoization
-
   useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const q = query(collection(db, collectionName), ...queryConstraints);
+        const querySnapshot = await getDocs(q);
+        const items = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as T[];
+        setData(items);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('An unknown error occurred'));
+        console.error(`Error fetching from ${collectionName}:`, err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     fetchData();
-  }, [fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName]);
 
   return { data, loading, error };
 }

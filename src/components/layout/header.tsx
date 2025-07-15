@@ -41,6 +41,7 @@ import {
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
+import { NewSaleSheet } from '../sales/new-sale-sheet';
 
 
 const mainNavLinks = [
@@ -69,6 +70,7 @@ export default function Header() {
   const pathname = usePathname();
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
+  const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
 
   return (
     <>
@@ -146,7 +148,7 @@ export default function Header() {
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Bloquear horario</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsSaleSheetOpen(true)}>
                   <Tag className="mr-2 h-4 w-4" />
                   <span>Registrar nueva venta</span>
                 </DropdownMenuItem>
@@ -201,6 +203,7 @@ export default function Header() {
           <BlockScheduleForm onFormSubmit={() => setIsBlockScheduleModalOpen(false)} />
         </DialogContent>
       </Dialog>
+      <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} />
     </>
   );
 }

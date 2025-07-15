@@ -43,7 +43,7 @@ export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
-  const HOURLY_SLOT_HEIGHT = 40; // in pixels
+  const HOURLY_SLOT_HEIGHT = 48; // in pixels
   
   const handleSetToday = () => setDate(new Date());
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
@@ -68,23 +68,8 @@ export default function AgendaView() {
   return (
     <TooltipProvider>
       <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]">
-        <aside className="w-full lg:w-80 space-y-6 flex-shrink-0">
-          <Card className="shadow-md bg-white rounded-lg">
-              <CardContent className="p-2">
-                  <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      className="rounded-md"
-                      locale={es}
-                      components={{
-                        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-                        IconRight: () => <ChevronRight className="h-4 w-4" />,
-                      }}
-                  />
-              </CardContent>
-          </Card>
-          <Card className="shadow-md bg-white rounded-lg">
+        <aside className="w-full lg:w-64 space-y-6 flex-shrink-0">
+           <Card className="shadow-md bg-white rounded-lg">
               <CardHeader>
                   <CardTitle className="text-base font-semibold text-gray-800">Filtros</CardTitle>
               </CardHeader>
@@ -117,6 +102,21 @@ export default function AgendaView() {
                   </div>
               </CardContent>
           </Card>
+          <Card className="shadow-md bg-white rounded-lg">
+              <CardContent className="p-2">
+                  <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={setDate}
+                      className="rounded-md"
+                      locale={es}
+                      components={{
+                        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
+                        IconRight: () => <ChevronRight className="h-4 w-4" />,
+                      }}
+                  />
+              </CardContent>
+          </Card>
         </aside>
         <main className="flex-1 flex flex-col">
           {/* Agenda Navigation Header */}
@@ -143,7 +143,7 @@ export default function AgendaView() {
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                       {hours.map((hour) => (
-                          <div key={hour} className="h-[40px] text-right pr-2 border-b border-border">
+                          <div key={hour} className="h-[48px] text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
@@ -175,7 +175,7 @@ export default function AgendaView() {
                               <div className="relative bg-white/60">
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
-                                      <div key={hour} className="h-[40px] border-b border-border"></div>
+                                      <div key={hour} className="h-[48px] border-b border-border"></div>
                                   ))}
 
                                   {/* Appointments */}

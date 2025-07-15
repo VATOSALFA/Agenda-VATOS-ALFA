@@ -40,7 +40,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, PlusCircle, X, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
 
 // Types
 interface Client { id: string; nombre: string; apellido: string; }
@@ -245,7 +245,10 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   );
 
   return (
-    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+    <Sheet open={isOpen} onOpenChange={(open) => {
+        if(!open) resetFlow();
+        onOpenChange(open);
+    }}>
       <SheetContent className="sm:max-w-4xl w-full flex flex-col p-0 shadow-2xl">
         <SheetHeader className="p-6 border-b">
           <SheetTitle>Registrar Nueva Venta</SheetTitle>
@@ -357,7 +360,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                     <ResumenCarrito />
                 </div>
                  <SheetFooter className="p-6 bg-background border-t mt-auto">
-                    <Button variant="outline" onClick={() => setStep(1)}>Volver</Button>
+                    <Button variant="outline" type="button" onClick={() => setStep(1)}>Volver</Button>
                     <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Finalizar Venta
@@ -369,8 +372,8 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         
         {step === 1 && (
             <SheetFooter className="p-6 bg-background border-t">
-                 <Button className="w-full text-lg py-6" style={{ backgroundColor: '#7C3AED', color: 'white' }} onClick={handleNextStep} disabled={cart.length === 0}>
-                    Continuar al Pago
+                 <Button type="button" className="w-full text-lg py-6 bg-[#7C3AED] hover:bg-[#7C3AED]/90 text-white" onClick={handleNextStep} disabled={cart.length === 0}>
+                    Continuar
                 </Button>
             </SheetFooter>
         )}
@@ -378,13 +381,3 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     </Sheet>
   );
 }
-
-// Helper components for quantity buttons
-const Minus = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}><path d="M5 11h14v2H5z" /></svg>
-);
-const Plus = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z" /></svg>
-);
-
-    

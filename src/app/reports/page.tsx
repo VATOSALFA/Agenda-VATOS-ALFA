@@ -82,6 +82,7 @@ export default function ReportsPage() {
                                 <CardDescription>Total de ventas durante la última semana.</CardDescription>
                             </CardHeader>
                             <CardContent className="pl-2">
+                                {salesData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height={350}>
                                     <RechartsBarChart data={salesData}>
                                         <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
@@ -90,6 +91,11 @@ export default function ReportsPage() {
                                         <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                                     </RechartsBarChart>
                                 </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-[350px] w-full flex items-center justify-center">
+                                        <p className="text-muted-foreground">Cargando datos...</p>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                         <Card className="col-span-3">

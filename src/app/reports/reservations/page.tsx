@@ -11,7 +11,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, Line, CartesianGrid } from 'recharts';
 import { Calendar as CalendarIcon, Search, CheckCircle, XCircle, Clock, AlertTriangle, Users, BookOpen, Truck, Store, Scissors, DollarSign, BarChart, LineChartIcon, PieChartIcon } from 'lucide-react';
-import { format, es } from 'date-fns';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 

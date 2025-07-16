@@ -228,8 +228,8 @@ export default function AgendaView() {
                           </div>
                       ))}
                        {isToday(date || new Date()) && currentTimeTop !== null && (
-                          <div className="absolute right-0" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
-                            <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded relative">
+                          <div className="absolute left-0 right-0 text-right pr-2" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                            <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
                               {format(currentTime, 'HH:mm')}
                             </span>
                           </div>

@@ -33,8 +33,8 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                                 data={data}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={70}
-                                outerRadius={100}
+                                innerRadius={65}
+                                outerRadius={90}
                                 fill="#8884d8"
                                 paddingAngle={2}
                                 dataKey="value"
@@ -53,7 +53,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                         </RechartsPieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-xl font-bold">${total.toLocaleString('es-CL')}</span>
+                        <span className="text-2xl font-bold">${total.toLocaleString('es-CL')}</span>
                     </div>
                 </div>
                 <div className="text-sm col-span-2">

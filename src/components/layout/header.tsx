@@ -34,6 +34,9 @@ import {
   Store,
   MessageCircle,
   Percent,
+  Globe,
+  Copy,
+  Share2
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -52,6 +55,8 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
+import { useToast } from '@/hooks/use-toast';
+import { Input } from '../ui/input';
 
 
 const mainNavLinks = [
@@ -94,6 +99,17 @@ export default function Header() {
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
+  const { toast } = useToast();
+
+  const websiteUrl = 'vatosalfabarbershop.site.agendapro.co';
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(websiteUrl);
+    toast({
+      title: '¡Copiado!',
+      description: 'El enlace a tu sitio web ha sido copiado al portapapeles.',
+    });
+  }
 
   return (
     <>
@@ -223,7 +239,7 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
-          <div className="ml-auto flex items-center space-x-4">
+          <div className="ml-auto flex items-center space-x-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="bg-[#314177] hover:bg-[#40538a] text-white">
@@ -245,11 +261,40 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            
+            <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                <Settings className="h-5 w-5" />
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="bg-transparent text-gray-300 border-gray-500 hover:bg-white/10 hover:text-white hover:border-white/80">
+                  <Globe className="mr-2 h-4 w-4" />
+                  Sitio web
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-4">
+                 <div className="space-y-2">
+                    <p className="font-semibold text-sm">¡Comparte tu link y recibe citas!</p>
+                     <div className="flex items-center space-x-2">
+                        <Input readOnly value={websiteUrl} className="flex-1 text-xs h-9" />
+                        <Button size="icon" className="h-9 w-9" onClick={copyToClipboard}><Copy className="h-4 w-4" /></Button>
+                    </div>
+                 </div>
+                 <DropdownMenuSeparator />
+                 <DropdownMenuItem asChild>
+                    <Link href="#">
+                        <Share2 className="mr-2 h-4 w-4" />
+                        <span>Ir a mi sitio web</span>
+                    </Link>
+                 </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-9 w-9">
                     <AvatarImage src="https://placehold.co/100x100" alt="@vatosalfa" data-ai-hint="man portrait" />
                     <AvatarFallback>VA</AvatarFallback>
                   </Avatar>

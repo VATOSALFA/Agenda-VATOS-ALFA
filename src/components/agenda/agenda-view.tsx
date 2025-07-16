@@ -46,16 +46,22 @@ const appointments = [
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
 
 const useCurrentTime = () => {
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    // Set time on mount (client-side only)
+    setCurrentTime(new Date());
+
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000); // Update every minute
+    
     return () => clearInterval(timer);
   }, []);
   
   const calculateTopPosition = () => {
+    if (!currentTime) return null;
+
     const hours = currentTime.getHours();
     const minutes = currentTime.getMinutes();
     const totalMinutes = (hours - 9) * 60 + minutes;
@@ -227,8 +233,8 @@ export default function AgendaView() {
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
-                       {isToday(date || new Date()) && currentTimeTop !== null && (
-                          <div className="absolute left-0 right-0 text-right pr-2" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                       {isToday(date || new Date()) && currentTime && currentTimeTop !== null && (
+                          <div className="absolute right-2 text-right" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
                             <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
                               {format(currentTime, 'HH:mm')}
                             </span>

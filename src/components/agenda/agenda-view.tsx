@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useRef, MouseEvent } from 'react';
+import { useState, useRef, MouseEvent, useEffect } from 'react';
 import {
   Select,
   SelectContent,
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock } from 'lucide-react';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -43,6 +43,47 @@ const appointments = [
     { id: 7, barberId: 3, customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-gray-200 border-gray-400 text-gray-800', paymentStatus: null, phone: null },
 ];
 
+const HOURLY_SLOT_HEIGHT = 48; // in pixels
+
+const CurrentTimeIndicator = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const calculateTopPosition = () => {
+    const hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
+    const totalMinutes = (hours - 9) * 60 + minutes;
+    return (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
+  };
+
+  const top = calculateTopPosition();
+
+  if (top < 0 || top > HOURLY_SLOT_HEIGHT * 13) {
+    return null; // Don't show if outside of 9am-10pm
+  }
+
+  return (
+    <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${top}px` }}>
+      <div className="flex items-center">
+        <div className="w-16 flex-shrink-0 text-right pr-1">
+          <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
+            {format(currentTime, 'HH:mm')}
+          </span>
+        </div>
+        <div className="flex-grow h-px bg-[#202A49]"></div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [hoveredBarberId, setHoveredBarberId] = useState<number | null>(null);
@@ -54,7 +95,6 @@ export default function AgendaView() {
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
   const gridRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
 
-  const HOURLY_SLOT_HEIGHT = 48; // in pixels
   const SLOT_DURATION_MINUTES = 30;
   
   const handleSetToday = () => setDate(new Date());
@@ -201,7 +241,8 @@ export default function AgendaView() {
                   </div>
                   
                   {/* Barbers Columns */}
-                  <div className="flex-grow grid grid-flow-col auto-cols-min gap-6">
+                  <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
+                      {isToday(date || new Date()) && <CurrentTimeIndicator />}
                       {barbers.map((barber) => (
                           <div key={barber.id} className="w-64 flex-shrink-0">
                               {/* Professional Header */}
@@ -269,7 +310,7 @@ export default function AgendaView() {
                                   {/* Click Popover */}
                                   {popoverState?.barberId === barber.id && (
                                       <div
-                                        className="absolute w-[calc(100%_+_16px)] -ml-2 z-10"
+                                        className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
                                         style={calculatePopoverPosition(popoverState.time)}
                                       >
                                         <Card className="shadow-lg border-primary">

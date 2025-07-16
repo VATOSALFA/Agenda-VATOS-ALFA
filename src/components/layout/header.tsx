@@ -262,9 +262,23 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
-                <Settings className="h-5 w-5" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                 <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                    <Settings className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Configuraciones</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Users className="mr-2 h-4 w-4" />
+                  <span>Usuarios</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

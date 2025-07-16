@@ -28,6 +28,9 @@ import {
   Archive,
   ShoppingCart,
   History,
+  FileText,
+  PieChart,
+  LineChart,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -52,7 +55,6 @@ const mainNavLinks = [
   { href: '/', label: 'Agenda', icon: Calendar },
   { href: '/reminders', label: 'Recordatorios', icon: Bell },
   { href: '/clients', label: 'Clientes', icon: Users },
-  { href: '/reports', label: 'Reportes', icon: BarChart2 },
   { href: '/admin', label: 'Administración', icon: Settings },
 ];
 
@@ -68,6 +70,12 @@ const productsNavLinks = [
   { href: '/products', label: 'Inventario', icon: Archive },
   { href: '/products/sales', label: 'Venta de productos', icon: ShoppingCart },
   { href: '/products/stock-movement', label: 'Movimiento de stock', icon: History },
+];
+
+const reportsNavLinks = [
+  { href: '/reports', label: 'Resumen', icon: PieChart },
+  { href: '/reports/reservations', label: 'Reporte de reservas', icon: FileText },
+  { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart },
 ];
 
 
@@ -121,7 +129,7 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {mainNavLinks.filter(l => !['/', '/products'].includes(l.href)).map(({ href, label }) => (
+            {mainNavLinks.filter(l => !['/', '/products', '/reports'].includes(l.href)).map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
@@ -159,17 +167,28 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Link
-                href="/reports"
-                className={cn(
-                  'px-3 py-2 rounded-md transition-colors',
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                 <Button variant="ghost" className={cn(
+                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                   pathname.startsWith('/reports')
-                    ? 'bg-white/10 text-white'
+                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}
-              >
-                Reportes
-            </Link>
+                )}>
+                  Reportes <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                {reportsNavLinks.map(({href, label, icon: Icon}) => (
+                  <DropdownMenuItem key={href} asChild>
+                    <Link href={href}>
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{label}</span>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
              <Link
                 href="/admin"
                 className={cn(

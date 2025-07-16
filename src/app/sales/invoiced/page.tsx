@@ -23,7 +23,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
     return (
         <Card>
             <CardHeader>
-                <CardTitle>{title}</CardTitle>
+                <CardTitle className="text-xl font-semibold">{title}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4 items-center">
                 <div className="h-48 relative">
@@ -33,8 +33,8 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                                 data={data}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={40}
-                                outerRadius={60}
+                                innerRadius={50}
+                                outerRadius={70}
                                 fill="#8884d8"
                                 paddingAngle={2}
                                 dataKey="value"
@@ -52,7 +52,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                             />
                         </RechartsPieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                         <span className="text-2xl font-bold">${total.toLocaleString('es-CL')}</span>
                     </div>
                 </div>
@@ -229,4 +229,5 @@ export default function InvoicedSalesPage() {
 
         </div>
     );
-}
+
+    

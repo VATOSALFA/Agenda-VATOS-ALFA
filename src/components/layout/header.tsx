@@ -275,9 +275,11 @@ export default function Header() {
                     <span>Configuraciones</span>
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Users className="mr-2 h-4 w-4" />
-                  <span>Usuarios</span>
+                <DropdownMenuItem asChild>
+                    <Link href="/settings/users">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Usuarios</span>
+                    </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

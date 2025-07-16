@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, MouseEvent } from 'react';
 import {
   Select,
   SelectContent,
@@ -15,12 +15,15 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { NewReservationForm } from '../reservations/new-reservation-form';
+import { BlockScheduleForm } from '../reservations/block-schedule-form';
 
 const barbers = [
   { id: 1, name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
@@ -45,17 +48,63 @@ export default function AgendaView() {
   const [hoveredBarberId, setHoveredBarberId] = useState<number | null>(null);
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
+  const [hoveredSlot, setHoveredSlot] = useState<{barberId: number, time: string} | null>(null);
+  const [popoverState, setPopoverState] = useState<{barberId: number, time: string} | null>(null);
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
+  const gridRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
+
   const HOURLY_SLOT_HEIGHT = 48; // in pixels
+  const SLOT_DURATION_MINUTES = 30;
   
   const handleSetToday = () => setDate(new Date());
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
   const handleNextDay = () => setDate(d => addDays(d || new Date(), 1));
+
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>, barberId: number) => {
+    const gridEl = gridRefs.current[barberId];
+    if (!gridEl) return;
+    const rect = gridEl.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    
+    const slotsPerHour = 60 / SLOT_DURATION_MINUTES;
+    const slotIndex = Math.floor(y / (HOURLY_SLOT_HEIGHT / slotsPerHour));
+    
+    const hour = 9 + Math.floor(slotIndex / slotsPerHour);
+    const minute = (slotIndex % slotsPerHour) * SLOT_DURATION_MINUTES;
+
+    if (hour < 9 || hour >= 22) {
+      setHoveredSlot(null);
+      return;
+    }
+
+    const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    setHoveredSlot({ barberId, time });
+  }
+
+  const handleMouseLeave = () => {
+    setHoveredSlot(null);
+  }
+
+  const handleClickSlot = (e: MouseEvent<HTMLDivElement>, barberId: number) => {
+    e.stopPropagation();
+    if(hoveredSlot) {
+      setPopoverState(hoveredSlot)
+    }
+  }
 
   const calculatePosition = (start: number, duration: number) => {
     const top = (start - 9) * HOURLY_SLOT_HEIGHT;
     const height = duration * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
+
+  const calculatePopoverPosition = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number);
+    const start = hour + (minute / 60);
+    const top = (start - 9) * HOURLY_SLOT_HEIGHT;
+    return { top: `${top}px` };
+  }
 
   const formatHour = (hour: number) => {
       const h = Math.floor(hour);
@@ -192,11 +241,49 @@ export default function AgendaView() {
                               </div>
 
                               {/* Appointments Grid */}
-                              <div className="relative bg-white/60">
+                              <div 
+                                className="relative bg-white/60"
+                                ref={el => gridRefs.current[barber.id] = el}
+                                onMouseMove={(e) => handleMouseMove(e, barber.id)}
+                                onMouseLeave={handleMouseLeave}
+                                onClick={(e) => handleClickSlot(e, barber.id)}
+                              >
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
                                       <div key={hour} className="h-[48px] border-b border-border"></div>
                                   ))}
+                                  
+                                  {/* Hover Popover */}
+                                  {hoveredSlot?.barberId === barber.id && (
+                                    <div
+                                        className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${HOURLY_SLOT_HEIGHT/2}px`}}
+                                    >
+                                        <p className="text-xs font-bold text-primary flex items-center">
+                                            <Plus className="w-3 h-3 mr-1" />
+                                            {hoveredSlot.time}
+                                        </p>
+                                    </div>
+                                  )}
+
+                                  {/* Click Popover */}
+                                  {popoverState?.barberId === barber.id && (
+                                      <div
+                                        className="absolute w-[calc(100%_+_16px)] -ml-2 z-10"
+                                        style={calculatePopoverPosition(popoverState.time)}
+                                      >
+                                        <Card className="shadow-lg border-primary">
+                                            <CardContent className="p-2 space-y-1">
+                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={() => setIsReservationModalOpen(true)}>
+                                                    <Plus className="w-4 h-4 mr-2" /> Agregar Reserva
+                                                </Button>
+                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={() => setIsBlockScheduleModalOpen(true)}>
+                                                    <Lock className="w-4 h-4 mr-2" /> Bloquear horario
+                                                </Button>
+                                            </CardContent>
+                                        </Card>
+                                      </div>
+                                  )}
 
                                   {/* Appointments */}
                                   {appointments.filter(a => a.barberId === barber.id).map(appointment => (
@@ -204,7 +291,7 @@ export default function AgendaView() {
                                       <TooltipTrigger asChild>
                                         <div 
                                           className={cn(
-                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-[6px] text-[13px] border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2", 
+                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-[6px] text-[13px] border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", 
                                               appointment.color,
                                               'text-[#1A1A1A]'
                                           )} style={calculatePosition(appointment.start, appointment.duration)}>
@@ -248,6 +335,12 @@ export default function AgendaView() {
           </ScrollArea>
         </main>
       </div>
+      {isReservationModalOpen && (
+          <NewReservationForm onFormSubmit={() => setIsReservationModalOpen(false)} />
+      )}
+      {isBlockScheduleModalOpen && (
+          <BlockScheduleForm onFormSubmit={() => setIsBlockScheduleModalOpen(false)} />
+      )}
     </TooltipProvider>
   );
 }

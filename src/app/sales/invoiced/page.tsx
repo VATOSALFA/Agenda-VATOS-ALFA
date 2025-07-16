@@ -23,7 +23,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-lg font-medium">{title}</CardTitle>
+                <CardTitle className="text-base font-medium">{title}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4 items-center">
                 <div className="h-48 relative">
@@ -33,8 +33,8 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                                 data={data}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
+                                innerRadius={45}
+                                outerRadius={70}
                                 fill="#8884d8"
                                 paddingAngle={2}
                                 dataKey="value"

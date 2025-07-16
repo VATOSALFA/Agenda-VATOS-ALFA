@@ -116,8 +116,11 @@ export default function Header() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-            <Scissors className="h-6 w-6 text-white" />
-            <span className="font-bold text-lg text-white">VATOS ALFA</span>
+            <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="50,10 0,100 20,100 50,40 80,100 100,100" fill="#2d3d73"/>
+              <polygon points="50,10 20,100 30,100 50,60 70,100 80,100" fill="#40538a"/>
+            </svg>
+            <span className="font-bold text-lg text-white whitespace-nowrap">VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
             <Link

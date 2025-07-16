@@ -72,8 +72,8 @@ const CurrentTimeIndicator = () => {
   return (
     <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${top}px` }}>
       <div className="flex items-center">
-        <div className="w-16 flex-shrink-0 text-right pr-1">
-          <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
+        <div className="w-16 flex-shrink-0 text-right pr-2">
+           <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded -translate-y-1/2 relative">
             {format(currentTime, 'HH:mm')}
           </span>
         </div>

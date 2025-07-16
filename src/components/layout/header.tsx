@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -54,16 +55,11 @@ const mainNavLinks = [
 ];
 
 const salesNavLinks = [
-    { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote },
     { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard },
-    { href: '/sales/payment-methods', label: 'Métodos de Pago', icon: Wallet },
-    { href: '/sales/subscriptions', label: 'Abonos', icon: UserPlus },
-    { href: '/sales/plans', label: 'Planes', icon: Briefcase },
-    { href: '/sales/tips', label: 'Propinas', icon: Gift },
     { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign },
+    { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote },
+    { href: '/sales/tips', label: 'Propinas', icon: Gift },
     { href: '/sales/payments', label: 'Pagos y Transferencias', icon: ArrowRightLeft },
-    { href: '/sales/my-charges', label: 'Mis cobros', icon: CreditCard },
-    { href: '/sales/my-payments', label: 'Mis pagos', icon: CreditCard },
 ]
 
 export default function Header() {

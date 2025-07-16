@@ -25,8 +25,8 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
             <CardHeader>
                 <CardTitle className="text-base font-medium">{title}</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 items-center">
-                <div className="h-56 relative">
+            <CardContent className="grid grid-cols-5 gap-4 items-center">
+                <div className="h-56 relative col-span-3">
                     <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                             <Pie
@@ -56,7 +56,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                         <span className="text-xl font-bold">${total.toLocaleString('es-CL')}</span>
                     </div>
                 </div>
-                <div className="text-sm">
+                <div className="text-sm col-span-2">
                     <ul>
                         {data.map((item, index) => (
                             <li key={index} className="flex justify-between items-center py-1 border-b">

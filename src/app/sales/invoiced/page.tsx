@@ -26,7 +26,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                 <CardTitle className="text-base font-medium">{title}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4 items-center">
-                <div className="h-48 relative">
+                <div className="h-56 relative">
                     <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                             <Pie
@@ -154,8 +154,8 @@ export default function InvoicedSalesPage() {
                     </>
                 ) : (
                     <>
-                        <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
-                        <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+                        <Card><CardContent className="p-6"><Skeleton className="h-56 w-full" /></CardContent></Card>
+                        <Card><CardContent className="p-6"><Skeleton className="h-56 w-full" /></CardContent></Card>
                     </>
                 )}
             </div>
@@ -229,11 +229,4 @@ export default function InvoicedSalesPage() {
 
         </div>
     );
-
-    
-
-
-
-    
-
-    
+}

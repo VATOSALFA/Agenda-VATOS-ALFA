@@ -34,7 +34,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                                 cx="50%"
                                 cy="50%"
                                 innerRadius={60}
-                                outerRadius={85}
+                                outerRadius={95}
                                 fill="#8884d8"
                                 paddingAngle={2}
                                 dataKey="value"
@@ -233,5 +233,7 @@ export default function InvoicedSalesPage() {
     
 
 
+
+    
 
     

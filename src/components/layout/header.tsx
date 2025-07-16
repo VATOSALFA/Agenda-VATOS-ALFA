@@ -25,6 +25,9 @@ import {
   ChevronDown,
   Wallet,
   Lock,
+  Archive,
+  ShoppingCart,
+  History,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -49,7 +52,6 @@ const mainNavLinks = [
   { href: '/', label: 'Agenda', icon: Calendar },
   { href: '/reminders', label: 'Recordatorios', icon: Bell },
   { href: '/clients', label: 'Clientes', icon: Users },
-  { href: '/products', label: 'Productos', icon: Box },
   { href: '/reports', label: 'Reportes', icon: BarChart2 },
   { href: '/admin', label: 'Administración', icon: Settings },
 ];
@@ -61,6 +63,13 @@ const salesNavLinks = [
     { href: '/sales/tips', label: 'Propinas', icon: Gift },
     { href: '/sales/payments', label: 'Pagos y Transferencias', icon: ArrowRightLeft },
 ]
+
+const productsNavLinks = [
+  { href: '/products', label: 'Inventario', icon: Archive },
+  { href: '/products/sales', label: 'Venta de productos', icon: ShoppingCart },
+  { href: '/products/stock-movement', label: 'Movimiento de stock', icon: History },
+];
+
 
 export default function Header() {
   const pathname = usePathname();
@@ -77,20 +86,18 @@ export default function Header() {
             <span className="font-bold text-lg text-white">VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
-            {mainNavLinks.slice(0, 1).map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'px-3 py-2 rounded-md transition-colors',
-                  pathname === href
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}
-              >
-                {label}
-              </Link>
-            ))}
+            <Link
+              href="/"
+              className={cn(
+                'px-3 py-2 rounded-md transition-colors',
+                pathname === '/'
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-300 hover:bg-white/10 hover:text-white'
+              )}
+            >
+              Agenda
+            </Link>
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className={cn(
@@ -113,13 +120,14 @@ export default function Header() {
                   ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {mainNavLinks.slice(1).map(({ href, label }) => (
+
+            {mainNavLinks.filter(l => !['/', '/products'].includes(l.href)).map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors',
-                  pathname === href
+                  pathname.startsWith(href)
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}
@@ -127,6 +135,54 @@ export default function Header() {
                 {label}
               </Link>
             ))}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className={cn(
+                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                  pathname.startsWith('/products')
+                     ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}>
+                  Productos <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                  {productsNavLinks.map(({href, label, icon: Icon}) => (
+                      <DropdownMenuItem key={href} asChild>
+                          <Link href={href}>
+                              <Icon className="mr-2 h-4 w-4" />
+                              <span>{label}</span>
+                          </Link>
+                      </DropdownMenuItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Link
+                href="/reports"
+                className={cn(
+                  'px-3 py-2 rounded-md transition-colors',
+                  pathname.startsWith('/reports')
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}
+              >
+                Reportes
+            </Link>
+             <Link
+                href="/admin"
+                className={cn(
+                  'px-3 py-2 rounded-md transition-colors',
+                  pathname.startsWith('/admin')
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}
+              >
+                Administración
+            </Link>
+
+
           </nav>
           <div className="ml-auto flex items-center space-x-4">
             <DropdownMenu>

@@ -45,42 +45,29 @@ const appointments = [
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
 
-const CurrentTimeIndicator = () => {
+const useCurrentTime = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000); // Update every minute
-
     return () => clearInterval(timer);
   }, []);
-
+  
   const calculateTopPosition = () => {
     const hours = currentTime.getHours();
     const minutes = currentTime.getMinutes();
     const totalMinutes = (hours - 9) * 60 + minutes;
-    return (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
+    const top = (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
+
+    if (top < 0 || top > HOURLY_SLOT_HEIGHT * 13) {
+      return null;
+    }
+    return top;
   };
 
-  const top = calculateTopPosition();
-
-  if (top < 0 || top > HOURLY_SLOT_HEIGHT * 13) {
-    return null; // Don't show if outside of 9am-10pm
-  }
-
-  return (
-    <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${top}px` }}>
-      <div className="flex items-center">
-        <div className="w-16 flex-shrink-0 text-right pr-2">
-           <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded -translate-y-1/2 relative">
-            {format(currentTime, 'HH:mm')}
-          </span>
-        </div>
-        <div className="flex-grow h-px bg-[#202A49]"></div>
-      </div>
-    </div>
-  );
+  return { time: currentTime, top: calculateTopPosition() };
 };
 
 
@@ -94,6 +81,8 @@ export default function AgendaView() {
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
   const gridRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
+  const { time: currentTime, top: currentTimeTop } = useCurrentTime();
+
 
   const SLOT_DURATION_MINUTES = 30;
   
@@ -231,18 +220,27 @@ export default function AgendaView() {
           <ScrollArea className="h-full">
               <div className="flex">
                   {/* Time Column */}
-                  <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
+                  <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0 relative">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                       {hours.map((hour) => (
                           <div key={hour} className="h-[48px] text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
+                       {isToday(date || new Date()) && currentTimeTop !== null && (
+                          <div className="absolute right-0" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                            <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded relative">
+                              {format(currentTime, 'HH:mm')}
+                            </span>
+                          </div>
+                      )}
                   </div>
                   
                   {/* Barbers Columns */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
-                      {isToday(date || new Date()) && <CurrentTimeIndicator />}
+                      {isToday(date || new Date()) && currentTimeTop !== null && (
+                        <div className="absolute left-0 right-0 h-px bg-[#202A49] z-10" style={{ top: currentTimeTop }} />
+                      )}
                       {barbers.map((barber) => (
                           <div key={barber.id} className="w-64 flex-shrink-0">
                               {/* Professional Header */}

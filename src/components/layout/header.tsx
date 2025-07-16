@@ -269,9 +269,11 @@ export default function Header() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Configuraciones</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Configuraciones</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Users className="mr-2 h-4 w-4" />
@@ -297,10 +299,10 @@ export default function Header() {
                  </div>
                  <DropdownMenuSeparator />
                  <DropdownMenuItem asChild>
-                    <Link href="#">
+                    <a href={`https://${websiteUrl}`} target="_blank" rel="noopener noreferrer" className="flex items-center">
                         <Share2 className="mr-2 h-4 w-4" />
                         <span>Ir a mi sitio web</span>
-                    </Link>
+                    </a>
                  </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -329,9 +331,11 @@ export default function Header() {
                     <Users className="mr-2 h-4 w-4" />
                     <span>Perfil</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Configuración</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Configuración</span>
+                    </Link>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />

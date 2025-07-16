@@ -26,7 +26,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                 <CardTitle className="text-xl font-medium">{title}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-5 gap-4 items-center">
-                <div className="h-64 relative col-span-3">
+                <div className="h-[280px] relative col-span-3">
                     <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                             <Pie

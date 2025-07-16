@@ -23,7 +23,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-base font-medium">{title}</CardTitle>
+                <CardTitle className="text-xl font-medium">{title}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-5 gap-4 items-center">
                 <div className="h-64 relative col-span-3">

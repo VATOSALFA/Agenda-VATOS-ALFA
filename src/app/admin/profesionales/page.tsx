@@ -15,8 +15,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Tooltip,
@@ -26,7 +24,6 @@ import {
 } from '@/components/ui/tooltip';
 
 import {
-  Lightbulb,
   Filter,
   PlusCircle,
   Pencil,
@@ -158,26 +155,14 @@ export default function ProfessionalsPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-       <Tabs defaultValue="profesionales">
         <div className="flex items-center justify-between">
-            <TabsList>
-                <TabsTrigger value="profesionales">Profesionales</TabsTrigger>
-                <TabsTrigger value="grupos">Grupos Personalizados</TabsTrigger>
-            </TabsList>
+            <h2 className="text-3xl font-bold tracking-tight">Profesionales</h2>
             <Button onClick={() => handleOpenModal('new')}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Profesional
             </Button>
         </div>
 
-        <TabsContent value="profesionales" className="space-y-4">
-            <Alert>
-                <Lightbulb className="h-4 w-4" />
-                <AlertTitle>¡Edita a tu primer profesional!</AlertTitle>
-                <AlertDescription>
-                Agrega más personas a tu equipo de trabajo. Puedes editar sus horarios, qué servicios realizan y más.
-                </AlertDescription>
-            </Alert>
-
+        <div className="space-y-4">
             <div className="py-2">
                 <Button variant="outline">
                 <Filter className="mr-2 h-4 w-4" /> Filtrar por
@@ -259,15 +244,7 @@ export default function ProfessionalsPage() {
                 </ul>
                 </CardContent>
             </Card>
-        </TabsContent>
-        <TabsContent value="grupos">
-            <Card>
-                <CardContent className="p-6">
-                    <p className="text-muted-foreground text-center">La gestión de grupos personalizados estará disponible aquí.</p>
-                </CardContent>
-            </Card>
-        </TabsContent>
-       </Tabs>
+        </div>
       </div>
 
       {editingProfessional && (

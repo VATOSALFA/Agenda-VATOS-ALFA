@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -27,6 +28,7 @@ import {
   Info
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
 
 const servicesByCategory = [
   {
@@ -66,7 +68,10 @@ const servicesByCategory = [
 ];
 
 export default function ServicesPage() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   return (
+    <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Servicios</h2>
@@ -74,7 +79,7 @@ export default function ServicesPage() {
           <Button variant="outline">
             <PlusCircle className="mr-2 h-4 w-4" /> Nueva categoría
           </Button>
-          <Button>
+          <Button onClick={() => setIsModalOpen(true)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo
           </Button>
         </div>
@@ -140,6 +145,7 @@ export default function ServicesPage() {
         </CardContent>
       </Card>
     </div>
+    <EditServicioModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </>
   );
 }
-

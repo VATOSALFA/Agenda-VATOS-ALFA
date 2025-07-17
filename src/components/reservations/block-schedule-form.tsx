@@ -114,7 +114,6 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
           title: 'Conflicto de Horario',
           description: `El barbero ya tiene ${querySnapshot.size} reserva(s) en el rango seleccionado.`,
         });
-        // We return early here but the finally block will still execute
         return;
       }
       
@@ -141,7 +140,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       });
     } finally {
       setIsSubmitting(false);
-      onFormSubmit(); // Close the modal
+      onFormSubmit();
     }
   }
 

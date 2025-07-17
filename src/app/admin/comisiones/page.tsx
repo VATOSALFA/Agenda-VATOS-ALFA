@@ -7,26 +7,33 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { EditComisionesModal } from '@/components/admin/comisiones/edit-comisiones-modal';
+import { EditDefaultComisionModal } from '@/components/admin/comisiones/edit-default-comision-modal';
 
 const professionals = [
-  { id: 'prof_1', name: 'Beatriz Elizarraga Casas', serviceCount: 12 },
-  { id: 'prof_2', name: 'Gloria Ivon', serviceCount: 11 },
-  { id: 'prof_3', name: 'Karina Ruiz Rosales', serviceCount: 11 },
-  { id: 'prof_4', name: 'Lupita', serviceCount: 12 },
-  { id: 'prof_5', name: 'Erick', serviceCount: 13 },
+  { id: 'prof_1', name: 'Beatriz Elizarraga Casas', serviceCount: 12, defaultCommission: { value: 50, type: '%' } },
+  { id: 'prof_2', name: 'Gloria Ivon', serviceCount: 11, defaultCommission: { value: 45, type: '%' } },
+  { id: 'prof_3', name: 'Karina Ruiz Rosales', serviceCount: 11, defaultCommission: { value: 150, type: '$' } },
+  { id: 'prof_4', name: 'Lupita', serviceCount: 12, defaultCommission: { value: 50, type: '%' } },
+  { id: 'prof_5', name: 'Erick', serviceCount: 13, defaultCommission: { value: 55, type: '%' } },
 ];
 
 export type Professional = typeof professionals[0];
 
 export default function ComisionesPage() {
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
+  const [editingDefault, setEditingDefault] = useState<Professional | null>(null);
 
   const handleEdit = (prof: Professional) => {
     setEditingProfessional(prof);
   };
 
+  const handleEditDefault = (prof: Professional) => {
+    setEditingDefault(prof);
+  };
+
   const handleCloseModal = () => {
     setEditingProfessional(null);
+    setEditingDefault(null);
   };
 
   return (
@@ -55,7 +62,7 @@ export default function ComisionesPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => handleEdit(prof)}>Editar</Button>
-                <Button variant="secondary" size="sm">Editar Por Defecto</Button>
+                <Button variant="secondary" size="sm" onClick={() => handleEditDefault(prof)}>Editar Por Defecto</Button>
               </div>
             </Card>
           ))}
@@ -66,6 +73,13 @@ export default function ComisionesPage() {
           isOpen={!!editingProfessional}
           onClose={handleCloseModal}
           professional={editingProfessional}
+        />
+      )}
+       {editingDefault && (
+        <EditDefaultComisionModal
+          isOpen={!!editingDefault}
+          onClose={handleCloseModal}
+          professional={editingDefault}
         />
       )}
     </>

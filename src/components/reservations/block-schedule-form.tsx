@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import { format, set } from 'date-fns';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -114,7 +114,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
           title: 'Conflicto de Horario',
           description: `El barbero ya tiene ${querySnapshot.size} reserva(s) en el rango seleccionado.`,
         });
-        setIsSubmitting(false);
+        // We return early here but the finally block will still execute
         return;
       }
       
@@ -127,24 +127,21 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         creado_en: Timestamp.now(),
       });
       
-      form.reset();
-      onFormSubmit(); // This closes the modal
-      
       toast({
-        title: '¡Éxito!',
-        description: 'Bloqueo guardado con éxito',
+        title: 'Bloqueo guardado con éxito',
         duration: 1500,
       });
 
     } catch (error) {
-      console.error('Error blocking schedule: ', error);
+      console.error('Error al guardar el bloqueo:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo bloquear el horario. Inténtalo de nuevo.',
+        description: 'No se pudo guardar el bloqueo. Inténtalo de nuevo.',
       });
     } finally {
       setIsSubmitting(false);
+      onFormSubmit(); // Close the modal
     }
   }
 

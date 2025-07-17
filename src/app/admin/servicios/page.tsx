@@ -25,10 +25,13 @@ import {
   Circle,
   ChevronDown,
   GripVertical,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
 
 const servicesByCategory = [
   {
@@ -69,6 +72,17 @@ const servicesByCategory = [
 
 export default function ServicesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const { toast } = useToast();
+
+  const handleSaveCategory = () => {
+    // Here you would normally save to the database
+    toast({
+        title: "Categoría guardada",
+        description: "La nueva categoría ha sido creada con éxito."
+    })
+    setIsAddingCategory(false);
+  }
 
   return (
     <>
@@ -76,7 +90,7 @@ export default function ServicesPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Servicios</h2>
         <div className="flex items-center space-x-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => setIsAddingCategory(true)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nueva categoría
           </Button>
           <Button onClick={() => setIsModalOpen(true)}>
@@ -85,6 +99,29 @@ export default function ServicesPage() {
         </div>
       </div>
       
+      <AnimatePresence>
+        {isAddingCategory && (
+            <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+            >
+                <Card className="mb-4">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-4">
+                            <Input placeholder="Nombre de la nueva categoría" className="flex-grow"/>
+                            <Button onClick={handleSaveCategory}>Guardar</Button>
+                            <Button variant="ghost" onClick={() => setIsAddingCategory(false)}>Cancelar</Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
+
       <div className="flex items-center space-x-4 pb-4">
         <Button variant="outline">
           <Filter className="mr-2 h-4 w-4" /> Filtrar por

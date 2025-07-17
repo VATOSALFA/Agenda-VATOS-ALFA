@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useRef, MouseEvent, useEffect } from 'react';
+import { useState, useRef, MouseEvent, useEffect, useMemo } from 'react';
 import {
   Select,
   SelectContent,
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock } from 'lucide-react';
-import { format, addDays, subDays, isToday } from 'date-fns';
+import { format, addDays, subDays, isToday, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 const barbers = [
   { id: '1', name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
@@ -34,16 +35,25 @@ const barbers = [
 ];
 
 const appointments = [
-    { id: 1, barberId: '1', customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56912345678' },
-    { id: 2, barberId: '1', customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-green-100 border-green-500 text-green-800', paymentStatus: 'Pendiente', phone: '+56987654321' },
-    { id: 3, barberId: '2', customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-indigo-100 border-indigo-500 text-indigo-800', paymentStatus: 'Pagado', phone: '+56911223344' },
-    { id: 4, barberId: '3', customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56955667788' },
-    { id: 5, barberId: '1', customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-100 border-purple-500 text-purple-800', paymentStatus: 'Pendiente', phone: null },
-    { id: 6, barberId: '2', customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-100 border-pink-500 text-pink-800', paymentStatus: 'Pagado', phone: '+56999887766' },
-    { id: 7, barberId: '3', customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-gray-200 border-gray-400 text-gray-800', paymentStatus: null, phone: null },
+    { id: 1, barberId: '1', customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56912345678', type: 'appointment' },
+    { id: 2, barberId: '1', customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-green-100 border-green-500 text-green-800', paymentStatus: 'Pendiente', phone: '+56987654321', type: 'appointment' },
+    { id: 3, barberId: '2', customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-indigo-100 border-indigo-500 text-indigo-800', paymentStatus: 'Pagado', phone: '+56911223344', type: 'appointment' },
+    { id: 4, barberId: '3', customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56955667788', type: 'appointment' },
+    { id: 5, barberId: '1', customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-100 border-purple-500 text-purple-800', paymentStatus: 'Pendiente', phone: null, type: 'appointment' },
+    { id: 6, barberId: '2', customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-100 border-pink-500 text-pink-800', paymentStatus: 'Pagado', phone: '+56999887766', type: 'appointment' },
+    // A block was here, it will be replaced by fetched data
 ];
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
+
+interface TimeBlock {
+    id: string;
+    barbero_id: string;
+    motivo: string;
+    fecha: string;
+    hora_inicio: string;
+    hora_fin: string;
+}
 
 const useCurrentTime = () => {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -95,6 +105,28 @@ export default function AgendaView() {
   const { time: currentTime, top: currentTimeTop } = useCurrentTime();
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
   useEffect(() => setRenderTimeIndicator(true), []);
+
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date);
+
+  const allEvents = useMemo(() => {
+    const formattedBlocks = timeBlocks
+      .filter(block => date && block.fecha === format(date, 'yyyy-MM-dd'))
+      .map(block => {
+        const start = parse(block.hora_inicio, 'HH:mm', new Date()).getHours() + parse(block.hora_inicio, 'HH:mm', new Date()).getMinutes() / 60;
+        const end = parse(block.hora_fin, 'HH:mm', new Date()).getHours() + parse(block.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
+        return {
+          id: block.id,
+          barberId: block.barbero_id,
+          customer: block.motivo,
+          service: 'Bloqueado',
+          start: start,
+          duration: end - start,
+          color: 'bg-gray-100 border-gray-400 text-gray-600',
+          type: 'block',
+        };
+      });
+      return [...appointments, ...formattedBlocks];
+  }, [timeBlocks, date]);
 
 
   const SLOT_DURATION_MINUTES = 30;
@@ -267,7 +299,7 @@ export default function AgendaView() {
                           </div>
                       ))}
                        {renderTimeIndicator && isToday(date || new Date()) && currentTimeTop !== null && (
-                          <div className="absolute right-0 text-right pr-2" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                         <div className="absolute w-full text-right" style={{ top: currentTimeTop, transform: 'translateY(-50%)', paddingRight: '0.75rem' }}>
                             <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
                               {currentTime && format(currentTime, 'HH:mm')}
                             </span>
@@ -364,46 +396,53 @@ export default function AgendaView() {
                                       </div>
                                   )}
 
-                                  {/* Appointments */}
-                                  {appointments.filter(a => a.barberId === barber.id).map(appointment => (
-                                    <Tooltip key={appointment.id}>
+                                  {/* Events */}
+                                  {allEvents.filter(a => a.barberId === barber.id).map(event => (
+                                    <Tooltip key={event.id}>
                                       <TooltipTrigger asChild>
                                         <div 
                                           className={cn(
                                               "absolute w-[calc(100%-8px)] ml-[4px] rounded-[6px] text-[13px] border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", 
-                                              appointment.color,
+                                              event.color,
+                                              event.type === 'block' && 'bg-striped-gray',
                                               'text-[#1A1A1A]'
-                                          )} style={calculatePosition(appointment.start, appointment.duration)}>
-                                          <p className="font-bold truncate leading-tight">{appointment.customer}</p>
-                                          <p className="truncate leading-tight">{appointment.service}</p>
+                                          )} style={calculatePosition(event.start, event.duration)}>
+                                          <p className="font-bold truncate leading-tight">{event.customer}</p>
+                                          {event.type === 'appointment' && <p className="truncate leading-tight">{event.service}</p>}
                                         </div>
                                       </TooltipTrigger>
-                                      <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
-                                        <div className="space-y-2">
-                                          <p className="font-bold text-base text-foreground">{appointment.customer}</p>
-                                          <p className="text-sm text-muted-foreground">{appointment.service}</p>
-                                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <Clock className="w-4 h-4" />
-                                            <span>{formatHour(appointment.start)} - {formatHour(appointment.start + appointment.duration)}</span>
-                                          </div>
-                                          {appointment.paymentStatus &&
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <DollarSign className="w-4 h-4" />
-                                                <span className={cn(
-                                                    appointment.paymentStatus === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
-                                                )}>
-                                                    {appointment.paymentStatus}
-                                                </span>
-                                            </div>
-                                          }
-                                          {appointment.phone &&
+                                      {event.type === 'appointment' ? (
+                                        <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
+                                          <div className="space-y-2">
+                                            <p className="font-bold text-base text-foreground">{event.customer}</p>
+                                            <p className="text-sm text-muted-foreground">{event.service}</p>
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                <Phone className="w-4 h-4" />
-                                                <span>{appointment.phone}</span>
+                                              <Clock className="w-4 h-4" />
+                                              <span>{formatHour(event.start)} - {formatHour(event.start + event.duration)}</span>
                                             </div>
-                                          }
-                                        </div>
-                                      </TooltipContent>
+                                            {(event as any).paymentStatus &&
+                                              <div className="flex items-center gap-2 text-sm">
+                                                  <DollarSign className="w-4 h-4" />
+                                                  <span className={cn(
+                                                      (event as any).paymentStatus === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                                  )}>
+                                                      {(event as any).paymentStatus}
+                                                  </span>
+                                              </div>
+                                            }
+                                            {(event as any).phone &&
+                                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                  <Phone className="w-4 h-4" />
+                                                  <span>{(event as any).phone}</span>
+                                              </div>
+                                            }
+                                          </div>
+                                        </TooltipContent>
+                                      ) : (
+                                        <TooltipContent>
+                                            <p>Horario Bloqueado</p>
+                                        </TooltipContent>
+                                      )}
                                     </Tooltip>
                                   ))}
                               </div>
@@ -433,3 +472,5 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
+

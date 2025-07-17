@@ -14,9 +14,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, UploadCloud } from 'lucide-react';
+import { Loader2, Plus, UploadCloud, Info } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 interface EditServicioModalProps {
   isOpen: boolean;
@@ -38,7 +40,7 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
   
   const selectedProfessionals = watch('professionals', []);
 
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = (checked: boolean | string) => {
     if (checked) {
         setValue('professionals', professionals.map(p => p.id));
     } else {
@@ -66,13 +68,6 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
       onClose();
     }
   };
-
-  const ImageUploader = () => (
-    <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg text-center h-32">
-      <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
-      <p className="text-xs text-muted-foreground">Arrastra o selecciona el archivo</p>
-    </div>
-  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -160,30 +155,57 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                 </div>
               </TabsContent>
               <TabsContent value="website" className="space-y-6 mt-0">
-                  <RadioGroup defaultValue="online-deposit">
-                     <div className="space-y-4 rounded-lg border p-4">
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="online-deposit" id="online-deposit" />
-                            <Label htmlFor="online-deposit">Abono en línea</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="full-payment" id="full-payment" />
-                            <Label htmlFor="full-payment">Se debe pagar en línea</Label>
-                        </div>
-                        <Input type="number" placeholder="Incentivo %" className="w-40 ml-6" />
-                         <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="no-online-payment" id="no-online-payment" />
-                            <Label htmlFor="no-online-payment">No se puede pagar en línea</Label>
-                        </div>
-                     </div>
-                  </RadioGroup>
-                  <div className="space-y-2">
-                    <Label>Agregar imágenes</Label>
-                    <div className="grid grid-cols-3 gap-4">
-                        <ImageUploader />
-                        <ImageUploader />
-                        <ImageUploader />
+                  <Alert className="bg-orange-100 border-orange-200 text-orange-800 [&>svg]:text-orange-600">
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      Configura las opciones para que tus clientes agenden en línea desde el Sitio Web. 
+                      <Link href="#" className="font-semibold underline ml-1">Visualiza tu Sitio Web aquí</Link>
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <h3 className="font-semibold">¡No pierdas citas y deja que tus clientes agenden desde tu Sitio Web!</h3>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="allow-online-booking">Permitir que este servicio se agende en línea.</Label>
+                      <Switch id="allow-online-booking" />
                     </div>
+                     <div className="flex items-center justify-between">
+                      <Label htmlFor="show-duration">Mostrar la duración del servicio en el Sitio Web.</Label>
+                      <Switch id="show-duration" />
+                    </div>
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="service-description">Descripción del servicio</Label>
+                      <p className="text-xs text-muted-foreground">Esta descripción aparecerá en tu Sitio Web.</p>
+                      <Textarea id="service-description" rows={4} placeholder="Acá puedes describir que incluye el servicio, notas importantes, requerimientos, entre otros." />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <h3 className="font-semibold">Pago en línea</h3>
+                    <p className="text-sm text-muted-foreground">¡Permite que tus clientes paguen en línea y disminuye las inasistencias!</p>
+                     <div className="flex items-center justify-between">
+                      <Label htmlFor="show-price">Mostrar el precio del servicio en el Sitio Web.</Label>
+                      <Switch id="show-price" />
+                    </div>
+                    <RadioGroup defaultValue="online-deposit" className="pt-2">
+                        <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="online-deposit" id="online-deposit" className="mt-1" />
+                            <div className="grid gap-1.5 leading-none">
+                              <Label htmlFor="online-deposit">Abono en línea</Label>
+                              <p className="text-sm text-muted-foreground">Tus clientes deberán pagar una parte del servicio al agendar. Podrás cobrar con POS de AgendaPro el monto restante.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="full-payment" id="full-payment" className="mt-1"/>
+                             <div className="grid gap-1.5 leading-none">
+                              <Label htmlFor="full-payment">Se debe pagar en línea</Label>
+                              <p className="text-sm text-muted-foreground">Tus clientes deberán realizar el pago completo de este servicio en línea.</p>
+                               <div className="pt-2">
+                                <Input placeholder="Descuento sólo para pago en línea" className="h-9"/>
+                               </div>
+                            </div>
+                        </div>
+                     </RadioGroup>
                   </div>
               </TabsContent>
               <TabsContent value="advanced" className="space-y-6 mt-0">

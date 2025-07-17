@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -32,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
+import { es } from 'date-fns/locale';
 
 const timeSlots = Array.from({ length: 24 * 2 }, (_, i) => {
   const hours = String(Math.floor(i / 2)).padStart(2, '0');

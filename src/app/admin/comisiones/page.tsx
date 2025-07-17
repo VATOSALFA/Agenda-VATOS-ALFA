@@ -2,10 +2,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, ChevronDown } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
 import { EditComisionesModal } from '@/components/admin/comisiones/edit-comisiones-modal';
 import { EditDefaultComisionModal } from '@/components/admin/comisiones/edit-default-comision-modal';
 import {
@@ -14,6 +13,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EditServiceComisionesModal } from '@/components/admin/comisiones/edit-service-comisiones-modal';
+import { EditDefaultServiceComisionModal } from '@/components/admin/comisiones/edit-default-service-comision-modal';
 
 
 const professionals = [
@@ -24,25 +25,49 @@ const professionals = [
   { id: 'prof_5', name: 'Erick', serviceCount: 13, defaultCommission: { value: 55, type: '%' } },
 ];
 
+const services = [
+    { id: 'serv_1', name: 'Todo para el Campeón', defaultCommission: { value: 50, type: '%' } },
+    { id: 'serv_2', name: 'Renovación Alfa', defaultCommission: { value: 50, type: '%' } },
+    { id: 'serv_3', name: 'Héroe en descanso', defaultCommission: { value: 50, type: '%' } },
+    { id: 'serv_4', name: 'El Caballero Alfa', defaultCommission: { value: 50, type: '%' } },
+    { id: 'serv_5', name: 'El Alfa Superior', defaultCommission: { value: 50, type: '%' } },
+    { id: 'serv_6', name: 'Facial completo con Masajeador', defaultCommission: { value: 100, type: '$' } },
+    { id: 'serv_7', name: 'Arreglo de ceja', defaultCommission: { value: 15, type: '%' } },
+];
+
+
 export type Professional = typeof professionals[0];
+export type Service = typeof services[0];
 
 export default function ComisionesPage() {
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [editingDefault, setEditingDefault] = useState<Professional | null>(null);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingDefaultService, setEditingDefaultService] = useState<Service | null>(null);
   const [viewType, setViewType] = useState('por profesional');
 
 
-  const handleEdit = (prof: Professional) => {
+  const handleEditProfessional = (prof: Professional) => {
     setEditingProfessional(prof);
   };
 
-  const handleEditDefault = (prof: Professional) => {
+  const handleEditDefaultProfessional = (prof: Professional) => {
     setEditingDefault(prof);
   };
 
-  const handleCloseModal = () => {
+  const handleEditService = (serv: Service) => {
+    setEditingService(serv);
+  }
+
+  const handleEditDefaultService = (serv: Service) => {
+    setEditingDefaultService(serv);
+  }
+
+  const handleCloseModals = () => {
     setEditingProfessional(null);
     setEditingDefault(null);
+    setEditingService(null);
+    setEditingDefaultService(null);
   };
 
   return (
@@ -71,35 +96,72 @@ export default function ComisionesPage() {
           </DropdownMenu>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {professionals.map((prof) => (
-            <Card key={prof.id} className="flex items-center justify-between p-4">
-              <div>
-                <p className="font-bold">{prof.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  Número De Servicios {prof.serviceCount}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleEdit(prof)}>Editar</Button>
-                <Button variant="secondary" size="sm" onClick={() => handleEditDefault(prof)}>Editar Por Defecto</Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        {viewType === 'por profesional' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {professionals.map((prof) => (
+              <Card key={prof.id} className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-bold">{prof.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Número De Servicios {prof.serviceCount}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleEditProfessional(prof)}>Editar</Button>
+                  <Button variant="secondary" size="sm" onClick={() => handleEditDefaultProfessional(prof)}>Editar Por Defecto</Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {services.map((serv) => (
+              <Card key={serv.id} className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-bold">{serv.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Comisión por Defecto: {serv.defaultCommission.value}{serv.defaultCommission.type}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleEditService(serv)}>Editar</Button>
+                  <Button variant="secondary" size="sm" onClick={() => handleEditDefaultService(serv)}>Editar Por Defecto</Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Professional Modals */}
       {editingProfessional && (
         <EditComisionesModal
           isOpen={!!editingProfessional}
-          onClose={handleCloseModal}
+          onClose={handleCloseModals}
           professional={editingProfessional}
         />
       )}
        {editingDefault && (
         <EditDefaultComisionModal
           isOpen={!!editingDefault}
-          onClose={handleCloseModal}
+          onClose={handleCloseModals}
           professional={editingDefault}
+        />
+      )}
+
+      {/* Service Modals */}
+       {editingService && (
+        <EditServiceComisionesModal
+          isOpen={!!editingService}
+          onClose={handleCloseModals}
+          service={editingService}
+        />
+      )}
+      {editingDefaultService && (
+        <EditDefaultServiceComisionModal
+            isOpen={!!editingDefaultService}
+            onClose={handleCloseModals}
+            service={editingDefaultService}
         />
       )}
     </>

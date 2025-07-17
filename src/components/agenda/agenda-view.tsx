@@ -88,7 +88,7 @@ const useCurrentTime = () => {
 
 
 export default function AgendaView() {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
@@ -104,7 +104,11 @@ export default function AgendaView() {
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const { time: currentTime, top: currentTimeTop } = useCurrentTime();
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
-  useEffect(() => setRenderTimeIndicator(true), []);
+  
+  useEffect(() => {
+    setDate(new Date());
+    setRenderTimeIndicator(true)
+  }, []);
 
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date);
 
@@ -299,7 +303,7 @@ export default function AgendaView() {
                           </div>
                       ))}
                        {renderTimeIndicator && isToday(date || new Date()) && currentTimeTop !== null && (
-                         <div className="absolute w-full text-right" style={{ top: currentTimeTop, transform: 'translateY(-50%)', paddingRight: '0.75rem' }}>
+                         <div className="absolute left-0 right-0 text-right" style={{ top: currentTimeTop, transform: 'translateY(-50%)', paddingRight: '0.75rem' }}>
                             <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
                               {currentTime && format(currentTime, 'HH:mm')}
                             </span>
@@ -472,5 +476,6 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
 
 

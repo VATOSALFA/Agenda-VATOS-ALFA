@@ -1,0 +1,305 @@
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+import type { Profesional } from '@/app/admin/profesionales/page';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Info, UploadCloud, Plus, Copy } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface EditProfesionalModalProps {
+  profesional: Profesional | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const timeOptions = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
+  const minute = i % 2 === 0 ? '00' : '30';
+  return `${String(hour).padStart(2, '0')}:${minute}`;
+});
+
+const daysOfWeek = [
+    { id: 'lunes', label: 'Lunes' },
+    { id: 'martes', label: 'Martes' },
+    { id: 'miercoles', label: 'Miércoles' },
+    { id: 'jueves', label: 'Jueves' },
+    { id: 'viernes', label: 'Viernes' },
+    { id: 'sabado', label: 'Sábado' },
+    { id: 'domingo', label: 'Domingo' },
+];
+
+const servicesByCategory = [
+  {
+    category: 'Barba',
+    services: [
+      { id: 'serv_01', name: 'Arreglo de barba, Afeitado clásico' },
+      { id: 'serv_02', name: 'Arreglo de barba expres' },
+    ],
+  },
+  {
+    category: 'Capilar',
+    services: [
+        { id: 'serv_06', name: 'Coloración Capilar' },
+        { id: 'serv_07', name: 'Corte y lavado de cabello' },
+        { id: 'serv_08', name: 'Corte clásico y moderno' },
+        { id: 'serv_09', name: 'Grecas' },
+    ]
+  },
+  {
+      category: 'Facial',
+      services: [
+          { id: 'serv_10', name: 'Arreglo de ceja' },
+          { id: 'serv_11', name: 'Facial completo con Masajeador' },
+      ]
+  }
+];
+
+
+export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfesionalModalProps) {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const form = useForm({
+    defaultValues: profesional || {
+        name: '',
+        email: '',
+        acceptsOnline: true,
+        services: [],
+        schedule: {
+          lunes: { enabled: true, start: '09:00', end: '18:00' },
+          martes: { enabled: true, start: '09:00', end: '18:00' },
+          miercoles: { enabled: true, start: '09:00', end: '18:00' },
+          jueves: { enabled: true, start: '09:00', end: '18:00' },
+          viernes: { enabled: true, start: '09:00', end: '18:00' },
+          sabado: { enabled: false, start: '', end: '' },
+          domingo: { enabled: false, start: '', end: '' },
+        },
+        biography: '',
+    },
+  });
+  
+  useEffect(() => {
+    form.reset(profesional || {
+        name: '',
+        email: '',
+        acceptsOnline: true,
+        services: [],
+        schedule: {
+          lunes: { enabled: true, start: '09:00', end: '18:00' },
+          martes: { enabled: true, start: '09:00', end: '18:00' },
+          miercoles: { enabled: true, start: '09:00', end: '18:00' },
+          jueves: { enabled: true, start: '09:00', end: '18:00' },
+          viernes: { enabled: true, start: '09:00', end: '18:00' },
+          sabado: { enabled: false, start: '', end: '' },
+          domingo: { enabled: false, start: '', end: '' },
+        },
+        biography: '',
+    });
+  }, [profesional, form]);
+
+
+  const onSubmit = async (data: any) => {
+    setIsSubmitting(true);
+    try {
+        console.log("Saving data:", data);
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        toast({
+            title: "Profesional guardado con éxito",
+        });
+    } catch (error) {
+        console.error("Error saving professional:", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo guardar el profesional. Inténtalo de nuevo.",
+        });
+    } finally {
+        setIsSubmitting(false);
+        onClose();
+    }
+  };
+
+  const copySchedule = (fromDay: string) => {
+    const sourceSchedule = form.getValues(`schedule.${fromDay}`);
+    daysOfWeek.forEach(day => {
+        if(day.id !== fromDay) {
+            form.setValue(`schedule.${day.id}.enabled`, sourceSchedule.enabled);
+            form.setValue(`schedule.${day.id}.start`, sourceSchedule.start);
+            form.setValue(`schedule.${day.id}.end`, sourceSchedule.end);
+        }
+    });
+    toast({ title: 'Horario copiado', description: `El horario del ${fromDay} ha sido copiado a los otros días.`});
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl h-[95vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{profesional ? `Editando ${profesional.name}` : 'Nuevo Profesional'}</DialogTitle>
+          <DialogDescription>
+            Modifica la información, servicios y horarios del profesional.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
+            <Tabs defaultValue="basic" className="flex-grow flex flex-col overflow-hidden">
+                <TabsList className="mb-4 flex-shrink-0">
+                    <TabsTrigger value="basic">Datos básicos</TabsTrigger>
+                    <TabsTrigger value="schedule">Horario</TabsTrigger>
+                    <TabsTrigger value="profile">Perfil</TabsTrigger>
+                </TabsList>
+                <ScrollArea className="flex-grow pr-4">
+                  <TabsContent value="basic" className="space-y-6 mt-0">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                              <Label htmlFor="name">Nombre Público</Label>
+                              <Input id="name" {...form.register('name')} />
+                          </div>
+                          <div className="space-y-2">
+                              <Label htmlFor="email">Email</Label>
+                              <Input id="email" type="email" {...form.register('email')} />
+                          </div>
+                      </div>
+                       <div className="flex items-center space-x-2 pt-4">
+                            <Controller
+                                name="acceptsOnline"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Switch id="acceptsOnline" checked={field.value} onCheckedChange={field.onChange} />
+                                )}
+                            />
+                            <Label htmlFor="acceptsOnline">Este profesional acepta reservas en línea</Label>
+                        </div>
+                        <div className="space-y-4 pt-6 border-t">
+                            <h4 className="text-lg font-semibold">Selecciona los services que realiza el profesional</h4>
+                            <Accordion type="multiple" defaultValue={servicesByCategory.map(s => s.category)}>
+                                {servicesByCategory.map(category => (
+                                    <AccordionItem key={category.category} value={category.category}>
+                                        <AccordionTrigger>{category.category}</AccordionTrigger>
+                                        <AccordionContent className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                            {category.services.map(service => (
+                                                 <Controller
+                                                    key={service.id}
+                                                    name="services"
+                                                    control={form.control}
+                                                    render={({ field }) => (
+                                                        <div className="flex items-center space-x-2">
+                                                            <Checkbox
+                                                                id={service.id}
+                                                                checked={field.value?.includes(service.id)}
+                                                                onCheckedChange={(checked) => {
+                                                                    return checked
+                                                                        ? field.onChange([...(field.value || []), service.id])
+                                                                        : field.onChange(field.value?.filter((value) => value !== service.id))
+                                                                }}
+                                                            />
+                                                            <Label htmlFor={service.id} className="font-normal">{service.name}</Label>
+                                                        </div>
+                                                    )}
+                                                />
+                                            ))}
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                        </div>
+                  </TabsContent>
+                  <TabsContent value="schedule" className="space-y-6 mt-0">
+                      {daysOfWeek.map((day) => (
+                          <div key={day.id} className="grid grid-cols-6 items-center gap-4 border-b pb-4">
+                              <Controller
+                                  name={`schedule.${day.id}.enabled` as any}
+                                  control={form.control}
+                                  render={({ field }) => (
+                                      <div className="flex items-center space-x-2 col-span-1">
+                                          <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} />
+                                          <Label htmlFor={`switch-${day.id}`} className="capitalize font-bold">{day.label}</Label>
+                                      </div>
+                                  )}
+                              />
+                              <div className="col-span-3 grid grid-cols-2 gap-2 items-center">
+                                 <Controller
+                                      name={`schedule.${day.id}.start` as any}
+                                      control={form.control}
+                                      render={({ field }) => (
+                                          <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled` as any)}>
+                                              <SelectTrigger><SelectValue/></SelectTrigger>
+                                              <SelectContent>
+                                                  {timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
+                                              </SelectContent>
+                                          </Select>
+                                      )}
+                                  />
+                                  <Controller
+                                      name={`schedule.${day.id}.end` as any}
+                                      control={form.control}
+                                      render={({ field }) => (
+                                           <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled` as any)}>
+                                              <SelectTrigger><SelectValue/></SelectTrigger>
+                                              <SelectContent>
+                                                  {timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
+                                              </SelectContent>
+                                          </Select>
+                                      )}
+                                  />
+                              </div>
+                              <div className="col-span-2 flex items-center gap-2 justify-end">
+                                <Button variant="outline" size="sm" type="button"><Plus className="mr-2 h-4 w-4" />Descanso</Button>
+                                <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.id)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
+                              </div>
+                          </div>
+                      ))}
+                  </TabsContent>
+                  <TabsContent value="profile" className="space-y-6 mt-0">
+                      <div className="space-y-2">
+                          <Label htmlFor="biography">Biografía</Label>
+                          <Textarea id="biography" rows={5} {...form.register('biography')} placeholder="Cuéntale a tus clientes sobre este profesional..." />
+                      </div>
+                      <div className="space-y-2">
+                         <Label>Foto del profesional</Label>
+                         <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg text-center">
+                            <UploadCloud className="h-12 w-12 text-muted-foreground mb-4" />
+                            <p className="text-muted-foreground mb-4">Arrastra o selecciona el archivo</p>
+                            <Button variant="outline" type="button">Subir archivo</Button>
+                         </div>
+                      </div>
+                      {profesional && (
+                          <div className="pt-6 border-t">
+                            <h4 className="text-lg font-semibold text-destructive">Zona de Peligro</h4>
+                             <div className="flex justify-between items-center mt-2 p-4 border border-destructive/50 rounded-lg">
+                                <div>
+                                    <p className="font-medium">Eliminar profesional</p>
+                                    <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
+                                </div>
+                                <Button variant="destructive" type="button">Eliminar</Button>
+                             </div>
+                          </div>
+                      )}
+                  </TabsContent>
+                </ScrollArea>
+            </Tabs>
+            <DialogFooter className="pt-6 border-t flex-shrink-0">
+                <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Guardar
+                </Button>
+            </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -16,13 +16,10 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Card } from '@/components/ui/card';
 
-const basicInfoLinks = [
+const adminLinks = [
   { href: '/admin/locales', label: 'Locales', icon: Store },
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
-];
-
-const advancedOptionsLinks = [
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
 ];
@@ -40,32 +37,11 @@ export default function AdminLayout({ children }: Props) {
         <nav className="flex flex-col space-y-1">
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-              Información básica
+              Información
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {basicInfoLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === href && 'bg-muted text-primary'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </Link>
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
-          <Collapsible>
-            <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-                Opciones avanzadas
-                <ChevronDown className="h-4 w-4" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 pt-2">
-               {advancedOptionsLinks.map(({ href, label, icon: Icon }) => (
+              {adminLinks.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}

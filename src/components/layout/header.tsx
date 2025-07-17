@@ -133,7 +133,7 @@ export default function Header() {
                 <path d="M49 50L53.5 54.5" stroke="white"/>
                 <path d="M152 50L147.5 54.5" stroke="white"/>
                 <foreignObject x="58" y="46" width="85" height="15">
-                    <p style="font-size: 6px; color: white; text-align: center; font-weight: bold;">BARBER SHOP</p>
+                    <p style={{fontSize: '6px', color: 'white', textAlign: 'center', fontWeight: 'bold'}}>BARBER SHOP</p>
                 </foreignObject>
             </svg>
             <span className="font-bold text-lg text-white whitespace-nowrap">VATOS ALFA</span>

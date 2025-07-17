@@ -13,7 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import type { Local } from '@/app/admin/locales/page';
-import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Info, UploadCloud } from 'lucide-react';
+import Link from 'next/link';
 
 interface EditLocalModalProps {
   local: Local;
@@ -72,7 +75,7 @@ export function EditLocalModal({ local, isOpen, onOpenChange }: EditLocalModalPr
                     <TabsTrigger value="basic">Datos básicos</TabsTrigger>
                     <TabsTrigger value="website">Sitio Web</TabsTrigger>
                 </TabsList>
-                <div className="flex-grow overflow-auto pr-4">
+                <ScrollArea className="flex-grow pr-4">
                   <TabsContent value="basic" className="space-y-6 mt-0">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
@@ -148,12 +151,46 @@ export function EditLocalModal({ local, isOpen, onOpenChange }: EditLocalModalPr
                           ))}
                       </div>
                   </TabsContent>
-                  <TabsContent value="website">
-                      <div className="text-center text-muted-foreground py-10">
-                          <p>Configuración del sitio web para este local estará disponible aquí.</p>
+                  <TabsContent value="website" className="space-y-6 mt-0">
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>¡Tu sitio web está activo!</AlertTitle>
+                        <AlertDescription className="flex justify-between items-center">
+                            <span>Asegúrate de que la información de tu local esté completa y actualizada.</span>
+                            <Button variant="link" asChild><Link href="#">Previsualizar</Link></Button>
+                        </AlertDescription>
+                      </Alert>
+
+                      <div className="space-y-4 rounded-lg border p-4">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="accepts-online">Este local acepta citas en línea desde el Sitio Web</Label>
+                            <Switch id="accepts-online" defaultChecked />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="home-delivery">Solo acepto servicios a domicilio</Label>
+                            <Switch id="home-delivery" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                          <Label htmlFor="secondary-phone">Teléfono secundario</Label>
+                          <Input id="secondary-phone" placeholder="Ingresa un teléfono adicional" />
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="local-description">Descripción del local</Label>
+                          <Textarea id="local-description" rows={5} placeholder="Describe los servicios y ambiente de tu local." />
+                      </div>
+                      
+                      <div className="space-y-2">
+                         <Label>Portada para tu Sitio Web</Label>
+                         <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg text-center">
+                            <UploadCloud className="h-12 w-12 text-muted-foreground mb-4" />
+                            <p className="text-muted-foreground mb-4">Arrastra o selecciona el archivo</p>
+                            <Button variant="outline" type="button">Subir archivo</Button>
+                         </div>
                       </div>
                   </TabsContent>
-                </div>
+                </ScrollArea>
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
                 <Button variant="ghost" type="button" onClick={() => onOpenChange(false)}>Cerrar</Button>
@@ -167,3 +204,4 @@ export function EditLocalModal({ local, isOpen, onOpenChange }: EditLocalModalPr
     </Dialog>
   );
 }
+

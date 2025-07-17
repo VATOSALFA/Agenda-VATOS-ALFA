@@ -211,16 +211,22 @@ export default function ProfessionalsPage() {
                             </TooltipTrigger>
                             <TooltipContent>
                                 <div className="p-2 text-sm">
-                                    <h4 className="font-bold mb-2">Horario de {prof.name}</h4>
+                                    <div className="grid grid-cols-3 gap-x-4 gap-y-1 font-bold mb-2">
+                                        <span>Día</span>
+                                        <span className="text-right">Apertura</span>
+                                        <span className="text-right">Cierre</span>
+                                    </div>
                                     <ul className="space-y-1">
                                         {daysOfWeek.map(day => (
-                                            <li key={day} className="flex justify-between gap-4">
-                                                <span className="capitalize">{day}:</span>
-                                                <span className="font-mono">
-                                                    {prof.schedule[day as keyof typeof prof.schedule].enabled 
-                                                        ? `${prof.schedule[day as keyof typeof prof.schedule].start} - ${prof.schedule[day as keyof typeof prof.schedule].end}`
-                                                        : 'Cerrado'}
-                                                </span>
+                                            <li key={day} className="grid grid-cols-3 gap-x-4 gap-y-1">
+                                                <span className="capitalize">{day.substring(0,3)}</span>
+                                                {prof.schedule[day as keyof typeof prof.schedule].enabled 
+                                                    ? <>
+                                                        <span className="font-mono text-right">{prof.schedule[day as keyof typeof prof.schedule].start}</span>
+                                                        <span className="font-mono text-right">{prof.schedule[day as keyof typeof prof.schedule].end}</span>
+                                                      </>
+                                                    : <span className="col-span-2 text-right text-muted-foreground">Cerrado</span>
+                                                }
                                             </li>
                                         ))}
                                     </ul>

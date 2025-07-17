@@ -105,7 +105,7 @@ export default function ServicesPage() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
                 className="overflow-hidden"
             >
                 <Card className="mb-4">
@@ -167,7 +167,7 @@ export default function ServicesPage() {
                                 <DropdownMenuItem className="text-destructive hover:!text-destructive">Eliminar</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" onClick={() => setIsModalOpen(true)}>
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Editar
                             </Button>

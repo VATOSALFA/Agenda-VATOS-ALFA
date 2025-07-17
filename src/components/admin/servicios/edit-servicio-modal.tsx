@@ -5,21 +5,16 @@ import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Plus, Upload, Info, ImagePlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 
 interface EditServicioModalProps {
@@ -34,6 +29,18 @@ const professionals = [
   { id: 'prof_4', name: 'Lupita' },
   { id: 'prof_5', name: 'Gloria Ivon' },
 ];
+
+const ImageUploader = () => (
+    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-full">
+        <ImagePlus className="h-10 w-10 text-muted-foreground mb-3" />
+        <p className="text-sm text-muted-foreground mb-3">Arrastra o selecciona la imagen</p>
+        <Button variant="outline" type="button" size="sm">
+            <Upload className="mr-2 h-4 w-4" />
+            Subir imagen
+        </Button>
+    </div>
+);
+
 
 export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
   const { toast } = useToast();
@@ -99,7 +106,6 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                   </div>
                 </div>
                 <div className="space-y-4 rounded-lg border p-4">
-                    <Label className="font-semibold">Otros</Label>
                     <div className="flex items-center space-x-2">
                         <Checkbox id="include-vat" />
                         <Label htmlFor="include-vat" className="font-normal">Precio incluye IVA</Label>
@@ -198,6 +204,22 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                       </RadioGroup>
                     </CardContent>
                   </Card>
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Agregar imágenes</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            ¡Carga hasta 3 imágenes de tu servicio! Te recomendamos que tengan un tamaño mínimo de 200x200px y un peso máximo de 3MB.
+                        </p>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <ImageUploader />
+                            <ImageUploader />
+                            <ImageUploader />
+                        </div>
+                    </CardContent>
+                </Card>
               </div>
             </ScrollArea>
           </div>

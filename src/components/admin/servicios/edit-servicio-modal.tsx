@@ -85,7 +85,6 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
             <TabsList className="mb-4 flex-shrink-0">
               <TabsTrigger value="basic">Datos básicos</TabsTrigger>
               <TabsTrigger value="website">Sitio Web</TabsTrigger>
-              <TabsTrigger value="advanced">Opciones avanzadas</TabsTrigger>
             </TabsList>
             <div className="flex-grow overflow-hidden">
               <ScrollArea className="h-full pr-4">
@@ -103,6 +102,17 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                       <Label htmlFor="duration">Duración (min) *</Label>
                       <Input id="duration" type="number" placeholder="0" />
                     </div>
+                  </div>
+                  <div className="space-y-4 rounded-lg border p-4">
+                      <Label className="font-semibold">Otros</Label>
+                      <div className="flex items-center space-x-2">
+                          <Checkbox id="include-vat" />
+                          <Label htmlFor="include-vat" className="font-normal">Precio incluye IVA</Label>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="commission">Comisión (%)</Label>
+                          <Input id="commission" type="number" placeholder="Porcentaje de comisión para el profesional" />
+                      </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Categoría *</Label>
@@ -215,44 +225,6 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                       </CardContent>
                   </Card>
                 </TabsContent>
-                <TabsContent value="advanced" className="space-y-6 mt-0">
-                  <div className="space-y-4 rounded-lg border p-4">
-                      <Label className="font-semibold">Modalidad del servicio</Label>
-                      <div className="flex items-center justify-between">
-                          <Label htmlFor="at-local">En el local</Label>
-                          <Switch id="at-local" defaultChecked />
-                      </div>
-                      <div className="flex items-center justify-between">
-                          <Label htmlFor="home-delivery">A domicilio</Label>
-                          <Switch id="home-delivery" />
-                      </div>
-                      <div className="flex items-center justify-between">
-                          <Label htmlFor="online-service">Servicio Online</Label>
-                          <Switch id="online-service" />
-                      </div>
-                  </div>
-                  <div className="space-y-4 rounded-lg border p-4">
-                      <Label className="font-semibold">Otros</Label>
-                      <div className="flex items-center space-x-2">
-                          <Checkbox id="include-vat" />
-                          <Label htmlFor="include-vat">Precio incluye IVA</Label>
-                      </div>
-                      <div className="space-y-2">
-                          <Label htmlFor="commission">Comisión (%)</Label>
-                          <Input id="commission" type="number" placeholder="Porcentaje de comisión para el profesional" />
-                      </div>
-                  </div>
-                  <Accordion type="multiple" className="w-full space-y-4">
-                      <AccordionItem value="resources" className="rounded-lg border px-4">
-                          <AccordionTrigger>Se necesita un Recurso para realizar el servicio</AccordionTrigger>
-                          <AccordionContent>Selecciona el recurso necesario.</AccordionContent>
-                      </AccordionItem>
-                      <AccordionItem value="special-schedule" className="rounded-lg border px-4">
-                          <AccordionTrigger>El servicio se realiza en un horario especial</AccordionTrigger>
-                          <AccordionContent>Configura el horario especial para este servicio.</AccordionContent>
-                      </AccordionItem>
-                  </Accordion>
-                </TabsContent>
               </ScrollArea>
             </div>
           </Tabs>
@@ -268,3 +240,5 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
     </Dialog>
   );
 }
+
+    

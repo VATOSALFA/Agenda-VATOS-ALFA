@@ -22,6 +22,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import {
   Filter,
@@ -164,9 +177,52 @@ export default function ProfessionalsPage() {
 
         <div className="space-y-4">
             <div className="py-2">
-                <Button variant="outline">
-                <Filter className="mr-2 h-4 w-4" /> Filtrar por
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline">
+                      <Filter className="mr-2 h-4 w-4" /> Filtrar por
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Filtros</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Aplica filtros para encontrar profesionales.
+                        </p>
+                      </div>
+                      <div className="grid gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="status">Estado</Label>
+                          <Select>
+                            <SelectTrigger id="status">
+                              <SelectValue placeholder="Seleccionar estado" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="activo">Activo</SelectItem>
+                              <SelectItem value="inactivo">Inactivo</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                           <Label htmlFor="local">Locales</Label>
+                           <Select>
+                            <SelectTrigger id="local">
+                                <SelectValue placeholder="Todos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="local1">VATOS ALFA Barber Shop</SelectItem>
+                            </SelectContent>
+                           </Select>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost">Restablecer</Button>
+                        <Button>Buscar</Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
             </div>
 
             <Card>

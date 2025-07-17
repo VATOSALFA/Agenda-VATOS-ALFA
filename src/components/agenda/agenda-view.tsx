@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { Skeleton } from '../ui/skeleton';
 
 const barbers = [
   { id: '1', name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
@@ -41,7 +42,6 @@ const appointments = [
     { id: 4, barberId: '3', customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56955667788', type: 'appointment' },
     { id: 5, barberId: '1', customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-100 border-purple-500 text-purple-800', paymentStatus: 'Pendiente', phone: null, type: 'appointment' },
     { id: 6, barberId: '2', customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-100 border-pink-500 text-pink-800', paymentStatus: 'Pagado', phone: '+56999887766', type: 'appointment' },
-    // A block was here, it will be replaced by fetched data
 ];
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -56,12 +56,9 @@ interface TimeBlock {
 }
 
 const useCurrentTime = () => {
-  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    // Set time on mount (client-side only)
-    setCurrentTime(new Date());
-
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000); // Update every minute
@@ -70,8 +67,6 @@ const useCurrentTime = () => {
   }, []);
   
   const calculateTopPosition = () => {
-    if (!currentTime) return null;
-
     const hours = currentTime.getHours();
     const minutes = currentTime.getMinutes();
     const totalMinutes = (hours - 9) * 60 + minutes;
@@ -106,7 +101,9 @@ export default function AgendaView() {
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
   
   useEffect(() => {
+    // Set initial date on mount to avoid hydration mismatch
     setDate(new Date());
+    // Only render time indicator on client
     setRenderTimeIndicator(true)
   }, []);
 
@@ -218,7 +215,7 @@ export default function AgendaView() {
 
   const selectedDateFormatted = date 
     ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
-    : '';
+    : 'Cargando...';
 
   return (
     <TooltipProvider>
@@ -259,17 +256,23 @@ export default function AgendaView() {
           </Card>
           <Card className="shadow-md bg-white rounded-lg h-auto">
               <CardContent className="p-2">
-                  <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      className="rounded-md"
-                      locale={es}
-                      components={{
-                        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-                        IconRight: () => <ChevronRight className="h-4 w-4" />,
-                      }}
-                  />
+                  {date ? (
+                    <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={setDate}
+                        className="rounded-md"
+                        locale={es}
+                        components={{
+                          IconLeft: () => <ChevronLeft className="h-4 w-4" />,
+                          IconRight: () => <ChevronRight className="h-4 w-4" />,
+                        }}
+                    />
+                  ) : (
+                    <div className="p-3">
+                      <Skeleton className="h-[250px] w-full" />
+                    </div>
+                  )}
               </CardContent>
           </Card>
         </aside>
@@ -295,25 +298,27 @@ export default function AgendaView() {
           <ScrollArea className="h-full">
               <div className="flex">
                   {/* Time Column */}
-                  <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0 relative">
+                  <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                       {hours.map((hour) => (
                           <div key={hour} className="h-[48px] text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
-                       {renderTimeIndicator && isToday(date || new Date()) && currentTimeTop !== null && (
-                         <div className="absolute left-0 right-0 text-right" style={{ top: currentTimeTop, transform: 'translateY(-50%)', paddingRight: '0.75rem' }}>
-                            <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
-                              {currentTime && format(currentTime, 'HH:mm')}
-                            </span>
+                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
+                         <div className="absolute w-full" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                            <div className="text-right pr-2">
+                              <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
+                                {format(currentTime, 'HH:mm')}
+                              </span>
+                            </div>
                           </div>
                       )}
                   </div>
                   
                   {/* Barbers Columns */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
-                      {renderTimeIndicator && isToday(date || new Date()) && currentTimeTop !== null && (
+                      {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
                         <div className="absolute left-0 right-0 h-px bg-[#202A49] z-10" style={{ top: currentTimeTop }} />
                       )}
                       {barbers.map((barber) => (
@@ -476,6 +481,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-
-
-

@@ -103,18 +103,6 @@ export function EditLocalModal({ local, isOpen, onOpenChange }: EditLocalModalPr
                                 <Label htmlFor="email">Email del local</Label>
                                 <Input id="email" type="email" {...form.register('email')} />
                             </div>
-                            <div className="flex items-center space-x-2 pt-6">
-                                <Controller
-                                    name="whatsappPermission"
-                                    control={form.control}
-                                    render={({ field }) => (
-                                        <Checkbox id="whatsapp" checked={field.value} onCheckedChange={field.onChange} />
-                                    )}
-                                />
-                                <Label htmlFor="whatsapp" className="text-sm font-medium leading-none">
-                                    Doy mi consentimiento para que AgendaPro me envíe recordatorios por WhatsApp
-                                </Label>
-                            </div>
                         </div>
 
                         <div className="space-y-4 pt-6 border-t">

@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import { format, set } from 'date-fns';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
 
 const timeSlots = Array.from({ length: 24 * 2 }, (_, i) => {
@@ -58,10 +58,17 @@ interface Barber {
 }
 
 interface BlockScheduleFormProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
+  initialData?: {
+      barbero_id: string;
+      fecha: Date;
+      hora_inicio: string;
+  }
 }
 
-export function BlockScheduleForm({ onFormSubmit }: BlockScheduleFormProps) {
+export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialData }: BlockScheduleFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -73,6 +80,17 @@ export function BlockScheduleForm({ onFormSubmit }: BlockScheduleFormProps) {
       motivo: '',
     },
   });
+
+  useEffect(() => {
+    if (initialData) {
+      form.reset({
+        barbero_id: initialData.barbero_id,
+        fecha: initialData.fecha,
+        hora_inicio: initialData.hora_inicio,
+        motivo: '',
+      });
+    }
+  }, [initialData, form]);
 
   async function onSubmit(data: BlockFormData) {
     setIsSubmitting(true);
@@ -126,146 +144,151 @@ export function BlockScheduleForm({ onFormSubmit }: BlockScheduleFormProps) {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <DialogHeader>
-          <DialogTitle>Bloquear Horario</DialogTitle>
-          <DialogDescription>
-            Selecciona un barbero y un rango horario para marcarlo como no disponible en la agenda.
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <DialogHeader>
+              <DialogTitle>Bloquear Horario</DialogTitle>
+              <DialogDescription>
+                Selecciona un barbero y un rango horario para marcarlo como no disponible en la agenda.
+              </DialogDescription>
+            </DialogHeader>
 
-        <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
-          <FormField
-            control={form.control}
-            name="barbero_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={barbersLoading}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={barbersLoading ? 'Cargando...' : 'Selecciona un barbero'} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {barbers.map(barber => (
-                      <SelectItem key={barber.id} value={barber.id}>
-                        {barber.nombre_completo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="motivo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><Lock className="mr-2 h-4 w-4" /> Motivo del bloqueo</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ej. Almuerzo, día libre, evento" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="fecha"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
+            <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
+              <FormField
+                control={form.control}
+                name="barbero_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={barbersLoading}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={barbersLoading ? 'Cargando...' : 'Selecciona un barbero'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {barbers.map(barber => (
+                          <SelectItem key={barber.id} value={barber.id}>
+                            {barber.nombre_completo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="motivo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Lock className="mr-2 h-4 w-4" /> Motivo del bloqueo</FormLabel>
                     <FormControl>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? format(field.value, 'PPP') : <span>Selecciona una fecha</span>}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
+                      <Input placeholder="Ej. Almuerzo, día libre, evento" {...field} />
                     </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="hora_inicio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Inicio</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {timeSlots.map(time => (
-                        <SelectItem key={`start-${time}`} value={time}>{time}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="hora_fin"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Fin</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {timeSlots.map(time => (
-                        <SelectItem key={`end-${time}`} value={time}>{time}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        </div>
+              <FormField
+                control={form.control}
+                name="fecha"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          locale={es}
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        <DialogFooter>
-          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar Bloqueo
-          </Button>
-        </DialogFooter>
-      </form>
-    </Form>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="hora_inicio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Inicio</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {timeSlots.map(time => (
+                            <SelectItem key={`start-${time}`} value={time}>{time}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hora_fin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Fin</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {timeSlots.map(time => (
+                            <SelectItem key={`end-${time}`} value={time}>{time}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar Bloqueo
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -26,21 +26,21 @@ import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 
 const barbers = [
-  { id: 1, name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
-  { id: 2, name: 'El Sicario', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man serious' },
-  { id: 3, name: 'El Padrino', status: 'ocupado', avatar: 'https://placehold.co/100x100', dataAiHint: 'stylish man' },
-  { id: 4, name: 'Barbero Extra', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man portrait' },
-  { id: 5, name: 'Otro Barbero', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'cool man' },
+  { id: '1', name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
+  { id: '2', name: 'El Sicario', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man serious' },
+  { id: '3', name: 'El Padrino', status: 'ocupado', avatar: 'https://placehold.co/100x100', dataAiHint: 'stylish man' },
+  { id: '4', name: 'Barbero Extra', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man portrait' },
+  { id: '5', name: 'Otro Barbero', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'cool man' },
 ];
 
 const appointments = [
-    { id: 1, barberId: 1, customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56912345678' },
-    { id: 2, barberId: 1, customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-green-100 border-green-500 text-green-800', paymentStatus: 'Pendiente', phone: '+56987654321' },
-    { id: 3, barberId: 2, customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-indigo-100 border-indigo-500 text-indigo-800', paymentStatus: 'Pagado', phone: '+56911223344' },
-    { id: 4, barberId: 3, customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56955667788' },
-    { id: 5, barberId: 1, customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-100 border-purple-500 text-purple-800', paymentStatus: 'Pendiente', phone: null },
-    { id: 6, barberId: 2, customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-100 border-pink-500 text-pink-800', paymentStatus: 'Pagado', phone: '+56999887766' },
-    { id: 7, barberId: 3, customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-gray-200 border-gray-400 text-gray-800', paymentStatus: null, phone: null },
+    { id: 1, barberId: '1', customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56912345678' },
+    { id: 2, barberId: '1', customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-green-100 border-green-500 text-green-800', paymentStatus: 'Pendiente', phone: '+56987654321' },
+    { id: 3, barberId: '2', customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-indigo-100 border-indigo-500 text-indigo-800', paymentStatus: 'Pagado', phone: '+56911223344' },
+    { id: 4, barberId: '3', customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56955667788' },
+    { id: 5, barberId: '1', customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-100 border-purple-500 text-purple-800', paymentStatus: 'Pendiente', phone: null },
+    { id: 6, barberId: '2', customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-100 border-pink-500 text-pink-800', paymentStatus: 'Pagado', phone: '+56999887766' },
+    { id: 7, barberId: '3', customer: 'Horario Bloqueado', service: 'Almuerzo', start: 13, duration: 1, color: 'bg-gray-200 border-gray-400 text-gray-800', paymentStatus: null, phone: null },
 ];
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -79,15 +79,22 @@ const useCurrentTime = () => {
 
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [hoveredBarberId, setHoveredBarberId] = useState<number | null>(null);
+  const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
 
-  const [hoveredSlot, setHoveredSlot] = useState<{barberId: number, time: string} | null>(null);
-  const [popoverState, setPopoverState] = useState<{barberId: number, time: string} | null>(null);
+  const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
+  const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
+  
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [reservationInitialData, setReservationInitialData] = useState<any>(null);
+
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
-  const gridRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
+  const [blockInitialData, setBlockInitialData] = useState<any>(null);
+
+  const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const { time: currentTime, top: currentTimeTop } = useCurrentTime();
+  const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
+  useEffect(() => setRenderTimeIndicator(true), []);
 
 
   const SLOT_DURATION_MINUTES = 30;
@@ -96,7 +103,7 @@ export default function AgendaView() {
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
   const handleNextDay = () => setDate(d => addDays(d || new Date(), 1));
 
-  const handleMouseMove = (e: MouseEvent<HTMLDivElement>, barberId: number) => {
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
     const gridEl = gridRefs.current[barberId];
     if (!gridEl) return;
     const rect = gridEl.getBoundingClientRect();
@@ -121,12 +128,38 @@ export default function AgendaView() {
     setHoveredSlot(null);
   }
 
-  const handleClickSlot = (e: MouseEvent<HTMLDivElement>, barberId: number) => {
+  const handleClickSlot = (e: MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if(hoveredSlot) {
       setPopoverState(hoveredSlot)
+    } else {
+      setPopoverState(null)
     }
   }
+
+  const handleOpenReservationModal = () => {
+    if (popoverState && date) {
+      setReservationInitialData({
+        barbero_id: popoverState.barberId,
+        fecha: date,
+        hora_inicio: popoverState.time,
+      });
+      setIsReservationModalOpen(true);
+      setPopoverState(null);
+    }
+  };
+
+  const handleOpenBlockModal = () => {
+    if (popoverState && date) {
+      setBlockInitialData({
+        barbero_id: popoverState.barberId,
+        fecha: date,
+        hora_inicio: popoverState.time
+      });
+      setIsBlockScheduleModalOpen(true);
+      setPopoverState(null);
+    }
+  };
 
   const calculatePosition = (start: number, duration: number) => {
     const top = (start - 9) * HOURLY_SLOT_HEIGHT;
@@ -153,7 +186,7 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]">
+      <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]" onClick={() => setPopoverState(null)}>
         <aside className="w-full lg:w-[250px] space-y-6 flex-shrink-0">
            <Card className="shadow-md bg-white rounded-lg">
               <CardHeader>
@@ -233,10 +266,10 @@ export default function AgendaView() {
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
-                       {isToday(date || new Date()) && currentTime && currentTimeTop !== null && (
-                          <div className="absolute right-2 text-right" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                       {renderTimeIndicator && isToday(date || new Date()) && currentTimeTop !== null && (
+                          <div className="absolute right-0 text-right pr-2" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
                             <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
-                              {format(currentTime, 'HH:mm')}
+                              {currentTime && format(currentTime, 'HH:mm')}
                             </span>
                           </div>
                       )}
@@ -244,7 +277,7 @@ export default function AgendaView() {
                   
                   {/* Barbers Columns */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
-                      {isToday(date || new Date()) && currentTimeTop !== null && (
+                      {renderTimeIndicator && isToday(date || new Date()) && currentTimeTop !== null && (
                         <div className="absolute left-0 right-0 h-px bg-[#202A49] z-10" style={{ top: currentTimeTop }} />
                       )}
                       {barbers.map((barber) => (
@@ -291,7 +324,7 @@ export default function AgendaView() {
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
-                                onClick={(e) => handleClickSlot(e, barber.id)}
+                                onClick={(e) => handleClickSlot(e)}
                               >
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
@@ -316,13 +349,14 @@ export default function AgendaView() {
                                       <div
                                         className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
                                         style={calculatePopoverPosition(popoverState.time)}
+                                        onClick={(e) => e.stopPropagation()}
                                       >
                                         <Card className="shadow-lg border-primary">
                                             <CardContent className="p-2 space-y-1">
-                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={() => setIsReservationModalOpen(true)}>
+                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenReservationModal}>
                                                     <Plus className="w-4 h-4 mr-2" /> Agregar Reserva
                                                 </Button>
-                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={() => setIsBlockScheduleModalOpen(true)}>
+                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}>
                                                     <Lock className="w-4 h-4 mr-2" /> Bloquear horario
                                                 </Button>
                                             </CardContent>
@@ -381,10 +415,20 @@ export default function AgendaView() {
         </main>
       </div>
       {isReservationModalOpen && (
-          <NewReservationForm onFormSubmit={() => setIsReservationModalOpen(false)} />
+          <NewReservationForm 
+            isOpen={isReservationModalOpen}
+            onOpenChange={setIsReservationModalOpen}
+            onFormSubmit={() => setIsReservationModalOpen(false)}
+            initialData={reservationInitialData}
+          />
       )}
       {isBlockScheduleModalOpen && (
-          <BlockScheduleForm onFormSubmit={() => setIsBlockScheduleModalOpen(false)} />
+          <BlockScheduleForm
+            isOpen={isBlockScheduleModalOpen}
+            onOpenChange={setIsBlockScheduleModalOpen}
+            onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
+            initialData={blockInitialData}
+          />
       )}
     </TooltipProvider>
   );

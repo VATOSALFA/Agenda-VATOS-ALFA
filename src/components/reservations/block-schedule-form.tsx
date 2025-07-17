@@ -127,12 +127,14 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         creado_en: Timestamp.now(),
       });
 
+      form.reset();
+      onFormSubmit(); // This closes the modal
+      
       toast({
         title: '¡Éxito!',
         description: 'El horario ha sido bloqueado correctamente.',
       });
-      form.reset();
-      onFormSubmit();
+
     } catch (error) {
       console.error('Error blocking schedule: ', error);
       toast({

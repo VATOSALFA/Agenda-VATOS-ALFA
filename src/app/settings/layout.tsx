@@ -12,13 +12,14 @@ import {
   DollarSign,
   Calculator,
   Bell,
-  ClipboardList,
+  Mail,
+  Component,
+  KeyRound,
   ChevronDown,
   UserCircle,
   Users
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Card } from '@/components/ui/card';
 
 const settingsLinks = [
   { href: '/settings/empresa', label: 'Empresa', icon: Building2 },
@@ -27,6 +28,14 @@ const settingsLinks = [
   { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign },
   { href: '/settings/sistema-caja', label: 'Sistemas de Caja', icon: Calculator },
   { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell },
+];
+
+const advancedLinks = [
+  { href: '/settings/emails', label: 'E-Mails', icon: Mail },
+  { href: '/settings/integrations', label: 'Integraciones', icon: Component },
+  { href: '/settings/notifications', label: 'Notificaciones', icon: Bell },
+  { href: '/settings/clients-settings', label: 'Clientes', icon: Users },
+  { href: '/settings/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
 ];
 
 const accountLinks = [
@@ -62,6 +71,28 @@ export default function SettingsLayout({ children }: Props) {
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
               {settingsLinks.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                    pathname === href && 'bg-muted text-primary'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+          
+          <Collapsible defaultOpen>
+            <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
+              Opciones avanzadas
+              <ChevronDown className="h-4 w-4" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 pt-2">
+              {advancedLinks.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}

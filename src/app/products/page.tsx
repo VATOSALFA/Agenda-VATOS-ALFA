@@ -12,6 +12,7 @@ import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NewProductModal } from "@/components/products/new-product-modal";
+import { CategoryModal } from "@/components/products/category-modal";
 
 const mockProducts = [
     { barcode: '7801234567890', name: 'SERUM COCTEL MULTINUTRIENTES', category: 'Facial', brand: 'VATOS ALFA', presentation: '30 ml', price: 17900, stock: 12 },
@@ -24,6 +25,7 @@ const mockProducts = [
 
 export default function InventoryPage() {
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   return (
     <>
@@ -54,7 +56,7 @@ export default function InventoryPage() {
                         <p className="text-xs text-muted-foreground">Agrega un producto nuevo a tu inventario</p>
                     </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsCategoryModalOpen(true)}>
                      <div>
                         <p className="font-semibold">Nueva Categoría</p>
                         <p className="text-xs text-muted-foreground">Crea categorías de productos para filtrarlos más rápido</p>
@@ -152,6 +154,10 @@ export default function InventoryPage() {
     <NewProductModal 
       isOpen={isNewProductModalOpen}
       onClose={() => setIsNewProductModalOpen(false)}
+    />
+    <CategoryModal 
+      isOpen={isCategoryModalOpen}
+      onClose={() => setIsCategoryModalOpen(false)}
     />
     </>
   );

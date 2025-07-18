@@ -347,21 +347,6 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings/profile">
-                        <Users className="mr-2 h-4 w-4" />
-                        <span>Perfil</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings">
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Configuración</span>
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem>
                   <span>Cerrar Sesión</span>
                 </DropdownMenuItem>

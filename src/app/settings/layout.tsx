@@ -41,6 +41,16 @@ type Props = {
 
 export default function SettingsLayout({ children }: Props) {
   const pathname = usePathname();
+  const isUsersPage = pathname === '/settings/users';
+
+  if (isUsersPage) {
+    return (
+        <div className="bg-muted/40">
+            {children}
+        </div>
+    );
+  }
+
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">

@@ -348,9 +348,11 @@ export default function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem>
-                    <Users className="mr-2 h-4 w-4" />
-                    <span>Perfil</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/profile">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Perfil</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/settings">

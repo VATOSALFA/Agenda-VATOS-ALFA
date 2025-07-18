@@ -13,7 +13,8 @@ import {
   Calculator,
   Bell,
   ClipboardList,
-  ChevronDown
+  ChevronDown,
+  UserCircle
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Card } from '@/components/ui/card';
@@ -28,6 +29,10 @@ const settingsLinks = [
   { href: '/settings/fichas-medicas', label: 'Fichas Médicas', icon: ClipboardList },
 ];
 
+const accountLinks = [
+  { href: '/settings/profile', label: 'Mi perfil', icon: UserCircle },
+]
+
 type Props = {
   children: ReactNode;
 };
@@ -38,7 +43,7 @@ export default function SettingsLayout({ children }: Props) {
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
       <aside className="w-72 flex-shrink-0 border-r bg-background p-4">
-        <nav className="flex flex-col space-y-1">
+        <nav className="flex flex-col space-y-4">
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
               Información básica
@@ -61,6 +66,27 @@ export default function SettingsLayout({ children }: Props) {
             </CollapsibleContent>
           </Collapsible>
           
+           <Collapsible defaultOpen>
+            <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
+              Cuenta
+              <ChevronDown className="h-4 w-4" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 pt-2">
+              {accountLinks.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                    pathname === href && 'bg-muted text-primary'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
         </nav>
       </aside>
       <div className="flex-1 overflow-y-auto">

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NewProductModal } from "@/components/products/new-product-modal";
 import { CategoryModal } from "@/components/products/category-modal";
+import { BrandModal } from "@/components/products/brand-modal";
 
 const mockProducts = [
     { barcode: '7801234567890', name: 'SERUM COCTEL MULTINUTRIENTES', category: 'Facial', brand: 'VATOS ALFA', presentation: '30 ml', price: 17900, stock: 12 },
@@ -26,6 +27,7 @@ const mockProducts = [
 export default function InventoryPage() {
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
 
   return (
     <>
@@ -62,7 +64,7 @@ export default function InventoryPage() {
                         <p className="text-xs text-muted-foreground">Crea categorías de productos para filtrarlos más rápido</p>
                     </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsBrandModalOpen(true)}>
                      <div>
                         <p className="font-semibold">Nueva Marca</p>
                         <p className="text-xs text-muted-foreground">Incorpora una marca de los productos que comercializas</p>
@@ -158,6 +160,10 @@ export default function InventoryPage() {
     <CategoryModal 
       isOpen={isCategoryModalOpen}
       onClose={() => setIsCategoryModalOpen(false)}
+    />
+    <BrandModal
+        isOpen={isBrandModalOpen}
+        onClose={() => setIsBrandModalOpen(false)}
     />
     </>
   );

@@ -11,7 +11,11 @@ import {
   Scissors,
   MessageCircle,
   Percent,
-  ChevronDown
+  ChevronDown,
+  Mail,
+  Component,
+  Bell,
+  KeyRound
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Card } from '@/components/ui/card';
@@ -22,6 +26,11 @@ const adminLinks = [
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
+  { href: '/admin/emails', label: 'E-Mails', icon: Mail },
+  { href: '/admin/integrations', label: 'Integraciones', icon: Component },
+  { href: '/admin/notifications', label: 'Notificaciones', icon: Bell },
+  { href: '/admin/clients', label: 'Clientes', icon: Users },
+  { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
 ];
 
 type Props = {
@@ -37,7 +46,7 @@ export default function AdminLayout({ children }: Props) {
         <nav className="flex flex-col space-y-1">
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-              Información
+              Informacion
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">

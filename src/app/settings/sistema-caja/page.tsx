@@ -41,7 +41,7 @@ const ToggleField = ({ name, label, control }: { name: string, label: string, co
 
 export default function SistemaCajaPage() {
     const { toast } = useToast();
-    [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const form = useForm({
         defaultValues: {

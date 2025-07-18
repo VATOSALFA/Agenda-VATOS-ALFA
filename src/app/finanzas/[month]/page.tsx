@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp } from 'lucide-react';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
+import { cn } from '@/lib/utils';
 
 // Mock Data
 const mockIngresos = [
@@ -29,6 +30,13 @@ const ResumenEgresoItem = ({ label, amount }: { label: string, amount: number })
     </div>
 );
 
+const ResumenGeneralItem = ({ label, amount, isBold, isPrimary, className }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string }) => (
+    <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
+        <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
+        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+    </div>
+);
+
 
 export default function FinanzasMensualesPage() {
     const params = useParams();
@@ -37,6 +45,13 @@ export default function FinanzasMensualesPage() {
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+    // Calculation logic
+    const ingresoTotal = 57341.80; // Hardcoded from user request
+    const egresoTotal = 38721.44;  // Hardcoded from user request
+    const subtotalUtilidad = ingresoTotal - egresoTotal;
+    const comisionBeatriz = subtotalUtilidad * 0.20;
+    const utilidadNeta = subtotalUtilidad - comisionBeatriz;
 
     return (
         <>
@@ -49,19 +64,12 @@ export default function FinanzasMensualesPage() {
                     <CardHeader>
                         <CardTitle>Resumen General del Mes</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                        <div className="flex justify-between items-center text-lg">
-                            <span className="flex items-center text-green-600"><ArrowUp className="mr-2 h-5 w-5"/>Ingreso Total</span>
-                            <span className="font-bold text-green-600">$165,000</span>
-                        </div>
-                        <div className="flex justify-between items-center text-lg">
-                            <span className="flex items-center text-red-600"><ArrowDown className="mr-2 h-5 w-5"/>Egreso Total</span>
-                            <span className="font-bold text-red-600">$45,000</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xl pt-2 border-t mt-2">
-                            <span className="flex items-center font-bold text-primary"><DollarSign className="mr-2 h-5 w-5"/>Utilidad</span>
-                            <span className="font-extrabold text-primary">$120,000</span>
-                        </div>
+                    <CardContent className="space-y-1 text-sm">
+                        <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
+                        <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
+                        <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
+                        <ResumenGeneralItem label="Comisión de Beatriz" amount={comisionBeatriz} />
+                        <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
                     </CardContent>
                 </Card>
                  <Card>

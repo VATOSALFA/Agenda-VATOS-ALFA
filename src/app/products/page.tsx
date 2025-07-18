@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { NewProductModal } from "@/components/products/new-product-modal";
 
 const mockProducts = [
     { barcode: '7801234567890', name: 'SERUM COCTEL MULTINUTRIENTES', category: 'Facial', brand: 'VATOS ALFA', presentation: '30 ml', price: 17900, stock: 12 },
@@ -21,7 +23,10 @@ const mockProducts = [
 ];
 
 export default function InventoryPage() {
+  const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+
   return (
+    <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-start justify-between space-y-2">
         <div>
@@ -43,7 +48,7 @@ export default function InventoryPage() {
               <DropdownMenuContent className="w-64" align="end">
                 <DropdownMenuLabel>Crear nuevo</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsNewProductModalOpen(true)}>
                     <div>
                         <p className="font-semibold">Nuevo Producto</p>
                         <p className="text-xs text-muted-foreground">Agrega un producto nuevo a tu inventario</p>
@@ -143,5 +148,11 @@ export default function InventoryPage() {
         </CardContent>
       </Card>
     </div>
+
+    <NewProductModal 
+      isOpen={isNewProductModalOpen}
+      onClose={() => setIsNewProductModalOpen(false)}
+    />
+    </>
   );
 }

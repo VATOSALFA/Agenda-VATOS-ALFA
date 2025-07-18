@@ -24,7 +24,7 @@ const settingsLinks = [
   { href: '/settings/empresa', label: 'Empresa', icon: Building2 },
   { href: '/settings/sitio-web', label: 'Sitio Web', icon: Globe },
   { href: '/settings/agenda', label: 'Agenda', icon: Calendar },
-  { href: '/settings/pagos', label: 'Pagos AgendaPro', icon: DollarSign },
+  { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign },
   { href: '/settings/sistema-caja', label: 'Sistemas de Caja', icon: Calculator },
   { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell },
   { href: '/settings/fichas-medicas', label: 'Fichas Médicas', icon: ClipboardList },

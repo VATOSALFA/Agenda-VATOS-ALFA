@@ -36,7 +36,8 @@ import {
   Percent,
   Globe,
   Copy,
-  Share2
+  Share2,
+  Landmark,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -93,6 +94,22 @@ const adminNavLinks = [
     { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
 ];
 
+const finanzasNavLinks = [
+  { href: '/finanzas/resumen', label: 'Resumen' },
+  { isSeparator: true },
+  { href: '/finanzas/enero', label: 'Enero' },
+  { href: '/finanzas/febrero', label: 'Febrero' },
+  { href: '/finanzas/marzo', label: 'Marzo' },
+  { href: '/finanzas/abril', label: 'Abril' },
+  { href: '/finanzas/mayo', label: 'Mayo' },
+  { href: '/finanzas/junio', label: 'Junio' },
+  { href: '/finanzas/julio', label: 'Julio' },
+  { href: '/finanzas/agosto', label: 'Agosto' },
+  { href: '/finanzas/septiembre', label: 'Septiembre' },
+  { href: '/finanzas/octubre', label: 'Octubre' },
+  { href: '/finanzas/noviembre', label: 'Noviembre' },
+  { href: '/finanzas/diciembre', label: 'Diciembre' },
+];
 
 export default function Header() {
   const pathname = usePathname();
@@ -254,6 +271,32 @@ export default function Header() {
                       <span>{label}</span>
                     </Link>
                   </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+             <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                 <Button variant="ghost" className={cn(
+                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                  pathname.startsWith('/finanzas')
+                     ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}>
+                  Finanzas <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                {finanzasNavLinks.map((item) => (
+                    item.isSeparator ? (
+                        <DropdownMenuSeparator key="separator" />
+                    ) : (
+                        <DropdownMenuItem key={item.href} asChild>
+                            <Link href={item.href!}>
+                                <span>{item.label}</span>
+                            </Link>
+                        </DropdownMenuItem>
+                    )
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>

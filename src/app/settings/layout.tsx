@@ -33,7 +33,6 @@ const settingsLinks = [
 const advancedLinks = [
   { href: '/settings/emails', label: 'E-Mails', icon: Mail },
   { href: '/settings/integrations', label: 'Integraciones', icon: Component },
-  { href: '/settings/notifications', label: 'Notificaciones', icon: Bell },
   { href: '/settings/clients-settings', label: 'Clientes', icon: Users },
   { href: '/settings/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
 ];

@@ -27,7 +27,6 @@ const settingsLinks = [
   { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign },
   { href: '/settings/sistema-caja', label: 'Sistemas de Caja', icon: Calculator },
   { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell },
-  { href: '/settings/fichas-medicas', label: 'Fichas Médicas', icon: ClipboardList },
 ];
 
 const accountLinks = [

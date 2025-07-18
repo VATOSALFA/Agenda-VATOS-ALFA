@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { NewProductModal } from "@/components/products/new-product-modal";
 import { CategoryModal } from "@/components/products/category-modal";
 import { BrandModal } from "@/components/products/brand-modal";
+import { PresentationModal } from "@/components/products/presentation-modal";
 
 const mockProducts = [
     { barcode: '7801234567890', name: 'SERUM COCTEL MULTINUTRIENTES', category: 'Facial', brand: 'VATOS ALFA', presentation: '30 ml', price: 17900, stock: 12 },
@@ -28,6 +29,7 @@ export default function InventoryPage() {
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
+  const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
 
   return (
     <>
@@ -70,7 +72,7 @@ export default function InventoryPage() {
                         <p className="text-xs text-muted-foreground">Incorpora una marca de los productos que comercializas</p>
                     </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsPresentationModalOpen(true)}>
                      <div>
                         <p className="font-semibold">Nuevo Formato/Presentación</p>
                         <p className="text-xs text-muted-foreground">Agrega los ml, gr o unidades estándar de tus productos</p>
@@ -164,6 +166,10 @@ export default function InventoryPage() {
     <BrandModal
         isOpen={isBrandModalOpen}
         onClose={() => setIsBrandModalOpen(false)}
+    />
+    <PresentationModal
+        isOpen={isPresentationModalOpen}
+        onClose={() => setIsPresentationModalOpen(false)}
     />
     </>
   );

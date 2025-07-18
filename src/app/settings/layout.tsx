@@ -14,7 +14,8 @@ import {
   Bell,
   ClipboardList,
   ChevronDown,
-  UserCircle
+  UserCircle,
+  Users
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Card } from '@/components/ui/card';
@@ -31,6 +32,7 @@ const settingsLinks = [
 
 const accountLinks = [
   { href: '/settings/profile', label: 'Mi perfil', icon: UserCircle },
+  { href: '/settings/users', label: 'Usuarios', icon: Users },
 ]
 
 type Props = {

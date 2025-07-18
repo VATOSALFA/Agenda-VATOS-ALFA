@@ -3,12 +3,12 @@
 
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserCircle } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserCircle, Shield, ConciergeBell, Wrench, Store, Check, X } from "lucide-react";
 
 const mockUsers = [
   { id: 1, name: 'Azucena Sánchez Sánchez', email: 'vatosalfaazucena@gmail.com', role: 'Recepcionista' },
@@ -24,6 +24,82 @@ const mockUsers = [
   { id: 11, name: 'Usuario Ejemplo 11', email: 'user11@example.com', role: 'Staff' },
 ];
 
+const rolesData = [
+  {
+    icon: Shield,
+    title: 'Administrador general',
+    description: 'El dueño del negocio. Tiene acceso a toda la información de todos los locales.',
+    permissions: [
+      { access: true, label: 'Acceso a todos los locales' },
+      { access: true, label: 'Ver y editar toda la configuración' },
+      { access: true, label: 'Ver y editar la agenda de todos' },
+      { access: true, label: 'Ver todos los reportes' },
+    ],
+  },
+  {
+    icon: Store,
+    title: 'Administrador local',
+    description: 'El encargado de un local. Tiene acceso a toda la información de su local asignado.',
+    permissions: [
+      { access: true, label: 'Acceso solo a su local' },
+      { access: true, label: 'Ver y editar configuración de su local' },
+      { access: true, label: 'Ver y editar la agenda de su local' },
+      { access: true, label: 'Ver reportes de su local' },
+    ],
+  },
+  {
+    icon: ConciergeBell,
+    title: 'Recepcionista',
+    description: 'Ayuda en la gestión del local. Puede editar la agenda, caja y clientes.',
+    permissions: [
+      { access: true, label: 'Ver y editar agenda' },
+      { access: true, label: 'Acceso a la caja' },
+      { access: true, label: 'Ver y editar clientes' },
+      { access: false, label: 'Acceso a reportes y configuración' },
+    ],
+  },
+   {
+    icon: ConciergeBell,
+    title: 'Recepcionista (Sin edición)',
+    description: 'Solo puede ver la agenda, caja y clientes, pero no puede editar nada.',
+    permissions: [
+      { access: true, label: 'Ver agenda' },
+      { access: true, label: 'Ver caja' },
+      { access: true, label: 'Ver clientes' },
+      { access: false, label: 'No puede editar nada' },
+    ],
+  },
+  {
+    icon: Wrench,
+    title: 'Staff',
+    description: 'El profesional que realiza los servicios. Puede ver su agenda y editarla.',
+    permissions: [
+      { access: true, label: 'Ver y editar su propia agenda' },
+      { access: true, label: 'Acceso a su propia caja' },
+      { access: false, label: 'Ver agenda de otros profesionales' },
+      { access: false, label: 'Acceso a configuración' },
+    ],
+  },
+  {
+    icon: Wrench,
+    title: 'Staff (Sin edición)',
+    description: 'Solo puede ver su agenda, pero no puede editar nada.',
+    permissions: [
+      { access: true, label: 'Ver su propia agenda' },
+      { access: false, label: 'No puede editar su agenda' },
+      { access: false, label: 'No puede ver agenda de otros' },
+      { access: false, label: 'Acceso a configuración' },
+    ],
+  },
+];
+
+const PermissionItem = ({ access, label }: { access: boolean, label: string }) => (
+    <li className="flex items-center gap-2">
+        {access ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-red-500" />}
+        <span className="text-muted-foreground">{label}</span>
+    </li>
+);
+
 export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -35,7 +111,7 @@ export default function UsersPage() {
   );
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       <Alert>
         <Info className="h-4 w-4" />
         <AlertTitle>En esta pantalla podrás crear y gestionar usuarios.</AlertTitle>
@@ -92,8 +168,7 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination Controls */}
-      <div className="flex items-center justify-end space-x-6 pt-4">
+      <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
         <div className="flex items-center space-x-2">
             <p className="text-sm font-medium">Resultados por página</p>
             <Select
@@ -135,6 +210,29 @@ export default function UsersPage() {
             </Button>
         </div>
       </div>
+      
+      <div className="pt-8 border-t">
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Roles de usuarios</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {rolesData.map((rol, index) => (
+                <Card key={index}>
+                    <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+                        <rol.icon className="h-8 w-8 text-primary" />
+                        <CardTitle>{rol.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground mb-4">{rol.description}</p>
+                        <ul className="space-y-2 text-sm">
+                            {rol.permissions.map((permission, pIndex) => (
+                                <PermissionItem key={pIndex} {...permission} />
+                            ))}
+                        </ul>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+      </div>
+
     </div>
   );
 }

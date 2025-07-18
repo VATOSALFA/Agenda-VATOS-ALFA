@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,41 @@ export default function InventoryPage() {
                 <Input placeholder="Buscar por nombre, marca..." className="pl-10" />
             </div>
             <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Carga masiva</Button>
-            <Button><PlusCircle className="mr-2 h-4 w-4" /> Nuevo</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Nuevo
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-64" align="end">
+                <DropdownMenuLabel>Crear nuevo</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                    <div>
+                        <p className="font-semibold">Nuevo Producto</p>
+                        <p className="text-xs text-muted-foreground">Agrega un producto nuevo a tu inventario</p>
+                    </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                     <div>
+                        <p className="font-semibold">Nueva Categoría</p>
+                        <p className="text-xs text-muted-foreground">Crea categorías de productos para filtrarlos más rápido</p>
+                    </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                     <div>
+                        <p className="font-semibold">Nueva Marca</p>
+                        <p className="text-xs text-muted-foreground">Incorpora una marca de los productos que comercializas</p>
+                    </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                     <div>
+                        <p className="font-semibold">Nuevo Formato/Presentación</p>
+                        <p className="text-xs text-muted-foreground">Agrega los ml, gr o unidades estándar de tus productos</p>
+                    </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
         </div>
       </div>
 

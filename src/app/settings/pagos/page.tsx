@@ -132,13 +132,13 @@ export default function PagosAgendaProPage() {
                     <div className="space-y-2">
                         <Label htmlFor="account-holder">Nombre</Label>
                         <Controller name="accountHolder" control={form.control} render={({ field }) => (
-                           <Input id="account-holder" {...field} placeholder="Nombre del titular de la cuenta" />
+                           <Input id="account-holder" {...field} placeholder="Nombre del titular de la cuenta" suppressHydrationWarning />
                         )}/>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="clabe">CLABE interbancaria</Label>
                         <Controller name="clabe" control={form.control} render={({ field }) => (
-                           <Input id="clabe" {...field} placeholder="Número de CLABE de 18 dígitos" />
+                           <Input id="clabe" {...field} placeholder="Número de CLABE de 18 dígitos" suppressHydrationWarning />
                         )}/>
                     </div>
                 </AccordionContent>
@@ -153,13 +153,13 @@ export default function PagosAgendaProPage() {
                     <div className="space-y-2">
                         <Label htmlFor="mercado-pago-public-key">Public Key</Label>
                         <Controller name="mercadoPagoPublicKey" control={form.control} render={({ field }) => (
-                           <Input id="mercado-pago-public-key" {...field} placeholder="Tu Public Key de MercadoPago" />
+                           <Input id="mercado-pago-public-key" {...field} placeholder="Tu Public Key de MercadoPago" suppressHydrationWarning />
                         )}/>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="mercado-pago-access-token">Access Token</Label>
                          <Controller name="mercadoPagoAccessToken" control={form.control} render={({ field }) => (
-                           <Input id="mercado-pago-access-token" {...field} placeholder="Tu Access Token de MercadoPago" />
+                           <Input id="mercado-pago-access-token" {...field} placeholder="Tu Access Token de MercadoPago" suppressHydrationWarning />
                         )}/>
                     </div>
                 </AccordionContent>

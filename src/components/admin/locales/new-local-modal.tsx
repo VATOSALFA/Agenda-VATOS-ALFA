@@ -1,9 +1,11 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { doc, updateDoc } from 'firebase/firestore';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -14,17 +16,36 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import type { Local } from '@/app/admin/locales/page';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Info, UploadCloud } from 'lucide-react';
 import Link from 'next/link';
 
-interface EditLocalModalProps {
-  local: Local;
+const localSchema = z.object({
+  name: z.string().min(1, "El nombre es requerido."),
+  address: z.string().min(1, "La dirección es requerida."),
+  timezone: z.string().min(1, "La zona horaria es requerida."),
+  phone: z.string().min(1, "El teléfono es requerido."),
+  email: z.string().email("El email no es válido."),
+  active: z.boolean().default(true),
+  whatsappPermission: z.boolean().default(true),
+  schedule: z.object({
+    lunes: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+    martes: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+    miercoles: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+    jueves: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+    viernes: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+    sabado: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+    domingo: z.object({ enabled: z.boolean(), start: z.string(), end: z.string() }),
+  })
+});
+
+type LocalFormData = z.infer<typeof localSchema>;
+
+interface NewLocalModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onLocalUpdated: () => void;
+  onLocalCreated: () => void;
 }
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -43,39 +64,49 @@ const daysOfWeek = [
     { id: 'domingo', label: 'Domingo' },
 ];
 
-export function EditLocalModal({ local, isOpen, onOpenChange, onLocalUpdated }: EditLocalModalProps) {
+export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocalModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const form = useForm<Local>({
-    defaultValues: local,
+  const form = useForm<LocalFormData>({
+    resolver: zodResolver(localSchema),
+    defaultValues: {
+      name: '',
+      address: '',
+      timezone: 'America/Mexico_City',
+      phone: '',
+      email: '',
+      active: true,
+      whatsappPermission: true,
+      schedule: {
+        lunes: { enabled: true, start: '09:00', end: '20:00' },
+        martes: { enabled: true, start: '09:00', end: '20:00' },
+        miercoles: { enabled: true, start: '09:00', end: '20:00' },
+        jueves: { enabled: true, start: '09:00', end: '20:00' },
+        viernes: { enabled: true, start: '09:00', end: '21:00' },
+        sabado: { enabled: true, start: '10:00', end: '21:00' },
+        domingo: { enabled: false, start: '10:00', end: '18:00' },
+      }
+    }
   });
 
-  useEffect(() => {
-    if (local) {
-      form.reset(local);
-    }
-  }, [local, form]);
-
-  const onSubmit = async (data: Local) => {
+  const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
-      const { id, ...localData } = data;
-      const localRef = doc(db, 'locales', id);
-      await updateDoc(localRef, localData);
-      
+      await addDoc(collection(db, 'locales'), data);
       toast({
-          title: "Local Actualizado",
-          description: `La información de ${data.name} ha sido guardada.`,
+          title: "Local Creado",
+          description: `El local ${data.name} ha sido creado con éxito.`,
       });
-      onLocalUpdated();
+      onLocalCreated();
       onOpenChange(false);
+      form.reset();
     } catch(error) {
-        console.error("Error updating document: ", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "No se pudo actualizar el local. Inténtalo de nuevo.",
-        });
+      console.error("Error adding document: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo crear el local. Inténtalo de nuevo.",
+      });
     } finally {
         setIsSubmitting(false);
     }
@@ -85,9 +116,9 @@ export function EditLocalModal({ local, isOpen, onOpenChange, onLocalUpdated }: 
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Editando {local.name}</DialogTitle>
+          <DialogTitle>Nuevo Local</DialogTitle>
           <DialogDescription>
-            Modifica la información y el horario de atención de tu local.
+            Completa la información y el horario de atención de tu nuevo local.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
@@ -102,29 +133,40 @@ export function EditLocalModal({ local, isOpen, onOpenChange, onLocalUpdated }: 
                           <div className="space-y-2">
                               <Label htmlFor="name">Nombre del local</Label>
                               <Input id="name" {...form.register('name')} />
+                              {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
                           </div>
                           <div className="space-y-2">
                               <Label htmlFor="address">Dirección del local</Label>
                               <Input id="address" {...form.register('address')} />
+                              {form.formState.errors.address && <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>}
                           </div>
                           <div className="space-y-2">
                               <Label>Zona horaria</Label>
-                              <Select defaultValue={local.timezone} onValueChange={(value) => form.setValue('timezone', value)}>
-                                  <SelectTrigger><SelectValue/></SelectTrigger>
-                                  <SelectContent>
-                                      <SelectItem value="America/Mexico_City">(GMT-06:00) Ciudad de México</SelectItem>
-                                      <SelectItem value="America/Bogota">(GMT-05:00) Bogotá</SelectItem>
-                                      <SelectItem value="America/Santiago">(GMT-04:00) Santiago</SelectItem>
-                                  </SelectContent>
-                              </Select>
+                              <Controller
+                                name="timezone"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="America/Mexico_City">(GMT-06:00) Ciudad de México</SelectItem>
+                                            <SelectItem value="America/Bogota">(GMT-05:00) Bogotá</SelectItem>
+                                            <SelectItem value="America/Santiago">(GMT-04:00) Santiago</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                              />
+                              {form.formState.errors.timezone && <p className="text-sm text-destructive">{form.formState.errors.timezone.message}</p>}
                           </div>
                           <div className="space-y-2">
                               <Label htmlFor="phone">Teléfono</Label>
                               <Input id="phone" {...form.register('phone')} />
+                               {form.formState.errors.phone && <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>}
                           </div>
                           <div className="space-y-2">
                               <Label htmlFor="email">Email del local</Label>
                               <Input id="email" type="email" {...form.register('email')} />
+                               {form.formState.errors.email && <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>}
                           </div>
                       </div>
 

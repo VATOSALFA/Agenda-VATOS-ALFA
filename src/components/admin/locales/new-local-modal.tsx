@@ -90,24 +90,32 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   });
 
   const onSubmit = async (data: LocalFormData) => {
+    console.log("Paso 1: Se presionó Guardar. Estableciendo estado de carga...");
     setIsSubmitting(true);
     try {
+      console.log("Paso 2: Intentando guardar los datos en la base de datos...");
       await addDoc(collection(db, 'locales'), data);
+      console.log("Paso 3: ¡ÉXITO! Los datos se guardaron correctamente.");
+      
+      console.log("Paso 4: Mostrando notificación de éxito...");
       toast({
           title: "Local guardado con éxito",
           description: `El local ${data.name} ha sido creado.`,
       });
-      form.reset();
+
       onLocalCreated();
     } catch(error) {
-      console.error("Error adding document: ", error);
+      console.error("ERROR EN EL BLOQUE CATCH:", error);
       toast({
         variant: "destructive",
         title: "Error",
         description: "No se pudo crear el local. Inténtalo de nuevo.",
       });
     } finally {
-        setIsSubmitting(false);
+      console.log("Paso 5: Ejecutando el bloque FINALLY.");
+      setIsSubmitting(false);
+      onClose();
+      console.log("Paso 6: El modal debería estar cerrado ahora.");
     }
   };
 

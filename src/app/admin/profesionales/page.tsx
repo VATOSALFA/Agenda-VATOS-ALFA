@@ -67,6 +67,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditProfesionalModal } from '@/components/admin/profesionales/edit-profesional-modal';
+import { SpecialDayModal } from '@/components/admin/profesionales/special-day-modal';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -176,7 +177,7 @@ const initialProfessionals = [
 export type Profesional = (typeof initialProfessionals)[0];
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-function SortableProfesionalItem({ prof, onToggleActive, onEdit }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void }) {
+function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void }) {
   const {
     attributes,
     listeners,
@@ -251,7 +252,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit }: { prof: Profe
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>Habilitar jornada especial</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onOpenSpecialDay(prof)}>Habilitar jornada especial</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onToggleActive(prof.id, !prof.active)}>
               {prof.active ? 'Desactivar profesional' : 'Activar profesional'}
             </DropdownMenuItem>
@@ -270,6 +271,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit }: { prof: Profe
 export default function ProfessionalsPage() {
   const [professionals, setProfessionals] = useState<Profesional[]>(initialProfessionals);
   const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
+  const [specialDayProfessional, setSpecialDayProfessional] = useState<Profesional | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClientMounted, setIsClientMounted] = useState(false);
   const { toast } = useToast();
@@ -292,6 +294,15 @@ export default function ProfessionalsPage() {
   const handleCloseModal = () => {
     setEditingProfessional(null);
   };
+  
+  const handleOpenSpecialDayModal = (profesional: Profesional) => {
+    setSpecialDayProfessional(profesional);
+  };
+  
+  const handleCloseSpecialDayModal = () => {
+    setSpecialDayProfessional(null);
+  };
+
 
   const handleToggleActive = (id: string, active: boolean) => {
     setProfessionals(professionals.map(p => p.id === id ? {...p, active} : p));
@@ -405,13 +416,19 @@ export default function ProfessionalsPage() {
                       <SortableContext items={professionals} strategy={verticalListSortingStrategy}>
                         <ul className="divide-y">
                           {professionals.map((prof) => (
-                            <SortableProfesionalItem key={prof.id} prof={prof} onToggleActive={handleToggleActive} onEdit={() => handleOpenModal(prof)} />
+                            <SortableProfesionalItem 
+                                key={prof.id} 
+                                prof={prof} 
+                                onToggleActive={handleToggleActive} 
+                                onEdit={() => handleOpenModal(prof)}
+                                onOpenSpecialDay={() => handleOpenSpecialDayModal(prof)}
+                            />
                           ))}
                         </ul>
                       </SortableContext>
                        <DragOverlay>
                           {activeProfessional ? (
-                            <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => {}} onEdit={() => {}} /></ul>
+                            <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => {}} onEdit={() => {}} onOpenSpecialDay={() => {}} /></ul>
                           ) : null}
                       </DragOverlay>
                     </DndContext>
@@ -428,6 +445,14 @@ export default function ProfessionalsPage() {
           profesional={editingProfessional === 'new' ? null : editingProfessional}
           isOpen={!!editingProfessional}
           onClose={handleCloseModal}
+        />
+      )}
+      
+      {specialDayProfessional && (
+        <SpecialDayModal
+            profesional={specialDayProfessional}
+            isOpen={!!specialDayProfessional}
+            onClose={handleCloseSpecialDayModal}
         />
       )}
     </TooltipProvider>

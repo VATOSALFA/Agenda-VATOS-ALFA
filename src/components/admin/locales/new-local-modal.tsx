@@ -94,14 +94,33 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
     if (local) {
         form.reset(local);
     } else {
-        form.reset();
+        form.reset({
+            name: '',
+            address: '',
+            timezone: 'America/Mexico_City',
+            phone: '',
+            email: '',
+            schedule: {
+              lunes: { enabled: true, start: '09:00', end: '18:00' },
+              martes: { enabled: true, start: '09:00', end: '18:00' },
+              miercoles: { enabled: true, start: '09:00', end: '18:00' },
+              jueves: { enabled: true, start: '09:00', end: '18:00' },
+              viernes: { enabled: true, start: '09:00', end: '18:00' },
+              sabado: { enabled: false, start: '', end: '' },
+              domingo: { enabled: false, start: '', end: '' },
+            },
+            acceptsOnline: true,
+            delivery: false,
+            secondaryPhone: '',
+            description: '',
+        });
     }
   }, [local, form]);
 
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
-      if (isEditMode) {
+      if (isEditMode && local) {
         const localRef = doc(db, 'locales', local.id);
         await updateDoc(localRef, data);
         toast({ title: "Local actualizado con éxito" });
@@ -116,7 +135,6 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
       }
       
       onLocalCreated();
-      onClose();
 
     } catch (error) {
       console.error("Error saving local: ", error);

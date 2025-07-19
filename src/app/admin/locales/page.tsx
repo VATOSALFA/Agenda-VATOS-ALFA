@@ -46,8 +46,9 @@ export default function LocalesPage() {
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
 
-  const handleLocalCreated = () => {
+  const handleDataUpdated = () => {
     setQueryKey(prev => prev + 1); // Refreshes the data
+    closeModal();
   };
   
   const openNewModal = () => {
@@ -144,7 +145,7 @@ export default function LocalesPage() {
       <NewLocalModal
         isOpen={isModalOpen}
         onClose={closeModal}
-        onLocalCreated={handleLocalCreated}
+        onLocalCreated={handleDataUpdated}
         local={editingLocal}
       />
     </>

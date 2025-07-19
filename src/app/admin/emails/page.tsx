@@ -14,6 +14,7 @@ import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, C
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AddSenderModal } from '@/components/admin/emails/add-sender-modal';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 
 const initialSenders = [
@@ -26,9 +27,10 @@ export type Sender = typeof initialSenders[0];
 export default function EmailsSettingsPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isAddSenderModalOpen, setIsAddSenderModalOpen] = useState(false);
+    const [isSenderModalOpen, setIsSenderModalOpen] = useState(false);
     const [senders, setSenders] = useState<Sender[]>(initialSenders);
-
+    const [editingSender, setEditingSender] = useState<Sender | null>(null);
+    const [senderToDelete, setSenderToDelete] = useState<Sender | null>(null);
 
     const form = useForm({
         defaultValues: {
@@ -51,14 +53,50 @@ export default function EmailsSettingsPage() {
         }, 1500);
     }
     
-    const handleAddSender = (newEmail: string) => {
-        setSenders(prev => [...prev, { email: newEmail, confirmed: false }]);
-        setIsAddSenderModalOpen(false);
-        toast({
-            title: "Correo agregado con éxito",
-            description: `Se ha enviado un correo de confirmación a ${newEmail}.`,
-        });
+    const handleSaveSender = (newEmail: string) => {
+        if (editingSender) {
+            // Edit mode
+            setSenders(prev => prev.map(s => s.email === editingSender.email ? { ...s, email: newEmail } : s));
+            toast({
+                title: "Correo actualizado con éxito",
+                description: `El correo ha sido cambiado a ${newEmail}.`,
+            });
+        } else {
+            // Add mode
+            setSenders(prev => [...prev, { email: newEmail, confirmed: false }]);
+            toast({
+                title: "Correo agregado con éxito",
+                description: `Se ha enviado un correo de confirmación a ${newEmail}.`,
+            });
+        }
+        closeModal();
     }
+    
+    const handleDeleteSender = () => {
+        if (!senderToDelete) return;
+        setSenders(prev => prev.filter(s => s.email !== senderToDelete.email));
+        toast({
+            title: "Correo eliminado",
+            description: `El correo "${senderToDelete.email}" ha sido eliminado.`,
+        });
+        setSenderToDelete(null);
+    };
+
+    const openAddModal = () => {
+        setEditingSender(null);
+        setIsSenderModalOpen(true);
+    };
+
+    const openEditModal = (sender: Sender) => {
+        setEditingSender(sender);
+        setIsSenderModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsSenderModalOpen(false);
+        setEditingSender(null);
+    };
+
 
   return (
     <>
@@ -77,7 +115,7 @@ export default function EmailsSettingsPage() {
                         <CardTitle>Configuraciones de emails</CardTitle>
                         <CardDescription>Correos para enviar notificaciones a tus clientes.</CardDescription>
                     </div>
-                    <Button type="button" variant="outline" onClick={() => setIsAddSenderModalOpen(true)}>
+                    <Button type="button" variant="outline" onClick={openAddModal}>
                         <PlusCircle className="mr-2 h-4 w-4"/> Agregar Correo
                     </Button>
                 </CardHeader>
@@ -109,8 +147,10 @@ export default function EmailsSettingsPage() {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => openEditModal(sender)}><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setSenderToDelete(sender)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -209,10 +249,30 @@ export default function EmailsSettingsPage() {
     </div>
     
     <AddSenderModal 
-        isOpen={isAddSenderModalOpen}
-        onClose={() => setIsAddSenderModalOpen(false)}
-        onSave={handleAddSender}
+        isOpen={isSenderModalOpen}
+        onClose={closeModal}
+        onSave={handleSaveSender}
+        sender={editingSender}
     />
+
+    {senderToDelete && (
+        <AlertDialog open={!!senderToDelete} onOpenChange={() => setSenderToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta acción no se puede deshacer. El correo "{senderToDelete.email}" será eliminado permanentemente.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteSender} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )}
     </>
   );
 }

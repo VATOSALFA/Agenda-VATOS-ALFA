@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,11 +17,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
+import type { Sender } from '@/app/admin/emails/page';
 
 interface AddSenderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (email: string) => void;
+  sender: Sender | null;
 }
 
 const senderSchema = z.object({
@@ -30,8 +32,9 @@ const senderSchema = z.object({
 
 type SenderFormData = z.infer<typeof senderSchema>;
 
-export function AddSenderModal({ isOpen, onClose, onSave }: AddSenderModalProps) {
+export function AddSenderModal({ isOpen, onClose, onSave, sender }: AddSenderModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isEditMode = !!sender;
   
   const form = useForm<SenderFormData>({
     resolver: zodResolver(senderSchema),
@@ -39,6 +42,14 @@ export function AddSenderModal({ isOpen, onClose, onSave }: AddSenderModalProps)
         email: '',
     },
   });
+  
+  useEffect(() => {
+    if (sender) {
+        form.setValue('email', sender.email);
+    } else {
+        form.reset();
+    }
+  }, [sender, form]);
 
   const onSubmit = (data: SenderFormData) => {
     setIsSubmitting(true);
@@ -56,7 +67,7 @@ export function AddSenderModal({ isOpen, onClose, onSave }: AddSenderModalProps)
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
                 <DialogHeader>
-                  <DialogTitle>Agregar correo</DialogTitle>
+                  <DialogTitle>{isEditMode ? 'Editar correo' : 'Agregar correo'}</DialogTitle>
                 </DialogHeader>
                 <div className="py-4">
                     <FormField

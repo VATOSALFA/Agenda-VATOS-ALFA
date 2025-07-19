@@ -91,14 +91,14 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
 
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
-    let success = false;
-    let localName = '';
     try {
-      localName = data.name;
       await addDoc(collection(db, 'locales'), data);
-      onLocalCreated();
+      toast({
+          title: "Local guardado con éxito",
+          description: `El local ${data.name} ha sido creado.`,
+      });
       form.reset();
-      success = true;
+      onLocalCreated();
     } catch(error) {
       console.error("Error adding document: ", error);
       toast({
@@ -108,13 +108,6 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
       });
     } finally {
         setIsSubmitting(false);
-        onClose();
-        if (success) {
-            toast({
-                title: "Local guardado con éxito",
-                description: `El local ${localName} ha sido creado.`,
-            });
-        }
     }
   };
 

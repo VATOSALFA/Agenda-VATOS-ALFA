@@ -69,6 +69,11 @@ export default function LocalesPage() {
     setQueryKey(prevKey => prevKey + 1);
   };
 
+  const handleLocalCreated = () => {
+    handleDataUpdated();
+    setIsNewLocalModalOpen(false);
+  }
+
   return (
     <>
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -192,7 +197,7 @@ export default function LocalesPage() {
       <NewLocalModal 
         isOpen={isNewLocalModalOpen} 
         onClose={() => setIsNewLocalModalOpen(false)}
-        onLocalCreated={handleDataUpdated}
+        onLocalCreated={handleLocalCreated}
       />
 
       {editingLocal && (

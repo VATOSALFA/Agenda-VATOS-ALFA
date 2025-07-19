@@ -191,7 +191,7 @@ export default function LocalesPage() {
 
       <NewLocalModal 
         isOpen={isNewLocalModalOpen} 
-        onOpenChange={setIsNewLocalModalOpen}
+        onClose={() => setIsNewLocalModalOpen(false)}
         onLocalCreated={handleDataUpdated}
       />
 

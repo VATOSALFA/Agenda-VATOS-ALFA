@@ -44,7 +44,7 @@ type LocalFormData = z.infer<typeof localSchema>;
 
 interface NewLocalModalProps {
   isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
+  onClose: () => void;
   onLocalCreated: () => void;
 }
 
@@ -64,7 +64,7 @@ const daysOfWeek = [
     { id: 'domingo', label: 'Domingo' },
 ];
 
-export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocalModalProps) {
+export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<LocalFormData>({
@@ -92,7 +92,9 @@ export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocal
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     let success = false;
+    let localName = '';
     try {
+      localName = data.name;
       await addDoc(collection(db, 'locales'), data);
       onLocalCreated();
       form.reset();
@@ -106,18 +108,18 @@ export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocal
       });
     } finally {
         setIsSubmitting(false);
-        onOpenChange(false);
+        onClose();
         if (success) {
             toast({
                 title: "Local guardado con éxito",
-                description: `El local ${data.name} ha sido creado.`,
+                description: `El local ${localName} ha sido creado.`,
             });
         }
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Nuevo Local</DialogTitle>
@@ -260,7 +262,7 @@ export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocal
                 </ScrollArea>
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
-                <Button variant="ghost" type="button" onClick={() => onOpenChange(false)}>Cerrar</Button>
+                <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Guardar

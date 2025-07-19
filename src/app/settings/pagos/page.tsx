@@ -59,7 +59,7 @@ export default function PagosAgendaProPage() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Agenda VATOS ALFA</h2>
         <p className="text-muted-foreground">
-          Cobra en la terminal con AgendaPro.
+          Cobra en la terminal con Agenda VATOS ALFA.
         </p>
       </div>
 

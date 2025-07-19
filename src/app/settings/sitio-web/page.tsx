@@ -82,7 +82,7 @@ export default function SitioWebPage() {
               <Switch id="onlineReservations" defaultChecked={form.getValues('onlineReservations')} />
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="marketVisibility" className="font-semibold">Aparecer en AgendaPro Market</Label>
+              <Label htmlFor="marketVisibility" className="font-semibold">Aparecer en Agenda VATOS ALFA Market</Label>
               <Switch id="marketVisibility" defaultChecked={form.getValues('marketVisibility')} />
             </div>
           </CardContent>
@@ -96,7 +96,7 @@ export default function SitioWebPage() {
                         <Label>Muestra tus horas según</Label>
                         <Select defaultValue={form.getValues('showHoursBy')}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="professional">Profesional</SelectItem><SelectItem value="service">Servicio</SelectItem></SelectContent></Select>
                     </div>
-                    <div className="flex items-center justify-between"><Label htmlFor="exclusiveForCreatedClients">Reservas exclusivas para clientes creados en AgendaPro</Label><Switch id="exclusiveForCreatedClients" /></div>
+                    <div className="flex items-center justify-between"><Label htmlFor="exclusiveForCreatedClients">Reservas exclusivas para clientes creados en Agenda VATOS ALFA</Label><Switch id="exclusiveForCreatedClients" /></div>
                     <div className="flex items-center justify-between"><Label htmlFor="allowClientNotes">Permitir notas del cliente</Label><Switch id="allowClientNotes" defaultChecked /></div>
                     <div className="space-y-2">
                         <Label>Notas predefinidas</Label>

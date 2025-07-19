@@ -37,7 +37,7 @@ export default function EmpresaPage() {
           <CardHeader>
             <CardTitle>Nombre de tu empresa</CardTitle>
             <CardDescription>
-              El nombre que aparecerá en todos los lugares de AgendaPro, incluido tu sitio web.
+              El nombre que aparecerá en todos los lugares de Agenda VATOS ALFA, incluido tu sitio web.
             </CardDescription>
           </CardHeader>
           <CardContent>

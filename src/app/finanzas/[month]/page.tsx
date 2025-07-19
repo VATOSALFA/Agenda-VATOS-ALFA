@@ -6,10 +6,11 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp } from 'lucide-react';
+import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User } from 'lucide-react';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 // Mock Data
 const mockIngresos = [
@@ -22,6 +23,14 @@ const mockEgresos = [
     { fecha: '2024-07-02', concepto: 'Insumos', aQuien: 'Proveedor de Cera', monto: 10000, comentarios: 'Cera para cabello' },
     { fecha: '2024-07-03', concepto: 'Nómina', aQuien: 'Recepcionista', monto: 20000, comentarios: 'Pago semanal' },
 ];
+
+const comisionesPorProfesional = [
+    { name: 'Beatriz Elizarraga', commission: 8000, tips: 2500 },
+    { name: 'Erick', commission: 4000, tips: 1500 },
+    { name: 'Lupita', commission: 3000, tips: 1000 },
+];
+
+const totalComisiones = comisionesPorProfesional.reduce((acc, prof) => acc + prof.commission, 0);
 
 const ResumenEgresoItem = ({ label, amount }: { label: string, amount: number }) => (
     <div className="flex justify-between items-center text-sm py-1.5 border-b last:border-0">
@@ -62,7 +71,7 @@ export default function FinanzasMensualesPage() {
     return (
         <>
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-            <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(month)}</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(month as string)}</h2>
 
             {/* KPI Cards */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -106,7 +115,30 @@ export default function FinanzasMensualesPage() {
                         <CardTitle>Resumen de Egresos por Categoría</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <ResumenEgresoItem label="Comisiones" amount={15000} />
+                        <Accordion type="single" collapsible className="w-full">
+                            <AccordionItem value="comisiones" className="border-b">
+                                <AccordionTrigger className="flex justify-between items-center text-sm py-1.5 hover:no-underline font-normal">
+                                    <span className="text-muted-foreground">Comisiones</span>
+                                    <span className="font-medium mr-4">${totalComisiones.toLocaleString('es-CL')}</span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-b-md">
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-3 text-xs font-semibold text-muted-foreground">
+                                            <span>Profesional</span>
+                                            <span className="text-right">Comisión</span>
+                                            <span className="text-right">Propina</span>
+                                        </div>
+                                        {comisionesPorProfesional.map((prof, index) => (
+                                            <div key={index} className="grid grid-cols-3 text-xs">
+                                                <span>{prof.name}</span>
+                                                <span className="text-right font-mono">${prof.commission.toLocaleString('es-CL')}</span>
+                                                <span className="text-right font-mono">${prof.tips.toLocaleString('es-CL')}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
                         <ResumenEgresoItem label="Propinas" amount={5000} />
                         <ResumenEgresoItem label="Nómina" amount={20000} />
                         <ResumenEgresoItem label="Costos fijos" amount={0} />

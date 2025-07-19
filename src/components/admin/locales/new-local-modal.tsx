@@ -90,39 +90,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   });
 
   const onSubmit = async (data: LocalFormData) => {
-    setIsSubmitting(true);
-    try {
-      // This is the critical step: ensuring the data is clean for Firestore.
-      const dataToSave = {
-        name: data.name,
-        address: data.address,
-        timezone: data.timezone,
-        phone: data.phone,
-        email: data.email,
-        active: data.active,
-        whatsappPermission: data.whatsappPermission,
-        schedule: data.schedule,
-      };
-
-      await addDoc(collection(db, 'locales'), dataToSave);
-      
-      toast({
-          title: "Local guardado con éxito",
-          description: `El local ${data.name} ha sido creado.`,
-      });
-      onLocalCreated();
-
-    } catch(error) {
-      console.error("Error al guardar el local:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo crear el local. Inténtalo de nuevo.",
-      });
-    } finally {
-      setIsSubmitting(false);
-      onClose();
-    }
+    // This function is no longer called by a submit button
   };
 
   return (
@@ -134,7 +102,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
             Completa la información y el horario de atención de tu nuevo local.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
+        <div className="flex-grow flex flex-col overflow-hidden">
             <Tabs defaultValue="basic" className="flex-grow flex flex-col overflow-hidden">
                 <TabsList className="mb-4 flex-shrink-0">
                     <TabsTrigger value="basic">Datos básicos</TabsTrigger>
@@ -270,12 +238,8 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
                 <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Guardar
-                </Button>
             </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

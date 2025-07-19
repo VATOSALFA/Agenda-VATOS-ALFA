@@ -24,8 +24,6 @@ const adminLinks = [
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
-  { href: '/admin/integrations', label: 'Integraciones', icon: Component },
-  { href: '/admin/clients', label: 'Clientes', icon: Users },
 ];
 
 type Props = {

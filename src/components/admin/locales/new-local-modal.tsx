@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -91,12 +92,21 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'locales'), data);
+      const scheduleData = Object.fromEntries(
+        Object.entries(data.schedule).map(([day, value]) => [day, { ...value }])
+      );
       
-      toast({
-          title: "Local guardado con éxito",
-      });
+      const dataToSave = {
+        ...data,
+        schedule: scheduleData
+      };
+
+      await addDoc(collection(db, 'locales'), dataToSave);
+      
       onLocalCreated();
+      toast({
+        title: "Local guardado con éxito",
+      });
       
     } catch(error) {
         console.error("Error creating document: ", error);

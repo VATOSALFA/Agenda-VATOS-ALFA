@@ -89,7 +89,24 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   });
 
   const onSubmit = async (data: LocalFormData) => {
-    // This function is no longer called by a button
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'locales'), data);
+      onLocalCreated();
+      toast({
+          title: "Local guardado con éxito",
+      });
+    } catch(error) {
+        console.error("Error creating document: ", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo crear el local. Inténtalo de nuevo.",
+        });
+    } finally {
+        setIsSubmitting(false);
+        onClose();
+    }
   };
 
   return (
@@ -237,6 +254,10 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
                 <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Guardar
+                </Button>
             </DialogFooter>
         </form>
       </DialogContent>

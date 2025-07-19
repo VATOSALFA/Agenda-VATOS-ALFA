@@ -12,8 +12,29 @@ import { useState } from "react";
 import { Loader2, PlusCircle, Edit, Trash2 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { AuthCodeModal } from '@/components/admin/auth-codes/auth-code-modal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-const mockCodes = [
+export interface AuthCode {
+  id: number;
+  name: string;
+  active: boolean;
+  code: string;
+  reserves: boolean;
+  cashbox: boolean;
+  download: boolean;
+}
+
+const initialCodes: AuthCode[] = [
     { id: 1, name: 'Beatriz administradora', active: true, code: 'admin', reserves: true, cashbox: false, download: true },
     { id: 2, name: 'Zeus', active: true, code: '2408', reserves: true, cashbox: true, download: true },
     { id: 3, name: 'Azucena', active: true, code: 'Azucena11', reserves: true, cashbox: true, download: true },
@@ -53,6 +74,10 @@ const ToggleField = ({ name, label, control, description }: { name: string, labe
 export default function AuthCodesSettingsPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [authCodes, setAuthCodes] = useState<AuthCode[]>(initialCodes);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingCode, setEditingCode] = useState<AuthCode | null>(null);
+    const [codeToDelete, setCodeToDelete] = useState<AuthCode | null>(null);
 
     const form = useForm({
         defaultValues: {
@@ -74,7 +99,49 @@ export default function AuthCodesSettingsPage() {
         }, 1500);
     }
 
+    const openModalForNew = () => {
+        setEditingCode(null);
+        setIsModalOpen(true);
+    }
+
+    const openModalForEdit = (code: AuthCode) => {
+        setEditingCode(code);
+        setIsModalOpen(true);
+    }
+    
+    const handleSaveCode = (codeData: Omit<AuthCode, 'id'>) => {
+        if (editingCode) {
+            // Editing existing code
+            setAuthCodes(codes => codes.map(c => c.id === editingCode.id ? { ...editingCode, ...codeData } : c));
+            toast({ title: "Código actualizado con éxito" });
+        } else {
+            // Adding new code
+            const newCode = { ...codeData, id: Date.now() };
+            setAuthCodes(codes => [...codes, newCode]);
+            toast({ title: "Código agregado con éxito" });
+        }
+        setIsModalOpen(false);
+    };
+
+    const handleDeleteCode = () => {
+        if (!codeToDelete) return;
+        setAuthCodes(codes => codes.filter(c => c.id !== codeToDelete.id));
+        toast({
+            title: "Código eliminado",
+            description: `El código para "${codeToDelete.name}" ha sido eliminado.`,
+        });
+        setCodeToDelete(null);
+    }
+
+    const handleToggleActive = (codeId: number, active: boolean) => {
+        setAuthCodes(codes => codes.map(c => c.id === codeId ? { ...c, active } : c));
+        toast({
+            title: `Código ${active ? 'activado' : 'desactivado'}`
+        });
+    }
+
   return (
+    <>
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
         <div>
             <h2 className="text-3xl font-bold tracking-tight">Códigos de autorización</h2>
@@ -111,7 +178,7 @@ export default function AuthCodesSettingsPage() {
                     <CardTitle>Listado de códigos</CardTitle>
                     <CardDescription>Configura códigos y permisos para tu equipo.</CardDescription>
                 </div>
-                 <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/> Agregar Código</Button>
+                 <Button variant="outline" onClick={openModalForNew}><PlusCircle className="mr-2 h-4 w-4"/> Agregar Código</Button>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -127,20 +194,20 @@ export default function AuthCodesSettingsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {mockCodes.map(code => (
+                        {authCodes.map(code => (
                             <TableRow key={code.id}>
                                 <TableCell className="font-medium">{code.name}</TableCell>
-                                <TableCell><Switch checked={code.active} /></TableCell>
+                                <TableCell><Switch checked={code.active} onCheckedChange={(checked) => handleToggleActive(code.id, checked)} /></TableCell>
                                 <TableCell>{code.code}</TableCell>
                                 <TableCell><PermissionBadge permitted={code.reserves} /></TableCell>
                                 <TableCell><PermissionBadge permitted={code.cashbox} /></TableCell>
                                 <TableCell><PermissionBadge permitted={code.download} /></TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex gap-2 justify-end">
-                                        <Button variant="outline" size="sm" style={{backgroundColor: '#f59e0b', color: 'white', borderColor: '#d97706'}}>
+                                        <Button variant="outline" size="sm" style={{backgroundColor: '#f59e0b', color: 'white', borderColor: '#d97706'}} onClick={() => openModalForEdit(code)}>
                                             <Edit className="mr-2 h-4 w-4" /> Editar
                                         </Button>
-                                         <Button variant="destructive" size="sm">
+                                         <Button variant="destructive" size="sm" onClick={() => setCodeToDelete(code)}>
                                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                         </Button>
                                     </div>
@@ -152,5 +219,32 @@ export default function AuthCodesSettingsPage() {
             </CardContent>
         </Card>
     </div>
+    
+    <AuthCodeModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveCode}
+        code={editingCode}
+    />
+
+    {codeToDelete && (
+        <AlertDialog open={!!codeToDelete} onOpenChange={() => setCodeToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                       Esta acción no se puede deshacer. Se eliminará permanentemente el código de autorización para "{codeToDelete.name}".
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteCode} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )}
+    </>
   );
 }

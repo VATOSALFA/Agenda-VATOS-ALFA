@@ -15,6 +15,7 @@ import { Loader2, Plus, Upload, Info, ImagePlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CategoryModal } from '@/components/admin/servicios/category-modal';
 
 
 interface EditServicioModalProps {
@@ -28,6 +29,13 @@ const professionals = [
   { id: 'prof_3', name: 'Karina Ruiz Rosales' },
   { id: 'prof_4', name: 'Lupita' },
   { id: 'prof_5', name: 'Gloria Ivon' },
+];
+
+const initialCategories = [
+    { id: 1, name: 'Paquetes' },
+    { id: 2, name: 'Barba' },
+    { id: 3, name: 'Capilar' },
+    { id: 4, name: 'Facial' },
 ];
 
 const ImageUploader = () => (
@@ -45,6 +53,9 @@ const ImageUploader = () => (
 export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [categories, setCategories] = useState(initialCategories);
+
   const { control, handleSubmit, setValue, watch } = useForm();
   
   const selectedProfessionals = watch('professionals', []);
@@ -56,6 +67,11 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
         setValue('professionals', []);
     }
   }
+
+  const handleCategoryCreated = (newCategory: { id: number, name: string }) => {
+    setCategories(prev => [...prev, newCategory]);
+    setValue('category', newCategory.name); // Select the new category
+  };
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
@@ -79,6 +95,7 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
@@ -118,11 +135,21 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                 <div className="space-y-2">
                   <Label>Categoría *</Label>
                   <div className="flex gap-2">
-                    <Select>
-                      <SelectTrigger><SelectValue placeholder="Paquetes" /></SelectTrigger>
-                      <SelectContent></SelectContent>
-                    </Select>
-                    <Button variant="outline" type="button"><Plus className="mr-2 h-4 w-4"/>Nueva categoría</Button>
+                    <Controller
+                        name="category"
+                        control={control}
+                        render={({ field }) => (
+                           <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger><SelectValue placeholder="Paquetes" /></SelectTrigger>
+                                <SelectContent>
+                                    {categories.map(cat => (
+                                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                    <Button variant="outline" type="button" onClick={() => setIsCategoryModalOpen(true)}><Plus className="mr-2 h-4 w-4"/>Nueva categoría</Button>
                   </div>
                 </div>
                 <div className="space-y-4 pt-4 border-t">
@@ -233,5 +260,12 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
         </form>
       </DialogContent>
     </Dialog>
+     <CategoryModal 
+      isOpen={isCategoryModalOpen}
+      onClose={() => setIsCategoryModalOpen(false)}
+      onCategoryCreated={handleCategoryCreated}
+      existingCategories={categories}
+    />
+    </>
   );
 }

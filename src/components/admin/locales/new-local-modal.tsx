@@ -92,21 +92,27 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
+      // (Esta parte de la lógica de guardado está bien)
       const scheduleData = Object.fromEntries(
         Object.entries(data.schedule).map(([day, value]) => [day, { ...value }])
       );
-      
-      const dataToSave = {
-        ...data,
-        schedule: scheduleData
-      };
-
+      const dataToSave = { ...data, schedule: scheduleData };
       await addDoc(collection(db, 'locales'), dataToSave);
       
-      onLocalCreated();
+      // --- INICIO DE LA CORRECCIÓN ---
+
+      // 1. Mostrar la notificación de éxito
       toast({
         title: "Local guardado con éxito",
       });
+
+      // 2. Llamar a la función para actualizar la lista de locales en la página principal
+      onLocalCreated();
+
+      // 3. LLAMAR A LA FUNCIÓN PARA CERRAR EL MODAL
+      onClose(); 
+
+      // --- FIN DE LA CORRECCIÓN ---
       
     } catch(error) {
         console.error("Error creating document: ", error);
@@ -116,8 +122,8 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
           description: "No se pudo crear el local. Inténtalo de nuevo.",
         });
     } finally {
+        // Esta parte se asegura de que el estado de carga siempre se desactive
         setIsSubmitting(false);
-        onClose();
     }
   };
 

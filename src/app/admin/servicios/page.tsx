@@ -122,6 +122,7 @@ export default function ServicesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const { toast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,11 +160,17 @@ export default function ServicesPage() {
 
 
   const handleSaveCategory = () => {
+    if (newCategoryName.trim() === '') {
+        toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la categoría no puede estar vacío.' });
+        return;
+    }
     // Here you would normally save to the database
+    setServicesByCategory(prev => [...prev, { category: newCategoryName, services: [] }]);
     toast({
         title: "Categoría guardada",
         description: "La nueva categoría ha sido creada con éxito."
     })
+    setNewCategoryName('');
     setIsAddingCategory(false);
   }
 
@@ -223,7 +230,7 @@ export default function ServicesPage() {
     setServiceToDelete(null);
   };
 
-  const openEditModal = (service: Service) => {
+  const openEditModal = (service: Service | null) => {
     setEditingService(service);
     setIsModalOpen(true);
   }
@@ -255,7 +262,12 @@ export default function ServicesPage() {
                 <Card className="mb-4">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-4">
-                            <Input placeholder="Nombre de la nueva categoría" className="flex-grow"/>
+                            <Input 
+                              placeholder="Nombre de la nueva categoría" 
+                              className="flex-grow"
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                            />
                             <Button onClick={handleSaveCategory}>Guardar</Button>
                             <Button variant="ghost" onClick={() => setIsAddingCategory(false)}>Cancelar</Button>
                         </div>
@@ -337,60 +349,64 @@ export default function ServicesPage() {
                 <div className="p-4">
                   <h3 className="text-lg font-semibold flex items-center">{categoryGroup.category} <Info className="ml-2 h-4 w-4 text-muted-foreground" /></h3>
                 </div>
-                <ul className="divide-y divide-border">
-                  {categoryGroup.services.map((service) => (
-                    <li key={service.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
-                      <div className="flex items-center gap-4">
-                        <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-                        <span className="font-medium">{service.name}</span>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <span className="text-sm text-muted-foreground">{service.duration}</span>
-                        <span className="text-sm font-semibold">${service.price}</span>
-                        <Badge className={cn(
-                          service.active 
-                          ? 'bg-green-100 text-green-800 border-green-200' 
-                          : 'bg-red-100 text-red-800 border-red-200'
-                        )}>
-                          <Circle className={cn(
-                            "mr-2 h-2 w-2 fill-current",
-                            service.active ? 'text-green-600' : 'text-red-600'
-                          )} />
-                          {service.active ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                        <div className="flex items-center gap-2">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    Opciones <ChevronDown className="ml-2 h-4 w-4" />
-                                </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleToggleActive(categoryGroup.category, service.id)}>
-                                    {service.active ? 'Desactivar' : 'Activar'}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDuplicateService(categoryGroup.category, service)}>
-                                    Duplicar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
-                                    className="text-destructive hover:!text-destructive focus:!bg-destructive/10 focus:!text-destructive"
-                                    onClick={() => setServiceToDelete({ categoryId: categoryGroup.category, serviceId: service.id })}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4"/>
-                                    Eliminar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button variant="outline" size="sm" onClick={() => openEditModal(service)}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Editar
-                            </Button>
+                {categoryGroup.services.length > 0 ? (
+                  <ul className="divide-y divide-border">
+                    {categoryGroup.services.map((service) => (
+                      <li key={service.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
+                        <div className="flex items-center gap-4">
+                          <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                          <span className="font-medium">{service.name}</span>
                         </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                        <div className="flex items-center gap-6">
+                          <span className="text-sm text-muted-foreground">{service.duration}</span>
+                          <span className="text-sm font-semibold">${service.price}</span>
+                          <Badge className={cn(
+                            service.active 
+                            ? 'bg-green-100 text-green-800 border-green-200' 
+                            : 'bg-red-100 text-red-800 border-red-200'
+                          )}>
+                            <Circle className={cn(
+                              "mr-2 h-2 w-2 fill-current",
+                              service.active ? 'text-green-600' : 'text-red-600'
+                            )} />
+                            {service.active ? 'Activo' : 'Inactivo'}
+                          </Badge>
+                          <div className="flex items-center gap-2">
+                              <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm">
+                                      Opciones <ChevronDown className="ml-2 h-4 w-4" />
+                                  </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleToggleActive(categoryGroup.category, service.id)}>
+                                      {service.active ? 'Desactivar' : 'Activar'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDuplicateService(categoryGroup.category, service)}>
+                                      Duplicar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      className="text-destructive hover:!text-destructive focus:!bg-destructive/10 focus:!text-destructive"
+                                      onClick={() => setServiceToDelete({ categoryId: categoryGroup.category, serviceId: service.id })}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4"/>
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                              </DropdownMenu>
+                              <Button variant="outline" size="sm" onClick={() => openEditModal(service)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Editar
+                              </Button>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="px-4 pb-4 text-sm text-muted-foreground">No hay servicios en esta categoría.</p>
+                )}
               </div>
             ))}
              {filteredServicesByCategory.length === 0 && (

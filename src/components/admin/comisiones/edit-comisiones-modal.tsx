@@ -66,26 +66,47 @@ export function EditComisionesModal({ professional, isOpen, onClose }: EditComis
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
+
+    const saveOperation = async () => {
+        const professionalRef = doc(db, 'profesionales', professional.id);
+        await updateDoc(professionalRef, {
+            comisionesPorServicio: data
+        });
+    };
+
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout")), 10000)
+    );
+
     try {
-      const professionalRef = doc(db, 'profesionales', professional.id);
-      await updateDoc(professionalRef, {
-        comisionesPorServicio: data
-      });
-      
-      toast({
-        title: 'Comisiones guardadas con éxito',
-        description: `Las comisiones para ${professional.name} han sido actualizadas.`,
-      });
-      onClose();
+        await Promise.race([saveOperation(), timeoutPromise]);
+        
+        toast({
+            title: 'Comisiones guardadas con éxito',
+            description: `Las comisiones para ${professional.name} han sido actualizadas.`,
+        });
+        onClose();
+
     } catch (error) {
        console.error("Error al guardar comisiones:", error);
-       toast({
-        variant: "destructive",
-        title: 'Error al guardar',
-        description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
-      });
+       if ((error as Error).message === "Timeout") {
+           toast({
+                variant: "destructive",
+                title: 'Error de Tiempo de Espera',
+                description: 'La operación tardó demasiado. Revisa tu conexión o los permisos de la base de datos.',
+           });
+       } else {
+           toast({
+            variant: "destructive",
+            title: 'Error al guardar',
+            description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
+          });
+       }
     } finally {
       setIsSubmitting(false);
+      if (isOpen) {
+        onClose();
+      }
     }
   };
 

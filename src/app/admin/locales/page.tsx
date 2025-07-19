@@ -18,17 +18,33 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Filter,
   PlusCircle,
   Pencil,
   ChevronDown,
   Info,
   Circle,
+  Trash2,
 } from 'lucide-react';
 import { NewLocalModal } from '@/components/admin/locales/new-local-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { cn } from '@/lib/utils';
+
 
 interface Local {
   id: string;
@@ -42,7 +58,9 @@ interface Local {
 export default function LocalesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLocal, setEditingLocal] = useState<Local | null>(null);
+  const [localToDelete, setLocalToDelete] = useState<Local | null>(null);
   const [queryKey, setQueryKey] = useState(0);
+  const { toast } = useToast();
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
 
@@ -65,6 +83,47 @@ export default function LocalesPage() {
     setIsModalOpen(false);
     setEditingLocal(null);
   }
+
+  const handleToggleStatus = async (local: Local) => {
+    const newStatus = local.status === 'active' ? 'inactive' : 'active';
+    try {
+        const localRef = doc(db, 'locales', local.id);
+        await updateDoc(localRef, { status: newStatus });
+        toast({
+            title: `Local ${newStatus === 'active' ? 'activado' : 'desactivado'}`,
+            description: `El local "${local.name}" ha sido ${newStatus === 'active' ? 'activado' : 'desactivado'}.`,
+        });
+        setQueryKey(prev => prev + 1);
+    } catch (error) {
+        console.error("Error toggling status: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo cambiar el estado del local. Inténtalo de nuevo.",
+        });
+    }
+  };
+
+  const handleDeleteLocal = async () => {
+    if (!localToDelete) return;
+    try {
+      await deleteDoc(doc(db, "locales", localToDelete.id));
+      toast({
+        title: "Local Eliminado",
+        description: `El local "${localToDelete.name}" ha sido eliminado permanentemente.`,
+      });
+      setQueryKey(prevKey => prevKey + 1);
+    } catch (error) {
+      console.error("Error deleting local: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar el local. Inténtalo de nuevo.",
+      });
+    } finally {
+        setLocalToDelete(null);
+    }
+  };
 
 
   return (
@@ -107,9 +166,13 @@ export default function LocalesPage() {
                 <div key={local.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
                   <div>
                     <div className="font-bold flex items-center gap-2">
-                       <Badge className="bg-green-100 text-green-800 border-green-200">
-                         <Circle className="mr-2 h-2 w-2 fill-current text-green-600" />
-                         Activo
+                       <Badge className={cn(
+                           local.status === 'active'
+                           ? 'bg-green-100 text-green-800 border-green-200'
+                           : 'bg-orange-100 text-orange-800 border-orange-200'
+                       )}>
+                         <Circle className={cn("mr-2 h-2 w-2 fill-current", local.status === 'active' ? 'text-green-600' : 'text-orange-600')} />
+                         {local.status === 'active' ? 'Activo' : 'Inactivo'}
                        </Badge>
                        {local.name}
                     </div>
@@ -123,8 +186,13 @@ export default function LocalesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Desactivar</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive hover:!text-destructive">Eliminar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleToggleStatus(local)}>
+                            {local.status === 'active' ? 'Desactivar' : 'Activar'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setLocalToDelete(local)} className="text-destructive hover:!text-destructive focus:text-destructive focus:bg-destructive/10">
+                            <Trash2 className="mr-2 h-4 w-4"/>
+                            Eliminar
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button variant="outline" size="sm" onClick={() => openEditModal(local)}>
@@ -148,6 +216,26 @@ export default function LocalesPage() {
         onLocalCreated={handleDataUpdated}
         local={editingLocal}
       />
+      
+      {localToDelete && (
+         <AlertDialog open={!!localToDelete} onOpenChange={(open) => !open && setLocalToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta acción no se puede deshacer. Esto eliminará permanentemente el local
+                        <span className="font-bold"> {localToDelete.name}</span>.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setLocalToDelete(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteLocal} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar local
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }

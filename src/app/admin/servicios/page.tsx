@@ -242,7 +242,7 @@ export default function ServicesPage() {
         <h2 className="text-3xl font-bold tracking-tight">Servicios</h2>
         <div className="flex items-center space-x-2">
           <Button variant="outline" onClick={() => setIsAddingCategory(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo servicio
+            <PlusCircle className="mr-2 h-4 w-4" /> Nueva categoría
           </Button>
           <Button onClick={() => openEditModal(null)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo
@@ -263,7 +263,7 @@ export default function ServicesPage() {
                     <CardContent className="p-4">
                         <div className="flex items-center gap-4">
                             <Input 
-                              placeholder="Nombre del nuevo servicio" 
+                              placeholder="Nombre de la nueva categoría" 
                               className="flex-grow"
                               value={newCategoryName}
                               onChange={(e) => setNewCategoryName(e.target.value)}

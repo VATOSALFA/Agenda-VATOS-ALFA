@@ -14,6 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +27,8 @@ import {
   ChevronDown,
   GripVertical,
   Info,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import {
   Select,
@@ -41,12 +43,35 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from '@/lib/utils';
 
-const initialServicesByCategory = [
+interface Service {
+  id: string;
+  name: string;
+  duration: string;
+  price: number;
+  active: boolean;
+}
+
+interface ServiceCategory {
+  category: string;
+  services: Service[];
+}
+
+const initialServicesByCategory: ServiceCategory[] = [
   {
     category: 'Barba',
     services: [
@@ -93,7 +118,9 @@ const initialServicesByCategory = [
 ];
 
 export default function ServicesPage() {
+  const [servicesByCategory, setServicesByCategory] = useState<ServiceCategory[]>(initialServicesByCategory);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const { toast } = useToast();
 
@@ -101,6 +128,8 @@ export default function ServicesPage() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [categoryFilter, setCategoryFilter] = useState('todos');
   
+  const [serviceToDelete, setServiceToDelete] = useState<{ categoryId: string; serviceId: string } | null>(null);
+
   const handleApplyFilters = () => {
      toast({
         title: "Filtros aplicados",
@@ -118,7 +147,7 @@ export default function ServicesPage() {
   }
 
   const filteredServicesByCategory = useMemo(() => {
-    return initialServicesByCategory.map(categoryGroup => {
+    return servicesByCategory.map(categoryGroup => {
       const filtered = categoryGroup.services.filter(service => {
         const nameMatch = service.name.toLowerCase().includes(searchTerm.toLowerCase());
         const statusMatch = statusFilter === 'todos' || (statusFilter === 'activo' && service.active) || (statusFilter === 'inactivo' && !service.active);
@@ -126,7 +155,7 @@ export default function ServicesPage() {
       });
       return { ...categoryGroup, services: filtered };
     }).filter(categoryGroup => categoryGroup.services.length > 0 && (categoryFilter === 'todos' || categoryGroup.category === categoryFilter));
-  }, [searchTerm, statusFilter, categoryFilter]);
+  }, [searchTerm, statusFilter, categoryFilter, servicesByCategory]);
 
 
   const handleSaveCategory = () => {
@@ -138,6 +167,67 @@ export default function ServicesPage() {
     setIsAddingCategory(false);
   }
 
+  const handleToggleActive = (categoryId: string, serviceId: string) => {
+    setServicesByCategory(prev =>
+      prev.map(cat => {
+        if (cat.category === categoryId) {
+          return {
+            ...cat,
+            services: cat.services.map(serv => {
+              if (serv.id === serviceId) {
+                toast({ title: `Servicio ${!serv.active ? 'activado' : 'desactivado'}` });
+                return { ...serv, active: !serv.active };
+              }
+              return serv;
+            }),
+          };
+        }
+        return cat;
+      })
+    );
+  };
+
+  const handleDuplicateService = (categoryId: string, serviceToDuplicate: Service) => {
+    const newService = {
+      ...serviceToDuplicate,
+      id: `serv_${Date.now()}`,
+      name: `${serviceToDuplicate.name} (Copia)`,
+    };
+    setServicesByCategory(prev =>
+      prev.map(cat => {
+        if (cat.category === categoryId) {
+          return { ...cat, services: [...cat.services, newService] };
+        }
+        return cat;
+      })
+    );
+    toast({ title: "Servicio duplicado con éxito" });
+  };
+
+  const handleDeleteService = () => {
+    if (!serviceToDelete) return;
+    const { categoryId, serviceId } = serviceToDelete;
+
+    setServicesByCategory(prev =>
+      prev.map(cat => {
+        if (cat.category === categoryId) {
+          return {
+            ...cat,
+            services: cat.services.filter(s => s.id !== serviceId),
+          };
+        }
+        return cat;
+      })
+    );
+    toast({ title: "Servicio eliminado con éxito" });
+    setServiceToDelete(null);
+  };
+
+  const openEditModal = (service: Service) => {
+    setEditingService(service);
+    setIsModalOpen(true);
+  }
+
   return (
     <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -147,7 +237,7 @@ export default function ServicesPage() {
           <Button variant="outline" onClick={() => setIsAddingCategory(true)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nueva categoría
           </Button>
-          <Button onClick={() => setIsModalOpen(true)}>
+          <Button onClick={() => openEditModal(null)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo
           </Button>
         </div>
@@ -257,8 +347,15 @@ export default function ServicesPage() {
                       <div className="flex items-center gap-6">
                         <span className="text-sm text-muted-foreground">{service.duration}</span>
                         <span className="text-sm font-semibold">${service.price}</span>
-                        <Badge className={service.active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}>
-                          <Circle className={`mr-2 h-2 w-2 fill-current ${service.active ? 'text-green-600' : 'text-red-600'}`} />
+                        <Badge className={cn(
+                          service.active 
+                          ? 'bg-green-100 text-green-800 border-green-200' 
+                          : 'bg-red-100 text-red-800 border-red-200'
+                        )}>
+                          <Circle className={cn(
+                            "mr-2 h-2 w-2 fill-current",
+                            service.active ? 'text-green-600' : 'text-red-600'
+                          )} />
                           {service.active ? 'Activo' : 'Inactivo'}
                         </Badge>
                         <div className="flex items-center gap-2">
@@ -269,12 +366,23 @@ export default function ServicesPage() {
                                 </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                <DropdownMenuItem>{service.active ? 'Desactivar' : 'Activar'}</DropdownMenuItem>
-                                <DropdownMenuItem>Duplicar</DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive hover:!text-destructive">Eliminar</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleToggleActive(categoryGroup.category, service.id)}>
+                                    {service.active ? 'Desactivar' : 'Activar'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDuplicateService(categoryGroup.category, service)}>
+                                    Duplicar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    className="text-destructive hover:!text-destructive focus:!bg-destructive/10 focus:!text-destructive"
+                                    onClick={() => setServiceToDelete({ categoryId: categoryGroup.category, serviceId: service.id })}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4"/>
+                                    Eliminar
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                            <Button variant="outline" size="sm" onClick={() => setIsModalOpen(true)}>
+                            <Button variant="outline" size="sm" onClick={() => openEditModal(service)}>
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Editar
                             </Button>
@@ -293,6 +401,26 @@ export default function ServicesPage() {
       </Card>
     </div>
     <EditServicioModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
+    <AlertDialog open={!!serviceToDelete} onOpenChange={() => setServiceToDelete(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción no se puede deshacer. Se eliminará permanentemente el servicio.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDeleteService}
+            className="bg-destructive hover:bg-destructive/90"
+          >
+            Sí, eliminar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

@@ -13,15 +13,22 @@ import { useState } from "react";
 import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AddSenderModal } from '@/components/admin/emails/add-sender-modal';
 
-const mockSenders = [
+
+const initialSenders = [
   { email: 'vatosalfa@gmail.com', confirmed: true },
   { email: 'contacto@vatosalfa.com', confirmed: false },
 ];
 
+export type Sender = typeof initialSenders[0];
+
 export default function EmailsSettingsPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isAddSenderModalOpen, setIsAddSenderModalOpen] = useState(false);
+    const [senders, setSenders] = useState<Sender[]>(initialSenders);
+
 
     const form = useForm({
         defaultValues: {
@@ -43,8 +50,18 @@ export default function EmailsSettingsPage() {
             })
         }, 1500);
     }
+    
+    const handleAddSender = (newEmail: string) => {
+        setSenders(prev => [...prev, { email: newEmail, confirmed: false }]);
+        setIsAddSenderModalOpen(false);
+        toast({
+            title: "Correo agregado con éxito",
+            description: `Se ha enviado un correo de confirmación a ${newEmail}.`,
+        });
+    }
 
   return (
+    <>
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
         <div>
             <h2 className="text-3xl font-bold tracking-tight">Configuración de Emails</h2>
@@ -60,7 +77,9 @@ export default function EmailsSettingsPage() {
                         <CardTitle>Configuraciones de emails</CardTitle>
                         <CardDescription>Correos para enviar notificaciones a tus clientes.</CardDescription>
                     </div>
-                    <Button type="button" variant="outline"><PlusCircle className="mr-2 h-4 w-4"/> Agregar Correo</Button>
+                    <Button type="button" variant="outline" onClick={() => setIsAddSenderModalOpen(true)}>
+                        <PlusCircle className="mr-2 h-4 w-4"/> Agregar Correo
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <Table>
@@ -72,7 +91,7 @@ export default function EmailsSettingsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {mockSenders.map((sender) => (
+                            {senders.map((sender) => (
                                 <TableRow key={sender.email}>
                                     <TableCell className="font-medium">{sender.email}</TableCell>
                                     <TableCell>
@@ -188,7 +207,12 @@ export default function EmailsSettingsPage() {
             </div>
         </form>
     </div>
+    
+    <AddSenderModal 
+        isOpen={isAddSenderModalOpen}
+        onClose={() => setIsAddSenderModalOpen(false)}
+        onSave={handleAddSender}
+    />
+    </>
   );
 }
-
-    

@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 import {
-  Store,
   Users,
   Scissors,
   MessageCircle,
@@ -21,7 +20,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Card } from '@/components/ui/card';
 
 const adminLinks = [
-  { href: '/admin/locales', label: 'Locales', icon: Store },
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },

@@ -27,7 +27,6 @@ const adminLinks = [
   { href: '/admin/emails', label: 'E-Mails', icon: Mail },
   { href: '/admin/integrations', label: 'Integraciones', icon: Component },
   { href: '/admin/clients', label: 'Clientes', icon: Users },
-  { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
 ];
 
 type Props = {

@@ -135,7 +135,7 @@ export default function FinanzasResumenPage() {
                             <Legend />
                             <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-2))" name="Ingresos" />
                             <Line type="monotone" dataKey="egresos" stroke="hsl(var(--destructive))" name="Egresos" />
-                            <Line type="monotone" dataKey="utilidad" stroke="hsl(var(--chart-1))" name="Utilidad" strokeWidth={2} />
+                            <Line type="monotone" dataKey="utilidad" stroke="#22c55e" name="Utilidad" strokeWidth={2} />
                         </LineChart>
                     </ResponsiveContainer>
                 </CardContent>
@@ -148,4 +148,3 @@ export default function FinanzasResumenPage() {
         </>
     );
 }
-

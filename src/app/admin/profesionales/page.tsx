@@ -285,7 +285,12 @@ export default function ProfessionalsPage() {
   const [professionals, setProfessionals] = useState<Profesional[]>(initialProfessionals);
   const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [isClientMounted, setIsClientMounted] = useState(false);
   const { toast } = useToast();
+  
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -396,26 +401,30 @@ export default function ProfessionalsPage() {
                     <CardTitle>VATOS ALFA Barber Shop</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                    modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
-                  >
-                    <SortableContext items={professionals} strategy={verticalListSortingStrategy}>
-                      <ul className="divide-y">
-                        {professionals.map((prof) => (
-                          <SortableProfesionalItem key={prof.id} prof={prof} />
-                        ))}
-                      </ul>
-                    </SortableContext>
-                     <DragOverlay>
-                        {activeProfessional ? (
-                          <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} /></ul>
-                        ) : null}
-                    </DragOverlay>
-                  </DndContext>
+                  {isClientMounted ? (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+                    >
+                      <SortableContext items={professionals} strategy={verticalListSortingStrategy}>
+                        <ul className="divide-y">
+                          {professionals.map((prof) => (
+                            <SortableProfesionalItem key={prof.id} prof={prof} />
+                          ))}
+                        </ul>
+                      </SortableContext>
+                       <DragOverlay>
+                          {activeProfessional ? (
+                            <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} /></ul>
+                          ) : null}
+                      </DragOverlay>
+                    </DndContext>
+                  ) : (
+                    <div className="p-4 text-center text-muted-foreground">Cargando...</div>
+                  )}
                 </CardContent>
             </Card>
         </div>

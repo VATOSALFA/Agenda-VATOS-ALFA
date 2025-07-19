@@ -24,6 +24,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Professional } from '@/app/admin/comisiones/page';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface EditComisionesModalProps {
   professional: Professional;
@@ -65,9 +67,10 @@ export function EditComisionesModal({ professional, isOpen, onClose }: EditComis
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
-      // En una aplicación real, aquí se guardaría en la base de datos
-      console.log('Datos de comisiones guardados:', data);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular llamada a API
+      const professionalRef = doc(db, 'profesionales', professional.id);
+      await updateDoc(professionalRef, {
+        comisionesPorServicio: data
+      });
       
       toast({
         title: 'Comisiones guardadas con éxito',

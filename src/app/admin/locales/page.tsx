@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditLocalModal } from '@/components/admin/locales/edit-local-modal';
-import { NewLocalModal } from '@/components/admin/locales/new-local-modal';
+import { CreateLocalModal } from '@/components/admin/locales/create-local-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -194,10 +194,10 @@ export default function LocalesPage() {
         </Card>
       </div>
 
-      <NewLocalModal 
+      <CreateLocalModal 
         isOpen={isNewLocalModalOpen} 
-        onClose={() => setIsNewLocalModalOpen(false)}
-        onLocalCreated={handleLocalCreated}
+        onOpenChange={setIsNewLocalModalOpen}
+        onFormSubmit={handleLocalCreated}
       />
 
       {editingLocal && (

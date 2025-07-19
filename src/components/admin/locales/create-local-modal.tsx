@@ -42,10 +42,10 @@ const localSchema = z.object({
 
 type LocalFormData = z.infer<typeof localSchema>;
 
-interface NewLocalModalProps {
+interface CreateLocalModalProps {
   isOpen: boolean;
-  onClose: () => void;
-  onLocalCreated: () => void;
+  onOpenChange: (isOpen: boolean) => void;
+  onFormSubmit: () => void;
 }
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -64,7 +64,7 @@ const daysOfWeek = [
     { id: 'domingo', label: 'Domingo' },
 ];
 
-export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModalProps) {
+export function CreateLocalModal({ isOpen, onOpenChange, onFormSubmit }: CreateLocalModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<LocalFormData>({
@@ -92,27 +92,17 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
-      // (Esta parte de la lógica de guardado está bien)
       const scheduleData = Object.fromEntries(
         Object.entries(data.schedule).map(([day, value]) => [day, { ...value }])
       );
       const dataToSave = { ...data, schedule: scheduleData };
       await addDoc(collection(db, 'locales'), dataToSave);
       
-      // --- INICIO DE LA CORRECCIÓN ---
-
-      // 1. Mostrar la notificación de éxito
       toast({
         title: "Local guardado con éxito",
       });
-
-      // 2. Llamar a la función para actualizar la lista de locales en la página principal
-      onLocalCreated();
-
-      // 3. LLAMAR A LA FUNCIÓN PARA CERRAR EL MODAL
-      onClose(); 
-
-      // --- FIN DE LA CORRECCIÓN ---
+      form.reset();
+      onFormSubmit();
       
     } catch(error) {
         console.error("Error creating document: ", error);
@@ -122,13 +112,12 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
           description: "No se pudo crear el local. Inténtalo de nuevo.",
         });
     } finally {
-        // Esta parte se asegura de que el estado de carga siempre se desactive
         setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Nuevo Local</DialogTitle>
@@ -271,7 +260,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
                 </ScrollArea>
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
-                <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
+                <Button variant="ghost" type="button" onClick={() => onOpenChange(false)}>Cerrar</Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Guardar

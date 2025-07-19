@@ -86,14 +86,6 @@ const reportsNavLinks = [
   { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart },
 ];
 
-const adminNavLinks = [
-    { href: '/admin/locales', label: 'Locales', icon: Store },
-    { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
-    { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
-    { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
-    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
-];
-
 const finanzasNavLinks = [
   { href: '/finanzas/resumen', label: 'Resumen' },
   { isSeparator: true },
@@ -252,29 +244,6 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                 <Button variant="ghost" className={cn(
-                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/admin')
-                     ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}>
-                  Administración <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start">
-                {adminNavLinks.map(({href, label, icon: Icon}) => (
-                  <DropdownMenuItem key={href} asChild>
-                    <Link href={href}>
-                      <Icon className="mr-2 h-4 w-4" />
-                      <span>{label}</span>
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                  <Button variant="ghost" className={cn(
@@ -300,6 +269,19 @@ export default function Header() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Link
+              href="/admin/profesionales"
+              className={cn(
+                'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                pathname.startsWith('/admin')
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-300 hover:bg-white/10 hover:text-white'
+              )}
+            >
+              Administración
+            </Link>
+
           </nav>
           <div className="ml-auto flex items-center space-x-2">
             <DropdownMenu>

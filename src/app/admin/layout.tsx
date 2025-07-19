@@ -14,12 +14,14 @@ import {
   Mail,
   Component,
   Bell,
-  KeyRound
+  KeyRound,
+  Store
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Card } from '@/components/ui/card';
 
 const adminLinks = [
+  { href: '/admin/locales', label: 'Locales', icon: Store },
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },

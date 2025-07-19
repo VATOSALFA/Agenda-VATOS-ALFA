@@ -92,10 +92,10 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'locales'), data);
-      onLocalCreated();
       toast({
           title: "Local guardado con éxito",
       });
+      onLocalCreated();
     } catch(error) {
         console.error("Error creating document: ", error);
         toast({

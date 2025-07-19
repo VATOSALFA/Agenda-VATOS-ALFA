@@ -98,7 +98,6 @@ export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocal
           description: `El local ${data.name} ha sido creado con éxito.`,
       });
       onLocalCreated();
-      onOpenChange(false);
       form.reset();
     } catch(error) {
       console.error("Error adding document: ", error);
@@ -109,6 +108,7 @@ export function NewLocalModal({ isOpen, onOpenChange, onLocalCreated }: NewLocal
       });
     } finally {
         setIsSubmitting(false);
+        onOpenChange(false);
     }
   };
 

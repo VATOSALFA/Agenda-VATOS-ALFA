@@ -52,6 +52,12 @@ export default function FinanzasMensualesPage() {
     const subtotalUtilidad = ingresoTotal - egresoTotal;
     const comisionBeatriz = subtotalUtilidad * 0.20;
     const utilidadNeta = subtotalUtilidad - comisionBeatriz;
+    
+    // Product summary mock data
+    const ventaProductos = 80000;
+    const reinversion = 25000;
+    const comisionProfesionales = 8000;
+    const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
 
     return (
         <>
@@ -79,15 +85,19 @@ export default function FinanzasMensualesPage() {
                     <CardContent className="space-y-2">
                          <div className="flex justify-between items-center text-base">
                             <span className="text-muted-foreground">Venta de productos</span>
-                            <span className="font-semibold">$80,000</span>
+                            <span className="font-semibold">${ventaProductos.toLocaleString('es-CL')}</span>
                         </div>
                          <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Comisión de venta</span>
-                            <span className="font-semibold">-$8,000</span>
+                            <span className="text-muted-foreground">Reinversión</span>
+                            <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-CL')}</span>
+                        </div>
+                         <div className="flex justify-between items-center text-base">
+                            <span className="text-muted-foreground">Comisión de profesionales</span>
+                            <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-CL')}</span>
                         </div>
                         <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
-                            <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad de productos</span>
-                            <span className="font-extrabold text-primary">$72,000</span>
+                            <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
+                            <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-CL')}</span>
                         </div>
                     </CardContent>
                 </Card>

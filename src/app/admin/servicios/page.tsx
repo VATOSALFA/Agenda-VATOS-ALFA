@@ -28,7 +28,8 @@ import {
   GripVertical,
   Info,
   X,
-  Trash2
+  Trash2,
+  Check
 } from 'lucide-react';
 import {
   Select,
@@ -168,7 +169,7 @@ export default function ServicesPage() {
     setServicesByCategory(prev => [...prev, { category: newCategoryName, services: [] }]);
     toast({
         title: "Categoría guardada",
-        description: "La nueva categoría ha sido creada con éxito."
+        description: `La nueva categoría "${newCategoryName.trim()}" ha sido creada con éxito.`
     })
     setNewCategoryName('');
     setIsAddingCategory(false);
@@ -241,44 +242,36 @@ export default function ServicesPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Servicios</h2>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" onClick={() => setIsAddingCategory(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Nueva categoría
-          </Button>
+           {isAddingCategory ? (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 'auto', opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="flex items-center gap-2"
+            >
+              <Input 
+                placeholder="Nombre de la categoría" 
+                className="w-48 h-9"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
+              />
+              <Button size="sm" onClick={handleSaveCategory}>Guardar</Button>
+              <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setIsAddingCategory(false)}><X className="h-4 w-4" /></Button>
+            </motion.div>
+          ) : (
+            <Button variant="outline" onClick={() => setIsAddingCategory(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Nueva categoría
+            </Button>
+          )}
+
           <Button onClick={() => openEditModal(null)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo
           </Button>
         </div>
       </div>
-      
-      <AnimatePresence>
-        {isAddingCategory && (
-            <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-                className="overflow-hidden"
-            >
-                <Card className="mb-4">
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-4">
-                            <Input 
-                              placeholder="Nombre de la nueva categoría" 
-                              className="flex-grow"
-                              value={newCategoryName}
-                              onChange={(e) => setNewCategoryName(e.target.value)}
-                            />
-                            <Button onClick={handleSaveCategory}>Guardar</Button>
-                            <Button variant="ghost" onClick={() => setIsAddingCategory(false)}>Cancelar</Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </motion.div>
-        )}
-      </AnimatePresence>
 
-
-      <div className="flex items-center space-x-4 pb-4">
+      <div className="flex items-center space-x-4 pt-4 pb-4">
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline">

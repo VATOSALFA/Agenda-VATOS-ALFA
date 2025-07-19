@@ -88,13 +88,13 @@ export default function LocalesPage() {
               ) : locales.map((local) => (
                 <div key={local.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
                   <div>
-                    <p className="font-bold flex items-center gap-2">
+                    <div className="font-bold flex items-center gap-2">
                        <Badge className="bg-green-100 text-green-800 border-green-200">
                          <Circle className="mr-2 h-2 w-2 fill-current text-green-600" />
                          Activo
                        </Badge>
                        {local.name}
-                    </p>
+                    </div>
                     <p className="text-sm text-muted-foreground">{local.address}</p>
                   </div>
                   <div className="flex items-center gap-2">

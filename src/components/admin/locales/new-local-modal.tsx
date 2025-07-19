@@ -92,14 +92,26 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'locales'), data);
+      // This is the critical step: ensuring the data is clean for Firestore.
+      const dataToSave = {
+        name: data.name,
+        address: data.address,
+        timezone: data.timezone,
+        phone: data.phone,
+        email: data.email,
+        active: data.active,
+        whatsappPermission: data.whatsappPermission,
+        schedule: data.schedule,
+      };
+
+      await addDoc(collection(db, 'locales'), dataToSave);
       
       toast({
           title: "Local guardado con éxito",
           description: `El local ${data.name} ha sido creado.`,
       });
-
       onLocalCreated();
+
     } catch(error) {
       console.error("Error al guardar el local:", error);
       toast({

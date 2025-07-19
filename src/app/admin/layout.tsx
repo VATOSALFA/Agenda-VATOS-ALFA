@@ -13,12 +13,10 @@ import {
   ChevronDown,
   Mail,
   Component,
-  Bell,
   KeyRound,
   Store
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Card } from '@/components/ui/card';
 
 const adminLinks = [
   { href: '/admin/locales', label: 'Locales', icon: Store },
@@ -28,7 +26,6 @@ const adminLinks = [
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
   { href: '/admin/emails', label: 'E-Mails', icon: Mail },
   { href: '/admin/integrations', label: 'Integraciones', icon: Component },
-  { href: '/admin/notifications', label: 'Notificaciones', icon: Bell },
   { href: '/admin/clients', label: 'Clientes', icon: Users },
   { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
 ];

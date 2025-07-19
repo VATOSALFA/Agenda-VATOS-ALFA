@@ -62,19 +62,28 @@ export function EditComisionesModal({ professional, isOpen, onClose }: EditComis
     defaultValues: getDefaultValues(),
   });
 
-  const onSubmit = (data: any) => {
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-    console.log('Datos de comisiones guardados:', data);
-    
-    // Simular llamada a API
-    setTimeout(() => {
+    try {
+      // En una aplicación real, aquí se guardaría en la base de datos
+      console.log('Datos de comisiones guardados:', data);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular llamada a API
+      
       toast({
         title: 'Comisiones guardadas con éxito',
         description: `Las comisiones para ${professional.name} han sido actualizadas.`,
       });
-      setIsSubmitting(false);
       onClose();
-    }, 1000);
+    } catch (error) {
+       console.error("Error al guardar comisiones:", error);
+       toast({
+        variant: "destructive",
+        title: 'Error al guardar',
+        description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

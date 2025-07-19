@@ -105,7 +105,6 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
         });
     } finally {
         setIsSubmitting(false);
-        onClose();
     }
   };
 

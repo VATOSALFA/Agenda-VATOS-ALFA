@@ -40,7 +40,8 @@ interface Local {
 }
 
 export default function LocalesPage() {
-  const [isNewLocalModalOpen, setIsNewLocalModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingLocal, setEditingLocal] = useState<Local | null>(null);
   const [queryKey, setQueryKey] = useState(0);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
@@ -48,6 +49,22 @@ export default function LocalesPage() {
   const handleLocalCreated = () => {
     setQueryKey(prev => prev + 1); // Refreshes the data
   };
+  
+  const openNewModal = () => {
+    setEditingLocal(null);
+    setIsModalOpen(true);
+  }
+
+  const openEditModal = (local: Local) => {
+    setEditingLocal(local);
+    setIsModalOpen(true);
+  }
+  
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingLocal(null);
+  }
+
 
   return (
     <>
@@ -64,7 +81,7 @@ export default function LocalesPage() {
           <Button variant="outline">
             <Filter className="mr-2 h-4 w-4" /> Filtrar por
           </Button>
-          <Button onClick={() => setIsNewLocalModalOpen(true)}>
+          <Button onClick={openNewModal}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo local
           </Button>
         </div>
@@ -109,7 +126,7 @@ export default function LocalesPage() {
                         <DropdownMenuItem className="text-destructive hover:!text-destructive">Eliminar</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => openEditModal(local)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar
                     </Button>
@@ -125,9 +142,10 @@ export default function LocalesPage() {
       </div>
       
       <NewLocalModal
-        isOpen={isNewLocalModalOpen}
-        onClose={() => setIsNewLocalModalOpen(false)}
+        isOpen={isModalOpen}
+        onClose={closeModal}
         onLocalCreated={handleLocalCreated}
+        local={editingLocal}
       />
     </>
   );

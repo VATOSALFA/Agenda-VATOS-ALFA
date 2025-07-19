@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { addDoc, updateDoc, collection, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -41,7 +41,7 @@ const localSchema = z.object({
   timezone: z.string().min(1, "La zona horaria es requerida."),
   phone: z.string().min(1, "El teléfono es requerido."),
   email: z.string().email("Debe ser un email válido."),
-  schedule: z.any(), // Simplified for now
+  schedule: z.any(),
   acceptsOnline: z.boolean().default(true),
   delivery: z.boolean().default(false),
   secondaryPhone: z.string().optional(),
@@ -50,16 +50,22 @@ const localSchema = z.object({
 
 type LocalFormData = z.infer<typeof localSchema>;
 
+interface Local extends LocalFormData {
+    id: string;
+}
+
 interface NewLocalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLocalCreated: () => void;
+  local: Local | null;
 }
 
-export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModalProps) {
+export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLocalModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const isEditMode = !!local;
+
   const form = useForm<LocalFormData>({
     resolver: zodResolver(localSchema),
     defaultValues: {
@@ -84,28 +90,40 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
     },
   });
 
+  useEffect(() => {
+    if (local) {
+        form.reset(local);
+    } else {
+        form.reset();
+    }
+  }, [local, form]);
+
   const onSubmit = async (data: LocalFormData) => {
     setIsSubmitting(true);
     try {
-      const dataToSave = {
-        ...data,
-        status: 'active',
-        creado_en: Timestamp.now(),
-      };
-      await addDoc(collection(db, 'locales'), dataToSave);
+      if (isEditMode) {
+        const localRef = doc(db, 'locales', local.id);
+        await updateDoc(localRef, data);
+        toast({ title: "Local actualizado con éxito" });
+      } else {
+        const dataToSave = {
+          ...data,
+          status: 'active',
+          creado_en: Timestamp.now(),
+        };
+        await addDoc(collection(db, 'locales'), dataToSave);
+        toast({ title: "Local guardado con éxito" });
+      }
       
-      toast({
-        title: "Local guardado con éxito",
-      });
       onLocalCreated();
       onClose();
 
     } catch (error) {
-      console.error("Error creating local: ", error);
+      console.error("Error saving local: ", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "No se pudo crear el local. Inténtalo de nuevo.",
+        description: "No se pudo guardar el local. Inténtalo de nuevo.",
       });
     } finally {
       setIsSubmitting(false);
@@ -116,9 +134,9 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated }: NewLocalModal
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Nuevo Local</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Editar Local' : 'Nuevo Local'}</DialogTitle>
           <DialogDescription>
-            Agrega una nueva sucursal a tu negocio.
+            {isEditMode ? 'Modifica los datos de la sucursal.' : 'Agrega una nueva sucursal a tu negocio.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">

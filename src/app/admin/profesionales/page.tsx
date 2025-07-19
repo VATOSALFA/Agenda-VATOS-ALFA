@@ -68,6 +68,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { EditProfesionalModal } from '@/components/admin/profesionales/edit-profesional-modal';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const initialProfessionals = [
   {
@@ -156,7 +157,7 @@ const initialProfessionals = [
     email: 'gloria@example.com',
     avatar: 'https://placehold.co/100x100',
     dataAiHint: 'woman smiling',
-    active: true,
+    active: false,
     acceptsOnline: true,
     biography: 'Especialista en cuidado facial y masajes relajantes.',
     services: ['serv_10', 'serv_11'],
@@ -175,7 +176,7 @@ const initialProfessionals = [
 export type Profesional = (typeof initialProfessionals)[0];
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-function SortableProfesionalItem({ prof }: { prof: Profesional }) {
+function SortableProfesionalItem({ prof, onToggleActive, onEdit }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void }) {
   const {
     attributes,
     listeners,
@@ -185,8 +186,6 @@ function SortableProfesionalItem({ prof }: { prof: Profesional }) {
     isDragging,
   } = useSortable({ id: prof.id });
   
-  const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
-  
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -194,16 +193,7 @@ function SortableProfesionalItem({ prof }: { prof: Profesional }) {
     boxShadow: isDragging ? '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' : 'none'
   };
 
-  const handleOpenModal = (profesional: Profesional | 'new') => {
-    setEditingProfessional(profesional);
-  };
-
-  const handleCloseModal = () => {
-    setEditingProfessional(null);
-  };
-
   return (
-    <>
     <li ref={setNodeRef} style={style} className="flex items-center justify-between p-4 bg-card hover:bg-muted/50 list-none">
       <div className="flex items-center gap-4">
         <div {...attributes} {...listeners} className="cursor-grab p-2">
@@ -248,9 +238,11 @@ function SortableProfesionalItem({ prof }: { prof: Profesional }) {
           </TooltipContent>
         </Tooltip>
 
-        <Badge variant={prof.active ? 'default' : 'secondary'} className="bg-green-100 text-green-800 border-green-200">
-          <Circle className="mr-2 h-2 w-2 fill-current text-green-600" />
-          Activo
+        <Badge variant={prof.active ? 'default' : 'destructive'} className={cn(
+            prof.active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'
+        )}>
+          <Circle className={cn("mr-2 h-2 w-2 fill-current", prof.active ? 'text-green-600' : 'text-red-600')} />
+          {prof.active ? 'Activo' : 'Inactivo'}
         </Badge>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -260,23 +252,17 @@ function SortableProfesionalItem({ prof }: { prof: Profesional }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem>Habilitar jornada especial</DropdownMenuItem>
-            <DropdownMenuItem>Desactivar profesional</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onToggleActive(prof.id, !prof.active)}>
+              {prof.active ? 'Desactivar profesional' : 'Activar profesional'}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="sm" onClick={() => handleOpenModal(prof)}>
+        <Button variant="outline" size="sm" onClick={() => onEdit(prof)}>
           <Pencil className="mr-2 h-4 w-4" />
           Editar
         </Button>
       </div>
     </li>
-    {editingProfessional && (
-        <EditProfesionalModal
-          profesional={editingProfessional === 'new' ? null : editingProfessional}
-          isOpen={!!editingProfessional}
-          onClose={handleCloseModal}
-        />
-      )}
-    </>
   );
 }
 
@@ -306,6 +292,13 @@ export default function ProfessionalsPage() {
   const handleCloseModal = () => {
     setEditingProfessional(null);
   };
+
+  const handleToggleActive = (id: string, active: boolean) => {
+    setProfessionals(professionals.map(p => p.id === id ? {...p, active} : p));
+    toast({
+        title: active ? "Profesional activado" : "Profesional desactivado"
+    });
+  }
   
   function handleDragStart(event: any) {
     setActiveId(event.active.id);
@@ -412,13 +405,13 @@ export default function ProfessionalsPage() {
                       <SortableContext items={professionals} strategy={verticalListSortingStrategy}>
                         <ul className="divide-y">
                           {professionals.map((prof) => (
-                            <SortableProfesionalItem key={prof.id} prof={prof} />
+                            <SortableProfesionalItem key={prof.id} prof={prof} onToggleActive={handleToggleActive} onEdit={() => handleOpenModal(prof)} />
                           ))}
                         </ul>
                       </SortableContext>
                        <DragOverlay>
                           {activeProfessional ? (
-                            <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} /></ul>
+                            <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => {}} onEdit={() => {}} /></ul>
                           ) : null}
                       </DragOverlay>
                     </DndContext>

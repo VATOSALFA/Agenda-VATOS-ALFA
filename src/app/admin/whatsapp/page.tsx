@@ -70,9 +70,6 @@ export default function WhatsappPage() {
                 </p>
                 <div className="flex items-center gap-4">
                   <Button size="lg" onClick={() => setIsSelectionModalOpen(true)}>Probar plantillas</Button>
-                  <Button size="lg" variant="ghost">
-                    <PlayCircle className="mr-2 h-5 w-5" /> Ver un video
-                  </Button>
                 </div>
               </div>
               <div className="p-8 bg-muted/40 flex items-center justify-center">

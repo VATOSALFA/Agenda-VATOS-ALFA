@@ -131,7 +131,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </div>
         <Avatar>
           <AvatarImage src={prof.avatar} data-ai-hint={prof.dataAiHint} />
-          <AvatarFallback>{prof.name.substring(0, 2)}</AvatarFallback>
+          <AvatarFallback>{prof.name ? prof.name.substring(0, 2) : '??'}</AvatarFallback>
         </Avatar>
         <span className="font-medium">{prof.name}</span>
       </div>
@@ -433,4 +433,5 @@ export default function ProfessionalsPage() {
     </TooltipProvider>
   );
 }
+
 

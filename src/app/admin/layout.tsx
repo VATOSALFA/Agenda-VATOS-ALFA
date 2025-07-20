@@ -14,7 +14,8 @@ import {
   Mail,
   Component,
   KeyRound,
-  Store
+  Store,
+  School
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -24,6 +25,7 @@ const adminLinks = [
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
+  { href: '/admin/academia', label: 'Academia', icon: School },
 ];
 
 type Props = {

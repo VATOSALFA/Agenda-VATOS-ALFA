@@ -29,6 +29,8 @@ import type { Profesional } from '@/app/admin/profesionales/page';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface SpecialDayModalProps {
   profesional: Profesional;
@@ -76,18 +78,43 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
     setSpecialDays(prev => prev.filter(day => day.id !== id));
   }
 
-  const onSubmit = (data: any) => {
+  const onSubmit = async () => {
+    if (specialDays.length === 0) {
+        toast({ variant: 'destructive', title: 'No hay días para guardar.' });
+        return;
+    }
     setIsSubmitting(true);
-    console.log('Jornada especial guardada:', { professionalId: profesional.id, days: specialDays });
     
-    // Simular llamada a API
-    setTimeout(() => {
-      toast({
-        title: 'Jornada especial guardada con éxito',
-      });
-      setIsSubmitting(false);
-      onClose();
-    }, 1000);
+    try {
+        const promises = specialDays.map(day => {
+            const dataToSave = {
+                profesionalId: profesional.id,
+                profesionalName: profesional.name,
+                fecha: format(day.date, 'yyyy-MM-dd'),
+                hora_inicio: day.start,
+                hora_fin: day.end,
+                creado_en: Timestamp.now(),
+            };
+            return addDoc(collection(db, 'jornadas_especiales'), dataToSave);
+        });
+
+        await Promise.all(promises);
+
+        toast({
+            title: 'Jornada(s) especial(es) guardada(s) con éxito',
+        });
+        setSpecialDays([]);
+        onClose();
+    } catch (error) {
+        console.error("Error guardando jornada especial:", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudieron guardar las jornadas. Inténtalo de nuevo."
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -99,7 +126,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
             Agrega fechas y horarios especiales donde este profesional estará disponible.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
             <div className="py-4 space-y-4">
                 <div className="p-4 border rounded-lg space-y-4">
                     <h4 className="font-semibold text-sm">Abrir el local en la siguiente fecha y horario</h4>
@@ -144,13 +171,13 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                         />
                     </div>
                      <div className="flex justify-end">
-                        <Button type="button" size="sm" onClick={handleAddDay}><Plus className="mr-2 h-4 w-4"/>Opciones</Button>
+                        <Button type="button" size="sm" onClick={handleAddDay}><Plus className="mr-2 h-4 w-4"/>Agregar Día</Button>
                     </div>
                 </div>
 
                 {specialDays.length > 0 && (
                     <div className="space-y-2">
-                        <h4 className="font-semibold text-sm">Días abiertos</h4>
+                        <h4 className="font-semibold text-sm">Días a agregar</h4>
                         <div className="max-h-48 overflow-y-auto space-y-2 border rounded-lg p-2">
                             {specialDays.map(day => (
                                 <div key={day.id} className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
@@ -169,7 +196,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                 <Button type="button" variant="outline" onClick={onClose}>
                 Cancelar
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || specialDays.length === 0}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar
                 </Button>

@@ -70,111 +70,40 @@ import { EditProfesionalModal } from '@/components/admin/profesionales/edit-prof
 import { SpecialDayModal } from '@/components/admin/profesionales/special-day-modal';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const initialProfessionals = [
-  {
-    id: 'prof_1',
-    name: 'Beatriz Elizarraga Casas',
-    email: 'jezbeth94@gmail.com',
-    avatar: 'https://placehold.co/100x100',
-    dataAiHint: 'woman portrait',
-    active: true,
-    acceptsOnline: true,
-    biography: 'Barbera experta en cortes clásicos y modernos, con más de 10 años de experiencia.',
-    services: ['serv_01', 'serv_02', 'serv_03'],
-    schedule: {
-      lunes: { enabled: true, start: '09:00', end: '18:00' },
-      martes: { enabled: true, start: '09:00', end: '18:00' },
-      miercoles: { enabled: true, start: '09:00', end: '18:00' },
-      jueves: { enabled: true, start: '09:00', end: '18:00' },
-      viernes: { enabled: true, start: '09:00', end: '20:00' },
-      sabado: { enabled: true, start: '10:00', end: '20:00' },
-      domingo: { enabled: false, start: '', end: '' },
-    }
-  },
-  {
-    id: 'prof_2',
-    name: 'Erick',
-    email: 'erick@example.com',
-    avatar: 'https://placehold.co/100x100',
-    dataAiHint: 'man portrait',
-    active: true,
-    acceptsOnline: true,
-    biography: 'Especialista en fades y diseños de barba.',
-    services: ['serv_02', 'serv_04'],
-    schedule: {
-      lunes: { enabled: false, start: '', end: '' },
-      martes: { enabled: true, start: '10:00', end: '19:00' },
-      miercoles: { enabled: true, start: '10:00', end: '19:00' },
-      jueves: { enabled: true, start: '10:00', end: '19:00' },
-      viernes: { enabled: true, start: '10:00', end: '21:00' },
-      sabado: { enabled: true, start: '09:00', end: '21:00' },
-      domingo: { enabled: false, start: '', end: '' },
-    }
-  },
-  {
-    id: 'prof_3',
-    name: 'Karina Ruiz Rosales',
-    email: 'karina@example.com',
-    avatar: 'https://placehold.co/100x100',
-    dataAiHint: 'woman glasses',
-    active: true,
-    acceptsOnline: false,
-    biography: 'Experta en coloración y tratamientos capilares.',
-    services: ['serv_06', 'serv_07', 'serv_08'],
-     schedule: {
-      lunes: { enabled: true, start: '09:00', end: '17:00' },
-      martes: { enabled: true, start: '09:00', end: '17:00' },
-      miercoles: { enabled: false, start: '', end: '' },
-      jueves: { enabled: true, start: '09:00', end: '17:00' },
-      viernes: { enabled: true, start: '09:00', end: '17:00' },
-      sabado: { enabled: false, start: '', end: '' },
-      domingo: { enabled: false, start: '', end: '' },
-    }
-  },
-  {
-    id: 'prof_4',
-    name: 'Lupita',
-    email: 'lupita@example.com',
-    avatar: 'https://placehold.co/100x100',
-    dataAiHint: 'woman happy',
-    active: true,
-    acceptsOnline: true,
-    biography: 'Pasión por el estilismo y las últimas tendencias.',
-    services: ['serv_01', 'serv_05', 'serv_09'],
-     schedule: {
-      lunes: { enabled: true, start: '12:00', end: '20:00' },
-      martes: { enabled: true, start: '12:00', end: '20:00' },
-      miercoles: { enabled: true, start: '12:00', end: '20:00' },
-      jueves: { enabled: true, start: '12:00', end: '20:00' },
-      viernes: { enabled: true, start: '12:00', end: '20:00' },
-      sabado: { enabled: true, start: '10:00', end: '18:00' },
-      domingo: { enabled: false, start: '', end: '' },
-    }
-  },
-  {
-    id: 'prof_5',
-    name: 'Gloria Ivon',
-    email: 'gloria@example.com',
-    avatar: 'https://placehold.co/100x100',
-    dataAiHint: 'woman smiling',
-    active: false,
-    acceptsOnline: true,
-    biography: 'Especialista en cuidado facial y masajes relajantes.',
-    services: ['serv_10', 'serv_11'],
-     schedule: {
-      lunes: { enabled: false, start: '', end: '' },
-      martes: { enabled: false, start: '', end: '' },
-      miercoles: { enabled: true, start: '10:00', end: '19:00' },
-      jueves: { enabled: true, start: '10:00', end: '19:00' },
-      viernes: { enabled: true, start: '10:00', end: '19:00' },
-      sabado: { enabled: true, start: '10:00', end: '19:00' },
-      domingo: { enabled: true, start: '11:00', end: '16:00' },
-    }
-  },
-];
+export interface ScheduleDay {
+    enabled: boolean;
+    start: string;
+    end: string;
+}
 
-export type Profesional = (typeof initialProfessionals)[0];
+export interface Schedule {
+    lunes: ScheduleDay;
+    martes: ScheduleDay;
+    miercoles: ScheduleDay;
+    jueves: ScheduleDay;
+    viernes: ScheduleDay;
+    sabado: ScheduleDay;
+    domingo: ScheduleDay;
+}
+
+export interface Profesional {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+    dataAiHint?: string;
+    active: boolean;
+    acceptsOnline: boolean;
+    biography: string;
+    services: string[];
+    schedule: Schedule;
+    order: number;
+}
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
 function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void }) {
@@ -225,7 +154,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
                 {daysOfWeek.map(day => (
                   <li key={day} className="grid grid-cols-3 gap-x-4 gap-y-1">
                     <span className="capitalize">{day.substring(0, 3)}</span>
-                    {prof.schedule[day as keyof typeof prof.schedule].enabled
+                    {prof.schedule[day as keyof typeof prof.schedule]?.enabled
                       ? <>
                           <span className="font-mono text-right">{prof.schedule[day as keyof typeof prof.schedule].start}</span>
                           <span className="font-mono text-right">{prof.schedule[day as keyof typeof prof.schedule].end}</span>
@@ -269,7 +198,10 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
 
 
 export default function ProfessionalsPage() {
-  const [professionals, setProfessionals] = useState<Profesional[]>(initialProfessionals);
+  const [queryKey, setQueryKey] = useState(0);
+  const { data: professionalsData, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
+  const [professionals, setProfessionals] = useState<Profesional[]>([]);
+  
   const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
   const [specialDayProfessional, setSpecialDayProfessional] = useState<Profesional | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -280,6 +212,13 @@ export default function ProfessionalsPage() {
     setIsClientMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (professionalsData) {
+      const sorted = [...professionalsData].sort((a, b) => a.order - b.order);
+      setProfessionals(sorted);
+    }
+  }, [professionalsData]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -287,6 +226,11 @@ export default function ProfessionalsPage() {
     })
   );
   
+  const handleDataUpdated = () => {
+    setQueryKey(prev => prev + 1); // Refreshes the data
+    handleCloseModal();
+  };
+
   const handleOpenModal = (profesional: Profesional | 'new') => {
     setEditingProfessional(profesional);
   };
@@ -303,42 +247,72 @@ export default function ProfessionalsPage() {
     setSpecialDayProfessional(null);
   };
 
-
-  const handleToggleActive = (id: string, active: boolean) => {
-    setProfessionals(professionals.map(p => p.id === id ? {...p, active} : p));
-    toast({
-        title: active ? "Profesional activado" : "Profesional desactivado"
-    });
+  const handleToggleActive = async (id: string, active: boolean) => {
+    try {
+        const profRef = doc(db, 'profesionales', id);
+        await updateDoc(profRef, { active });
+        toast({
+            title: active ? "Profesional activado" : "Profesional desactivado"
+        });
+        handleDataUpdated();
+    } catch (error) {
+        console.error("Error toggling active status: ", error);
+        toast({ variant: "destructive", title: "Error al actualizar" });
+    }
   }
   
   function handleDragStart(event: any) {
     setActiveId(event.active.id);
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
 
     if (over && active.id !== over.id) {
-      setProfessionals((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        
-        const newOrder = arrayMove(items, oldIndex, newIndex);
-        
-        // Here you would typically save the new order to the database.
-        // For now, we'll just show a toast.
+      const oldIndex = professionals.findIndex((item) => item.id === active.id);
+      const newIndex = professionals.findIndex((item) => item.id === over.id);
+      const newOrder = arrayMove(professionals, oldIndex, newIndex);
+      setProfessionals(newOrder);
+
+      try {
+        const batch = writeBatch(db);
+        newOrder.forEach((prof, index) => {
+          const profRef = doc(db, 'profesionales', prof.id);
+          batch.update(profRef, { order: index });
+        });
+        await batch.commit();
         toast({
             title: "Orden actualizado",
-            description: "El nuevo orden de los profesionales ha sido guardado localmente."
-        })
-        
-        return newOrder;
-      });
+            description: "El nuevo orden de los profesionales ha sido guardado."
+        });
+        handleDataUpdated();
+      } catch (error) {
+        console.error("Error updating order:", error);
+        toast({ variant: 'destructive', title: 'Error al guardar el orden'});
+        setProfessionals(professionals); // Revert on error
+      }
     }
   }
 
   const activeProfessional = useMemo(() => professionals.find(p => p.id === activeId), [activeId, professionals]);
+  
+  if (professionalsLoading && !isClientMounted) {
+    return (
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-12 w-full" />
+            <Card>
+                <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
+                <CardContent className="space-y-2 p-0">
+                    <div className="p-4"><Skeleton className="h-12 w-full" /></div>
+                    <div className="p-4"><Skeleton className="h-12 w-full" /></div>
+                    <div className="p-4"><Skeleton className="h-12 w-full" /></div>
+                </CardContent>
+            </Card>
+        </div>
+    )
+  }
 
   return (
     <TooltipProvider>
@@ -445,6 +419,7 @@ export default function ProfessionalsPage() {
           profesional={editingProfessional === 'new' ? null : editingProfessional}
           isOpen={!!editingProfessional}
           onClose={handleCloseModal}
+          onDataSaved={handleDataUpdated}
         />
       )}
       
@@ -458,3 +433,4 @@ export default function ProfessionalsPage() {
     </TooltipProvider>
   );
 }
+

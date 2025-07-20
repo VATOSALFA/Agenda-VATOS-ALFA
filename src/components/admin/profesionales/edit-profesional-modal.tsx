@@ -12,17 +12,29 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import type { Profesional } from '@/app/admin/profesionales/page';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { Profesional, Schedule } from '@/app/admin/profesionales/page';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Info, UploadCloud, Plus, Copy } from 'lucide-react';
+import { Loader2, Copy, UploadCloud, Plus, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
+import { db } from '@/lib/firebase';
+import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EditProfesionalModalProps {
   profesional: Profesional | null;
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: () => void;
 }
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -67,59 +79,68 @@ const servicesByCategory = [
   }
 ];
 
+const defaultSchedule: Schedule = {
+  lunes: { enabled: true, start: '09:00', end: '18:00' },
+  martes: { enabled: true, start: '09:00', end: '18:00' },
+  miercoles: { enabled: true, start: '09:00', end: '18:00' },
+  jueves: { enabled: true, start: '09:00', end: '18:00' },
+  viernes: { enabled: true, start: '09:00', end: '18:00' },
+  sabado: { enabled: false, start: '09:00', end: '18:00' },
+  domingo: { enabled: false, start: '09:00', end: '18:00' },
+};
 
-export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfesionalModalProps) {
+
+export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved }: EditProfesionalModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const form = useForm({
     defaultValues: profesional || {
         name: '',
         email: '',
+        active: true,
         acceptsOnline: true,
         services: [],
-        schedule: {
-          lunes: { enabled: true, start: '09:00', end: '18:00' },
-          martes: { enabled: true, start: '09:00', end: '18:00' },
-          miercoles: { enabled: true, start: '09:00', end: '18:00' },
-          jueves: { enabled: true, start: '09:00', end: '18:00' },
-          viernes: { enabled: true, start: '09:00', end: '18:00' },
-          sabado: { enabled: false, start: '', end: '' },
-          domingo: { enabled: false, start: '', end: '' },
-        },
+        schedule: defaultSchedule,
         biography: '',
+        avatar: 'https://placehold.co/100x100',
     },
   });
   
   useEffect(() => {
-    form.reset(profesional || {
-        name: '',
-        email: '',
-        acceptsOnline: true,
-        services: [],
-        schedule: {
-          lunes: { enabled: true, start: '09:00', end: '18:00' },
-          martes: { enabled: true, start: '09:00', end: '18:00' },
-          miercoles: { enabled: true, start: '09:00', end: '18:00' },
-          jueves: { enabled: true, start: '09:00', end: '18:00' },
-          viernes: { enabled: true, start: '09:00', end: '18:00' },
-          sabado: { enabled: false, start: '', end: '' },
-          domingo: { enabled: false, start: '', end: '' },
-        },
-        biography: '',
-    });
-  }, [profesional, form]);
+    if(isOpen) {
+        form.reset(profesional ? 
+            { ...profesional, schedule: profesional.schedule || defaultSchedule } 
+            : {
+                name: '', email: '', active: true, acceptsOnline: true, services: [],
+                schedule: defaultSchedule,
+                biography: '', avatar: 'https://placehold.co/100x100', order: 0
+            }
+        );
+    }
+  }, [profesional, form, isOpen]);
 
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
-        console.log("Saving data:", data);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast({
-            title: "Profesional guardado con éxito",
-        });
+        if(profesional) {
+            // Update
+            const profRef = doc(db, 'profesionales', profesional.id);
+            await updateDoc(profRef, data);
+            toast({ title: "Profesional actualizado con éxito" });
+        } else {
+            // Create
+            const collectionRef = collection(db, 'profesionales');
+            await addDoc(collectionRef, { 
+                ...data, 
+                order: 99, // Add to end of list
+                created_at: Timestamp.now() 
+            });
+            toast({ title: "Profesional creado con éxito" });
+        }
+        onDataSaved();
     } catch (error) {
         console.error("Error saving professional:", error);
         toast({
@@ -129,23 +150,44 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
         });
     } finally {
         setIsSubmitting(false);
-        onClose();
     }
   };
 
+  const handleDelete = async () => {
+    if (!profesional) return;
+    setIsDeleting(true);
+    try {
+        await deleteDoc(doc(db, 'profesionales', profesional.id));
+        toast({ title: "Profesional eliminado con éxito" });
+        onDataSaved();
+    } catch (error) {
+        console.error("Error deleting professional:", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo eliminar el profesional. Inténtalo de nuevo.",
+        });
+    } finally {
+        setIsDeleting(false);
+    }
+  }
+
   const copySchedule = (fromDay: string) => {
-    const sourceSchedule = form.getValues(`schedule.${fromDay}`);
+    const sourceSchedule = form.getValues(`schedule.${fromDay as keyof Schedule}`);
     daysOfWeek.forEach(day => {
         if(day.id !== fromDay) {
-            form.setValue(`schedule.${day.id}.enabled`, sourceSchedule.enabled);
-            form.setValue(`schedule.${day.id}.start`, sourceSchedule.start);
-            form.setValue(`schedule.${day.id}.end`, sourceSchedule.end);
+            form.setValue(`schedule.${day.id as keyof Schedule}.enabled`, sourceSchedule.enabled);
+            form.setValue(`schedule.${day.id as keyof Schedule}.start`, sourceSchedule.start);
+            form.setValue(`schedule.${day.id as keyof Schedule}.end`, sourceSchedule.end);
         }
     });
     toast({ title: 'Horario copiado', description: `El horario del ${fromDay} ha sido copiado a los otros días.`});
   }
 
+  const schedule = form.watch('schedule');
+
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl h-[95vh] flex flex-col">
         <DialogHeader>
@@ -199,11 +241,12 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
                                                         <div className="flex items-center space-x-2">
                                                             <Checkbox
                                                                 id={service.id}
-                                                                checked={field.value?.includes(service.id)}
+                                                                checked={Array.isArray(field.value) && field.value.includes(service.id)}
                                                                 onCheckedChange={(checked) => {
+                                                                    const currentValue = field.value || [];
                                                                     return checked
-                                                                        ? field.onChange([...(field.value || []), service.id])
-                                                                        : field.onChange(field.value?.filter((value) => value !== service.id))
+                                                                        ? field.onChange([...currentValue, service.id])
+                                                                        : field.onChange(currentValue.filter((value) => value !== service.id))
                                                                 }}
                                                             />
                                                             <Label htmlFor={service.id} className="font-normal">{service.name}</Label>
@@ -235,7 +278,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
                                       name={`schedule.${day.id}.start` as any}
                                       control={form.control}
                                       render={({ field }) => (
-                                          <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled` as any)}>
+                                          <Select onValueChange={field.onChange} value={field.value} disabled={!schedule?.[day.id as keyof Schedule]?.enabled}>
                                               <SelectTrigger><SelectValue/></SelectTrigger>
                                               <SelectContent>
                                                   {timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
@@ -247,7 +290,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
                                       name={`schedule.${day.id}.end` as any}
                                       control={form.control}
                                       render={({ field }) => (
-                                           <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled` as any)}>
+                                           <Select onValueChange={field.onChange} value={field.value} disabled={!schedule?.[day.id as keyof Schedule]?.enabled}>
                                               <SelectTrigger><SelectValue/></SelectTrigger>
                                               <SelectContent>
                                                   {timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
@@ -258,7 +301,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
                               </div>
                               <div className="col-span-2 flex items-center gap-2 justify-end">
                                 <Button variant="outline" size="sm" type="button"><Plus className="mr-2 h-4 w-4" />Descanso</Button>
-                                <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.id)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
+                                <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.label)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
                               </div>
                           </div>
                       ))}
@@ -284,7 +327,10 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
                                     <p className="font-medium">Eliminar profesional</p>
                                     <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
                                 </div>
-                                <Button variant="destructive" type="button">Eliminar</Button>
+                                <Button variant="destructive" type="button" onClick={() => setIsDeleting(true)}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Eliminar
+                                </Button>
                              </div>
                           </div>
                       )}
@@ -301,5 +347,26 @@ export function EditProfesionalModal({ profesional, isOpen, onClose }: EditProfe
         </form>
       </DialogContent>
     </Dialog>
+
+    {isDeleting && (
+        <AlertDialog open={isDeleting} onOpenChange={setIsDeleting}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                       Esta acción es irreversible. Se eliminará permanentemente al profesional "{profesional?.name}".
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )}
+    </>
   );
 }
+

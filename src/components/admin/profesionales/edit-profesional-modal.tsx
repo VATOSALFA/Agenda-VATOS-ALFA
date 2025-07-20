@@ -172,16 +172,22 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     }
   }
 
-  const copySchedule = (fromDay: string) => {
-    const sourceSchedule = form.getValues(`schedule.${fromDay as keyof Schedule}`);
+  const copySchedule = (fromDayId: string) => {
+    const sourceSchedule = form.getValues(`schedule.${fromDayId as keyof Schedule}`);
+    if (!sourceSchedule) {
+        toast({ variant: 'destructive', title: 'Error', description: `No se encontró el horario para ${fromDayId}.` });
+        return;
+    }
+    const dayLabel = daysOfWeek.find(d => d.id === fromDayId)?.label || 'este día';
+
     daysOfWeek.forEach(day => {
-        if(day.id !== fromDay) {
+        if(day.id !== fromDayId) {
             form.setValue(`schedule.${day.id as keyof Schedule}.enabled`, sourceSchedule.enabled);
             form.setValue(`schedule.${day.id as keyof Schedule}.start`, sourceSchedule.start);
             form.setValue(`schedule.${day.id as keyof Schedule}.end`, sourceSchedule.end);
         }
     });
-    toast({ title: 'Horario copiado', description: `El horario del ${fromDay} ha sido copiado a los otros días.`});
+    toast({ title: 'Horario copiado', description: `El horario de ${dayLabel} ha sido copiado a los otros días.`});
   }
 
   const schedule = form.watch('schedule');
@@ -301,7 +307,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                               </div>
                               <div className="col-span-2 flex items-center gap-2 justify-end">
                                 <Button variant="outline" size="sm" type="button"><Plus className="mr-2 h-4 w-4" />Descanso</Button>
-                                <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.label)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
+                                <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.id)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
                               </div>
                           </div>
                       ))}
@@ -369,4 +375,3 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     </>
   );
 }
-

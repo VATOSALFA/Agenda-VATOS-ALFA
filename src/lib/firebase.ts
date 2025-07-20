@@ -1,21 +1,35 @@
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  apiKey: "AIzaSyAsUWZLiMR7sVkL0of4i09-6zWfBHFjSUY",
+  authDomain: "agenda-1ae08.firebaseapp.com",
+  projectId: "agenda-1ae08",
+  storageBucket: "agenda-1ae08.appspot.com",
+  messagingSenderId: "34221543030",
+  appId: "1:34221543030:web:b46655e3ef8d7de4539957",
+  measurementId: "G-MZC8TZBYFL"
 };
 
-// Initialize Firebase
+// Initialize Firebase for SSR
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-export { app, db };
+// Analytics is conditionally initialized only on the client side
+// and is not exported to avoid server-side bundling issues.
+if (typeof window !== 'undefined') {
+  const { getAnalytics, isSupported } = require("firebase/analytics");
+  isSupported().then((supported) => {
+    if (supported) {
+      getAnalytics(app);
+    }
+  });
+}
+
+
+export { db, auth };

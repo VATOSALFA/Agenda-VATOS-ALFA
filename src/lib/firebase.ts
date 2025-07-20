@@ -19,16 +19,4 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Analytics is conditionally initialized only on the client side
-// and is not exported to avoid server-side bundling issues.
-if (typeof window !== 'undefined') {
-  const { getAnalytics, isSupported } = require("firebase/analytics");
-  isSupported().then((supported: boolean) => {
-    if (supported) {
-      getAnalytics(app);
-    }
-  });
-}
-
-
 export { db, auth };

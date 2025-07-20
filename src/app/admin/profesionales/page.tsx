@@ -101,7 +101,7 @@ export interface Profesional {
     acceptsOnline: boolean;
     biography: string;
     services: string[];
-    schedule: Schedule;
+    schedule?: Schedule;
     order: number;
 }
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -154,10 +154,10 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
                 {daysOfWeek.map(day => (
                   <li key={day} className="grid grid-cols-3 gap-x-4 gap-y-1">
                     <span className="capitalize">{day.substring(0, 3)}</span>
-                    {prof.schedule[day as keyof typeof prof.schedule]?.enabled
+                    {prof.schedule && prof.schedule[day as keyof Schedule]?.enabled
                       ? <>
-                          <span className="font-mono text-right">{prof.schedule[day as keyof typeof prof.schedule].start}</span>
-                          <span className="font-mono text-right">{prof.schedule[day as keyof typeof prof.schedule].end}</span>
+                          <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].start}</span>
+                          <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].end}</span>
                         </>
                       : <span className="col-span-2 text-right text-muted-foreground">Cerrado</span>
                     }
@@ -433,5 +433,3 @@ export default function ProfessionalsPage() {
     </TooltipProvider>
   );
 }
-
-

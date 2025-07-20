@@ -1,4 +1,3 @@
-
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -24,7 +23,7 @@ const auth = getAuth(app);
 // and is not exported to avoid server-side bundling issues.
 if (typeof window !== 'undefined') {
   const { getAnalytics, isSupported } = require("firebase/analytics");
-  isSupported().then((supported) => {
+  isSupported().then((supported: boolean) => {
     if (supported) {
       getAnalytics(app);
     }

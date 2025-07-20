@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -16,26 +16,29 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
-
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import type { Service, ServiceCategory } from '@/app/admin/servicios/page';
 
 interface EditServicioModalProps {
   isOpen: boolean;
   onClose: () => void;
+  service: Service | null;
+  onDataSaved: () => void;
 }
 
-const professionals = [
+interface Profesional {
+    id: string;
+    name: string;
+}
+
+const professionals: Profesional[] = [
   { id: 'prof_1', name: 'Beatriz Elizarraga Casas' },
   { id: 'prof_2', name: 'Erick' },
   { id: 'prof_3', name: 'Karina Ruiz Rosales' },
   { id: 'prof_4', name: 'Lupita' },
   { id: 'prof_5', name: 'Gloria Ivon' },
-];
-
-const initialCategories = [
-    { id: 1, name: 'Paquetes' },
-    { id: 2, name: 'Barba' },
-    { id: 3, name: 'Capilar' },
-    { id: 4, name: 'Facial' },
 ];
 
 const ImageUploader = () => (
@@ -50,14 +53,31 @@ const ImageUploader = () => (
 );
 
 
-export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
+export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: EditServicioModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [categories, setCategories] = useState(initialCategories);
+  const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
 
-  const { control, handleSubmit, setValue, watch } = useForm();
+  const { control, handleSubmit, setValue, watch, reset } = useForm();
   
+  useEffect(() => {
+    if (service) {
+        reset({ ...service });
+    } else {
+        reset({
+            name: '',
+            price: 0,
+            duration: 30,
+            category: '',
+            active: true,
+            professionals: [],
+            payment_type: 'online-deposit',
+        });
+    }
+  }, [service, reset]);
+
+
   const selectedProfessionals = watch('professionals', []);
 
   const handleSelectAll = (checked: boolean | string) => {
@@ -68,19 +88,40 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
     }
   }
 
-  const handleCategoryCreated = (newCategory: { id: number, name: string }) => {
-    setCategories(prev => [...prev, newCategory]);
-    setValue('category', newCategory.name); // Select the new category
+  const handleCategoryCreated = (newCategory: ServiceCategory) => {
+    // This is handled by useFirestoreQuery now. The modal just needs to close
+    // and trigger a refetch on the main page.
+    setValue('category', newCategory.id); // Select the new category
   };
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-    console.log("Saving data:", data);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast({
-        title: "Servicio guardado con éxito",
-      });
+        const dataToSave = {
+            ...data,
+            price: Number(data.price),
+            duration: Number(data.duration),
+        };
+
+        if (service) {
+            // Update
+            const serviceRef = doc(db, 'servicios', service.id);
+            await updateDoc(serviceRef, dataToSave);
+            toast({ title: "Servicio actualizado con éxito" });
+        } else {
+            // Create
+            await addDoc(collection(db, 'servicios'), {
+                ...dataToSave,
+                active: true,
+                order: 99, // default order, can be changed later
+                created_at: Timestamp.now(),
+            });
+            toast({ title: "Servicio guardado con éxito" });
+        }
+      
+      onDataSaved();
+      onClose();
+
     } catch (error) {
       console.error("Error saving service:", error);
       toast({
@@ -90,7 +131,6 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
       });
     } finally {
       setIsSubmitting(false);
-      onClose();
     }
   };
 
@@ -99,7 +139,7 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Nuevo Servicio</DialogTitle>
+          <DialogTitle>{service ? 'Editar Servicio' : 'Nuevo Servicio'}</DialogTitle>
           <DialogDescription>
             Configura un nuevo servicio para tu negocio.
           </DialogDescription>
@@ -110,26 +150,36 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="service-name">Nombre del servicio *</Label>
-                  <Input id="service-name" placeholder="El nombre aparecerá en el Sitio Web" />
+                  <Controller name="name" control={control} render={({ field }) => (
+                    <Input id="service-name" placeholder="El nombre aparecerá en el Sitio Web" {...field} />
+                  )} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="price">Precio *</Label>
-                    <Input id="price" type="number" placeholder="0" />
+                    <Controller name="price" control={control} render={({ field }) => (
+                        <Input id="price" type="number" placeholder="0" {...field} />
+                    )} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="duration">Duración (min) *</Label>
-                    <Input id="duration" type="number" placeholder="0" />
+                    <Controller name="duration" control={control} render={({ field }) => (
+                        <Input id="duration" type="number" placeholder="0" {...field} />
+                    )} />
                   </div>
                 </div>
                 <div className="space-y-4 rounded-lg border p-4">
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="include-vat" />
+                        <Controller name="include_vat" control={control} render={({ field }) => (
+                            <Checkbox id="include-vat" checked={field.value} onCheckedChange={field.onChange} />
+                        )} />
                         <Label htmlFor="include-vat" className="font-normal">Precio incluye IVA</Label>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="commission">Comisión (%)</Label>
-                        <Input id="commission" type="number" placeholder="Porcentaje de comisión para el profesional" />
+                         <Controller name="commission_percentage" control={control} render={({ field }) => (
+                            <Input id="commission" type="number" placeholder="Porcentaje de comisión para el profesional" {...field} />
+                         )} />
                     </div>
                 </div>
                 <div className="space-y-2">
@@ -140,10 +190,10 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                         control={control}
                         render={({ field }) => (
                            <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger><SelectValue placeholder="Paquetes" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
                                 <SelectContent>
                                     {categories.map(cat => (
-                                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -177,11 +227,12 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                                         <div key={prof.id} className="flex items-center space-x-2">
                                             <Checkbox
                                                 id={prof.id}
-                                                checked={field.value?.includes(prof.id)}
+                                                checked={Array.isArray(field.value) && field.value.includes(prof.id)}
                                                 onCheckedChange={(checked) => {
+                                                    const currentValue = field.value || [];
                                                     return checked
-                                                        ? field.onChange([...field.value, prof.id])
-                                                        : field.onChange(field.value?.filter((value: string) => value !== prof.id))
+                                                        ? field.onChange([...currentValue, prof.id])
+                                                        : field.onChange(currentValue.filter((value: string) => value !== prof.id))
                                                 }}
                                             />
                                             <Label htmlFor={prof.id} className="font-normal">{prof.name}</Label>
@@ -199,36 +250,42 @@ export function EditServicioModal({ isOpen, onClose }: EditServicioModalProps) {
                         <CardTitle>Pago en línea</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <RadioGroup defaultValue="online-deposit" className="space-y-4">
-                          <div className="flex items-start space-x-3 rounded-md border p-4">
-                              <RadioGroupItem value="online-deposit" id="online-deposit" />
-                              <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="online-deposit">Abono en línea</Label>
-                                <p className="text-sm text-muted-foreground">Tus clientes deberán pagar una parte del servicio al agendar. Podrás cobrar con POS de AgendaPro el monto restante.</p>
-                              </div>
-                          </div>
-                          <div className="flex items-start space-x-3 rounded-md border p-4">
-                              <RadioGroupItem value="full-payment" id="full-payment" />
-                              <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="full-payment">Se debe pagar en línea</Label>
-                                <p className="text-sm text-muted-foreground">Tus clientes deberán realizar el pago completo de este servicio en línea.</p>
-                                <div className="pt-2">
-                                  <Label className="text-xs">Descuento sólo para pago en línea</Label>
-                                  <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-                                    <Input placeholder="Incentiva el pago en línea" className="pl-6 h-9"/>
-                                  </div>
+                      <Controller
+                          name="payment_type"
+                          control={control}
+                          render={({ field }) => (
+                            <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-4">
+                                <div className="flex items-start space-x-3 rounded-md border p-4">
+                                    <RadioGroupItem value="online-deposit" id="online-deposit" />
+                                    <div className="grid gap-1.5 leading-none">
+                                      <Label htmlFor="online-deposit">Abono en línea</Label>
+                                      <p className="text-sm text-muted-foreground">Tus clientes deberán pagar una parte del servicio al agendar. Podrás cobrar con POS de AgendaPro el monto restante.</p>
+                                    </div>
                                 </div>
-                              </div>
-                          </div>
-                           <div className="flex items-start space-x-3 rounded-md border p-4">
-                              <RadioGroupItem value="no-payment" id="no-payment" />
-                              <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="no-payment">No se puede pagar en línea</Label>
-                                <p className="text-sm text-muted-foreground">Tus clientes no podrán pagar este servicio en línea pero si agendarlo.</p>
-                              </div>
-                          </div>
-                      </RadioGroup>
+                                <div className="flex items-start space-x-3 rounded-md border p-4">
+                                    <RadioGroupItem value="full-payment" id="full-payment" />
+                                    <div className="grid gap-1.5 leading-none">
+                                      <Label htmlFor="full-payment">Se debe pagar en línea</Label>
+                                      <p className="text-sm text-muted-foreground">Tus clientes deberán realizar el pago completo de este servicio en línea.</p>
+                                      <div className="pt-2">
+                                        <Label className="text-xs">Descuento sólo para pago en línea</Label>
+                                        <div className="relative">
+                                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                                          <Input placeholder="Incentiva el pago en línea" className="pl-6 h-9"/>
+                                        </div>
+                                      </div>
+                                    </div>
+                                </div>
+                                 <div className="flex items-start space-x-3 rounded-md border p-4">
+                                    <RadioGroupItem value="no-payment" id="no-payment" />
+                                    <div className="grid gap-1.5 leading-none">
+                                      <Label htmlFor="no-payment">No se puede pagar en línea</Label>
+                                      <p className="text-sm text-muted-foreground">Tus clientes no podrán pagar este servicio en línea pero si agendarlo.</p>
+                                    </div>
+                                </div>
+                            </RadioGroup>
+                          )}
+                      />
                     </CardContent>
                   </Card>
 

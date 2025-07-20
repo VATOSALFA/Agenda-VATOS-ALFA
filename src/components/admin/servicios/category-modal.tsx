@@ -9,26 +9,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2 } from 'lucide-react';
-
-interface Category {
-    id: number;
-    name: string;
-}
+import type { ServiceCategory } from '@/app/admin/servicios/page';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 
 interface CategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCategoryCreated: (category: Category) => void;
-  existingCategories: Category[];
+  onCategoryCreated: (category: ServiceCategory) => void;
+  existingCategories: ServiceCategory[];
 }
 
 export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCategories }: CategoryModalProps) {
   const { toast } = useToast();
-  const [categories, setCategories] = useState<Category[]>(existingCategories);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [nextId, setNextId] = useState(() => Math.max(...existingCategories.map(c => c.id), 0) + 1);
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (newCategoryName.trim() === '') {
         toast({
             variant: 'destructive',
@@ -38,26 +34,48 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
         return;
     }
     
-    const newCategory = { id: nextId, name: newCategoryName.trim() };
-    setCategories(prev => [...prev, newCategory]);
-    setNextId(prev => prev + 1);
-    setNewCategoryName('');
-    onCategoryCreated(newCategory); // Communicate back to parent
-    toast({
-        title: 'Categoría agregada',
-        description: `La categoría "${newCategoryName.trim()}" ha sido creada.`,
-    });
-    onClose(); // Close after adding
+    try {
+        const docRef = await addDoc(collection(db, 'categorias_servicios'), {
+            name: newCategoryName.trim(),
+            order: existingCategories.length,
+            created_at: Timestamp.now(),
+        });
+        const newCategory = { id: docRef.id, name: newCategoryName.trim(), order: existingCategories.length };
+        setNewCategoryName('');
+        onCategoryCreated(newCategory);
+        toast({
+            title: 'Categoría agregada',
+            description: `La categoría "${newCategory.name}" ha sido creada.`,
+        });
+        onClose();
+    } catch (error) {
+        console.error("Error creating category:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'No se pudo crear la categoría.',
+        });
+    }
   };
   
-  const handleDeleteCategory = (idToDelete: number) => {
-    const categoryToDelete = categories.find(c => c.id === idToDelete);
+  const handleDeleteCategory = async (idToDelete: string) => {
+    const categoryToDelete = existingCategories.find(c => c.id === idToDelete);
     if (categoryToDelete) {
-        setCategories(categories.filter(c => c.id !== idToDelete));
-        toast({
-            title: 'Categoría eliminada',
-            description: `La categoría "${categoryToDelete.name}" ha sido eliminada.`,
-        });
+        try {
+            await deleteDoc(doc(db, 'categorias_servicios', idToDelete));
+            toast({
+                title: 'Categoría eliminada',
+                description: `La categoría "${categoryToDelete.name}" ha sido eliminada.`,
+            });
+            // Refetch is handled by the parent component's queryKey update
+        } catch (error) {
+            console.error("Error deleting category:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'No se pudo eliminar la categoría.',
+            });
+        }
     }
   };
 
@@ -65,7 +83,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Nueva categoría</DialogTitle>
+          <DialogTitle>Administrar Categorías</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
             <div className="space-y-1">
@@ -87,7 +105,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
 
             <ScrollArea className="h-48 rounded-md border">
                 <div className="p-4">
-                {categories.map((category) => (
+                {existingCategories.map((category) => (
                     <div key={category.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
                         <span className="text-sm">{category.name}</span>
                         <Button 
@@ -100,7 +118,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
                         </Button>
                     </div>
                 ))}
-                 {categories.length === 0 && (
+                 {existingCategories.length === 0 && (
                     <p className="text-center text-sm text-muted-foreground py-4">No hay categorías creadas.</p>
                  )}
                 </div>

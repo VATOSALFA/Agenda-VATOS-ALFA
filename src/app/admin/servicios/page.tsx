@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -58,68 +58,39 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { db } from '@/lib/firebase';
+import { collection, doc, addDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { CategoryModal } from '@/components/admin/servicios/category-modal';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface Service {
+
+export interface Service {
   id: string;
   name: string;
-  duration: string;
+  duration: number;
   price: number;
-  active: boolean;
-}
-
-interface ServiceCategory {
   category: string;
-  services: Service[];
+  active: boolean;
+  order: number;
 }
 
-const initialServicesByCategory: ServiceCategory[] = [
-  {
-    category: 'Barba',
-    services: [
-      {
-        id: 'serv_01',
-        name: 'Arreglo de barba, Afeitado clásico con toalla caliente',
-        duration: '40 min',
-        price: 165,
-        active: true,
-      },
-      {
-        id: 'serv_02',
-        name: 'Arreglo de barba expres',
-        duration: '30 min',
-        price: 100,
-        active: true,
-      },
-      {
-        id: 'serv_03',
-        name: 'Servicio de Barba Desactivado',
-        duration: '20 min',
-        price: 80,
-        active: false,
-      },
-    ],
-  },
-  {
-    category: 'Capilar',
-    services: [
-        { id: 'serv_04', name: 'Coloración Capilar', duration: '60 min', price: 900, active: true },
-        { id: 'serv_05', name: 'Corte y lavado de cabello', duration: '40 min', price: 140, active: true },
-        { id: 'serv_06', name: 'Corte clásico y moderno', duration: '40 min', price: 140, active: true },
-        { id: 'serv_07', name: 'Grecas', duration: '20 min', price: 70, active: true },
-        { id: 'serv_08', name: 'Lavado de cabello', duration: '10 min', price: 30, active: true },
-    ]
-  },
-  {
-      category: 'Facial',
-      services: [
-          { id: 'serv_09', name: 'Arreglo de ceja', duration: '15 min', price: 30, active: true },
-          { id: 'serv_10', name: 'Facial completo con Masajeador relajante, spa y aceites', duration: '40 min', price: 190, active: true },
-      ]
-  }
-];
+export interface ServiceCategory {
+  id: string;
+  name: string;
+  order: number;
+}
+
+interface GroupedService extends ServiceCategory {
+    services: Service[];
+}
+
 
 export default function ServicesPage() {
-  const [servicesByCategory, setServicesByCategory] = useState<ServiceCategory[]>(initialServicesByCategory);
+  const [queryKey, setQueryKey] = useState(0);
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
+  const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios', queryKey);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -130,7 +101,11 @@ export default function ServicesPage() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [categoryFilter, setCategoryFilter] = useState('todos');
   
-  const [serviceToDelete, setServiceToDelete] = useState<{ categoryId: string; serviceId: string } | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  
+  const handleDataUpdated = () => {
+    setQueryKey(prev => prev + 1);
+  };
 
   const handleApplyFilters = () => {
      toast({
@@ -148,6 +123,19 @@ export default function ServicesPage() {
     });
   }
 
+  const servicesByCategory = useMemo(() => {
+    if (categoriesLoading || servicesLoading) return [];
+    
+    const sortedCategories = [...categories].sort((a,b) => a.order - b.order);
+    const sortedServices = [...services].sort((a,b) => a.order - b.order);
+
+    return sortedCategories.map(category => ({
+      ...category,
+      services: sortedServices.filter(service => service.category === category.id)
+    }));
+  }, [categories, services, categoriesLoading, servicesLoading]);
+
+
   const filteredServicesByCategory = useMemo(() => {
     return servicesByCategory.map(categoryGroup => {
       const filtered = categoryGroup.services.filter(service => {
@@ -156,84 +144,84 @@ export default function ServicesPage() {
         return nameMatch && statusMatch;
       });
       return { ...categoryGroup, services: filtered };
-    }).filter(categoryGroup => categoryGroup.services.length > 0 && (categoryFilter === 'todos' || categoryGroup.category === categoryFilter));
+    }).filter(categoryGroup => categoryGroup.services.length > 0 && (categoryFilter === 'todos' || categoryGroup.id === categoryFilter));
   }, [searchTerm, statusFilter, categoryFilter, servicesByCategory]);
 
 
-  const handleSaveCategory = () => {
+  const handleSaveCategory = async () => {
     if (newCategoryName.trim() === '') {
         toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la categoría no puede estar vacío.' });
         return;
     }
-    // Here you would normally save to the database
-    setServicesByCategory(prev => [...prev, { category: newCategoryName, services: [] }]);
-    toast({
-        title: "Categoría guardada",
-        description: `La nueva categoría "${newCategoryName.trim()}" ha sido creada con éxito.`
-    })
-    setNewCategoryName('');
-    setIsAddingCategory(false);
+    try {
+        await addDoc(collection(db, 'categorias_servicios'), {
+            name: newCategoryName.trim(),
+            order: categories.length, // Add to the end
+            created_at: Timestamp.now(),
+        });
+        toast({
+            title: "Categoría guardada",
+            description: `La nueva categoría "${newCategoryName.trim()}" ha sido creada con éxito.`
+        });
+        handleDataUpdated();
+        setNewCategoryName('');
+        setIsAddingCategory(false);
+    } catch (error) {
+        console.error("Error creating category:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear la categoría.' });
+    }
   }
 
-  const handleToggleActive = (categoryId: string, serviceId: string) => {
-    setServicesByCategory(prev =>
-      prev.map(cat => {
-        if (cat.category === categoryId) {
-          return {
-            ...cat,
-            services: cat.services.map(serv => {
-              if (serv.id === serviceId) {
-                toast({ title: `Servicio ${!serv.active ? 'activado' : 'desactivado'}` });
-                return { ...serv, active: !serv.active };
-              }
-              return serv;
-            }),
-          };
-        }
-        return cat;
-      })
-    );
+  const handleToggleActive = async (service: Service) => {
+    const newStatus = !service.active;
+    try {
+        const serviceRef = doc(db, 'servicios', service.id);
+        await updateDoc(serviceRef, { active: newStatus });
+        toast({ title: `Servicio ${newStatus ? 'activado' : 'desactivado'}` });
+        handleDataUpdated();
+    } catch (error) {
+        console.error("Error toggling active status:", error);
+        toast({ variant: 'destructive', title: 'Error al actualizar.' });
+    }
   };
 
-  const handleDuplicateService = (categoryId: string, serviceToDuplicate: Service) => {
-    const newService = {
-      ...serviceToDuplicate,
-      id: `serv_${Date.now()}`,
-      name: `${serviceToDuplicate.name} (Copia)`,
-    };
-    setServicesByCategory(prev =>
-      prev.map(cat => {
-        if (cat.category === categoryId) {
-          return { ...cat, services: [...cat.services, newService] };
-        }
-        return cat;
-      })
-    );
-    toast({ title: "Servicio duplicado con éxito" });
+  const handleDuplicateService = async (serviceToDuplicate: Service) => {
+    try {
+        await addDoc(collection(db, 'servicios'), {
+            ...serviceToDuplicate,
+            name: `${serviceToDuplicate.name} (Copia)`,
+            order: services.length,
+            created_at: Timestamp.now(),
+        });
+        toast({ title: "Servicio duplicado con éxito" });
+        handleDataUpdated();
+    } catch (error) {
+        console.error("Error duplicating service:", error);
+        toast({ variant: 'destructive', title: 'Error al duplicar.' });
+    }
   };
 
-  const handleDeleteService = () => {
+  const handleDeleteService = async () => {
     if (!serviceToDelete) return;
-    const { categoryId, serviceId } = serviceToDelete;
-
-    setServicesByCategory(prev =>
-      prev.map(cat => {
-        if (cat.category === categoryId) {
-          return {
-            ...cat,
-            services: cat.services.filter(s => s.id !== serviceId),
-          };
-        }
-        return cat;
-      })
-    );
-    toast({ title: "Servicio eliminado con éxito" });
-    setServiceToDelete(null);
+    try {
+        await deleteDoc(doc(db, 'servicios', serviceToDelete.id));
+        toast({ title: "Servicio eliminado con éxito" });
+        setServiceToDelete(null);
+        handleDataUpdated();
+    } catch (error) {
+        console.error("Error deleting service:", error);
+        toast({ variant: 'destructive', title: 'Error al eliminar.' });
+    }
   };
 
   const openEditModal = (service: Service | null) => {
     setEditingService(service);
     setIsModalOpen(true);
+  }
+  
+  const closeModal = () => {
+      setEditingService(null);
+      setIsModalOpen(false);
   }
 
   return (
@@ -308,8 +296,8 @@ export default function ServicesPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todas</SelectItem>
-                      {initialServicesByCategory.map(cat => (
-                        <SelectItem key={cat.category} value={cat.category}>{cat.category}</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -337,10 +325,20 @@ export default function ServicesPage() {
       <Card>
         <CardContent className="p-0">
           <div className="divide-y divide-border">
-            {filteredServicesByCategory.map((categoryGroup) => (
-              <div key={categoryGroup.category}>
+            {(servicesLoading || categoriesLoading) ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="p-4 space-y-4">
+                  <Skeleton className="h-6 w-1/4" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                </div>
+              ))
+            ) : filteredServicesByCategory.map((categoryGroup) => (
+              <div key={categoryGroup.id}>
                 <div className="p-4">
-                  <h3 className="text-lg font-semibold flex items-center">{categoryGroup.category} <Info className="ml-2 h-4 w-4 text-muted-foreground" /></h3>
+                  <h3 className="text-lg font-semibold flex items-center">{categoryGroup.name} <Info className="ml-2 h-4 w-4 text-muted-foreground" /></h3>
                 </div>
                 {categoryGroup.services.length > 0 ? (
                   <ul className="divide-y divide-border">
@@ -351,8 +349,8 @@ export default function ServicesPage() {
                           <span className="font-medium">{service.name}</span>
                         </div>
                         <div className="flex items-center gap-6">
-                          <span className="text-sm text-muted-foreground">{service.duration}</span>
-                          <span className="text-sm font-semibold">${service.price}</span>
+                          <span className="text-sm text-muted-foreground">{service.duration} min</span>
+                          <span className="text-sm font-semibold">${service.price.toLocaleString('es-CL')}</span>
                           <Badge className={cn(
                             service.active 
                             ? 'bg-green-100 text-green-800 border-green-200' 
@@ -372,16 +370,16 @@ export default function ServicesPage() {
                                   </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => handleToggleActive(categoryGroup.category, service.id)}>
+                                    <DropdownMenuItem onClick={() => handleToggleActive(service)}>
                                       {service.active ? 'Desactivar' : 'Activar'}
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDuplicateService(categoryGroup.category, service)}>
+                                    <DropdownMenuItem onClick={() => handleDuplicateService(service)}>
                                       Duplicar
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
                                       className="text-destructive hover:!text-destructive focus:!bg-destructive/10 focus:!text-destructive"
-                                      onClick={() => setServiceToDelete({ categoryId: categoryGroup.category, serviceId: service.id })}
+                                      onClick={() => setServiceToDelete(service)}
                                     >
                                       <Trash2 className="mr-2 h-4 w-4"/>
                                       Eliminar
@@ -398,25 +396,31 @@ export default function ServicesPage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="px-4 pb-4 text-sm text-muted-foreground">No hay servicios en esta categoría.</p>
+                  <p className="px-4 pb-4 text-sm text-muted-foreground">No hay servicios en esta categoría que coincidan con los filtros.</p>
                 )}
               </div>
             ))}
-             {filteredServicesByCategory.length === 0 && (
+             {(!servicesLoading && !categoriesLoading && filteredServicesByCategory.length === 0) && (
                 <p className="py-10 text-center text-muted-foreground">No se encontraron servicios con los filtros aplicados.</p>
               )}
           </div>
         </CardContent>
       </Card>
     </div>
-    <EditServicioModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    
+    <EditServicioModal 
+      isOpen={isModalOpen} 
+      onClose={closeModal}
+      service={editingService}
+      onDataSaved={handleDataUpdated}
+    />
 
     <AlertDialog open={!!serviceToDelete} onOpenChange={() => setServiceToDelete(null)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta acción no se puede deshacer. Se eliminará permanentemente el servicio.
+            Esta acción no se puede deshacer. Se eliminará permanentemente el servicio "{serviceToDelete?.name}".
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

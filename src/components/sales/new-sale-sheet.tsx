@@ -290,7 +290,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                     <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                         <CardContent className="p-4">
                                             <p className="font-semibold">{product.nombre}</p>
-                                            <p className="text-sm text-primary">${product.precio.toLocaleString('es-CL')}</p>
+                                            <p className="text-sm text-primary">${(product.precio || 0).toLocaleString('es-CL')}</p>
                                             <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                         </CardContent>
                                     </Card>

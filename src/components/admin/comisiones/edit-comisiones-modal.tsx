@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Professional } from '@/app/admin/comisiones/page';
+import type { Professional, Service, Commission } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -31,82 +31,56 @@ interface EditComisionesModalProps {
   professional: Professional;
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: () => void;
+  services: Service[];
 }
 
-const mockServices = [
-  'Todo para el Campeón',
-  'Renovación Alfa',
-  'Héroe en descanso',
-  'El Caballero Alfa',
-  'El Alfa Superior',
-  'Facial completo con Masajeador relajante, spa y aceites',
-  'Arreglo de ceja',
-  'Lavado de cabello',
-  'Corte clásico y moderno',
-  'Arreglo de barba expres',
-  'Arreglo de barba, Afeitado clásico con toalla caliente',
-];
-
-const getDefaultValues = () => {
-    const defaultCommission = { value: 50, type: '%' };
-    const values: { [key: string]: { value: number; type: string } } = {};
-    mockServices.forEach(service => {
-        values[service] = defaultCommission;
+const getDefaultValues = (professional: Professional, services: Service[]) => {
+    const values: { [key: string]: Commission } = {};
+    services.forEach(service => {
+        values[service.name] = professional.comisionesPorServicio?.[service.name] || professional.defaultCommission || { value: 0, type: '%' };
     });
     return values;
 }
 
-export function EditComisionesModal({ professional, isOpen, onClose }: EditComisionesModalProps) {
+export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved, services }: EditComisionesModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { control, handleSubmit } = useForm({
-    defaultValues: getDefaultValues(),
+  const { control, handleSubmit, reset } = useForm({
+    defaultValues: getDefaultValues(professional, services),
   });
+
+  useEffect(() => {
+    if (isOpen) {
+        reset(getDefaultValues(professional, services));
+    }
+  }, [professional, services, isOpen, reset]);
+
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-
-    const saveOperation = async () => {
+    try {
         const professionalRef = doc(db, 'profesionales', professional.id);
         await updateDoc(professionalRef, {
             comisionesPorServicio: data
         });
-    };
-
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout")), 10000)
-    );
-
-    try {
-        await Promise.race([saveOperation(), timeoutPromise]);
-        
         toast({
             title: 'Comisiones guardadas con éxito',
             description: `Las comisiones para ${professional.name} han sido actualizadas.`,
         });
+        onDataSaved();
         onClose();
 
     } catch (error) {
        console.error("Error al guardar comisiones:", error);
-       if ((error as Error).message === "Timeout") {
-           toast({
-                variant: "destructive",
-                title: 'Error de Tiempo de Espera',
-                description: 'La operación tardó demasiado. Revisa tu conexión o los permisos de la base de datos.',
-           });
-       } else {
-           toast({
-            variant: "destructive",
-            title: 'Error al guardar',
-            description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
-          });
-       }
+       toast({
+        variant: "destructive",
+        title: 'Error al guardar',
+        description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
+      });
     } finally {
       setIsSubmitting(false);
-      if (isOpen) {
-        onClose();
-      }
     }
   };
 
@@ -122,27 +96,28 @@ export function EditComisionesModal({ professional, isOpen, onClose }: EditComis
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="py-4 max-h-[60vh] overflow-y-auto px-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {mockServices.map((service) => (
-                <div key={service}>
-                  <Label htmlFor={`value-${service}`}>{service}</Label>
+              {services.map((service) => (
+                <div key={service.id}>
+                  <Label htmlFor={`value-${service.name}`}>{service.name}</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Controller
-                      name={`${service}.value`}
+                      name={`${service.name}.value`}
                       control={control}
                       render={({ field }) => (
                         <Input
-                          id={`value-${service}`}
+                          id={`value-${service.name}`}
                           type="number"
                           className="flex-grow"
                           {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                         />
                       )}
                     />
                     <Controller
-                        name={`${service}.type`}
+                        name={`${service.name}.type`}
                         control={control}
                         render={({ field }) => (
-                             <Select onValueChange={field.onChange} defaultValue={field.value}>
+                             <Select onValueChange={field.onChange} value={field.value}>
                                 <SelectTrigger className="w-[80px]">
                                     <SelectValue placeholder="Tipo" />
                                 </SelectTrigger>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,36 +24,56 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Professional } from '@/app/admin/comisiones/page';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface EditDefaultComisionModalProps {
   professional: Professional;
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: () => void;
 }
 
-export function EditDefaultComisionModal({ professional, isOpen, onClose }: EditDefaultComisionModalProps) {
+export function EditDefaultComisionModal({ professional, isOpen, onClose, onDataSaved }: EditDefaultComisionModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { control, handleSubmit } = useForm({
+  const { control, handleSubmit, reset } = useForm({
     defaultValues: {
-      commission: professional.defaultCommission || { value: 0, type: '%' }
+      defaultCommission: professional.defaultCommission || { value: 0, type: '%' }
     },
   });
 
-  const onSubmit = (data: any) => {
+  useEffect(() => {
+    if (isOpen) {
+        reset({ defaultCommission: professional.defaultCommission || { value: 0, type: '%' } });
+    }
+  }, [professional, isOpen, reset]);
+
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-    console.log('Datos de comisión por defecto guardados:', data);
-    
-    // Simular llamada a API
-    setTimeout(() => {
-      toast({
-        title: 'Comisión por defecto guardada con éxito',
-        description: `La comisión por defecto para ${professional.name} ha sido actualizada.`,
-      });
-      setIsSubmitting(false);
-      onClose();
-    }, 1000);
+    try {
+        const professionalRef = doc(db, 'profesionales', professional.id);
+        await updateDoc(professionalRef, {
+            defaultCommission: data.defaultCommission
+        });
+
+        toast({
+            title: 'Comisión por defecto guardada con éxito',
+            description: `La comisión por defecto para ${professional.name} ha sido actualizada.`,
+        });
+        onDataSaved();
+        onClose();
+    } catch (error) {
+        console.error("Error al guardar comisión por defecto:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: 'No se pudo guardar la comisión por defecto. Inténtalo de nuevo.',
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,7 +90,7 @@ export function EditDefaultComisionModal({ professional, isOpen, onClose }: Edit
             <Label htmlFor="commission-value">Comisión por defecto</Label>
             <div className="flex items-center gap-2 mt-1">
                 <Controller
-                    name="commission.value"
+                    name="defaultCommission.value"
                     control={control}
                     render={({ field }) => (
                     <Input
@@ -79,14 +99,15 @@ export function EditDefaultComisionModal({ professional, isOpen, onClose }: Edit
                         placeholder="Comisión"
                         className="flex-grow"
                         {...field}
+                        onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                     )}
                 />
                 <Controller
-                    name="commission.type"
+                    name="defaultCommission.type"
                     control={control}
                     render={({ field }) => (
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="w-[80px]">
                                 <SelectValue placeholder="Tipo" />
                             </SelectTrigger>

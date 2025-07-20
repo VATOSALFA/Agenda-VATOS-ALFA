@@ -10,67 +10,51 @@ import { EditServiceComisionesModal } from '@/components/admin/comisiones/edit-s
 import { EditDefaultServiceComisionModal } from '@/components/admin/comisiones/edit-default-service-comision-modal';
 import { EditProductComisionModal } from '@/components/admin/comisiones/edit-product-comision-modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
+export interface Commission {
+    value: number;
+    type: '%' | '$';
+}
 
-const professionals = [
-  { id: 'prof_1', name: 'Beatriz Elizarraga Casas', serviceCount: 12, defaultCommission: { value: 50, type: '%' } },
-  { id: 'prof_2', name: 'Gloria Ivon', serviceCount: 11, defaultCommission: { value: 45, type: '%' } },
-  { id: 'prof_3', name: 'Karina Ruiz Rosales', serviceCount: 11, defaultCommission: { value: 150, type: '$' } },
-  { id: 'prof_4', name: 'Lupita', serviceCount: 12, defaultCommission: { value: 50, type: '%' } },
-  { id: 'prof_5', name: 'Erick', serviceCount: 13, defaultCommission: { value: 55, type: '%' } },
-];
+export interface Professional {
+  id: string;
+  name: string;
+  serviceCount?: number; // This might be a calculated field
+  defaultCommission: Commission;
+  comisionesPorServicio?: { [serviceName: string]: Commission };
+}
 
-const services = [
-    { id: 'serv_1', name: 'Todo para el Campeón', defaultCommission: { value: 50, type: '%' } },
-    { id: 'serv_2', name: 'Renovación Alfa', defaultCommission: { value: 50, type: '%' } },
-    { id: 'serv_3', name: 'Héroe en descanso', defaultCommission: { value: 50, type: '%' } },
-    { id: 'serv_4', name: 'El Caballero Alfa', defaultCommission: { value: 50, type: '%' } },
-    { id: 'serv_5', name: 'El Alfa Superior', defaultCommission: { value: 50, type: '%' } },
-    { id: 'serv_6', name: 'Facial completo con Masajeador', defaultCommission: { value: 100, type: '$' } },
-    { id: 'serv_7', name: 'Arreglo de ceja', defaultCommission: { value: 15, type: '%' } },
-];
+export interface Service {
+  id: string;
+  name: string;
+  defaultCommission: Commission;
+  comisionesPorProfesional?: { [profesionalId: string]: Commission };
+}
 
-const products = [
-    { id: 'prod_1', name: 'SERUM COCTEL MULTINUTRIENTES', defaultCommission: { value: 15, type: '%' } },
-    { id: 'prod_2', name: 'SERUM CRECIMIENTO CAPILAR 7% MINOXIDIL', defaultCommission: { value: 15, type: '%' } },
-    { id: 'prod_3', name: 'MASCARILLA CARBON ACTIVADO', defaultCommission: { value: 15, type: '%' } },
-    { id: 'prod_4', name: 'SHAMPOO CRECIMIENTO ACELERADO', defaultCommission: { value: 15, type: '%' } },
-    { id: 'prod_5', name: 'JABÓN LÍQUIDO PURIFICANTE Y EXFOLIANTE', defaultCommission: { value: 15, type: '%' } },
-    { id: 'prod_6', name: 'AFTER SHAVE', defaultCommission: { value: 10, type: '%' } },
-];
-
-
-export type Professional = typeof professionals[0];
-export type Service = typeof services[0];
-export type Product = typeof products[0];
+export interface Product {
+  id: string;
+  name: string;
+  defaultCommission: Commission;
+}
 
 export default function ComisionesPage() {
+  const [queryKey, setQueryKey] = useState(0);
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Professional>('profesionales', queryKey);
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
+  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
+
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [editingDefault, setEditingDefault] = useState<Professional | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingDefaultService, setEditingDefaultService] = useState<Service | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const handleEditProfessional = (prof: Professional) => {
-    setEditingProfessional(prof);
+  const handleDataUpdated = () => {
+    setQueryKey(prev => prev + 1);
   };
-
-  const handleEditDefaultProfessional = (prof: Professional) => {
-    setEditingDefault(prof);
-  };
-
-  const handleEditService = (serv: Service) => {
-    setEditingService(serv);
-  }
-
-  const handleEditDefaultService = (serv: Service) => {
-    setEditingDefaultService(serv);
-  }
-
-  const handleEditProduct = (prod: Product) => {
-    setEditingProduct(prod);
-  }
-
+  
   const handleCloseModals = () => {
     setEditingProfessional(null);
     setEditingDefault(null);
@@ -78,6 +62,8 @@ export default function ComisionesPage() {
     setEditingDefaultService(null);
     setEditingProduct(null);
   };
+  
+  const isLoading = professionalsLoading || servicesLoading || productsLoading;
 
   return (
     <>
@@ -86,66 +72,78 @@ export default function ComisionesPage() {
           <h2 className="text-3xl font-bold tracking-tight">Comisiones</h2>
         </div>
 
-        <Tabs defaultValue="por profesional" className="space-y-4">
+        <Tabs defaultValue="por-profesional" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="por profesional">Por profesional</TabsTrigger>
-            <TabsTrigger value="por servicio">Por servicio</TabsTrigger>
-            <TabsTrigger value="por producto">Por producto</TabsTrigger>
+            <TabsTrigger value="por-profesional">Por profesional</TabsTrigger>
+            <TabsTrigger value="por-servicio">Por servicio</TabsTrigger>
+            <TabsTrigger value="por-producto">Por producto</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="por profesional">
+          <TabsContent value="por-profesional">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {professionals.map((prof) => (
-                <Card key={prof.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-bold">{prof.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Número De Servicios {prof.serviceCount}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEditProfessional(prof)}>Editar</Button>
-                    <Button variant="secondary" size="sm" onClick={() => handleEditDefaultProfessional(prof)}>Editar Por Defecto</Button>
-                  </div>
-                </Card>
-              ))}
+              {isLoading ? (
+                Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
+              ) : (
+                professionals.map((prof) => (
+                  <Card key={prof.id} className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="font-bold">{prof.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Comisión por defecto: {prof.defaultCommission?.value}{prof.defaultCommission?.type}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditingProfessional(prof)}>Editar</Button>
+                      <Button variant="secondary" size="sm" onClick={() => setEditingDefault(prof)}>Editar Por Defecto</Button>
+                    </div>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
 
-          <TabsContent value="por servicio">
+          <TabsContent value="por-servicio">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {services.map((serv) => (
-                <Card key={serv.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-bold">{serv.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Comisión por Defecto: {serv.defaultCommission.value}{serv.defaultCommission.type}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEditService(serv)}>Editar</Button>
-                    <Button variant="secondary" size="sm" onClick={() => handleEditDefaultService(serv)}>Editar Por Defecto</Button>
-                  </div>
-                </Card>
-              ))}
+               {isLoading ? (
+                Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
+              ) : (
+                services.map((serv) => (
+                  <Card key={serv.id} className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="font-bold">{serv.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Comisión por Defecto: {serv.defaultCommission?.value}{serv.defaultCommission?.type}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditingService(serv)}>Editar</Button>
+                      <Button variant="secondary" size="sm" onClick={() => setEditingDefaultService(serv)}>Editar Por Defecto</Button>
+                    </div>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
 
-          <TabsContent value="por producto">
+          <TabsContent value="por-producto">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {products.map((prod) => (
-                <Card key={prod.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-bold">{prod.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Comisión por Defecto: {prod.defaultCommission.value}{prod.defaultCommission.type}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEditProduct(prod)}>Editar</Button>
-                  </div>
-                </Card>
-              ))}
+              {isLoading ? (
+                Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
+              ) : (
+                products.map((prod) => (
+                  <Card key={prod.id} className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="font-bold">{prod.name}</p>
+                       <p className="text-sm text-muted-foreground">
+                        Comisión por Defecto: {prod.defaultCommission?.value}{prod.defaultCommission?.type}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditingProduct(prod)}>Editar</Button>
+                    </div>
+                  </Card>
+                ))
+               )}
             </div>
           </TabsContent>
         </Tabs>
@@ -157,6 +155,8 @@ export default function ComisionesPage() {
           isOpen={!!editingProfessional}
           onClose={handleCloseModals}
           professional={editingProfessional}
+          onDataSaved={handleDataUpdated}
+          services={services}
         />
       )}
        {editingDefault && (
@@ -164,6 +164,7 @@ export default function ComisionesPage() {
           isOpen={!!editingDefault}
           onClose={handleCloseModals}
           professional={editingDefault}
+          onDataSaved={handleDataUpdated}
         />
       )}
 
@@ -173,6 +174,8 @@ export default function ComisionesPage() {
           isOpen={!!editingService}
           onClose={handleCloseModals}
           service={editingService}
+          onDataSaved={handleDataUpdated}
+          professionals={professionals}
         />
       )}
       {editingDefaultService && (
@@ -180,6 +183,7 @@ export default function ComisionesPage() {
             isOpen={!!editingDefaultService}
             onClose={handleCloseModals}
             service={editingDefaultService}
+            onDataSaved={handleDataUpdated}
         />
       )}
 
@@ -189,6 +193,7 @@ export default function ComisionesPage() {
           isOpen={!!editingProduct}
           onClose={handleCloseModals}
           product={editingProduct}
+          onDataSaved={handleDataUpdated}
         />
       )}
     </>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,53 +23,63 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Service } from '@/app/admin/comisiones/page';
+import type { Service, Professional, Commission } from '@/app/admin/comisiones/page';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface EditServiceComisionesModalProps {
   service: Service;
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: () => void;
+  professionals: Professional[];
 }
 
-const mockProfessionals = [
-  { id: 'prof_1', name: 'Beatriz Elizarraga Casas' },
-  { id: 'prof_2', name: 'Gloria Ivon' },
-  { id: 'prof_3', name: 'Karina Ruiz Rosales' },
-  { id: 'prof_4', name: 'Lupita' },
-  { id: 'prof_5', name: 'Erick' },
-];
-
-const getDefaultValues = (service: Service) => {
-    const values: { [key: string]: { value: number; type: string } } = {};
-    mockProfessionals.forEach(prof => {
-        // In a real app, you would fetch the specific commission for this prof/service
-        // For now, we'll use the service's default
-        values[prof.name] = service.defaultCommission;
+const getDefaultValues = (service: Service, professionals: Professional[]) => {
+    const values: { [key: string]: Commission } = {};
+    professionals.forEach(prof => {
+        values[prof.id] = service.comisionesPorProfesional?.[prof.id] || service.defaultCommission || { value: 0, type: '%' };
     });
     return values;
 }
 
-export function EditServiceComisionesModal({ service, isOpen, onClose }: EditServiceComisionesModalProps) {
+export function EditServiceComisionesModal({ service, isOpen, onClose, onDataSaved, professionals }: EditServiceComisionesModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { control, handleSubmit } = useForm({
-    defaultValues: getDefaultValues(service),
+  const { control, handleSubmit, reset } = useForm({
+    defaultValues: getDefaultValues(service, professionals),
   });
 
-  const onSubmit = (data: any) => {
+  useEffect(() => {
+    if (isOpen) {
+        reset(getDefaultValues(service, professionals));
+    }
+  }, [service, professionals, isOpen, reset]);
+
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-    console.log('Datos de comisiones de servicio guardados:', data);
-    
-    // Simular llamada a API
-    setTimeout(() => {
-      toast({
-        title: 'Comisiones guardadas con éxito',
-        description: `Las comisiones para el servicio ${service.name} han sido actualizadas.`,
-      });
-      setIsSubmitting(false);
-      onClose();
-    }, 1000);
+    try {
+        const serviceRef = doc(db, 'servicios', service.id);
+        await updateDoc(serviceRef, {
+            comisionesPorProfesional: data
+        });
+        toast({
+            title: 'Comisiones guardadas con éxito',
+            description: `Las comisiones para el servicio ${service.name} han sido actualizadas.`,
+        });
+        onDataSaved();
+        onClose();
+    } catch(error) {
+        console.error('Error al guardar comisiones de servicio:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -84,12 +94,12 @@ export function EditServiceComisionesModal({ service, isOpen, onClose }: EditSer
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="py-4 max-h-[60vh] overflow-y-auto px-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {mockProfessionals.map((prof) => (
+              {professionals.map((prof) => (
                 <div key={prof.id}>
                   <Label htmlFor={`value-${prof.id}`}>{prof.name}</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Controller
-                      name={`${prof.name}.value`}
+                      name={`${prof.id}.value`}
                       control={control}
                       render={({ field }) => (
                         <Input
@@ -97,14 +107,15 @@ export function EditServiceComisionesModal({ service, isOpen, onClose }: EditSer
                           type="number"
                           className="flex-grow"
                           {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                         />
                       )}
                     />
                     <Controller
-                        name={`${prof.name}.type`}
+                        name={`${prof.id}.type`}
                         control={control}
                         render={({ field }) => (
-                             <Select onValueChange={field.onChange} defaultValue={field.value}>
+                             <Select onValueChange={field.onChange} value={field.value}>
                                 <SelectTrigger className="w-[80px]">
                                     <SelectValue placeholder="Tipo" />
                                 </SelectTrigger>

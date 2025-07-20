@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,36 +24,56 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Service } from '@/app/admin/comisiones/page';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface EditDefaultServiceComisionModalProps {
   service: Service;
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: () => void;
 }
 
-export function EditDefaultServiceComisionModal({ service, isOpen, onClose }: EditDefaultServiceComisionModalProps) {
+export function EditDefaultServiceComisionModal({ service, isOpen, onClose, onDataSaved }: EditDefaultServiceComisionModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { control, handleSubmit } = useForm({
+  const { control, handleSubmit, reset } = useForm({
     defaultValues: {
-      commission: service.defaultCommission,
+      defaultCommission: service.defaultCommission || { value: 0, type: '%' },
     },
   });
 
-  const onSubmit = (data: any) => {
+  useEffect(() => {
+    if (isOpen) {
+        reset({ defaultCommission: service.defaultCommission || { value: 0, type: '%' } });
+    }
+  }, [service, isOpen, reset]);
+
+
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-    console.log('Datos de comisión por defecto del servicio guardados:', data);
-    
-    // Simular llamada a API
-    setTimeout(() => {
-      toast({
-        title: 'Comisión por defecto guardada',
-        description: `La comisión por defecto para ${service.name} ha sido actualizada.`,
-      });
-      setIsSubmitting(false);
-      onClose();
-    }, 1000);
+    try {
+        const serviceRef = doc(db, 'servicios', service.id);
+        await updateDoc(serviceRef, {
+            defaultCommission: data.defaultCommission
+        });
+        toast({
+            title: 'Comisión por defecto guardada',
+            description: `La comisión por defecto para ${service.name} ha sido actualizada.`,
+        });
+        onDataSaved();
+        onClose();
+    } catch(error) {
+        console.error('Error al guardar comisión por defecto del servicio:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: 'No se pudo guardar la comisión. Inténtalo de nuevo.',
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,7 +90,7 @@ export function EditDefaultServiceComisionModal({ service, isOpen, onClose }: Ed
             <Label htmlFor="commission-value">Comisión por defecto del servicio</Label>
             <div className="flex items-center gap-2 mt-1">
                 <Controller
-                    name="commission.value"
+                    name="defaultCommission.value"
                     control={control}
                     render={({ field }) => (
                     <Input
@@ -79,14 +99,15 @@ export function EditDefaultServiceComisionModal({ service, isOpen, onClose }: Ed
                         placeholder="Comisión"
                         className="flex-grow"
                         {...field}
+                        onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                     )}
                 />
                 <Controller
-                    name="commission.type"
+                    name="defaultCommission.type"
                     control={control}
                     render={({ field }) => (
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="w-[80px]">
                                 <SelectValue placeholder="Tipo" />
                             </SelectTrigger>
@@ -113,4 +134,3 @@ export function EditDefaultServiceComisionModal({ service, isOpen, onClose }: Ed
     </Dialog>
   );
 }
-

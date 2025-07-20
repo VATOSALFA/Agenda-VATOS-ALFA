@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,36 +24,55 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Product } from '@/app/admin/comisiones/page';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface EditProductComisionModalProps {
   product: Product;
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: () => void;
 }
 
-export function EditProductComisionModal({ product, isOpen, onClose }: EditProductComisionModalProps) {
+export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved }: EditProductComisionModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { control, handleSubmit } = useForm({
+  const { control, handleSubmit, reset } = useForm({
     defaultValues: {
-      commission: product.defaultCommission,
+      defaultCommission: product.defaultCommission || { value: 0, type: '%' },
     },
   });
 
-  const onSubmit = (data: any) => {
+  useEffect(() => {
+    if (isOpen) {
+        reset({ defaultCommission: product.defaultCommission || { value: 0, type: '%' } });
+    }
+  }, [product, isOpen, reset]);
+
+  const onSubmit = async (data: any) => {
     setIsSubmitting(true);
-    console.log('Datos de comisión por defecto del producto guardados:', data);
-    
-    // Simular llamada a API
-    setTimeout(() => {
-      toast({
-        title: 'Comisión guardada con éxito',
-        description: `La comisión para ${product.name} ha sido actualizada.`,
-      });
-      setIsSubmitting(false);
-      onClose();
-    }, 1000);
+    try {
+        const productRef = doc(db, 'productos', product.id);
+        await updateDoc(productRef, {
+            defaultCommission: data.defaultCommission
+        });
+        toast({
+            title: 'Comisión guardada con éxito',
+            description: `La comisión para ${product.name} ha sido actualizada.`,
+        });
+        onDataSaved();
+        onClose();
+    } catch(error) {
+        console.error('Error al guardar comisión de producto:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: 'No se pudo guardar la comisión. Inténtalo de nuevo.',
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -62,7 +81,7 @@ export function EditProductComisionModal({ product, isOpen, onClose }: EditProdu
         <DialogHeader>
           <DialogTitle>Editando comisión por defecto</DialogTitle>
           <DialogDescription>
-            Al guardar se modificarán las comisiones generales o específicas de tus productos, servicios o planes.
+             Esta comisión se aplicará a la venta del producto: <span className="font-semibold">{product.name}</span>.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -70,7 +89,7 @@ export function EditProductComisionModal({ product, isOpen, onClose }: EditProdu
             <Label htmlFor="commission-value">Comisión por defecto</Label>
             <div className="flex items-center gap-2 mt-1">
                 <Controller
-                    name="commission.value"
+                    name="defaultCommission.value"
                     control={control}
                     render={({ field }) => (
                     <Input
@@ -79,14 +98,15 @@ export function EditProductComisionModal({ product, isOpen, onClose }: EditProdu
                         placeholder="Comisión"
                         className="flex-grow"
                         {...field}
+                        onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                     )}
                 />
                 <Controller
-                    name="commission.type"
+                    name="defaultCommission.type"
                     control={control}
                     render={({ field }) => (
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="w-[80px]">
                                 <SelectValue placeholder="Tipo" />
                             </SelectTrigger>

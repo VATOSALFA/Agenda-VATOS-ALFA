@@ -8,60 +8,69 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Trash2, Loader2 } from 'lucide-react';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { ProductBrand } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
 
 interface BrandModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: (newBrandId: string) => void;
 }
 
-const initialBrands = [
-    { id: 1, name: 'VATOS ALFA' },
-    { id: 2, name: 'Reuzel' },
-    { id: 3, name: 'Suavecito' },
-];
-
-export function BrandModal({ isOpen, onClose }: BrandModalProps) {
+export function BrandModal({ isOpen, onClose, onDataSaved }: BrandModalProps) {
   const { toast } = useToast();
-  const [brands, setBrands] = useState(initialBrands);
   const [newBrandName, setNewBrandName] = useState('');
-  const [nextId, setNextId] = useState(initialBrands.length + 1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [queryKey, setQueryKey] = useState(0);
 
-  const handleAddBrand = () => {
+  const { data: brands, loading } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
+
+  const handleAddBrand = async () => {
     if (newBrandName.trim() === '') {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: 'El nombre de la marca no puede estar vacío.',
-        });
+        toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la marca no puede estar vacío.' });
         return;
     }
     
-    setBrands([...brands, { id: nextId, name: newBrandName.trim() }]);
-    setNextId(nextId + 1);
-    setNewBrandName('');
-    toast({
-        title: 'Marca agregada',
-        description: `La marca "${newBrandName.trim()}" ha sido creada.`,
-    });
+    setIsSubmitting(true);
+    try {
+        const querySnapshot = await getDocs(collection(db, 'marcas_productos'));
+        const order = querySnapshot.size;
+
+        const docRef = await addDoc(collection(db, 'marcas_productos'), {
+            name: newBrandName.trim(),
+            order,
+            created_at: Timestamp.now(),
+        });
+        setNewBrandName('');
+        toast({ title: 'Marca agregada' });
+        onDataSaved(docRef.id);
+        onClose();
+    } catch (error) {
+        console.error("Error creating brand:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear la marca.' });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
   
-  const handleDeleteBrand = (idToDelete: number) => {
-    const brandToDelete = brands.find(c => c.id === idToDelete);
-    if (brandToDelete) {
-        setBrands(brands.filter(c => c.id !== idToDelete));
-        toast({
-            title: 'Marca eliminada',
-            description: `La marca "${brandToDelete.name}" ha sido eliminada.`,
-        });
-    }
+  const handleDeleteBrand = async (idToDelete: string) => {
+     try {
+        await deleteDoc(doc(db, 'marcas_productos', idToDelete));
+        toast({ title: 'Marca eliminada' });
+        setQueryKey(prev => prev + 1);
+     } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar la marca.' });
+     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Nueva marca</DialogTitle>
+          <DialogTitle>Administrar Marcas</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
             <div className="space-y-1">
@@ -73,9 +82,10 @@ export function BrandModal({ isOpen, onClose }: BrandModalProps) {
                         value={newBrandName}
                         onChange={(e) => setNewBrandName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddBrand()}
+                        disabled={isSubmitting}
                     />
-                    <Button variant="outline" onClick={handleAddBrand}>
-                        <Check className="mr-2 h-4 w-4"/>
+                    <Button variant="outline" onClick={handleAddBrand} disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4"/>}
                         Agregar
                     </Button>
                 </div>
@@ -83,7 +93,8 @@ export function BrandModal({ isOpen, onClose }: BrandModalProps) {
 
             <ScrollArea className="h-48 rounded-md border">
                 <div className="p-4">
-                {brands.map((brand) => (
+                {loading && <div className="flex justify-center items-center h-full"><Loader2 className="h-6 w-6 animate-spin"/></div>}
+                {!loading && brands.map((brand) => (
                     <div key={brand.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
                         <span className="text-sm">{brand.name}</span>
                         <Button 
@@ -96,7 +107,7 @@ export function BrandModal({ isOpen, onClose }: BrandModalProps) {
                         </Button>
                     </div>
                 ))}
-                 {brands.length === 0 && (
+                 {!loading && brands.length === 0 && (
                     <p className="text-center text-sm text-muted-foreground py-4">No hay marcas creadas.</p>
                  )}
                 </div>

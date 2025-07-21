@@ -8,64 +8,69 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Trash2, Loader2 } from 'lucide-react';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { ProductPresentation } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
 
 interface PresentationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onDataSaved: (newPresentationId: string) => void;
 }
 
-const initialPresentations = [
-    { id: 1, name: '100ml' },
-    { id: 2, name: '120 ml' },
-    { id: 3, name: '150' },
-    { id: 4, name: '150 gr.' },
-    { id: 5, name: '20gr' },
-    { id: 6, name: '30 ml' },
-    { id: 7, name: '500 ml' },
-];
-
-export function PresentationModal({ isOpen, onClose }: PresentationModalProps) {
+export function PresentationModal({ isOpen, onClose, onDataSaved }: PresentationModalProps) {
   const { toast } = useToast();
-  const [presentations, setPresentations] = useState(initialPresentations);
   const [newPresentationName, setNewPresentationName] = useState('');
-  const [nextId, setNextId] = useState(initialPresentations.length + 1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [queryKey, setQueryKey] = useState(0);
 
-  const handleAddPresentation = () => {
+  const { data: presentations, loading } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
+
+  const handleAddPresentation = async () => {
     if (newPresentationName.trim() === '') {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: 'El nombre del formato no puede estar vacío.',
-        });
+        toast({ variant: 'destructive', title: 'Error', description: 'El nombre del formato no puede estar vacío.' });
         return;
     }
     
-    setPresentations([...presentations, { id: nextId, name: newPresentationName.trim() }]);
-    setNextId(nextId + 1);
-    setNewPresentationName('');
-    toast({
-        title: 'Formato agregado',
-        description: `El formato "${newPresentationName.trim()}" ha sido creado.`,
-    });
+    setIsSubmitting(true);
+    try {
+        const querySnapshot = await getDocs(collection(db, 'formatos_productos'));
+        const order = querySnapshot.size;
+
+        const docRef = await addDoc(collection(db, 'formatos_productos'), {
+            name: newPresentationName.trim(),
+            order,
+            created_at: Timestamp.now(),
+        });
+        setNewPresentationName('');
+        toast({ title: 'Formato agregado' });
+        onDataSaved(docRef.id);
+        onClose();
+    } catch (error) {
+        console.error("Error creating presentation:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear el formato.' });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
   
-  const handleDeletePresentation = (idToDelete: number) => {
-    const presentationToDelete = presentations.find(c => c.id === idToDelete);
-    if (presentationToDelete) {
-        setPresentations(presentations.filter(c => c.id !== idToDelete));
-        toast({
-            title: 'Formato eliminado',
-            description: `El formato "${presentationToDelete.name}" ha sido eliminado.`,
-        });
-    }
+  const handleDeletePresentation = async (idToDelete: string) => {
+     try {
+        await deleteDoc(doc(db, 'formatos_productos', idToDelete));
+        toast({ title: 'Formato eliminado' });
+        setQueryKey(prev => prev + 1);
+     } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el formato.' });
+     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Nuevo formato/presentación</DialogTitle>
+          <DialogTitle>Administrar Formatos/Presentaciones</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
             <div className="space-y-1">
@@ -77,9 +82,10 @@ export function PresentationModal({ isOpen, onClose }: PresentationModalProps) {
                         value={newPresentationName}
                         onChange={(e) => setNewPresentationName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddPresentation()}
+                        disabled={isSubmitting}
                     />
-                    <Button variant="outline" onClick={handleAddPresentation}>
-                        <Check className="mr-2 h-4 w-4"/>
+                    <Button variant="outline" onClick={handleAddPresentation} disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4"/>}
                         Agregar
                     </Button>
                 </div>
@@ -87,7 +93,8 @@ export function PresentationModal({ isOpen, onClose }: PresentationModalProps) {
 
             <ScrollArea className="h-48 rounded-md border">
                 <div className="p-4">
-                {presentations.map((presentation) => (
+                {loading && <div className="flex justify-center items-center h-full"><Loader2 className="h-6 w-6 animate-spin"/></div>}
+                {!loading && presentations.map((presentation) => (
                     <div key={presentation.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
                         <span className="text-sm">{presentation.name}</span>
                         <Button 
@@ -100,7 +107,7 @@ export function PresentationModal({ isOpen, onClose }: PresentationModalProps) {
                         </Button>
                     </div>
                 ))}
-                 {presentations.length === 0 && (
+                 {!loading && presentations.length === 0 && (
                     <p className="text-center text-sm text-muted-foreground py-4">No hay formatos creados.</p>
                  )}
                 </div>

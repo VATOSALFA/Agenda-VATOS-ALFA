@@ -21,8 +21,41 @@ export interface Barber {
 export interface Product {
     id: string;
     nombre: string;
-    precio: number;
+    barcode?: string;
+    brand_id: string;
+    category_id: string;
+    presentation_id: string;
+    public_price: number;
     stock: number;
+    purchase_cost?: number;
+    internal_price?: number;
+    commission?: {
+        value: number;
+        type: '%' | '$';
+    }
+    includes_vat?: boolean;
+    description?: string;
+    stock_alarm_threshold?: number;
+    notification_email?: string;
+    created_at?: any;
+}
+
+export interface ProductCategory {
+    id: string;
+    name: string;
+    order: number;
+}
+
+export interface ProductBrand {
+    id: string;
+    name: string;
+    order: number;
+}
+
+export interface ProductPresentation {
+    id: string;
+    name: string;
+    order: number;
 }
 
 export interface Service {

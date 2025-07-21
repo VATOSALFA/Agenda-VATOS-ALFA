@@ -1,35 +1,115 @@
 
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NewProductModal } from "@/components/products/new-product-modal";
 import { CategoryModal } from "@/components/products/category-modal";
 import { BrandModal } from "@/components/products/brand-modal";
 import { PresentationModal } from "@/components/products/presentation-modal";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import type { Product, ProductCategory, ProductBrand, ProductPresentation } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { doc, deleteDoc, updateDoc, increment } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useToast } from "@/hooks/use-toast";
 
-const mockProducts = [
-    { barcode: '7801234567890', name: 'SERUM COCTEL MULTINUTRIENTES', category: 'Facial', brand: 'VATOS ALFA', presentation: '30 ml', price: 17900, stock: 12 },
-    { barcode: '7801234567891', name: 'SERUM CRECIMIENTO CAPILAR 7% MINOXIDIL', category: 'Capilar', brand: 'VATOS ALFA', presentation: '50 ml', price: 19900, stock: 15 },
-    { barcode: '7801234567892', name: 'MASCARILLA CARBON ACTIVADO', category: 'Facial', brand: 'VATOS ALFA', presentation: '50 gr', price: 16500, stock: 18 },
-    { barcode: '7801234567893', name: 'SHAMPOO CRECIMIENTO ACELERADO', category: 'Capilar', brand: 'VATOS ALFA', presentation: '500 ml', price: 16500, stock: 14 },
-    { barcode: '7801234567894', name: 'JABÓN LÍQUIDO PURIFICANTE Y EXFOLIANTE', category: 'Facial', brand: 'VATOS ALFA', presentation: '120 ml', price: 16500, stock: 16 },
-    { barcode: '7801234567895', name: 'AFTER SHAVE', category: 'Facial', brand: 'VATOS ALFA', presentation: '100ml', price: 18000, stock: 0 },
-];
 
 export default function InventoryPage() {
+  const [queryKey, setQueryKey] = useState(0);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
   const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
+  
+  const { toast } = useToast();
+
+  // Firestore Queries
+  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
+  const { data: categories } = useFirestoreQuery<ProductCategory>('categorias_productos', queryKey);
+  const { data: brands } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
+  const { data: presentations } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
+
+  const isLoading = productsLoading;
+
+  const handleDataUpdated = () => {
+    setQueryKey(prev => prev + 1);
+  };
+  
+  const openNewModal = () => {
+    setEditingProduct(null);
+    setIsNewProductModalOpen(true);
+  }
+
+  const openEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setIsNewProductModalOpen(true);
+  }
+
+  const handleDeleteProduct = async () => {
+    if (!productToDelete) return;
+    try {
+      await deleteDoc(doc(db, "productos", productToDelete.id));
+      toast({
+        title: "Producto Eliminado",
+        description: `El producto "${productToDelete.nombre}" ha sido eliminado.`,
+      });
+      handleDataUpdated();
+    } catch (error) {
+      console.error("Error deleting product: ", error);
+       toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar el producto.",
+      });
+    } finally {
+        setProductToDelete(null);
+    }
+  };
+  
+  const handleStockChange = async (product: Product, amount: number) => {
+      if (product.stock + amount < 0) {
+          toast({ variant: 'destructive', title: 'Stock insuficiente' });
+          return;
+      }
+      try {
+        const productRef = doc(db, 'productos', product.id);
+        await updateDoc(productRef, {
+            stock: increment(amount)
+        });
+         toast({ title: `Stock actualizado para ${product.nombre}` });
+         handleDataUpdated();
+      } catch (error) {
+        console.error("Error updating stock:", error);
+        toast({ variant: 'destructive', title: 'Error al actualizar stock' });
+      }
+  }
+  
+  const getEntityName = (id: string, entities: {id: string, name: string}[]) => {
+      return entities.find(e => e.id === id)?.name || 'N/A';
+  }
+
 
   return (
     <>
@@ -54,7 +134,7 @@ export default function InventoryPage() {
               <DropdownMenuContent className="w-64" align="end">
                 <DropdownMenuLabel>Crear nuevo</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setIsNewProductModalOpen(true)}>
+                <DropdownMenuItem onSelect={openNewModal}>
                     <div>
                         <p className="font-semibold">Nuevo Producto</p>
                         <p className="text-xs text-muted-foreground">Agrega un producto nuevo a tu inventario</p>
@@ -117,19 +197,32 @@ export default function InventoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockProducts.map((product) => (
-                <TableRow key={product.barcode} className={cn(product.stock === 0 && 'bg-red-500/10 hover:bg-red-500/20')}>
-                  <TableCell className="font-mono text-xs">{product.barcode}</TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>{product.category}</TableCell>
-                  <TableCell>{product.brand}</TableCell>
-                  <TableCell>{product.presentation}</TableCell>
-                  <TableCell>${product.price.toLocaleString('es-CL')}</TableCell>
+              {isLoading ? (
+                  Array.from({length: 5}).map((_, i) => (
+                      <TableRow key={i}>
+                          <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
+                      </TableRow>
+                  ))
+              ) : products.map((product) => (
+                <TableRow key={product.id} className={cn(product.stock === 0 && 'bg-red-500/10 hover:bg-red-500/20')}>
+                  <TableCell className="font-mono text-xs">{product.barcode || 'N/A'}</TableCell>
+                  <TableCell className="font-medium">{product.nombre}</TableCell>
+                  <TableCell>{getEntityName(product.category_id, categories)}</TableCell>
+                  <TableCell>{getEntityName(product.brand_id, brands)}</TableCell>
+                  <TableCell>{getEntityName(product.presentation_id, presentations)}</TableCell>
+                  <TableCell>${product.public_price.toLocaleString('es-CL')}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                         <span>{product.stock}</span>
-                        <Button size="sm" variant="ghost" className="h-6 w-auto px-2"><Plus className="mr-1 h-3 w-3" /> Stock</Button>
-                        <Button size="sm" variant="ghost" className="h-6 w-auto px-2"><Minus className="mr-1 h-3 w-3" /> Stock</Button>
+                        <Button size="sm" variant="ghost" className="h-6 w-auto px-2" onClick={() => handleStockChange(product, 1)}><Plus className="mr-1 h-3 w-3" /> Stock</Button>
+                        <Button size="sm" variant="ghost" className="h-6 w-auto px-2" onClick={() => handleStockChange(product, -1)}><Minus className="mr-1 h-3 w-3" /> Stock</Button>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -140,10 +233,14 @@ export default function InventoryPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Editar</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => openEditModal(product)}>Editar</DropdownMenuItem>
                         <DropdownMenuItem>Ver historial de movimientos</DropdownMenuItem>
                         <DropdownMenuItem>Desactivar producto</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive hover:!text-destructive">Eliminar</DropdownMenuItem>
+                         <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => setProductToDelete(product)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10">
+                            <Trash2 className="mr-2 h-4 w-4"/>
+                            Eliminar
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -151,26 +248,64 @@ export default function InventoryPage() {
               ))}
             </TableBody>
           </Table>
+           {!isLoading && products.length === 0 && (
+            <p className="py-10 text-center text-muted-foreground">Aún no tienes productos. ¡Agrega uno!</p>
+          )}
         </CardContent>
       </Card>
     </div>
 
-    <NewProductModal 
-      isOpen={isNewProductModalOpen}
-      onClose={() => setIsNewProductModalOpen(false)}
-    />
-    <CategoryModal 
-      isOpen={isCategoryModalOpen}
-      onClose={() => setIsCategoryModalOpen(false)}
-    />
-    <BrandModal
-        isOpen={isBrandModalOpen}
-        onClose={() => setIsBrandModalOpen(false)}
-    />
-    <PresentationModal
-        isOpen={isPresentationModalOpen}
-        onClose={() => setIsPresentationModalOpen(false)}
-    />
+    {isNewProductModalOpen && (
+        <NewProductModal 
+          isOpen={isNewProductModalOpen}
+          onClose={() => setIsNewProductModalOpen(false)}
+          onDataSaved={handleDataUpdated}
+          product={editingProduct}
+        />
+    )}
+    {isCategoryModalOpen && (
+        <CategoryModal 
+          isOpen={isCategoryModalOpen}
+          onClose={() => setIsCategoryModalOpen(false)}
+          onDataSaved={handleDataUpdated}
+        />
+    )}
+    {isBrandModalOpen && (
+        <BrandModal
+            isOpen={isBrandModalOpen}
+            onClose={() => setIsBrandModalOpen(false)}
+            onDataSaved={handleDataUpdated}
+        />
+    )}
+    {isPresentationModalOpen && (
+        <PresentationModal
+            isOpen={isPresentationModalOpen}
+            onClose={() => setIsPresentationModalOpen(false)}
+            onDataSaved={handleDataUpdated}
+        />
+    )}
+
+    {productToDelete && (
+        <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta acción no se puede deshacer. Se eliminará permanentemente el producto "{productToDelete.nombre}".
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={handleDeleteProduct}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        Sí, eliminar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )}
     </>
   );
 }

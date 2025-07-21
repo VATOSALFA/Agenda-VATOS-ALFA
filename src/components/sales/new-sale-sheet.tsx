@@ -2,11 +2,11 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -161,14 +161,33 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
+        // --- 1. READ PHASE ---
+        const productUpdates = [];
+        for (const item of cart) {
+          if (item.tipo === 'producto') {
+            const productRef = doc(db, 'productos', item.id);
+            const productDoc = await transaction.get(productRef);
+            if (!productDoc.exists()) {
+              throw new Error(`Producto con ID ${item.id} no encontrado.`);
+            }
+            const newStock = productDoc.data().stock - item.cantidad;
+            if (newStock < 0) {
+              throw new Error(`Stock insuficiente para ${item.nombre}.`);
+            }
+            productUpdates.push({ ref: productRef, newStock });
+          }
+        }
+        
+        // --- 2. WRITE PHASE ---
         const ventaRef = doc(collection(db, "ventas"));
         const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo }) => ({
             id, nombre, tipo,
-            precio_unitario: precio,
+            precio_unitario: precio || 0,
             cantidad,
-            subtotal: precio * cantidad,
+            subtotal: (precio || 0) * cantidad,
         }));
   
+        // Create sale record
         transaction.set(ventaRef, {
             ...data,
             items: itemsToSave,
@@ -178,19 +197,8 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         });
   
         // Update product stock
-        for (const item of cart) {
-            if (item.tipo === 'producto') {
-                const productRef = doc(db, 'productos', item.id);
-                const productDoc = await transaction.get(productRef);
-                if (!productDoc.exists()) {
-                    throw new Error(`Producto con ID ${item.id} no encontrado.`);
-                }
-                const newStock = productDoc.data().stock - item.cantidad;
-                if (newStock < 0) {
-                    throw new Error(`Stock insuficiente para ${item.nombre}.`);
-                }
-                transaction.update(productRef, { stock: newStock });
-            }
+        for (const update of productUpdates) {
+          transaction.update(update.ref, { stock: update.newStock });
         }
       });
 
@@ -334,7 +342,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                     <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" /> Cliente</FormLabel>
                                     <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>+ Nuevo cliente</Button>
                                 </div>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value ?? ''}>
                                     <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Selecciona un cliente'} /></SelectTrigger></FormControl>
                                     <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
                                 </Select>

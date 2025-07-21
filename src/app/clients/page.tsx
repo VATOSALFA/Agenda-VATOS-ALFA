@@ -293,16 +293,18 @@ export default function ClientsPage() {
       )}
 
       {isReservationModalOpen && (
-        <NewReservationForm
-          isOpen={isReservationModalOpen}
-          onOpenChange={setIsReservationModalOpen}
-          onFormSubmit={() => {
-            setIsReservationModalOpen(false);
-            setIsDetailModalOpen(false);
-            handleDataUpdated();
-          }}
-          initialData={{ cliente_id: selectedClient?.id }}
-        />
+        <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+            <DialogContent className="sm:max-w-xl">
+                <NewReservationForm
+                    onFormSubmit={() => {
+                        setIsReservationModalOpen(false);
+                        setIsDetailModalOpen(false);
+                        handleDataUpdated();
+                    }}
+                    initialData={{ cliente_id: selectedClient?.id }}
+                />
+            </DialogContent>
+        </Dialog>
       )}
 
       {isCombineModalOpen && (

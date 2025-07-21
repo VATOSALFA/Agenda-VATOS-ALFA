@@ -33,11 +33,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
 import type { Profesional, Service } from '@/lib/types';
 import type { Client } from '@/lib/types';
-import { Dialog, DialogContent } from '../ui/dialog';
 
 
 const reservationSchema = z.object({
@@ -444,4 +443,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
      </Dialog>
   );
 }
-

@@ -380,16 +380,19 @@ export default function Header() {
           </div>
         </div>
       </header>
-      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <NewReservationForm onFormSubmit={() => setIsReservationModalOpen(false)} />
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isBlockScheduleModalOpen} onOpenChange={setIsBlockScheduleModalOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <BlockScheduleForm onFormSubmit={() => setIsBlockScheduleModalOpen(false)} />
-        </DialogContent>
-      </Dialog>
+      
+      <NewReservationForm 
+        isOpen={isReservationModalOpen}
+        onOpenChange={setIsReservationModalOpen}
+        onFormSubmit={() => setIsReservationModalOpen(false)}
+      />
+      
+      <BlockScheduleForm
+        isOpen={isBlockScheduleModalOpen}
+        onOpenChange={setIsBlockScheduleModalOpen}
+        onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
+      />
+
       <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} />
     </>
   );

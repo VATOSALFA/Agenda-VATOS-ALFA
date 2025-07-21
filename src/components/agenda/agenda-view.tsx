@@ -450,12 +450,12 @@ export default function AgendaView() {
                                       <TooltipTrigger asChild>
                                         <div 
                                           className={cn(
-                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg text-sm border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2.5 z-10 text-foreground", 
+                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg text-sm border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
                                               event.color,
-                                              event.type === 'block' && 'bg-striped-gray'
+                                              event.type === 'block' && 'bg-striped-gray',
+                                              'text-blue-900'
                                           )} style={calculatePosition(event.start, event.duration)}>
-                                          <p className="font-bold truncate leading-tight">{event.customer}</p>
-                                          {event.type === 'appointment' && <p className="truncate leading-tight">{event.service}</p>}
+                                          <p className="font-bold text-xs truncate leading-tight">{event.customer}</p>
                                         </div>
                                       </TooltipTrigger>
                                       {event.type === 'appointment' ? (

@@ -12,11 +12,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip, Legend } from 'recharts';
-import { format } from "date-fns";
+import { Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
+import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import { where } from "firebase/firestore";
+import type { Client } from "@/lib/types";
+
+interface Sale {
+    id: string;
+    fecha_hora_venta: { seconds: number };
+    cliente_id: string;
+    metodo_pago: string;
+    total: number;
+    items: { nombre: string }[];
+}
 
 const DonutChartCard = ({ title, data, total }: { title: string, data: any[], total: number }) => {
     const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
@@ -49,6 +61,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                                     backgroundColor: 'hsl(var(--background))',
                                     border: '1px solid hsl(var(--border))'
                                 }}
+                                formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
                             />
                         </RechartsPieChart>
                     </ResponsiveContainer>
@@ -62,7 +75,7 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                             <li key={index} className="flex justify-between items-center py-1 border-b">
                                 <div className="flex items-center">
                                     <span className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                                    <span>{item.name}</span>
+                                    <span className="capitalize">{item.name}</span>
                                 </div>
                                 <span>${item.value.toLocaleString('es-CL')}</span>
                             </li>
@@ -74,46 +87,67 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
     )
 }
 
-const mockSales = [
-    { id: 'V001', fecha: '2025-07-15', local: 'Principal', cliente: 'Juan Perez', comprobante: 'Boleta #123', detalle: 'Corte Vatos', monto: 10000, descuento: 0 },
-    { id: 'V002', fecha: '2025-07-15', local: 'Principal', cliente: 'Carlos Gomez', comprobante: 'Boleta #124', detalle: 'Afeitado Alfa + Cera', monto: 28980, descuento: 2000 },
-    { id: 'V003', fecha: '2025-07-14', local: 'Norte', cliente: 'Luis Rodriguez', comprobante: 'Boleta #125', detalle: 'Corte y Barba', monto: 18000, descuento: 0 },
-];
-
 export default function InvoicedSalesPage() {
-    const [dateRange, setDateRange] = useState<DateRange | undefined>();
-    const [salesData, setSalesData] = useState<any | null>(null);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: new Date() });
+    const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
 
-    useEffect(() => {
-        // Simulate data loading and avoid hydration errors
-        setTimeout(() => {
-            setSalesData({
-                totalSales: {
-                    data: [
-                        { name: 'Servicios', value: 2400000 },
-                        { name: 'Productos', value: 750000 },
-                        { name: 'Planes', value: 150000 },
-                    ],
-                    total: 3300000,
-                },
-                paymentMethods: {
-                    data: [
-                        { name: 'Efectivo', value: 1200000 },
-                        { name: 'Tarjeta de Crédito', value: 900000 },
-                        { name: 'Tarjeta de Débito', value: 1000000 },
-                        { name: 'Transferencia', value: 200000 },
-                    ],
-                    total: 3300000,
-                },
+    const salesQueryConstraints = useMemo(() => {
+        const constraints = [];
+        if (dateRange?.from) {
+            constraints.push(where('fecha_hora_venta', '>=', startOfDay(dateRange.from)));
+        }
+        if (dateRange?.to) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(dateRange.to)));
+        }
+        if (paymentMethodFilter !== 'todos') {
+            constraints.push(where('metodo_pago', '==', paymentMethodFilter));
+        }
+        return constraints;
+    }, [dateRange, paymentMethodFilter]);
+
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
+    const { data: clients } = useFirestoreQuery<Client>('clientes');
+
+    const clientMap = useMemo(() => {
+        if (!clients) return new Map();
+        return new Map(clients.map(c => [c.id, c]));
+    }, [clients]);
+
+    const salesData = useMemo(() => {
+        if (salesLoading || !sales) return null;
+
+        const salesByType = sales.reduce((acc, sale) => {
+            sale.items.forEach(item => {
+                const type = item.tipo === 'producto' ? 'Productos' : 'Servicios';
+                acc[type] = (acc[type] || 0) + item.subtotal;
             });
-        }, 1000);
-    }, []);
+            return acc;
+        }, {} as Record<string, number>);
+
+        const salesByPaymentMethod = sales.reduce((acc, sale) => {
+            const method = sale.metodo_pago || 'Otro';
+            acc[method] = (acc[method] || 0) + sale.total;
+            return acc;
+        }, {} as Record<string, number>);
+
+        const totalSales = sales.reduce((acc, sale) => acc + sale.total, 0);
+
+        return {
+            totalSales: {
+                data: Object.entries(salesByType).map(([name, value]) => ({ name, value })),
+                total: totalSales,
+            },
+            paymentMethods: {
+                data: Object.entries(salesByPaymentMethod).map(([name, value]) => ({ name, value })),
+                total: totalSales,
+            },
+        };
+    }, [sales, salesLoading]);
 
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
 
-            {/* Filters */}
             <Card>
                 <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <Popover>
@@ -122,9 +156,9 @@ export default function InvoicedSalesPage() {
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {dateRange?.from ? (
                                     dateRange.to ? (
-                                        `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}`
+                                        `${format(dateRange.from, "LLL dd, y", { locale: es })} - ${format(dateRange.to, "LLL dd, y", { locale: es })}`
                                     ) : (
-                                        format(dateRange.from, "LLL dd, y")
+                                        format(dateRange.from, "LLL dd, y", { locale: es })
                                     )
                                 ) : (
                                     <span>Seleccionar rango</span>
@@ -132,11 +166,19 @@ export default function InvoicedSalesPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
+                            <Calendar mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
                         </PopoverContent>
                     </Popover>
                     <Select><SelectTrigger><SelectValue placeholder="Todas las sucursales" /></SelectTrigger><SelectContent /></Select>
-                    <Select><SelectTrigger><SelectValue placeholder="Todos los métodos de pago" /></SelectTrigger><SelectContent /></Select>
+                    <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Todos los métodos de pago</SelectItem>
+                            <SelectItem value="efectivo">Efectivo</SelectItem>
+                            <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                            <SelectItem value="transferencia">Transferencia</SelectItem>
+                        </SelectContent>
+                    </Select>
                     <Select><SelectTrigger><SelectValue placeholder="Todos los comprobantes" /></SelectTrigger><SelectContent /></Select>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -145,22 +187,20 @@ export default function InvoicedSalesPage() {
                 </CardContent>
             </Card>
 
-            {/* Summary Cards */}
             <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-                {salesData ? (
+                {salesLoading || !salesData ? (
+                    <>
+                        <Card><CardContent className="p-6"><Skeleton className="h-[380px] w-full" /></CardContent></Card>
+                        <Card><CardContent className="p-6"><Skeleton className="h-[380px] w-full" /></CardContent></Card>
+                    </>
+                ) : (
                     <>
                         <DonutChartCard title="Ventas Facturadas Totales" data={salesData.totalSales.data} total={salesData.totalSales.total} />
                         <DonutChartCard title="Medios de Pago" data={salesData.paymentMethods.data} total={salesData.paymentMethods.total} />
                     </>
-                ) : (
-                    <>
-                        <Card><CardContent className="p-6"><Skeleton className="h-56 w-full" /></CardContent></Card>
-                        <Card><CardContent className="p-6"><Skeleton className="h-56 w-full" /></CardContent></Card>
-                    </>
                 )}
             </div>
 
-            {/* Sales Table */}
             <Card>
                 <CardHeader className="flex-row items-center justify-between">
                     <div>
@@ -182,28 +222,28 @@ export default function InvoicedSalesPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>ID</TableHead>
                                         <TableHead>Fecha de pago</TableHead>
-                                        <TableHead>Local</TableHead>
                                         <TableHead>Cliente</TableHead>
-                                        <TableHead>Comprobante</TableHead>
                                         <TableHead>Detalle</TableHead>
-                                        <TableHead>Monto Facturado</TableHead>
-                                        <TableHead>Descuento</TableHead>
+                                        <TableHead>Método de Pago</TableHead>
+                                        <TableHead>Total</TableHead>
                                         <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {mockSales.map((sale) => (
+                                    {salesLoading ? (
+                                        Array.from({length: 5}).map((_, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : sales.map((sale) => (
                                         <TableRow key={sale.id}>
-                                            <TableCell className="font-medium">{sale.id}</TableCell>
-                                            <TableCell>{format(new Date(sale.fecha), 'PP', { locale: es })}</TableCell>
-                                            <TableCell>{sale.local}</TableCell>
-                                            <TableCell>{sale.cliente}</TableCell>
-                                            <TableCell>{sale.comprobante}</TableCell>
-                                            <TableCell>{sale.detalle}</TableCell>
-                                            <TableCell>${sale.monto.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell>${sale.descuento.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>{format(sale.fecha_hora_venta.seconds * 1000, 'PP p', { locale: es })}</TableCell>
+                                            <TableCell>{clientMap.get(sale.cliente_id)?.nombre || 'Desconocido'}</TableCell>
+                                            <TableCell>{sale.items.map(i => i.nombre).join(', ')}</TableCell>
+                                            <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
+                                            <TableCell>${sale.total.toLocaleString('es-CL')}</TableCell>
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -219,9 +259,11 @@ export default function InvoicedSalesPage() {
                                     ))}
                                 </TableBody>
                             </Table>
-                            <div className="flex justify-end font-bold text-lg pt-4 pr-4">
-                                Total: $56,980
-                            </div>
+                            { !salesLoading && sales.length > 0 &&
+                                <div className="flex justify-end font-bold text-lg pt-4 pr-4">
+                                    Total: ${sales.reduce((acc, s) => acc + s.total, 0).toLocaleString('es-CL')}
+                                </div>
+                            }
                         </TabsContent>
                     </Tabs>
                 </CardContent>

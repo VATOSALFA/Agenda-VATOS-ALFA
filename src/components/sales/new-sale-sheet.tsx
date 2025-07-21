@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -81,10 +82,10 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
 
-  const filteredServices = useMemo(() =>
-    services.filter(s => s && s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase())),
-    [searchTerm, services]
-  );
+  const filteredServices = useMemo(() => {
+    if (!services) return [];
+    return services.filter(s => s && s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [searchTerm, services]);
   
   const filteredProducts = useMemo(() => {
     if (!products) return [];

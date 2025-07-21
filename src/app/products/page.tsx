@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown, Trash2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NewProductModal } from "@/components/products/new-product-modal";
@@ -31,6 +31,7 @@ import {
 import { doc, deleteDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { Label } from "@/components/ui/label";
 
 
 export default function InventoryPage() {
@@ -38,6 +39,7 @@ export default function InventoryPage() {
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -110,6 +112,12 @@ export default function InventoryPage() {
       return entities?.find(e => e.id === id)?.name || 'N/A';
   }
 
+  const handleDownload = () => {
+    // Logic to validate code and download file will be here
+    toast({ title: 'Código aceptado', description: 'Descargando inventario...' });
+    setIsDownloadModalOpen(false);
+  }
+
 
   return (
     <>
@@ -178,7 +186,9 @@ export default function InventoryPage() {
                 <CardTitle>VATOS ALFA Barber Shop</CardTitle>
                 <div className="flex items-center gap-2">
                     <Button variant="outline"><Bell className="mr-2 h-4 w-4" /> Alarmas de local</Button>
-                    <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar inventario</Button>
+                    <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
+                        <Download className="mr-2 h-4 w-4" /> Descargar inventario
+                    </Button>
                 </div>
             </div>
         </CardHeader>
@@ -306,6 +316,28 @@ export default function InventoryPage() {
             </AlertDialogContent>
         </AlertDialog>
     )}
+
+    <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    ¿Está seguro que quieres descargar este archivo?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para descargar este archivo, es necesario un código de autorización. Por favor, ingréselo a continuación.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code">Código de Autorización</Label>
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownload}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

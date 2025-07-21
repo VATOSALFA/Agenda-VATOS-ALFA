@@ -33,7 +33,7 @@ import type { Profesional, Client, Service, ScheduleDay } from '@/lib/types';
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
 const START_HOUR = 10;
-const END_HOUR = 21;
+const END_HOUR = 20;
 
 interface TimeBlock {
     id: string;
@@ -492,8 +492,9 @@ export default function AgendaView() {
                                           className={cn(
                                               "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
                                               event.color,
+                                              'text-[#1A1A1A]'
                                           )} style={calculatePosition(event.start, event.duration)}>
-                                          <p className="font-bold text-xs truncate leading-tight text-slate-800">{event.customer}</p>
+                                          <p className="font-bold text-xs truncate leading-tight">{event.customer}</p>
                                         </div>
                                       </TooltipTrigger>
                                       {event.type === 'appointment' ? (

@@ -28,7 +28,7 @@ import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where } from 'firebase/firestore';
-import type { Profesional, Client, Service } from '@/lib/types';
+import type { Profesional, Client, Service, ScheduleDay } from '@/lib/types';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -80,6 +80,15 @@ const useCurrentTime = () => {
 
   return { time: currentTime, top: calculateTopPosition() };
 };
+
+const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
+    <div
+      className="absolute w-full bg-striped-gray flex items-center justify-center p-2 z-0"
+      style={{ top: `${top}px`, height: `${height}px` }}
+    >
+        <p className="text-xs text-center font-medium text-muted-foreground">{text}</p>
+    </div>
+);
 
 
 export default function AgendaView() {
@@ -245,6 +254,12 @@ export default function AgendaView() {
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
+  const getDaySchedule = (barber: Profesional): ScheduleDay | null => {
+    if (!date || !barber.schedule) return null;
+    const dayOfWeek = format(date, 'eeee', { locale: es }).toLowerCase();
+    return barber.schedule[dayOfWeek as keyof typeof barber.schedule];
+  };
+
   const selectedDateFormatted = date 
     ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
     : 'Cargando...';
@@ -360,7 +375,16 @@ export default function AgendaView() {
                                 <div className="relative"><Skeleton className="h-[624px] w-full" /></div>
                             </div>
                         ))
-                      ) : professionals.map((barber) => (
+                      ) : professionals.map((barber) => {
+                          const daySchedule = getDaySchedule(barber);
+                          const isWorking = daySchedule && daySchedule.enabled;
+                          let startHour = 9, endHour = 22;
+                          if (isWorking) {
+                              startHour = parse(daySchedule.start, 'HH:mm', new Date()).getHours();
+                              endHour = parse(daySchedule.end, 'HH:mm', new Date()).getHours();
+                          }
+                          
+                          return (
                           <div key={barber.id} className="w-64 flex-shrink-0">
                               {/* Professional Header */}
                               <div 
@@ -402,17 +426,31 @@ export default function AgendaView() {
                               <div 
                                 className="relative bg-white/60"
                                 ref={el => gridRefs.current[barber.id] = el}
-                                onMouseMove={(e) => handleMouseMove(e, barber.id)}
+                                onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
-                                onClick={(e) => handleClickSlot(e)}
+                                onClick={(e) => isWorking && handleClickSlot(e)}
                               >
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
                                       <div key={hour} className="h-[48px] border-b border-border"></div>
                                   ))}
                                   
+                                  {/* Non-working hours blocks */}
+                                  {!isWorking ? (
+                                      <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />
+                                  ) : (
+                                      <>
+                                          {startHour > 9 && (
+                                              <NonWorkBlock top={0} height={(startHour - 9) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                          )}
+                                          {endHour < 22 && (
+                                              <NonWorkBlock top={(endHour - 9) * HOURLY_SLOT_HEIGHT} height={(22 - endHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                          )}
+                                      </>
+                                  )}
+                                  
                                   {/* Hover Popover */}
-                                  {hoveredSlot?.barberId === barber.id && (
+                                  {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
                                         className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
                                         style={{...calculatePopoverPosition(hoveredSlot.time), height: `${HOURLY_SLOT_HEIGHT/2}px`}}
@@ -425,7 +463,7 @@ export default function AgendaView() {
                                   )}
 
                                   {/* Click Popover */}
-                                  {popoverState?.barberId === barber.id && (
+                                  {isWorking && popoverState?.barberId === barber.id && (
                                       <div
                                         className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
                                         style={calculatePopoverPosition(popoverState.time)}
@@ -453,9 +491,8 @@ export default function AgendaView() {
                                               "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
                                               event.color,
                                               event.type === 'block' && 'bg-striped-gray',
-                                              'text-blue-900'
                                           )} style={calculatePosition(event.start, event.duration)}>
-                                          <p className="font-bold text-xs truncate leading-tight">{event.customer}</p>
+                                          <p className="font-bold text-xs truncate leading-tight text-slate-800">{event.customer}</p>
                                         </div>
                                       </TooltipTrigger>
                                       {event.type === 'appointment' ? (
@@ -494,7 +531,8 @@ export default function AgendaView() {
                                   ))}
                               </div>
                           </div>
-                      ))}
+                          )
+                      })}
                   </div>
               </div>
           </ScrollArea>

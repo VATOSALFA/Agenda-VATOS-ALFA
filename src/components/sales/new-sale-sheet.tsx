@@ -75,13 +75,13 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
 
   const filteredServices = useMemo(() =>
-    services.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())),
+    services.filter(s => s && s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase())),
     [searchTerm, services]
   );
   
   const filteredProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+    return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, products]);
 
 

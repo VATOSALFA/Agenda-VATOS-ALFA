@@ -23,11 +23,11 @@ import type { Client } from "@/lib/types";
 
 interface Sale {
     id: string;
-    fecha_hora_venta: { seconds: number };
+    fecha_hora_venta?: { seconds: number };
     cliente_id: string;
     metodo_pago: string;
     total: number;
-    items: { nombre: string }[];
+    items?: { nombre: string }[];
 }
 
 const DonutChartCard = ({ title, data, total }: { title: string, data: any[], total: number }) => {
@@ -252,7 +252,7 @@ export default function InvoicedSalesPage() {
                                                   : 'Fecha no disponible'}
                                             </TableCell>
                                             <TableCell>{clientMap.get(sale.cliente_id)?.nombre || 'Desconocido'}</TableCell>
-                                            <TableCell>{sale.items.map(i => i.nombre).join(', ')}</TableCell>
+                                            <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
                                             <TableCell>${sale.total.toLocaleString('es-CL')}</TableCell>
                                             <TableCell className="text-right">

@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import { format, set } from 'date-fns';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,12 +35,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
-
-const timeSlots = Array.from({ length: 24 * 2 }, (_, i) => {
-  const hours = String(Math.floor(i / 2)).padStart(2, '0');
-  const minutes = i % 2 === 0 ? '00' : '30';
-  return `${hours}:${minutes}`;
-});
 
 const blockSchema = z.object({
   barbero_id: z.string().min(1, 'Debes seleccionar un barbero.'),
@@ -78,6 +72,9 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       motivo: '',
     },
   });
+  
+  const selectedBarberId = form.watch('barbero_id');
+  const selectedDate = form.watch('fecha');
 
   useEffect(() => {
     if (initialData) {
@@ -94,6 +91,32 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         });
     }
   }, [initialData, form, isOpen]);
+
+  const timeSlots = useMemo(() => {
+    if (!selectedBarberId || !selectedDate) return [];
+    
+    const professional = professionals.find(p => p.id === selectedBarberId);
+    if (!professional || !professional.schedule) return [];
+
+    const dayOfWeek = format(selectedDate, 'eeee', { locale: es }).toLowerCase();
+    const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
+    
+    if (!schedule || !schedule.enabled) return [];
+
+    const [startHour, startMinute] = schedule.start.split(':').map(Number);
+    const [endHour, endMinute] = schedule.end.split(':').map(Number);
+    
+    const slots = [];
+    let currentTime = set(selectedDate, { hours: startHour, minutes: startMinute, seconds: 0, milliseconds: 0 });
+    const endTime = set(selectedDate, { hours: endHour, minutes: endMinute, seconds: 0, milliseconds: 0 });
+
+    while (currentTime <= endTime) {
+      slots.push(format(currentTime, 'HH:mm'));
+      currentTime.setMinutes(currentTime.getMinutes() + 30);
+    }
+    return slots;
+  }, [selectedBarberId, selectedDate, professionals]);
+
 
   async function onSubmit(data: BlockFormData) {
     setIsSubmitting(true);
@@ -243,10 +266,10 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Inicio</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={timeSlots.length === 0}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecciona" />
+                            <SelectValue placeholder={!selectedBarberId || !selectedDate ? 'Selecciona barbero y fecha' : 'Selecciona'} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -265,10 +288,10 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Fin</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={timeSlots.length === 0}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecciona" />
+                            <SelectValue placeholder={!selectedBarberId || !selectedDate ? 'Selecciona barbero y fecha' : 'Selecciona'} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>

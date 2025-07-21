@@ -441,5 +441,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </DialogContent>
   );
 }
-
-    

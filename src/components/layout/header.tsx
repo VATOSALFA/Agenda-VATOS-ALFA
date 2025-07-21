@@ -52,7 +52,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
@@ -385,19 +385,21 @@ export default function Header() {
         <NewReservationForm 
           isOpen={isReservationModalOpen}
           onOpenChange={setIsReservationModalOpen}
-          onFormSubmit={() => setIsReservationModalOpen(false)}
+          onFormSubmit={() => {
+            setIsReservationModalOpen(false)
+          }}
         />
       </Dialog>
       
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
+        onFormSubmit={() => {
+            setIsBlockScheduleModalOpen(false);
+        }} 
       />
 
       <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} />
     </>
   );
 }
-
-    

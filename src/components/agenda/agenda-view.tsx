@@ -450,7 +450,7 @@ export default function AgendaView() {
                                       <TooltipTrigger asChild>
                                         <div 
                                           className={cn(
-                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg text-sm border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
+                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
                                               event.color,
                                               event.type === 'block' && 'bg-striped-gray',
                                               'text-blue-900'
@@ -518,5 +518,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-
-    

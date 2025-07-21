@@ -34,6 +34,7 @@ import {
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
 import { es } from 'date-fns/locale';
+import type { Profesional } from '@/lib/types';
 
 const timeSlots = Array.from({ length: 24 * 2 }, (_, i) => {
   const hours = String(Math.floor(i / 2)).padStart(2, '0');
@@ -54,11 +55,6 @@ const blockSchema = z.object({
 
 type BlockFormData = z.infer<typeof blockSchema>;
 
-interface Barber {
-  id: string;
-  nombre_completo: string;
-}
-
 interface BlockScheduleFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -74,7 +70,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('barberos');
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
 
   const form = useForm<BlockFormData>({
     resolver: zodResolver(blockSchema),
@@ -91,8 +87,13 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         hora_inicio: initialData.hora_inicio,
         motivo: '',
       });
+    } else {
+        form.reset({
+            fecha: new Date(),
+            motivo: '',
+        });
     }
-  }, [initialData, form]);
+  }, [initialData, form, isOpen]);
 
   async function onSubmit(data: BlockFormData) {
     setIsSubmitting(true);
@@ -114,6 +115,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
           title: 'Conflicto de Horario',
           description: `El barbero ya tiene ${querySnapshot.size} reserva(s) en el rango seleccionado.`,
         });
+        setIsSubmitting(false);
         return;
       }
       
@@ -127,9 +129,11 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       });
       
       toast({
-        title: 'Bloqueo guardado con éxito',
-        duration: 1500,
+        title: 'Horario bloqueado con éxito',
+        duration: 2000,
       });
+      onFormSubmit();
+      onOpenChange(false);
 
     } catch (error) {
       console.error('Error al guardar el bloqueo:', error);
@@ -140,7 +144,6 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       });
     } finally {
       setIsSubmitting(false);
-      onFormSubmit();
     }
   }
 
@@ -163,16 +166,16 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={barbersLoading}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={barbersLoading ? 'Cargando...' : 'Selecciona un barbero'} />
+                          <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un barbero'} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {barbers.map(barber => (
-                          <SelectItem key={barber.id} value={barber.id}>
-                            {barber.nombre_completo}
+                        {professionals.map(professional => (
+                          <SelectItem key={professional.id} value={professional.id}>
+                            {professional.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -282,7 +285,8 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
             </div>
 
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar Bloqueo
               </Button>

@@ -45,18 +45,41 @@ export default function InventoryPage() {
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
   const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
   
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [brandFilter, setBrandFilter] = useState('all');
+  const [presentationFilter, setPresentationFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  
   const { toast } = useToast();
 
   // Firestore Queries
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
-  const { data: categories } = useFirestoreQuery<ProductCategory>('categorias_productos', queryKey);
-  const { data: brands } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
-  const { data: presentations } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
+  const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ProductCategory>('categorias_productos', queryKey);
+  const { data: brands, loading: brandsLoading } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
+  const { data: presentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
 
-  const isLoading = productsLoading;
+  const isLoading = productsLoading || categoriesLoading || brandsLoading || presentationsLoading;
 
-  const handleDataUpdated = () => {
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+        const nameMatch = product.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+        const categoryMatch = categoryFilter === 'all' || product.category_id === categoryFilter;
+        const brandMatch = brandFilter === 'all' || product.brand_id === brandFilter;
+        const presentationMatch = presentationFilter === 'all' || product.presentation_id === presentationFilter;
+        const statusMatch = statusFilter === 'all' || (statusFilter === 'active' && product.active) || (statusFilter === 'inactive' && !product.active);
+        
+        return nameMatch && categoryMatch && brandMatch && presentationMatch && statusMatch;
+    });
+  }, [products, searchTerm, categoryFilter, brandFilter, presentationFilter, statusFilter]);
+
+  const handleDataUpdated = (entityType?: string, newId?: string) => {
     setQueryKey(prev => prev + 1);
+    if(entityType && newId) {
+      if (entityType === 'category') setCategoryFilter(newId);
+      if (entityType === 'brand') setBrandFilter(newId);
+      if (entityType === 'presentation') setPresentationFilter(newId);
+    }
   };
   
   const openNewModal = () => {
@@ -130,7 +153,7 @@ export default function InventoryPage() {
         <div className="flex items-center space-x-2">
             <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar por nombre, marca..." className="pl-10" />
+                <Input placeholder="Buscar por nombre, marca..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Carga masiva</Button>
             <DropdownMenu>
@@ -173,10 +196,26 @@ export default function InventoryPage() {
 
       <Card>
         <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Select><SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger><SelectContent/></Select>
-            <Select><SelectTrigger><SelectValue placeholder="Marca" /></SelectTrigger><SelectContent/></Select>
-            <Select><SelectTrigger><SelectValue placeholder="Formato/Presentación" /></SelectTrigger><SelectContent/></Select>
-            <Select><SelectTrigger><SelectValue placeholder="Estado del producto" /></SelectTrigger><SelectContent/></Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Todas las categorías</SelectItem>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={brandFilter} onValueChange={setBrandFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Todas las marcas</SelectItem>{brands.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={presentationFilter} onValueChange={setPresentationFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Todos los formatos</SelectItem>{presentations.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="active">Activo</SelectItem>
+                    <SelectItem value="inactive">Inactivo</SelectItem>
+                </SelectContent>
+            </Select>
         </CardContent>
       </Card>
       
@@ -220,8 +259,8 @@ export default function InventoryPage() {
                           <TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
                       </TableRow>
                   ))
-              ) : products.map((product) => (
-                <TableRow key={product.id} className={cn(product.stock === 0 && 'bg-red-500/10 hover:bg-red-500/20')}>
+              ) : filteredProducts.map((product) => (
+                <TableRow key={product.id} className={cn(!product.active ? 'text-muted-foreground' : product.stock === 0 && 'bg-red-500/10 hover:bg-red-500/20')}>
                   <TableCell className="font-mono text-xs">{product.barcode || 'N/A'}</TableCell>
                   <TableCell className="font-medium">{product.nombre}</TableCell>
                   <TableCell>{getEntityName(product.category_id, categories)}</TableCell>
@@ -258,8 +297,10 @@ export default function InventoryPage() {
               ))}
             </TableBody>
           </Table>
-           {!isLoading && products.length === 0 && (
-            <p className="py-10 text-center text-muted-foreground">Aún no tienes productos. ¡Agrega uno!</p>
+           {!isLoading && filteredProducts.length === 0 && (
+            <p className="py-10 text-center text-muted-foreground">
+                {products.length === 0 ? "Aún no tienes productos. ¡Agrega uno!" : "No se encontraron productos con los filtros aplicados."}
+            </p>
           )}
         </CardContent>
       </Card>
@@ -277,21 +318,21 @@ export default function InventoryPage() {
         <CategoryModal 
           isOpen={isCategoryModalOpen}
           onClose={() => setIsCategoryModalOpen(false)}
-          onDataSaved={handleDataUpdated}
+          onDataSaved={(newId) => handleDataUpdated('category', newId)}
         />
     )}
     {isBrandModalOpen && (
         <BrandModal
             isOpen={isBrandModalOpen}
             onClose={() => setIsBrandModalOpen(false)}
-            onDataSaved={handleDataUpdated}
+            onDataSaved={(newId) => handleDataUpdated('brand', newId)}
         />
     )}
     {isPresentationModalOpen && (
         <PresentationModal
             isOpen={isPresentationModalOpen}
             onClose={() => setIsPresentationModalOpen(false)}
-            onDataSaved={handleDataUpdated}
+            onDataSaved={(newId) => handleDataUpdated('presentation', newId)}
         />
     )}
 
@@ -341,3 +382,4 @@ export default function InventoryPage() {
     </>
   );
 }
+

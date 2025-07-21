@@ -63,7 +63,8 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   
   useEffect(() => {
     if (service) {
-        reset({ ...service });
+        const commission_percentage = service.defaultCommission?.type === '%' ? service.defaultCommission.value : 0;
+        reset({ ...service, commission_percentage });
     } else {
         reset({
             name: '',
@@ -73,6 +74,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
             active: true,
             professionals: [],
             payment_type: 'online-deposit',
+            commission_percentage: 0,
         });
     }
   }, [service, reset]);
@@ -101,7 +103,13 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
             ...data,
             price: Number(data.price),
             duration: Number(data.duration),
+            defaultCommission: {
+                value: Number(data.commission_percentage) || 0,
+                type: '%'
+            }
         };
+
+        delete dataToSave.commission_percentage; // Remove temporary field
 
         if (service) {
             // Update

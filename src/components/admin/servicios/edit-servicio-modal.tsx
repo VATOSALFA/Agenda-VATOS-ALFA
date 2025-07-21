@@ -91,9 +91,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   }
 
   const handleCategoryCreated = (newCategory: ServiceCategory) => {
-    // This is handled by useFirestoreQuery now. The modal just needs to close
-    // and trigger a refetch on the main page.
-    setValue('category', newCategory.id); // Select the new category
+    setValue('category', newCategory.id); 
   };
 
   const onSubmit = async (data: any) => {
@@ -109,19 +107,17 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
             }
         };
 
-        delete dataToSave.commission_percentage; // Remove temporary field
+        delete dataToSave.commission_percentage; 
 
         if (service) {
-            // Update
             const serviceRef = doc(db, 'servicios', service.id);
             await updateDoc(serviceRef, dataToSave);
             toast({ title: "Servicio actualizado con éxito" });
         } else {
-            // Create
             await addDoc(collection(db, 'servicios'), {
                 ...dataToSave,
                 active: true,
-                order: 99, // default order, can be changed later
+                order: 99, 
                 created_at: Timestamp.now(),
             });
             toast({ title: "Servicio guardado con éxito" });
@@ -211,19 +207,20 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                   </div>
                 </div>
                 <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                         <h4 className="text-lg font-semibold">Selecciona que profesionales realizarán el servicio</h4>
+                         <div className="flex items-center gap-2">
+                            <Checkbox 
+                                id="select-all-professionals"
+                                checked={selectedProfessionals?.length === professionals.length}
+                                onCheckedChange={handleSelectAll}
+                            />
+                            <Label htmlFor="select-all-professionals">Seleccionar todos</Label>
+                        </div>
+                    </div>
                   <Accordion type="single" collapsible defaultValue="item-1">
                     <AccordionItem value="item-1">
-                        <AccordionTrigger>
-                            <div className="flex items-center gap-2">
-                                <Checkbox 
-                                    id="select-all-professionals"
-                                    checked={selectedProfessionals?.length === professionals.length}
-                                    onCheckedChange={handleSelectAll}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                                <Label htmlFor="select-all-professionals">Selecciona que profesionales realizarán el servicio</Label>
-                            </div>
-                        </AccordionTrigger>
+                        <AccordionTrigger>Ver/Ocultar lista de profesionales</AccordionTrigger>
                         <AccordionContent>
                           <Controller
                               name="professionals"

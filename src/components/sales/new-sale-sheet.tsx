@@ -81,8 +81,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
-  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
+  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
 
   const filteredServices = useMemo(() => {
     if (!services) return [];
@@ -221,7 +221,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
         
         const ventaRef = doc(collection(db, "ventas"));
         const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo, barbero_id }) => ({
-            id, nombre, tipo, barbero_id,
+            id, nombre, tipo, 
+            barbero_id: barbero_id || null,
             precio_unitario: precio || 0,
             cantidad,
             subtotal: (precio || 0) * cantidad,
@@ -449,4 +450,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
     </>
   );
 }
-

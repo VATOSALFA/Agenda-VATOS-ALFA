@@ -381,11 +381,13 @@ export default function Header() {
         </div>
       </header>
       
-      <NewReservationForm 
-        isOpen={isReservationModalOpen}
-        onOpenChange={setIsReservationModalOpen}
-        onFormSubmit={() => setIsReservationModalOpen(false)}
-      />
+      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+        <NewReservationForm 
+          isOpen={isReservationModalOpen}
+          onOpenChange={setIsReservationModalOpen}
+          onFormSubmit={() => setIsReservationModalOpen(false)}
+        />
+      </Dialog>
       
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
@@ -397,3 +399,5 @@ export default function Header() {
     </>
   );
 }
+
+    

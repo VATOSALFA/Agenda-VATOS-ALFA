@@ -22,12 +22,13 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Dialog } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where } from 'firebase/firestore';
-import type { Profesional, Client } from '@/lib/types';
+import type { Profesional, Client, Service } from '@/lib/types';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -106,14 +107,15 @@ export default function AgendaView() {
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: clients } = useFirestoreQuery<Client>('clientes');
+  const { data: services } = useFirestoreQuery<Service>('servicios');
 
   const reservationsQueryConstraint = useMemo(() => {
     if (!date) return undefined;
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading;
 
@@ -499,21 +501,23 @@ export default function AgendaView() {
           </ScrollArea>
         </main>
       </div>
-      {isReservationModalOpen && (
-          <NewReservationForm 
-            onFormSubmit={() => setIsReservationModalOpen(false)}
-            initialData={reservationInitialData}
-          />
-      )}
-      {isBlockScheduleModalOpen && (
-          <BlockScheduleForm
-            isOpen={isBlockScheduleModalOpen}
-            onOpenChange={setIsBlockScheduleModalOpen}
-            onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
-            initialData={blockInitialData}
-          />
-      )}
+      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+        <NewReservationForm 
+          onFormSubmit={() => setIsReservationModalOpen(false)}
+          initialData={reservationInitialData}
+          isOpen={isReservationModalOpen}
+          onOpenChange={setIsReservationModalOpen}
+        />
+      </Dialog>
+      
+      <BlockScheduleForm
+        isOpen={isBlockScheduleModalOpen}
+        onOpenChange={setIsBlockScheduleModalOpen}
+        onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
+        initialData={blockInitialData}
+      />
     </TooltipProvider>
   );
 }
 
+    

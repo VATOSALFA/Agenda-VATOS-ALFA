@@ -32,6 +32,8 @@ import type { Profesional, Client, Service, ScheduleDay } from '@/lib/types';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
+const START_HOUR = 10;
+const END_HOUR = 21;
 
 interface TimeBlock {
     id: string;
@@ -69,10 +71,10 @@ const useCurrentTime = () => {
   const calculateTopPosition = () => {
     const hours = currentTime.getHours();
     const minutes = currentTime.getMinutes();
-    const totalMinutes = (hours - 9) * 60 + minutes;
+    const totalMinutes = (hours - START_HOUR) * 60 + minutes;
     const top = (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
 
-    if (top < 0 || top > HOURLY_SLOT_HEIGHT * 13) {
+    if (top < 0 || top > HOURLY_SLOT_HEIGHT * (END_HOUR - START_HOUR + 1)) {
       return null;
     }
     return top;
@@ -83,7 +85,7 @@ const useCurrentTime = () => {
 
 const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
     <div
-      className="absolute w-full bg-striped-gray flex items-center justify-center p-2 z-0"
+      className="absolute w-full bg-muted flex items-center justify-center p-2 z-0"
       style={{ top: `${top}px`, height: `${height}px` }}
     >
         <p className="text-xs text-center font-medium text-muted-foreground">{text}</p>
@@ -94,7 +96,7 @@ const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
-  const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
+  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -162,7 +164,7 @@ export default function AgendaView() {
           service: 'Bloqueado',
           start: start,
           duration: Math.max(0.5, end - start),
-          color: 'bg-gray-100 border-gray-400 text-gray-600',
+          color: 'bg-striped-gray border-gray-400 text-gray-600',
           type: 'block',
         };
       });
@@ -186,10 +188,10 @@ export default function AgendaView() {
     const slotsPerHour = 60 / SLOT_DURATION_MINUTES;
     const slotIndex = Math.floor(y / (HOURLY_SLOT_HEIGHT / slotsPerHour));
     
-    const hour = 9 + Math.floor(slotIndex / slotsPerHour);
+    const hour = START_HOUR + Math.floor(slotIndex / slotsPerHour);
     const minute = (slotIndex % slotsPerHour) * SLOT_DURATION_MINUTES;
 
-    if (hour < 9 || hour >= 22) {
+    if (hour < START_HOUR || hour > END_HOUR) {
       setHoveredSlot(null);
       return;
     }
@@ -236,7 +238,7 @@ export default function AgendaView() {
   };
 
   const calculatePosition = (start: number, duration: number) => {
-    const top = (start - 9) * HOURLY_SLOT_HEIGHT;
+    const top = (start - START_HOUR) * HOURLY_SLOT_HEIGHT;
     const height = duration * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
@@ -244,7 +246,7 @@ export default function AgendaView() {
   const calculatePopoverPosition = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
     const start = hour + (minute / 60);
-    const top = (start - 9) * HOURLY_SLOT_HEIGHT;
+    const top = (start - START_HOUR) * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px` };
   }
 
@@ -372,13 +374,13 @@ export default function AgendaView() {
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
                                 <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton className="h-[624px] w-full" /></div>
+                                <div className="relative"><Skeleton className="h-[576px] w-full" /></div>
                             </div>
                         ))
                       ) : professionals.map((barber) => {
                           const daySchedule = getDaySchedule(barber);
                           const isWorking = daySchedule && daySchedule.enabled;
-                          let startHour = 9, endHour = 22;
+                          let startHour = START_HOUR, endHour = END_HOUR + 1;
                           if (isWorking) {
                               startHour = parse(daySchedule.start, 'HH:mm', new Date()).getHours();
                               endHour = parse(daySchedule.end, 'HH:mm', new Date()).getHours();
@@ -440,11 +442,11 @@ export default function AgendaView() {
                                       <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />
                                   ) : (
                                       <>
-                                          {startHour > 9 && (
-                                              <NonWorkBlock top={0} height={(startHour - 9) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                          {startHour > START_HOUR && (
+                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
-                                          {endHour < 22 && (
-                                              <NonWorkBlock top={(endHour - 9) * HOURLY_SLOT_HEIGHT} height={(22 - endHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                          {endHour < END_HOUR + 1 && (
+                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR + 1 - endHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}
@@ -490,7 +492,6 @@ export default function AgendaView() {
                                           className={cn(
                                               "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
                                               event.color,
-                                              event.type === 'block' && 'bg-striped-gray',
                                           )} style={calculatePosition(event.start, event.duration)}>
                                           <p className="font-bold text-xs truncate leading-tight text-slate-800">{event.customer}</p>
                                         </div>
@@ -524,7 +525,7 @@ export default function AgendaView() {
                                         </TooltipContent>
                                       ) : (
                                         <TooltipContent>
-                                            <p>Horario Bloqueado</p>
+                                            <p>Horario Bloqueado: {event.customer}</p>
                                         </TooltipContent>
                                       )}
                                     </Tooltip>

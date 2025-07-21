@@ -25,6 +25,22 @@ export interface Profesional {
     order: number;
 }
 
+export interface Reservation {
+    id: string;
+    barbero_id: string;
+    cliente_id: string;
+    servicio: string;
+    hora_inicio: string;
+    hora_fin: string;
+    fecha: string;
+    estado: string;
+    pago_estado?: string;
+    customer?: string; // transient property
+    type?: 'appointment' | 'block';
+    start?: number; // transient
+    duration?: number; // transient
+}
+
 export interface Schedule {
     lunes: ScheduleDay;
     martes: ScheduleDay;

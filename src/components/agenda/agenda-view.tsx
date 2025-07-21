@@ -15,7 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User } from 'lucide-react';
 import { format, addDays, subDays, isToday, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -25,10 +25,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Dialog } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
+import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
+import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where } from 'firebase/firestore';
-import type { Profesional, Client, Service, ScheduleDay } from '@/lib/types';
+import { where, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { Profesional, Client, Service, ScheduleDay, Reservation } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -42,19 +46,6 @@ interface TimeBlock {
     fecha: string;
     hora_inicio: string;
     hora_fin: string;
-}
-
-interface Reservation {
-    id: string;
-    barbero_id: string;
-    cliente_id: string;
-    servicio: string;
-    hora_inicio: string;
-    hora_fin: string;
-    fecha: string;
-    estado: string;
-    pago_estado?: string;
-    type?: 'appointment';
 }
 
 const useCurrentTime = () => {
@@ -85,10 +76,10 @@ const useCurrentTime = () => {
 
 const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
     <div
-      className="absolute w-full bg-muted flex items-center justify-center p-2 z-0"
+      className="absolute w-full bg-gray-100 flex items-center justify-center p-2 z-0"
       style={{ top: `${top}px`, height: `${height}px` }}
     >
-        <p className="text-xs text-center font-medium text-muted-foreground">{text}</p>
+        <p className="text-xs text-center font-medium text-gray-400">{text}</p>
     </div>
 );
 
@@ -103,22 +94,29 @@ export default function AgendaView() {
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
-
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
   const [blockInitialData, setBlockInitialData] = useState<any>(null);
+
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
+  const [saleInitialData, setSaleInitialData] = useState<any>(null);
+
 
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const { time: currentTime, top: currentTimeTop } = useCurrentTime();
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
+  const { toast } = useToast();
   
   useEffect(() => {
     setDate(new Date());
     setRenderTimeIndicator(true)
   }, []);
 
-  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
-  const { data: clients } = useFirestoreQuery<Client>('clientes');
-  const { data: services } = useFirestoreQuery<Service>('servicios');
+  const [queryKey, setQueryKey] = useState(0);
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
+  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
 
   const reservationsQueryConstraint = useMemo(() => {
     if (!date) return undefined;
@@ -128,7 +126,7 @@ export default function AgendaView() {
   const { data: reservations } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date, reservationsQueryConstraint);
   
-  const isLoading = professionalsLoading;
+  const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 
   const allEvents = useMemo(() => {
     if (!reservations || !timeBlocks || !clients) return [];
@@ -141,15 +139,11 @@ export default function AgendaView() {
         const end = parse(res.hora_fin, 'HH:mm', new Date()).getHours() + parse(res.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
         
         return {
-            id: res.id,
-            barberId: res.barbero_id,
+            ...res,
             customer: client ? `${client.nombre} ${client.apellido}` : 'Cliente Desconocido',
-            service: res.servicio,
             start: start,
             duration: Math.max(0.5, end - start),
-            color: 'bg-blue-100 border-blue-500', // Default color, can be customized later
-            paymentStatus: res.pago_estado,
-            phone: client?.telefono,
+            color: 'bg-pink-100 border-pink-500', // Default color, can be customized later
             type: 'appointment'
         };
     });
@@ -234,6 +228,41 @@ export default function AgendaView() {
       });
       setIsBlockScheduleModalOpen(true);
       setPopoverState(null);
+    }
+  };
+  
+  const handleOpenDetailModal = (event: any) => {
+      setSelectedReservation(event);
+      setIsDetailModalOpen(true);
+  }
+
+  const handleEditFromDetail = () => {
+    setReservationInitialData(selectedReservation);
+    setIsDetailModalOpen(false);
+    setIsReservationModalOpen(true);
+  }
+  
+  const handlePayFromDetail = () => {
+    if (!selectedReservation || !clients || !services) return;
+    const client = clients.find(c => c.id === selectedReservation.cliente_id);
+    const service = services.find(s => s.name === selectedReservation.servicio);
+    if (client && service) {
+        setSaleInitialData({
+            client,
+            items: [{...service, tipo: 'servicio'}]
+        });
+        setIsDetailModalOpen(false);
+        setIsSaleSheetOpen(true);
+    }
+  }
+  
+  const handleUpdateStatus = async (reservationId: string, newStatus: string) => {
+    try {
+        const resRef = doc(db, 'reservas', reservationId);
+        await updateDoc(resRef, { estado: newStatus });
+        toast({ title: 'Estado actualizado', description: `La reserva ahora está en estado: ${newStatus}`});
+    } catch(err) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.'})
     }
   };
 
@@ -489,11 +518,13 @@ export default function AgendaView() {
                                     <Tooltip key={event.id}>
                                       <TooltipTrigger asChild>
                                         <div 
+                                          onClick={() => event.type === 'appointment' && handleOpenDetailModal(event as Reservation)}
                                           className={cn(
-                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 px-2.5 z-10", 
+                                              "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
                                               event.color,
-                                              'text-[#1A1A1A]'
-                                          )} style={calculatePosition(event.start, event.duration)}>
+                                              'text-[#1A1A1A]',
+                                              event.pago_estado === 'Pagado' && 'border-green-500'
+                                          )} style={{...calculatePosition(event.start, event.duration), left: '0px'}}>
                                           <p className="font-bold text-xs truncate leading-tight">{event.customer}</p>
                                         </div>
                                       </TooltipTrigger>
@@ -501,25 +532,19 @@ export default function AgendaView() {
                                         <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                           <div className="space-y-2">
                                             <p className="font-bold text-base text-foreground">{event.customer}</p>
-                                            <p className="text-sm text-muted-foreground">{event.service}</p>
+                                            <p className="text-sm text-muted-foreground">{event.servicio}</p>
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                               <Clock className="w-4 h-4" />
                                               <span>{formatHour(event.start)} - {formatHour(event.start + event.duration)}</span>
                                             </div>
-                                            {(event as any).paymentStatus &&
+                                            {(event as any).pago_estado &&
                                               <div className="flex items-center gap-2 text-sm">
                                                   <DollarSign className="w-4 h-4" />
                                                   <span className={cn(
-                                                      (event as any).paymentStatus === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                                      (event as any).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
                                                   )}>
-                                                      {(event as any).paymentStatus}
+                                                      {(event as any).pago_estado}
                                                   </span>
-                                              </div>
-                                            }
-                                            {(event as any).phone &&
-                                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                  <Phone className="w-4 h-4" />
-                                                  <span>{(event as any).phone}</span>
                                               </div>
                                             }
                                           </div>
@@ -555,6 +580,24 @@ export default function AgendaView() {
         onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
         initialData={blockInitialData}
       />
+      
+      {selectedReservation && (
+          <ReservationDetailModal
+            reservation={selectedReservation}
+            isOpen={isDetailModalOpen}
+            onOpenChange={setIsDetailModalOpen}
+            onEdit={handleEditFromDetail}
+            onPay={handlePayFromDetail}
+            onUpdateStatus={handleUpdateStatus}
+          />
+      )}
+      
+      <NewSaleSheet 
+        isOpen={isSaleSheetOpen} 
+        onOpenChange={setIsSaleSheetOpen}
+        initialData={saleInitialData}
+      />
     </TooltipProvider>
   );
 }
+

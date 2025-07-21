@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import type { Client, Product, Service as ServiceType } from '@/lib/types';
+import type { Client, Product, Service as ServiceType, Profesional } from '@/lib/types';
 
 
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,6 @@ import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2
 import { NewClientForm } from '../clients/new-client-form';
 
 
-interface Barber { id: string; name: string; }
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; }
 
 const saleSchema = z.object({
@@ -65,9 +64,13 @@ type SaleFormData = z.infer<typeof saleSchema>;
 interface NewSaleSheetProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  initialData?: {
+    client: Client;
+    items: (Product | ServiceType)[];
+  }
 }
 
-export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
+export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheetProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -77,7 +80,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const [clientQueryKey, setClientQueryKey] = useState(0);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
-  const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('profesionales');
+  const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
 
@@ -132,6 +135,33 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     cart.reduce((acc, item) => acc + (item.precio || 0) * item.cantidad, 0),
     [cart]
   );
+  
+  const form = useForm<SaleFormData>({
+    resolver: zodResolver(saleSchema),
+    defaultValues: {
+        notas: '',
+    },
+  });
+
+  useEffect(() => {
+    if (initialData) {
+        form.setValue('cliente_id', initialData.client.id);
+        const initialCartItems = initialData.items.map(item => {
+            const tipo = 'duration' in item ? 'servicio' : 'producto';
+            const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
+            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
+            return {
+                id: item.id,
+                nombre,
+                precio: precio || 0,
+                cantidad: 1,
+                tipo
+            };
+        });
+        setCart(initialCartItems);
+        setStep(2);
+    }
+  }, [initialData, form, isOpen]);
 
   const handleNextStep = () => {
     if (cart.length === 0) {
@@ -144,13 +174,6 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     }
     setStep(2);
   };
-
-  const form = useForm<SaleFormData>({
-    resolver: zodResolver(saleSchema),
-    defaultValues: {
-        notas: '',
-    },
-  });
 
   const resetFlow = () => {
     setCart([]);
@@ -171,11 +194,21 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     try {
       await runTransaction(db, async (transaction) => {
         // --- 1. READ PHASE ---
-        const productUpdates = [];
+        const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
         for (const item of cart) {
           if (item.tipo === 'producto') {
             const productRef = doc(db, 'productos', item.id);
-            const productDoc = await transaction.get(productRef);
+            productRefs.push({ ref: productRef, item });
+          }
+        }
+        
+        const productDocs = await Promise.all(
+          productRefs.map(p => transaction.get(p.ref))
+        );
+
+        // --- 2. WRITE PHASE ---
+        productDocs.forEach((productDoc, index) => {
+            const { item, ref } = productRefs[index];
             if (!productDoc.exists()) {
               throw new Error(`Producto con ID ${item.id} no encontrado.`);
             }
@@ -183,11 +216,9 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
             if (newStock < 0) {
               throw new Error(`Stock insuficiente para ${item.nombre}.`);
             }
-            productUpdates.push({ ref: productRef, newStock });
-          }
-        }
+            transaction.update(ref, { stock: newStock });
+        });
         
-        // --- 2. WRITE PHASE ---
         const ventaRef = doc(collection(db, "ventas"));
         const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo, barbero_id }) => ({
             id, nombre, tipo, barbero_id,
@@ -204,11 +235,6 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
             fecha_hora_venta: Timestamp.now(),
             creado_por: 'admin' // Or use actual user ID
         });
-  
-        // Update product stock
-        for (const update of productUpdates) {
-          transaction.update(update.ref, { stock: update.newStock });
-        }
       });
 
       toast({
@@ -423,3 +449,4 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     </>
   );
 }
+

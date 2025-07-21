@@ -5,12 +5,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set } from 'date-fns';
+import { parse, format, set, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
-import type { Profesional, Service } from '@/lib/types';
+import type { Profesional, Service, Reservation } from '@/lib/types';
 import type { Client } from '@/lib/types';
 
 
@@ -52,17 +52,13 @@ type ReservationFormData = z.infer<typeof reservationSchema>;
 
 interface NewReservationFormProps {
   onFormSubmit: () => void;
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
-  initialData?: {
-    cliente_id?: string;
-    barbero_id?: string;
-    fecha?: Date;
-    hora_inicio?: string;
-  };
+  isOpen?: boolean; // For standalone dialog usage
+  onOpenChange?: (isOpen: boolean) => void; // For standalone dialog usage
+  isEditMode?: boolean;
+  initialData?: Partial<Reservation> & {id?: string};
 }
 
-export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData }: NewReservationFormProps) {
+export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
@@ -75,17 +71,22 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     resolver: zodResolver(reservationSchema),
     defaultValues: {
       notas: '',
-      ...initialData,
-      fecha: initialData?.fecha || new Date(),
     },
   });
   
   useEffect(() => {
     if (initialData) {
+        let fecha = new Date();
+        if (typeof initialData.fecha === 'string') {
+            fecha = parseISO(initialData.fecha);
+        } else if (initialData.fecha instanceof Date) {
+            fecha = initialData.fecha;
+        }
+
       form.reset({
         ...initialData,
-        fecha: initialData.fecha || new Date(),
-        notas: '',
+        fecha,
+        notas: (initialData as any).notas || '',
       });
     }
   }, [initialData, form, isOpen]);
@@ -164,23 +165,25 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       ]);
 
       const bookedSlots = new Set<string>();
+      
+      const addSlotsToBooked = (start: string, end: string) => {
+        for (let slot of allSlots) {
+            if (slot >= start && slot < end) {
+              bookedSlots.add(slot);
+            }
+        }
+      };
 
       reservationsSnap.forEach(doc => {
+        // Exclude the current reservation when editing
+        if (isEditMode && doc.id === initialData?.id) return;
         const { hora_inicio, hora_fin } = doc.data();
-        for (let slot of allSlots) {
-          if (slot >= hora_inicio && slot < hora_fin) {
-            bookedSlots.add(slot);
-          }
-        }
+        addSlotsToBooked(hora_inicio, hora_fin);
       });
 
       blocksSnap.forEach(doc => {
         const { hora_inicio, hora_fin } = doc.data();
-         for (let slot of allSlots) {
-          if (slot >= hora_inicio && slot < hora_fin) {
-            bookedSlots.add(slot);
-          }
-        }
+        addSlotsToBooked(hora_inicio, hora_fin);
       });
       
       const filteredSlots = allSlots.filter(slot => !bookedSlots.has(slot));
@@ -188,7 +191,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     };
 
     fetchAvailableTimes();
-  }, [selectedBarberId, selectedDate, selectedService, professionals, services, generateTimeSlots, initialData]);
+  }, [selectedBarberId, selectedDate, selectedService, professionals, services, generateTimeSlots, initialData, isEditMode]);
 
   async function onSubmit(data: ReservationFormData) {
     setIsSubmitting(true);
@@ -196,95 +199,82 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const serviceDuration = getServiceDuration(data.servicio);
       const [hour, minute] = data.hora_inicio.split(':').map(Number);
       const startTime = set(data.fecha, { hours: hour, minutes: minute });
-      
       const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
-
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
-      const conflictsQuery = query(
-        collection(db, 'reservas'),
-        where('barbero_id', '==', data.barbero_id),
-        where('fecha', '==', formattedDate),
-        where('hora_inicio', '<', format(endTime, 'HH:mm')),
-        where('hora_fin', '>', data.hora_inicio)
-      );
-      const conflictsSnap = await getDocs(conflictsQuery);
 
-      if (!conflictsSnap.empty) {
-        toast({
-          variant: 'destructive',
-          title: 'Error de Horario',
-          description: 'El horario seleccionado ya no está disponible. Por favor, elige otro.',
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
-      await addDoc(collection(db, 'reservas'), {
+      const dataToSave = {
         ...data,
         fecha: formattedDate,
         hora_fin: format(endTime, 'HH:mm'),
-        estado: 'confirmada',
-        canal_reserva: 'agenda',
-        creada_por: 'admin',
-        creado_en: Timestamp.now(),
-      });
+      };
+      
+      if (isEditMode && initialData?.id) {
+         const resRef = doc(db, 'reservas', initialData.id);
+         await updateDoc(resRef, dataToSave);
+         toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
+      } else {
+        await addDoc(collection(db, 'reservas'), {
+            ...dataToSave,
+            estado: 'Reservado',
+            canal_reserva: 'agenda',
+            creada_por: 'admin',
+            creado_en: Timestamp.now(),
+        });
+        toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
+      }
 
-      toast({
-        title: '¡Éxito!',
-        description: 'La reserva ha sido creada correctamente.',
-      });
-      form.reset();
       onFormSubmit();
+      if(onOpenChange) onOpenChange(false);
+      
     } catch (error) {
-      console.error('Error creating reservation: ', error);
+      console.error('Error guardando la reserva: ', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo crear la reserva. Inténtalo de nuevo.',
+        description: 'No se pudo guardar la reserva. Inténtalo de nuevo.',
       });
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  return (
-    <DialogContent className="sm:max-w-xl">
-        <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <DialogHeader>
-            <DialogTitle>Nueva Reserva</DialogTitle>
-            <DialogDescription>
-                Completa los detalles para agendar una nueva cita.
-            </DialogDescription>
-            </DialogHeader>
+  const FormContent = () => (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <DialogHeader>
+          <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
+          <DialogDescription>
+            {isEditMode ? 'Modifica los detalles de la cita.' : 'Completa los detalles para agendar una nueva cita.'}
+          </DialogDescription>
+        </DialogHeader>
 
-            <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
-            <FormField
-                control={form.control}
-                name="cliente_id"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Cliente</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={clientsLoading}>
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder={clientsLoading ? "Cargando clientes..." : "Selecciona un cliente"} />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {clients.map(client => (
-                        <SelectItem key={client.id} value={client.id}>
-                            {client.nombre} {client.apellido}
-                        </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-
-            <FormField
+        <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
+          {/* Form Fields */}
+          <FormField
+              control={form.control}
+              name="cliente_id"
+              render={({ field }) => (
+              <FormItem>
+                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Cliente</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={clientsLoading}>
+                  <FormControl>
+                      <SelectTrigger>
+                      <SelectValue placeholder={clientsLoading ? "Cargando clientes..." : "Selecciona un cliente"} />
+                      </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                      {clients.map(client => (
+                      <SelectItem key={client.id} value={client.id}>
+                          {client.nombre} {client.apellido}
+                      </SelectItem>
+                      ))}
+                  </SelectContent>
+                  </Select>
+                  <FormMessage />
+              </FormItem>
+              )}
+          />
+           <FormField
                 control={form.control}
                 name="barbero_id"
                 render={({ field }) => (
@@ -308,7 +298,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </FormItem>
                 )}
             />
-
             <FormField
                 control={form.control}
                 name="servicio"
@@ -333,7 +322,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </FormItem>
                 )}
             />
-
             <FormField
                 control={form.control}
                 name="fecha"
@@ -374,8 +362,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </FormItem>
                 )}
             />
-
-            <FormField
+             <FormField
                 control={form.control}
                 name="hora_inicio"
                 render={({ field }) => (
@@ -384,14 +371,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     <Select 
                     onValueChange={field.onChange} 
                     value={field.value}
-                    disabled={!selectedBarberId || !selectedDate || !selectedService || availableTimes.length === 0}
+                    disabled={!selectedBarberId || !selectedDate || !selectedService || (availableTimes.length === 0 && !initialData?.hora_inicio)}
                     >
                     <FormControl>
                         <SelectTrigger>
                         <SelectValue placeholder={
                             !selectedBarberId || !selectedDate || !selectedService 
                                 ? "Completa los campos anteriores" 
-                                : availableTimes.length === 0 
+                                : availableTimes.length === 0 && !initialData?.hora_inicio
                                 ? "No hay horarios disponibles" 
                                 : "Selecciona una hora"
                             } />
@@ -428,16 +415,27 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </FormItem>
                 )}
             />
-            </div>
-            
-            <DialogFooter>
-            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar Reserva
-            </Button>
-            </DialogFooter>
-        </form>
-        </Form>
-    </DialogContent>
+        </div>
+        
+        <DialogFooter>
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isEditMode ? 'Guardar Cambios' : 'Guardar Reserva'}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
+  );
+
+  if (isEditMode) {
+      return <FormContent />;
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-xl">
+            <FormContent />
+        </DialogContent>
+    </Dialog>
   );
 }

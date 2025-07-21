@@ -107,7 +107,7 @@ export default function InventoryPage() {
   }
   
   const getEntityName = (id: string, entities: {id: string, name: string}[]) => {
-      return entities.find(e => e.id === id)?.name || 'N/A';
+      return entities?.find(e => e.id === id)?.name || 'N/A';
   }
 
 
@@ -217,7 +217,7 @@ export default function InventoryPage() {
                   <TableCell>{getEntityName(product.category_id, categories)}</TableCell>
                   <TableCell>{getEntityName(product.brand_id, brands)}</TableCell>
                   <TableCell>{getEntityName(product.presentation_id, presentations)}</TableCell>
-                  <TableCell>${product.public_price.toLocaleString('es-CL')}</TableCell>
+                  <TableCell>${(product.public_price || 0).toLocaleString('es-CL')}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                         <span>{product.stock}</span>

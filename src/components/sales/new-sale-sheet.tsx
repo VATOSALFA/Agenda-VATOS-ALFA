@@ -45,17 +45,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
 
 
-interface Barber { id: string; nombre_completo: string; }
+interface Barber { id: string; name: string; }
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; }
-
-// Hardcoded services for now
-const services: ServiceType[] = [
-  { id: 'serv_01', name: 'Corte clásico', price: 10000, duration: 30, category: 'corte', active: true, order: 1 },
-  { id: 'serv_02', name: 'Fade', price: 15000, duration: 45, category: 'corte', active: true, order: 2 },
-  { id: 'serv_03', name: 'Afeitado', price: 8000, duration: 20, category: 'barba', active: true, order: 3 },
-  { id: 'serv_04', name: 'Diseño de cejas', price: 5000, duration: 15, category: 'facial', active: true, order: 4 },
-  { id: 'serv_05', name: 'Paquete VIP', price: 25000, duration: 60, category: 'paquete', active: true, order: 5 },
-];
 
 const saleSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
@@ -81,10 +72,11 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('profesionales');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
 
   const filteredServices = useMemo(() =>
     services.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())),
-    [searchTerm]
+    [searchTerm, services]
   );
   
   const filteredProducts = useMemo(() => {
@@ -103,8 +95,9 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
       }
       
       const itemPrice = tipo === 'producto' ? (item as Product).public_price : (item as ServiceType).price;
+      const itemName = tipo === 'producto' ? (item as Product).nombre : (item as ServiceType).name;
 
-      return [...prev, { id: item.id, nombre: tipo === 'producto' ? item.nombre : item.name, precio: itemPrice, cantidad: 1, tipo }];
+      return [...prev, { id: item.id, nombre: itemName, precio: itemPrice, cantidad: 1, tipo }];
     });
   };
 
@@ -123,7 +116,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   };
 
   const total = useMemo(() =>
-    cart.reduce((acc, item) => acc + item.precio * item.cantidad, 0),
+    cart.reduce((acc, item) => acc + (item.precio || 0) * item.cantidad, 0),
     [cart]
   );
 
@@ -218,7 +211,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
             <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
               <div>
                 <p className="font-medium capitalize">{item.nombre}</p>
-                <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio.toLocaleString('es-CL')}</p>
+                <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-CL') || '0'}</p>
                 <div className="flex items-center gap-2 mt-2">
                   <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
                   <span className="w-5 text-center font-bold">{item.cantidad}</span>
@@ -226,7 +219,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-semibold">${(item.precio * item.cantidad).toLocaleString('es-CL')}</p>
+                <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-CL')}</p>
                 <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
                     <Trash2 className="h-4 w-4" />
                 </Button>
@@ -275,13 +268,17 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                         <ScrollArea className="flex-grow mt-4 pr-4">
                             <TabsContent value="servicios" className="mt-0">
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                {filteredServices.map(service => (
+                                {(servicesLoading ? Array.from({length: 6}) : filteredServices).map((service, idx) => (
+                                     service ? (
                                     <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
                                         <CardContent className="p-4">
                                             <p className="font-semibold">{service.name}</p>
-                                            <p className="text-sm text-primary">${service.price.toLocaleString('es-CL')}</p>
+                                            <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-CL')}</p>
                                         </CardContent>
                                     </Card>
+                                     ) : (
+                                        <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
+                                    )
                                 ))}
                                 </div>
                             </TabsContent>

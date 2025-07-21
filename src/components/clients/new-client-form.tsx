@@ -40,7 +40,7 @@ const clientSchema = z.object({
 type ClientFormData = z.infer<typeof clientSchema>;
 
 interface NewClientFormProps {
-  onFormSubmit: () => void;
+  onFormSubmit: (newClientId: string) => void;
 }
 
 export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
@@ -61,7 +61,7 @@ export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'clientes'), {
+      const docRef = await addDoc(collection(db, 'clientes'), {
         ...data,
         fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
         creado_en: Timestamp.now(),
@@ -72,7 +72,7 @@ export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
         description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,
       });
       form.reset();
-      onFormSubmit();
+      onFormSubmit(docRef.id);
     } catch (error) {
       console.error('Error creating client: ', error);
       toast({

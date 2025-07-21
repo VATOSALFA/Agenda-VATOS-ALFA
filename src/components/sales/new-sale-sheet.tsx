@@ -25,6 +25,10 @@ import {
   SheetFooter,
 } from '@/components/ui/sheet';
 import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
+import {
   Form,
   FormControl,
   FormField,
@@ -43,6 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
+import { NewClientForm } from '../clients/new-client-form';
 
 
 interface Barber { id: string; name: string; }
@@ -68,8 +73,10 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [clientQueryKey, setClientQueryKey] = useState(0);
 
-  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('profesionales');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
@@ -141,6 +148,12 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
     setStep(1);
     form.reset();
     setIsSubmitting(false);
+  }
+
+  const handleClientCreated = (newClientId: string) => {
+    setIsClientModalOpen(false);
+    setClientQueryKey(prev => prev + 1); // Refetch clients
+    form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
   async function onSubmit(data: SaleFormData) {
@@ -240,6 +253,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   );
 
   return (
+    <>
     <Sheet open={isOpen} onOpenChange={(open) => {
         if(!open) resetFlow();
         onOpenChange(open);
@@ -315,8 +329,11 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                     <div className="space-y-4">
                         <FormField control={form.control} name="cliente_id" render={({ field }) => (
                             <FormItem>
-                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" /> Cliente</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={clientsLoading}>
+                                <div className="flex justify-between items-center">
+                                    <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" /> Cliente</FormLabel>
+                                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>+ Nuevo cliente</Button>
+                                </div>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                     <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Selecciona un cliente'} /></SelectTrigger></FormControl>
                                     <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
                                 </Select>
@@ -378,5 +395,12 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         )}
       </SheetContent>
     </Sheet>
+
+    <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+            <NewClientForm onFormSubmit={handleClientCreated} />
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -232,7 +232,7 @@ export default function AgendaView() {
   };
   
   const handleOpenDetailModal = (event: any) => {
-      setSelectedReservation(event);
+      setSelectedReservation(event as Reservation);
       setIsDetailModalOpen(true);
   }
 
@@ -403,13 +403,13 @@ export default function AgendaView() {
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
                                 <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton className="h-[576px] w-full" /></div>
+                                <div className="relative"><Skeleton className="h-[528px] w-full" /></div>
                             </div>
                         ))
                       ) : professionals.map((barber) => {
                           const daySchedule = getDaySchedule(barber);
                           const isWorking = daySchedule && daySchedule.enabled;
-                          let startHour = START_HOUR, endHour = END_HOUR + 1;
+                          let startHour = START_HOUR, endHour = END_HOUR;
                           if (isWorking) {
                               startHour = parse(daySchedule.start, 'HH:mm', new Date()).getHours();
                               endHour = parse(daySchedule.end, 'HH:mm', new Date()).getHours();
@@ -474,8 +474,8 @@ export default function AgendaView() {
                                           {startHour > START_HOUR && (
                                               <NonWorkBlock top={0} height={(startHour - START_HOUR) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
-                                          {endHour < END_HOUR + 1 && (
-                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR + 1 - endHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                          {endHour < END_HOUR && (
+                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR - endHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}
@@ -514,7 +514,7 @@ export default function AgendaView() {
                                   )}
 
                                   {/* Events */}
-                                  {allEvents.filter(a => a.barberId === barber.id).map(event => (
+                                  {allEvents.filter(a => (a as any).barbero_id === barber.id).map(event => (
                                     <Tooltip key={event.id}>
                                       <TooltipTrigger asChild>
                                         <div 
@@ -523,19 +523,19 @@ export default function AgendaView() {
                                               "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
                                               event.color,
                                               'text-[#1A1A1A]',
-                                              event.pago_estado === 'Pagado' && 'border-green-500'
-                                          )} style={{...calculatePosition(event.start, event.duration), left: '0px'}}>
-                                          <p className="font-bold text-xs truncate leading-tight">{event.customer}</p>
+                                              (event as any).pago_estado === 'Pagado' && 'border-green-500'
+                                          )} style={{...calculatePosition((event as any).start, (event as any).duration), left: '0px'}}>
+                                          <p className="font-bold text-xs truncate leading-tight">{(event as any).customer}</p>
                                         </div>
                                       </TooltipTrigger>
                                       {event.type === 'appointment' ? (
                                         <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                           <div className="space-y-2">
-                                            <p className="font-bold text-base text-foreground">{event.customer}</p>
-                                            <p className="text-sm text-muted-foreground">{event.servicio}</p>
+                                            <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
+                                            <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                               <Clock className="w-4 h-4" />
-                                              <span>{formatHour(event.start)} - {formatHour(event.start + event.duration)}</span>
+                                              <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
                                             </div>
                                             {(event as any).pago_estado &&
                                               <div className="flex items-center gap-2 text-sm">
@@ -551,7 +551,7 @@ export default function AgendaView() {
                                         </TooltipContent>
                                       ) : (
                                         <TooltipContent>
-                                            <p>Horario Bloqueado: {event.customer}</p>
+                                            <p>Horario Bloqueado: {(event as any).customer}</p>
                                         </TooltipContent>
                                       )}
                                     </Tooltip>
@@ -569,7 +569,10 @@ export default function AgendaView() {
         <NewReservationForm 
           isOpen={isReservationModalOpen}
           onOpenChange={setIsReservationModalOpen}
-          onFormSubmit={() => setIsReservationModalOpen(false)}
+          onFormSubmit={() => {
+            setIsReservationModalOpen(false)
+            setQueryKey(k => k + 1)
+          }}
           initialData={reservationInitialData}
         />
       </Dialog>
@@ -577,7 +580,10 @@ export default function AgendaView() {
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
+        onFormSubmit={() => {
+            setIsBlockScheduleModalOpen(false);
+            setQueryKey(k => k + 1)
+        }} 
         initialData={blockInitialData}
       />
       
@@ -600,4 +606,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

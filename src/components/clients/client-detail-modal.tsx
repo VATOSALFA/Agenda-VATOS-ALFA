@@ -20,13 +20,14 @@ interface ClientDetailModalProps {
   client: Client;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  onNewReservation: () => void;
 }
 
 interface Reservation {
   id: string;
   fecha: string;
   servicio: string;
-  barbero_id: string; // We'll need another query or join to get barber name
+  barbero_id: string; 
   estado: string;
 }
 
@@ -48,7 +49,7 @@ const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label:
   </div>
 );
 
-export function ClientDetailModal({ client, isOpen, onOpenChange }: ClientDetailModalProps) {
+export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservation }: ClientDetailModalProps) {
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>(
     'reservas',
     isOpen ? where('cliente_id', '==', client.id) : undefined
@@ -98,7 +99,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange }: ClientDetail
             <InfoRow icon={MessageSquare} label="Notas" value={client.notas} />
             
             <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                <Button>
+                <Button onClick={onNewReservation}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Crear nueva cita
                 </Button>
                 {client.telefono && (
@@ -133,7 +134,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange }: ClientDetail
                       <TableBody>
                         {reservations.map(res => (
                           <TableRow key={res.id}>
-                            <TableCell>{formatDate(res.fecha)}</TableCell>
+                            <TableCell>{formatDate(res.fecha, true)}</TableCell>
                             <TableCell>{res.servicio}</TableCell>
                             <TableCell><Badge>{res.estado}</Badge></TableCell>
                           </TableRow>

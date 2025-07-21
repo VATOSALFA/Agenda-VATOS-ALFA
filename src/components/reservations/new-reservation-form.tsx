@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -32,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
 
 const services = [
@@ -67,17 +68,16 @@ interface Barber {
 }
 
 interface NewReservationFormProps {
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
   initialData?: {
-    barbero_id: string;
-    fecha: Date;
-    hora_inicio: string;
+    cliente_id?: string;
+    barbero_id?: string;
+    fecha?: Date;
+    hora_inicio?: string;
   };
 }
 
-export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData }: NewReservationFormProps) {
+export function NewReservationForm({ onFormSubmit, initialData }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
@@ -89,15 +89,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     resolver: zodResolver(reservationSchema),
     defaultValues: {
       notas: '',
+      ...initialData,
+      fecha: initialData?.fecha || new Date(),
     },
   });
   
   useEffect(() => {
     if (initialData) {
       form.reset({
-        barbero_id: initialData.barbero_id,
-        fecha: initialData.fecha,
-        hora_inicio: initialData.hora_inicio,
+        ...initialData,
+        fecha: initialData.fecha || new Date(),
         notas: '',
       });
     }
@@ -110,8 +111,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const generateTimeSlots = useCallback((barber: Barber | undefined, date: Date | undefined) => {
     if (!barber || !date) return [];
     
+    // Default schedule if not defined for the barber
+    const defaultSchedule = { inicio: '09:00', fin: '21:00' };
     const dayOfWeek = format(date, 'eeee', { locale: es }).toLowerCase();
-    const schedule = barber.horario_trabajo?.[dayOfWeek];
+    const schedule = barber.horario_trabajo?.[dayOfWeek] || defaultSchedule;
     
     if (!schedule) return [];
 
@@ -209,7 +212,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const startTime = set(data.fecha, { hours: hour, minutes: minute });
       const endTime = addHours(startTime, serviceInfo.duration);
 
-      // Final check for availability
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
       const conflictsQuery = query(
         collection(db, 'reservas'),
@@ -259,198 +261,194 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <DialogHeader>
-              <DialogTitle>Crear Nueva Reserva</DialogTitle>
-              <DialogDescription>
-                Completa los detalles para agendar una nueva cita.
-              </DialogDescription>
-            </DialogHeader>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <DialogHeader>
+          <DialogTitle>Nueva Reserva</DialogTitle>
+          <DialogDescription>
+            Completa los detalles para agendar una nueva cita.
+          </DialogDescription>
+        </DialogHeader>
 
-            <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
-              <FormField
-                control={form.control}
-                name="cliente_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Cliente</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={clientsLoading}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={clientsLoading ? "Cargando clientes..." : "Selecciona un cliente"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {clients.map(client => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.nombre} {client.apellido}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
+          <FormField
+            control={form.control}
+            name="cliente_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Cliente</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value} disabled={clientsLoading}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={clientsLoading ? "Cargando clientes..." : "Selecciona un cliente"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {clients.map(client => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.nombre} {client.apellido}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="barbero_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={barbersLoading}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={barbersLoading ? "Cargando barberos..." : "Selecciona un barbero"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {barbers.map(barber => (
-                          <SelectItem key={barber.id} value={barber.id}>
-                            {barber.nombre_completo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="barbero_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value} disabled={barbersLoading}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={barbersLoading ? "Cargando barberos..." : "Selecciona un barbero"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {barbers.map(barber => (
+                      <SelectItem key={barber.id} value={barber.id}>
+                        {barber.nombre_completo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="servicio"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Tag className="mr-2 h-4 w-4" /> Servicio</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un servicio" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {services.map(service => (
-                          <SelectItem key={service.name} value={service.name}>
-                            {service.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="servicio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center"><Tag className="mr-2 h-4 w-4" /> Servicio</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un servicio" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {services.map(service => (
+                      <SelectItem key={service.name} value={service.name}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="fecha"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: es })
-                            ) : (
-                              <span>Selecciona una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          locale={es}
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="hora_inicio"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora de Inicio</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={!selectedBarberId || !selectedDate || !selectedService || availableTimes.length === 0}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={
-                              !selectedBarberId || !selectedDate || !selectedService 
-                                ? "Completa los campos anteriores" 
-                                : availableTimes.length === 0 
-                                ? "No hay horarios disponibles" 
-                                : "Selecciona una hora"
-                            } />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                         {initialData?.hora_inicio && !availableTimes.includes(initialData.hora_inicio) && (
-                            <SelectItem value={initialData.hora_inicio} disabled>
-                                {initialData.hora_inicio} (Ocupado)
-                            </SelectItem>
-                        )}
-                        {availableTimes.map(time => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="notas"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notas (Opcional)</FormLabel>
+          <FormField
+            control={form.control}
+            name="fecha"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
                     <FormControl>
-                      <Textarea placeholder="Alergias, preferencias especiales, etc." {...field} />
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {field.value ? (
+                          format(field.value, "PPP", { locale: es })
+                        ) : (
+                          <span>Selecciona una fecha</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <DialogFooter>
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar Reserva
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      locale={es}
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="hora_inicio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora de Inicio</FormLabel>
+                <Select 
+                  onValueChange={field.onChange} 
+                  value={field.value}
+                  disabled={!selectedBarberId || !selectedDate || !selectedService || availableTimes.length === 0}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={
+                          !selectedBarberId || !selectedDate || !selectedService 
+                            ? "Completa los campos anteriores" 
+                            : availableTimes.length === 0 
+                            ? "No hay horarios disponibles" 
+                            : "Selecciona una hora"
+                        } />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                      {initialData?.hora_inicio && !availableTimes.includes(initialData.hora_inicio) && (
+                        <SelectItem value={initialData.hora_inicio}>
+                            {initialData.hora_inicio}
+                        </SelectItem>
+                    )}
+                    {availableTimes.map(time => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="notas"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notas (Opcional)</FormLabel>
+                <FormControl>
+                  <Textarea placeholder="Alergias, preferencias especiales, etc." {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        
+        <DialogFooter>
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar Reserva
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
   );
 }

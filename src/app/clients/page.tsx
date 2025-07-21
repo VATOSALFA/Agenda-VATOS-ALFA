@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
+import { NewReservationForm } from "@/components/reservations/new-reservation-form";
 import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
 import { format } from "date-fns";
 import { es } from 'date-fns/locale';
@@ -41,6 +42,7 @@ import { Calendar } from "@/components/ui/calendar";
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -286,6 +288,20 @@ export default function ClientsPage() {
           client={selectedClient} 
           isOpen={isDetailModalOpen} 
           onOpenChange={setIsDetailModalOpen}
+          onNewReservation={() => setIsReservationModalOpen(true)}
+        />
+      )}
+
+      {isReservationModalOpen && (
+        <NewReservationForm
+          isOpen={isReservationModalOpen}
+          onOpenChange={setIsReservationModalOpen}
+          onFormSubmit={() => {
+            setIsReservationModalOpen(false);
+            setIsDetailModalOpen(false);
+            handleDataUpdated();
+          }}
+          initialData={{ cliente_id: selectedClient?.id }}
         />
       )}
 

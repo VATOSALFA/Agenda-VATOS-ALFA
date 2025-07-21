@@ -35,14 +35,9 @@ import {
 } from '@/components/ui/select';
 import { DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
+import type { Profesional, Schedule, Service } from '@/app/admin/profesionales/page';
+import type { Client } from '@/lib/types';
 
-const services = [
-  { name: "Corte clásico", duration: 1 },
-  { name: "Fade", duration: 1.5 },
-  { name: "Afeitado", duration: 1 },
-  { name: "Diseño de cejas", duration: 0.5 },
-  { name: "Paquete VIP", duration: 2 },
-];
 
 const reservationSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
@@ -54,18 +49,6 @@ const reservationSchema = z.object({
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
-
-interface Client {
-  id: string;
-  nombre: string;
-  apellido: string;
-}
-
-interface Barber {
-  id: string;
-  nombre_completo: string;
-  horario_trabajo?: { [key: string]: { inicio: string, fin: string } };
-}
 
 interface NewReservationFormProps {
   onFormSubmit: () => void;
@@ -83,7 +66,8 @@ export function NewReservationForm({ onFormSubmit, initialData }: NewReservation
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-  const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('barberos', where('estado', '==', 'disponible'));
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
   
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(reservationSchema),
@@ -108,18 +92,16 @@ export function NewReservationForm({ onFormSubmit, initialData }: NewReservation
   const selectedDate = form.watch('fecha');
   const selectedService = form.watch('servicio');
 
-  const generateTimeSlots = useCallback((barber: Barber | undefined, date: Date | undefined) => {
-    if (!barber || !date) return [];
+  const generateTimeSlots = useCallback((professional: Profesional | undefined, date: Date | undefined) => {
+    if (!professional || !date || !professional.schedule) return [];
     
-    // Default schedule if not defined for the barber
-    const defaultSchedule = { inicio: '09:00', fin: '21:00' };
-    const dayOfWeek = format(date, 'eeee', { locale: es }).toLowerCase();
-    const schedule = barber.horario_trabajo?.[dayOfWeek] || defaultSchedule;
+    const dayOfWeek = format(date, 'eeee', { locale: es }).toLowerCase() as keyof Schedule;
+    const schedule = professional.schedule[dayOfWeek];
     
-    if (!schedule) return [];
+    if (!schedule || !schedule.enabled) return [];
 
-    const [startHour, startMinute] = schedule.inicio.split(':').map(Number);
-    const [endHour, endMinute] = schedule.fin.split(':').map(Number);
+    const [startHour, startMinute] = schedule.start.split(':').map(Number);
+    const [endHour, endMinute] = schedule.end.split(':').map(Number);
     
     const slots = [];
     let currentTime = set(date, { hours: startHour, minutes: startMinute, seconds: 0, milliseconds: 0 });
@@ -143,14 +125,14 @@ export function NewReservationForm({ onFormSubmit, initialData }: NewReservation
         return;
       }
       
-      const barber = barbers.find(b => b.id === selectedBarberId);
+      const professional = professionals.find(b => b.id === selectedBarberId);
       const serviceInfo = services.find(s => s.name === selectedService);
-      if (!barber || !serviceInfo) {
+      if (!professional || !serviceInfo) {
         setAvailableTimes([]);
         return;
       }
       
-      const allSlots = generateTimeSlots(barber, selectedDate);
+      const allSlots = generateTimeSlots(professional, selectedDate);
       if (allSlots.length === 0) {
         setAvailableTimes([]);
         return;
@@ -200,7 +182,7 @@ export function NewReservationForm({ onFormSubmit, initialData }: NewReservation
     };
 
     fetchAvailableTimes();
-  }, [selectedBarberId, selectedDate, selectedService, barbers, generateTimeSlots, initialData]);
+  }, [selectedBarberId, selectedDate, selectedService, professionals, services, generateTimeSlots, initialData]);
 
   async function onSubmit(data: ReservationFormData) {
     setIsSubmitting(true);
@@ -302,16 +284,16 @@ export function NewReservationForm({ onFormSubmit, initialData }: NewReservation
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value} disabled={barbersLoading}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder={barbersLoading ? "Cargando barberos..." : "Selecciona un barbero"} />
+                      <SelectValue placeholder={professionalsLoading ? "Cargando barberos..." : "Selecciona un barbero"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {barbers.map(barber => (
-                      <SelectItem key={barber.id} value={barber.id}>
-                        {barber.nombre_completo}
+                    {professionals.map(professional => (
+                      <SelectItem key={professional.id} value={professional.id}>
+                        {professional.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -327,15 +309,15 @@ export function NewReservationForm({ onFormSubmit, initialData }: NewReservation
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="flex items-center"><Tag className="mr-2 h-4 w-4" /> Servicio</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={servicesLoading}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un servicio" />
+                      <SelectValue placeholder={servicesLoading ? 'Cargando servicios...' : 'Selecciona un servicio'} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {services.map(service => (
-                      <SelectItem key={service.name} value={service.name}>
+                      <SelectItem key={service.id} value={service.name}>
                         {service.name}
                       </SelectItem>
                     ))}

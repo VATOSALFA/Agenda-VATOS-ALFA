@@ -11,11 +11,34 @@ export interface Client {
   creado_en: any; // Firestore Timestamp
 }
 
-export interface Barber {
-  id: string;
-  nombre_completo: string;
-  estado: 'disponible' | 'ocupado' | 'bloqueado';
-  horario_trabajo?: { [key: string]: { inicio: string, fin: string } };
+export interface Profesional {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+    dataAiHint?: string;
+    active: boolean;
+    acceptsOnline: boolean;
+    biography: string;
+    services: string[];
+    schedule?: Schedule;
+    order: number;
+}
+
+export interface Schedule {
+    lunes: ScheduleDay;
+    martes: ScheduleDay;
+    miercoles: ScheduleDay;
+    jueves: ScheduleDay;
+    viernes: ScheduleDay;
+    sabado: ScheduleDay;
+    domingo: ScheduleDay;
+}
+
+export interface ScheduleDay {
+    enabled: boolean;
+    start: string;
+    end: string;
 }
 
 export interface Product {
@@ -38,6 +61,8 @@ export interface Product {
     stock_alarm_threshold?: number;
     notification_email?: string;
     created_at?: any;
+    active: boolean;
+    order: number;
 }
 
 export interface ProductCategory {
@@ -60,9 +85,16 @@ export interface ProductPresentation {
 
 export interface Service {
     id: string;
-    nombre: string;
-    precio: number;
-    duracion: number; // en horas
+    name: string;
+    duration: number;
+    price: number;
+    category: string;
+    active: boolean;
+    order: number;
+    defaultCommission?: {
+        value: number;
+        type: '%' | '$';
+    }
 }
 
 export interface CartItem {

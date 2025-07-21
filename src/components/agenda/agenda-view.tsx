@@ -136,7 +136,7 @@ export default function AgendaView() {
             service: res.servicio,
             start: start,
             duration: Math.max(0.5, end - start),
-            color: 'bg-blue-100 border-blue-500 text-blue-800', // Default color, can be customized later
+            color: 'bg-blue-100 border-blue-500', // Default color, can be customized later
             paymentStatus: res.pago_estado,
             phone: client?.telefono,
             type: 'appointment'
@@ -450,10 +450,9 @@ export default function AgendaView() {
                                       <TooltipTrigger asChild>
                                         <div 
                                           className={cn(
-                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-[6px] text-[13px] border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", 
+                                              "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg text-sm border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2.5 z-10 text-foreground", 
                                               event.color,
-                                              event.type === 'block' && 'bg-striped-gray',
-                                              'text-[#1A1A1A]'
+                                              event.type === 'block' && 'bg-striped-gray'
                                           )} style={calculatePosition(event.start, event.duration)}>
                                           <p className="font-bold truncate leading-tight">{event.customer}</p>
                                           {event.type === 'appointment' && <p className="truncate leading-tight">{event.service}</p>}
@@ -503,10 +502,10 @@ export default function AgendaView() {
       </div>
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
         <NewReservationForm 
-          onFormSubmit={() => setIsReservationModalOpen(false)}
-          initialData={reservationInitialData}
           isOpen={isReservationModalOpen}
           onOpenChange={setIsReservationModalOpen}
+          onFormSubmit={() => setIsReservationModalOpen(false)}
+          initialData={reservationInitialData}
         />
       </Dialog>
       

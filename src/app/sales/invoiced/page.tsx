@@ -88,8 +88,13 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
 }
 
 export default function InvoicedSalesPage() {
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: new Date() });
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
+
+    useEffect(() => {
+        setDateRange({ from: new Date(), to: new Date() });
+    }, []);
+
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
@@ -105,7 +110,7 @@ export default function InvoicedSalesPage() {
         return constraints;
     }, [dateRange, paymentMethodFilter]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', dateRange, salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
 
     const clientMap = useMemo(() => {
@@ -114,12 +119,12 @@ export default function InvoicedSalesPage() {
     }, [clients]);
 
     const salesData = useMemo(() => {
-        if (salesLoading || !sales) return null;
+        if (salesLoading || !sales || sales.length === 0) return null;
 
         const salesByType = sales.reduce((acc, sale) => {
             sale.items.forEach(item => {
-                const type = item.tipo === 'producto' ? 'Productos' : 'Servicios';
-                acc[type] = (acc[type] || 0) + item.subtotal;
+                const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
+                acc[type] = (acc[type] || 0) + (item as any).subtotal;
             });
             return acc;
         }, {} as Record<string, number>);

@@ -246,7 +246,11 @@ export default function InvoicedSalesPage() {
                                         ))
                                     ) : sales.map((sale) => (
                                         <TableRow key={sale.id}>
-                                            <TableCell>{format(sale.fecha_hora_venta.seconds * 1000, 'PP p', { locale: es })}</TableCell>
+                                            <TableCell>
+                                                {sale.fecha_hora_venta?.seconds
+                                                  ? format(sale.fecha_hora_venta.seconds * 1000, 'PP p', { locale: es })
+                                                  : 'Fecha no disponible'}
+                                            </TableCell>
                                             <TableCell>{clientMap.get(sale.cliente_id)?.nombre || 'Desconocido'}</TableCell>
                                             <TableCell>{sale.items.map(i => i.nombre).join(', ')}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>

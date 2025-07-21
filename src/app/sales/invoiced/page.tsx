@@ -122,10 +122,12 @@ export default function InvoicedSalesPage() {
         if (salesLoading || !sales || sales.length === 0) return null;
 
         const salesByType = sales.reduce((acc, sale) => {
-            sale.items.forEach(item => {
-                const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
-                acc[type] = (acc[type] || 0) + (item as any).subtotal;
-            });
+            if (sale.items && Array.isArray(sale.items)) {
+                sale.items.forEach(item => {
+                    const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
+                    acc[type] = (acc[type] || 0) + (item as any).subtotal;
+                });
+            }
             return acc;
         }, {} as Record<string, number>);
 

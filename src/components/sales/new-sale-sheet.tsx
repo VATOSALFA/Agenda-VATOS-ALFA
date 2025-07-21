@@ -52,11 +52,10 @@ import { NewClientForm } from '../clients/new-client-form';
 
 
 interface Barber { id: string; name: string; }
-interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; }
+interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; }
 
 const saleSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
-  barbero_id: z.string().min(1, 'Debes seleccionar un barbero.'),
   metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
   notas: z.string().optional(),
 });
@@ -105,7 +104,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
       const itemPrice = tipo === 'producto' ? (item as Product).public_price : (item as ServiceType).price;
       const itemName = tipo === 'producto' ? (item as Product).nombre : (item as ServiceType).name;
 
-      return [...prev, { id: item.id, nombre: itemName, precio: itemPrice, cantidad: 1, tipo }];
+      return [...prev, { id: item.id, nombre: itemName, precio: itemPrice || 0, cantidad: 1, tipo }];
     });
   };
 
@@ -122,6 +121,12 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
       prev.map(item => (item.id === itemId ? { ...item, cantidad: newQuantity } : item))
     );
   };
+  
+  const updateItemProfessional = (itemId: string, barberoId: string) => {
+    setCart(prev =>
+      prev.map(item => (item.id === itemId ? { ...item, barbero_id: barberoId } : item))
+    );
+  };
 
   const total = useMemo(() =>
     cart.reduce((acc, item) => acc + (item.precio || 0) * item.cantidad, 0),
@@ -131,6 +136,10 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const handleNextStep = () => {
     if (cart.length === 0) {
       toast({ variant: 'destructive', title: 'Carrito vacío', description: 'Debes agregar al menos un ítem para continuar.' });
+      return;
+    }
+    if (cart.some(item => !item.barbero_id)) {
+      toast({ variant: 'destructive', title: 'Profesional no asignado', description: 'Por favor, asigna un profesional a cada ítem del carrito.' });
       return;
     }
     setStep(2);
@@ -180,8 +189,8 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
         
         // --- 2. WRITE PHASE ---
         const ventaRef = doc(collection(db, "ventas"));
-        const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo }) => ({
-            id, nombre, tipo,
+        const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo, barbero_id }) => ({
+            id, nombre, tipo, barbero_id,
             precio_unitario: precio || 0,
             cantidad,
             subtotal: (precio || 0) * cantidad,
@@ -231,7 +240,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
             <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
           ) : cart.map(item => (
             <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
-              <div>
+              <div className="flex-grow pr-2">
                 <p className="font-medium capitalize">{item.nombre}</p>
                 <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-CL') || '0'}</p>
                 <div className="flex items-center gap-2 mt-2">
@@ -239,8 +248,18 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                   <span className="w-5 text-center font-bold">{item.cantidad}</span>
                   <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
                 </div>
+                 <div className="mt-2">
+                    <Select onValueChange={(value) => updateItemProfessional(item.id, value)} value={item.barbero_id}>
+                        <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Seleccionar profesional" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {barbers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right flex-shrink-0">
                 <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-CL')}</p>
                 <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
                     <Trash2 className="h-4 w-4" />
@@ -342,23 +361,14 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                     <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" /> Cliente</FormLabel>
                                     <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>+ Nuevo cliente</Button>
                                 </div>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value ?? ''}>
+                                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                                     <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Selecciona un cliente'} /></SelectTrigger></FormControl>
                                     <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
                                 </Select>
                                 <FormMessage />
                             </FormItem>
                         )} />
-                        <FormField control={form.control} name="barbero_id" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={barbersLoading}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder={barbersLoading ? 'Cargando...' : 'Selecciona un barbero'} /></SelectTrigger></FormControl>
-                                    <SelectContent>{barbers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
+                        
                         <FormField control={form.control} name="metodo_pago" render={({ field }) => (
                             <FormItem>
                                 <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>

@@ -10,6 +10,8 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
+import type { Client, Product, Service as ServiceType } from '@/lib/types';
+
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,20 +44,17 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
 
-// Types
-interface Client { id: string; nombre: string; apellido: string; }
+
 interface Barber { id: string; nombre_completo: string; }
-interface Product { id: string; nombre: string; precio: number; stock: number; }
-interface Service { id: string; nombre: string; precio: number; }
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; }
 
 // Hardcoded services for now
-const services: Service[] = [
-  { id: 'serv_01', nombre: 'Corte clásico', precio: 10000 },
-  { id: 'serv_02', nombre: 'Fade', precio: 15000 },
-  { id: 'serv_03', nombre: 'Afeitado', precio: 8000 },
-  { id: 'serv_04', nombre: 'Diseño de cejas', precio: 5000 },
-  { id: 'serv_05', nombre: 'Paquete VIP', precio: 25000 },
+const services: ServiceType[] = [
+  { id: 'serv_01', name: 'Corte clásico', price: 10000, duration: 30, category: 'corte', active: true, order: 1 },
+  { id: 'serv_02', name: 'Fade', price: 15000, duration: 45, category: 'corte', active: true, order: 2 },
+  { id: 'serv_03', name: 'Afeitado', price: 8000, duration: 20, category: 'barba', active: true, order: 3 },
+  { id: 'serv_04', name: 'Diseño de cejas', price: 5000, duration: 15, category: 'facial', active: true, order: 4 },
+  { id: 'serv_05', name: 'Paquete VIP', price: 25000, duration: 60, category: 'paquete', active: true, order: 5 },
 ];
 
 const saleSchema = z.object({
@@ -80,11 +79,11 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-  const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('barberos');
+  const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Barber>('profesionales');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
 
   const filteredServices = useMemo(() =>
-    services.filter(s => s.nombre.toLowerCase().includes(searchTerm.toLowerCase())),
+    services.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())),
     [searchTerm]
   );
   
@@ -94,7 +93,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
   }, [searchTerm, products]);
 
 
-  const addToCart = (item: Product | Service, tipo: 'producto' | 'servicio') => {
+  const addToCart = (item: Product | ServiceType, tipo: 'producto' | 'servicio') => {
     setCart(prev => {
       const existingItem = prev.find(ci => ci.id === item.id);
       if (existingItem) {
@@ -102,7 +101,10 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
           ci.id === item.id ? { ...ci, cantidad: ci.cantidad + 1 } : ci
         );
       }
-      return [...prev, { ...item, cantidad: 1, tipo }];
+      
+      const itemPrice = tipo === 'producto' ? (item as Product).public_price : (item as ServiceType).price;
+
+      return [...prev, { id: item.id, nombre: tipo === 'producto' ? item.nombre : item.name, precio: itemPrice, cantidad: 1, tipo }];
     });
   };
 
@@ -276,8 +278,8 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                 {filteredServices.map(service => (
                                     <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
                                         <CardContent className="p-4">
-                                            <p className="font-semibold">{service.nombre}</p>
-                                            <p className="text-sm text-primary">${service.precio.toLocaleString('es-CL')}</p>
+                                            <p className="font-semibold">{service.name}</p>
+                                            <p className="text-sm text-primary">${service.price.toLocaleString('es-CL')}</p>
                                         </CardContent>
                                     </Card>
                                 ))}
@@ -290,7 +292,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                     <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                         <CardContent className="p-4">
                                             <p className="font-semibold">{product.nombre}</p>
-                                            <p className="text-sm text-primary">${(product.precio || 0).toLocaleString('es-CL')}</p>
+                                            <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-CL')}</p>
                                             <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                         </CardContent>
                                     </Card>
@@ -329,7 +331,7 @@ export function NewSaleSheet({ isOpen, onOpenChange }: NewSaleSheetProps) {
                                 <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
                                 <Select onValueChange={field.onChange} defaultValue={field.value} disabled={barbersLoading}>
                                     <FormControl><SelectTrigger><SelectValue placeholder={barbersLoading ? 'Cargando...' : 'Selecciona un barbero'} /></SelectTrigger></FormControl>
-                                    <SelectContent>{barbers.map(b => <SelectItem key={b.id} value={b.id}>{b.nombre_completo}</SelectItem>)}</SelectContent>
+                                    <SelectContent>{barbers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                                 </Select>
                                 <FormMessage />
                             </FormItem>

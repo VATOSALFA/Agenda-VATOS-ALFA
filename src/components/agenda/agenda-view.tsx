@@ -26,23 +26,9 @@ import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
+import { where } from 'firebase/firestore';
+import type { Profesional, Client } from '@/lib/types';
 
-const barbers = [
-  { id: '1', name: 'El Patrón', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'barber portrait' },
-  { id: '2', name: 'El Sicario', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man serious' },
-  { id: '3', name: 'El Padrino', status: 'ocupado', avatar: 'https://placehold.co/100x100', dataAiHint: 'stylish man' },
-  { id: '4', name: 'Barbero Extra', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'man portrait' },
-  { id: '5', name: 'Otro Barbero', status: 'disponible', avatar: 'https://placehold.co/100x100', dataAiHint: 'cool man' },
-];
-
-const appointments = [
-    { id: 1, barberId: '1', customer: 'Juan Perez', service: 'Corte Vatos', start: 9, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56912345678', type: 'appointment' },
-    { id: 2, barberId: '1', customer: 'Carlos Gomez', service: 'Afeitado Alfa', start: 11, duration: 1.5, color: 'bg-green-100 border-green-500 text-green-800', paymentStatus: 'Pendiente', phone: '+56987654321', type: 'appointment' },
-    { id: 3, barberId: '2', customer: 'Luis Rodriguez', service: 'Corte y Barba', start: 10, duration: 2, color: 'bg-indigo-100 border-indigo-500 text-indigo-800', paymentStatus: 'Pagado', phone: '+56911223344', type: 'appointment' },
-    { id: 4, barberId: '3', customer: 'Miguel Hernandez', service: 'Corte Vatos', start: 14, duration: 1, color: 'bg-blue-100 border-blue-500 text-blue-800', paymentStatus: 'Pagado', phone: '+56955667788', type: 'appointment' },
-    { id: 5, barberId: '1', customer: 'Cliente Ocasional', service: 'Corte Vatos', start: 15, duration: 1, color: 'bg-purple-100 border-purple-500 text-purple-800', paymentStatus: 'Pendiente', phone: null, type: 'appointment' },
-    { id: 6, barberId: '2', customer: 'Jorge Martinez', service: 'Diseño de Cejas', start: 13, duration: 0.5, color: 'bg-pink-100 border-pink-500 text-pink-800', paymentStatus: 'Pagado', phone: '+56999887766', type: 'appointment' },
-];
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
 
@@ -53,6 +39,19 @@ interface TimeBlock {
     fecha: string;
     hora_inicio: string;
     hora_fin: string;
+}
+
+interface Reservation {
+    id: string;
+    barbero_id: string;
+    cliente_id: string;
+    servicio: string;
+    hora_inicio: string;
+    hora_fin: string;
+    fecha: string;
+    estado: string;
+    pago_estado?: string;
+    type?: 'appointment';
 }
 
 const useCurrentTime = () => {
@@ -101,18 +100,48 @@ export default function AgendaView() {
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
   
   useEffect(() => {
-    // Set initial date on mount to avoid hydration mismatch
     setDate(new Date());
-    // Only render time indicator on client
     setRenderTimeIndicator(true)
   }, []);
 
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date);
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+  const { data: clients } = useFirestoreQuery<Client>('clientes');
+
+  const reservationsQueryConstraint = useMemo(() => {
+    if (!date) return undefined;
+    return where('fecha', '==', format(date, 'yyyy-MM-dd'));
+  }, [date]);
+
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', reservationsQueryConstraint);
+  
+  const isLoading = professionalsLoading;
 
   const allEvents = useMemo(() => {
-    const formattedBlocks = timeBlocks
-      .filter(block => date && block.fecha === format(date, 'yyyy-MM-dd'))
-      .map(block => {
+    if (!reservations || !timeBlocks || !clients) return [];
+
+    const clientMap = new Map(clients.map(c => [c.id, c]));
+
+    const appointmentEvents = reservations.map(res => {
+        const client = clientMap.get(res.cliente_id);
+        const start = parse(res.hora_inicio, 'HH:mm', new Date()).getHours() + parse(res.hora_inicio, 'HH:mm', new Date()).getMinutes() / 60;
+        const end = parse(res.hora_fin, 'HH:mm', new Date()).getHours() + parse(res.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
+        
+        return {
+            id: res.id,
+            barberId: res.barbero_id,
+            customer: client ? `${client.nombre} ${client.apellido}` : 'Cliente Desconocido',
+            service: res.servicio,
+            start: start,
+            duration: Math.max(0.5, end - start),
+            color: 'bg-blue-100 border-blue-500 text-blue-800', // Default color, can be customized later
+            paymentStatus: res.pago_estado,
+            phone: client?.telefono,
+            type: 'appointment'
+        };
+    });
+
+    const blockEvents = timeBlocks.map(block => {
         const start = parse(block.hora_inicio, 'HH:mm', new Date()).getHours() + parse(block.hora_inicio, 'HH:mm', new Date()).getMinutes() / 60;
         const end = parse(block.hora_fin, 'HH:mm', new Date()).getHours() + parse(block.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
         return {
@@ -121,13 +150,14 @@ export default function AgendaView() {
           customer: block.motivo,
           service: 'Bloqueado',
           start: start,
-          duration: end - start,
+          duration: Math.max(0.5, end - start),
           color: 'bg-gray-100 border-gray-400 text-gray-600',
           type: 'block',
         };
       });
-      return [...appointments, ...formattedBlocks];
-  }, [timeBlocks, date]);
+
+      return [...appointmentEvents, ...blockEvents];
+  }, [reservations, timeBlocks, clients]);
 
 
   const SLOT_DURATION_MINUTES = 30;
@@ -246,7 +276,7 @@ export default function AgendaView() {
                       </SelectTrigger>
                       <SelectContent>
                           <SelectItem value="todos">Todos</SelectItem>
-                          {barbers.map((barber) => (
+                          {professionals.map((barber) => (
                               <SelectItem key={barber.id} value={String(barber.id)}>{barber.name}</SelectItem>
                           ))}
                       </SelectContent>
@@ -321,7 +351,14 @@ export default function AgendaView() {
                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
                         <div className="absolute left-0 right-0 h-px bg-[#202A49] z-10" style={{ top: currentTimeTop }} />
                       )}
-                      {barbers.map((barber) => (
+                      {isLoading ? (
+                        Array.from({length: 5}).map((_, i) => (
+                            <div key={i} className="w-64 flex-shrink-0">
+                                <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
+                                <div className="relative"><Skeleton className="h-[624px] w-full" /></div>
+                            </div>
+                        ))
+                      ) : professionals.map((barber) => (
                           <div key={barber.id} className="w-64 flex-shrink-0">
                               {/* Professional Header */}
                               <div 
@@ -335,13 +372,13 @@ export default function AgendaView() {
                                   </Avatar>
                                   <div className="flex-grow">
                                       <p className="font-semibold text-sm text-gray-800">{barber.name}</p>
-                                      <Badge variant={barber.status === 'disponible' ? 'default' : 'destructive'} 
+                                      <Badge variant={barber.active ? 'default' : 'destructive'} 
                                           className={cn(
                                               'text-xs py-0.5 px-2 font-medium',
-                                              barber.status === 'disponible' && 'bg-green-100 text-green-800 border-green-200',
-                                              barber.status !== 'disponible' && 'bg-red-100 text-red-800 border-red-200'
+                                              barber.active && 'bg-green-100 text-green-800 border-green-200',
+                                              !barber.active && 'bg-red-100 text-red-800 border-red-200'
                                           )}
-                                      >{barber.status}</Badge>
+                                      >{barber.active ? 'disponible' : 'inactivo'}</Badge>
                                   </div>
                                   {hoveredBarberId === barber.id && (
                                     <Tooltip>
@@ -464,8 +501,6 @@ export default function AgendaView() {
       </div>
       {isReservationModalOpen && (
           <NewReservationForm 
-            isOpen={isReservationModalOpen}
-            onOpenChange={setIsReservationModalOpen}
             onFormSubmit={() => setIsReservationModalOpen(false)}
             initialData={reservationInitialData}
           />
@@ -481,3 +516,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

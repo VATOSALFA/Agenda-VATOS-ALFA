@@ -4,7 +4,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -20,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where } from "firebase/firestore";
 import type { Client } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 interface Sale {
     id: string;
@@ -90,28 +90,38 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
 export default function InvoicedSalesPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
+    const [activeFilters, setActiveFilters] = useState<{
+        dateRange: DateRange | undefined;
+        paymentMethod: string;
+    }>({
+        dateRange: undefined,
+        paymentMethod: 'todos'
+    });
+    const { toast } = useToast();
 
     useEffect(() => {
         // Set initial date range on client-side to avoid hydration mismatch
-        setDateRange({ from: new Date(), to: new Date() });
+        const today = new Date();
+        setDateRange({ from: today, to: today });
+        setActiveFilters({ dateRange: { from: today, to: today }, paymentMethod: 'todos' });
     }, []);
 
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
-        if (dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', startOfDay(dateRange.from)));
+        if (activeFilters.dateRange?.from) {
+            constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
         }
-        if (dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(dateRange.to)));
+        if (activeFilters.dateRange?.to) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
-        if (paymentMethodFilter !== 'todos') {
-            constraints.push(where('metodo_pago', '==', paymentMethodFilter));
+        if (activeFilters.paymentMethod !== 'todos') {
+            constraints.push(where('metodo_pago', '==', activeFilters.paymentMethod));
         }
         return constraints;
-    }, [dateRange, paymentMethodFilter]);
+    }, [activeFilters]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', dateRange, salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
 
     const clientMap = useMemo(() => {
@@ -152,6 +162,17 @@ export default function InvoicedSalesPage() {
         };
     }, [sales, salesLoading]);
 
+    const handleSearch = () => {
+        setActiveFilters({
+            dateRange,
+            paymentMethod: paymentMethodFilter
+        });
+        toast({
+            title: "Filtros aplicados",
+            description: "Los datos de ventas han sido actualizados."
+        })
+    };
+
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
@@ -188,10 +209,10 @@ export default function InvoicedSalesPage() {
                         </SelectContent>
                     </Select>
                     <Select><SelectTrigger><SelectValue placeholder="Todos los comprobantes" /></SelectTrigger><SelectContent /></Select>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar por cliente, folio..." className="pl-10" />
-                    </div>
+                    <Button onClick={handleSearch}>
+                        <Search className="mr-2 h-4 w-4" />
+                        Buscar
+                    </Button>
                 </CardContent>
             </Card>
 
@@ -284,3 +305,4 @@ export default function InvoicedSalesPage() {
         </div>
     );
 }
+

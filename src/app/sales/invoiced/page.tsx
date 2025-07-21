@@ -92,6 +92,7 @@ export default function InvoicedSalesPage() {
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
 
     useEffect(() => {
+        // Set initial date range on client-side to avoid hydration mismatch
         setDateRange({ from: new Date(), to: new Date() });
     }, []);
 
@@ -133,11 +134,11 @@ export default function InvoicedSalesPage() {
 
         const salesByPaymentMethod = sales.reduce((acc, sale) => {
             const method = sale.metodo_pago || 'Otro';
-            acc[method] = (acc[method] || 0) + sale.total;
+            acc[method] = (acc[method] || 0) + (sale.total || 0);
             return acc;
         }, {} as Record<string, number>);
 
-        const totalSales = sales.reduce((acc, sale) => acc + sale.total, 0);
+        const totalSales = sales.reduce((acc, sale) => acc + (sale.total || 0), 0);
 
         return {
             totalSales: {
@@ -254,7 +255,7 @@ export default function InvoicedSalesPage() {
                                             <TableCell>{clientMap.get(sale.cliente_id)?.nombre || 'Desconocido'}</TableCell>
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                            <TableCell>${sale.total.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -272,7 +273,7 @@ export default function InvoicedSalesPage() {
                             </Table>
                             { !salesLoading && sales.length > 0 &&
                                 <div className="flex justify-end font-bold text-lg pt-4 pr-4">
-                                    Total: ${sales.reduce((acc, s) => acc + s.total, 0).toLocaleString('es-CL')}
+                                    Total: ${sales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
                                 </div>
                             }
                         </TabsContent>

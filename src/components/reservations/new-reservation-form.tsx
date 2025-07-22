@@ -63,6 +63,7 @@ interface NewReservationFormProps {
   onOpenChange?: (isOpen: boolean) => void; // For standalone dialog usage
   isEditMode?: boolean;
   initialData?: Partial<Reservation> & {id?: string};
+  isDialogChild?: boolean;
 }
 
 const statusOptions = [
@@ -77,7 +78,7 @@ const statusOptions = [
 const minutesOptions = ['00', '15', '30', '45'];
 
 
-export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveChanges, initialData, isEditMode = false }: NewReservationFormProps) {
+export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveChanges, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -106,7 +107,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     if (selectedService && services) {
         const service = services.find(s => s.name === selectedService);
         if (service) {
-            form.setValue('precio', service.price);
+            form.setValue('precio', service.price || 0);
         }
     }
   }, [selectedService, services, form]);
@@ -171,7 +172,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         hora_inicio_h: h,
         hora_inicio_m: m,
         estado: initialData.estado,
-        precio: 'precio' in initialData ? initialData.precio : 0,
+        precio: 'precio' in initialData ? initialData.precio || 0 : 0,
         notas: initialData.notas,
         nota_interna: initialData.nota_interna,
       });
@@ -251,13 +252,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
   const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
 
+  const FormHeader = isDialogChild ? 'div' : DialogHeader;
+
   const FormContent = () => (
     <>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-        <DialogHeader className="p-6 flex-row items-center justify-between border-b">
+        <FormHeader className="p-6 flex-row items-center justify-between border-b">
           <div className="space-y-1">
-            <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
+             { !isDialogChild && <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle> }
           </div>
            <FormField
               control={form.control}
@@ -267,12 +270,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                         <SelectTrigger className="w-[180px]">
-                            <SelectValue asChild>
-                                <div className="flex items-center gap-2">
-                                    <span className={cn('h-3 w-3 rounded-full', statusColor)} />
-                                    <span>{selectedStatusLabel}</span>
-                                </div>
-                            </SelectValue>
+                          <SelectValue asChild>
+                            <div className="flex items-center gap-2">
+                                <span className={cn('h-3 w-3 rounded-full', statusColor)} />
+                                <span>{selectedStatusLabel}</span>
+                            </div>
+                          </SelectValue>
                         </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -290,7 +293,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 </FormItem>
               )}
             />
-        </DialogHeader>
+        </FormHeader>
 
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
           {/* Main reservation fields */}
@@ -419,6 +422,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Form>
     </>
   );
+
+  if(isDialogChild) {
+    return <FormContent />;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

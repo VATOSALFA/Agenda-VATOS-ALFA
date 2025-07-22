@@ -112,14 +112,16 @@ export function ReservationDetailModal({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-        
-
+        <DialogHeader className="p-6 pb-0">
+            <DialogTitle>Detalle de la Reserva</DialogTitle>
+        </DialogHeader>
         <div className="flex-grow overflow-hidden flex flex-col">
           <NewReservationForm
             onFormSubmit={() => {}}
             onSaveChanges={handleSaveChanges}
             initialData={reservation}
             isEditMode
+            isDialogChild={true}
           />
         </div>
       </DialogContent>

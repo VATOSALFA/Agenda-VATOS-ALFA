@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 import { NewReservationForm } from "@/components/reservations/new-reservation-form";
@@ -263,6 +263,12 @@ export default function ClientsPage() {
 
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-lg">
+           <DialogHeader>
+              <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+              <DialogDescription>
+                Completa la información para registrar un nuevo cliente en el sistema.
+              </DialogDescription>
+            </DialogHeader>
             <NewClientForm onFormSubmit={() => {
                 setIsClientModalOpen(false);
                 handleDataUpdated();

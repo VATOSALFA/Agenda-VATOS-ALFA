@@ -23,7 +23,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DialogFooter } from '@/components/ui/dialog';
 import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
@@ -88,13 +88,6 @@ export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <DialogHeader>
-          <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-          <DialogDescription>
-            Completa la información para registrar un nuevo cliente en el sistema.
-          </DialogDescription>
-        </DialogHeader>
-
         <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <FormField

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client } from "@/lib/types";
@@ -27,16 +27,78 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+
+const FiltersSidebar = () => (
+    <div className="space-y-4">
+        <h3 className="text-xl font-bold">Filtros avanzados</h3>
+        <div className="space-y-3">
+             <div className="space-y-1">
+              <Label>Local/sede</Label>
+              <Select><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent></SelectContent></Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Profesional/prestador</Label>
+              <Select><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent></SelectContent></Select>
+            </div>
+             <div className="space-y-1">
+              <Label>Servicios</Label>
+              <Select><SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger><SelectContent></SelectContent></Select>
+            </div>
+            <div className="flex items-center justify-between">
+                <Label>Estado de la reserva</Label>
+                <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
+            </div>
+            <div className="flex items-center justify-between">
+                <Label>Género</Label>
+                <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
+            </div>
+             <div className="space-y-1">
+                <Label>Cumpleaños</Label>
+                 <Popover>
+                    <PopoverTrigger asChild>
+                    <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <span>Desde / hasta</span>
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0"><Calendar mode="range" numberOfMonths={1} /></PopoverContent>
+                </Popover>
+            </div>
+             <div className="space-y-1">
+                <Label>Cliente creado en el periodo</Label>
+                 <Popover>
+                    <PopoverTrigger asChild>
+                    <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <span>Desde / hasta</span>
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0"><Calendar mode="range" numberOfMonths={1} /></PopoverContent>
+                </Popover>
+            </div>
+             <div className="flex items-center justify-between">
+                <Label>¿Ha reservado?</Label>
+                <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
+            </div>
+             <div className="flex items-center justify-between">
+                <Label>Personalizados</Label>
+                <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
+            </div>
+        </div>
+        <div className="space-y-2 pt-4 border-t">
+            <Button className="w-full">Buscar</Button>
+            <Button variant="ghost" className="w-full">Restablecer</Button>
+        </div>
+    </div>
+  );
 
 
 export default function ClientsPage() {
@@ -92,172 +154,95 @@ export default function ClientsPage() {
     );
   }, [clients, searchTerm]);
 
-  const formatDate = (date: any) => {
-    if (!date) return 'N/A';
-    if (date.seconds) {
-      return format(new Date(date.seconds * 1000), 'PPP', { locale: es });
-    }
-    if (typeof date === 'string') {
-        try {
-            const parsedDate = new Date(date);
-            if (!isNaN(parsedDate.getTime())) {
-                 return format(parsedDate, 'PPP', { locale: es });
-            }
-        } catch (e) {
-            return date;
-        }
-    }
-    return 'Fecha inválida';
-  };
-
-  const FiltersSidebar = () => (
-    <Card className="bg-card/50">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Filtros</CardTitle>
-        <CardDescription>Refina tu búsqueda de clientes.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Collapsible defaultOpen>
-          <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold">
-            Filtros Principales
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label>Sucursal</Label>
-              <Select><SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger><SelectContent></SelectContent></Select>
-            </div>
-            <div className="space-y-2">
-              <Label>¿Ha reservado?</Label>
-              <Select><SelectTrigger><SelectValue placeholder="Cualquiera" /></SelectTrigger><SelectContent></SelectContent></Select>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-        <Collapsible>
-          <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold">
-            Filtros por Fecha
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-4">
-             <div className="space-y-2">
-                <Label>Cumpleaños</Label>
-                 <Popover>
-                    <PopoverTrigger asChild>
-                    <Button variant={"outline"} className="w-full justify-start text-left font-normal">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        <span>Seleccionar rango</span>
-                    </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0"><Calendar mode="range" numberOfMonths={2} /></PopoverContent>
-                </Popover>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <>
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Base de Clientes</h2>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Cargar (CSV)</Button>
+           <div className="flex items-center space-x-2">
+            <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Cargar clientes</Button>
             <Button onClick={() => setIsClientModalOpen(true)}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Crear nuevo cliente
+              <PlusCircle className="mr-2 h-4 w-4" /> Nuevo cliente
             </Button>
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setIsCombineModalOpen(true)}>
-                    <Combine className="mr-2 h-4 w-4" />
-                    <span>Combinar clientes</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast({ title: "Próximamente...", description: "Funcionalidad para descargar listado de clientes."})}>
-                    <Download className="mr-2 h-4 w-4" />
-                    <span>Descargar este listado</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1">
+          <aside className="lg:col-span-1">
             <FiltersSidebar />
-          </div>
+          </aside>
 
-          <div className="lg:col-span-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Lista de Clientes</CardTitle>
-                <div className="relative flex-1 pt-4">
+          <main className="lg:col-span-3">
+             <div className="flex items-center justify-between mb-4 gap-4">
+                <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      placeholder="Buscar por nombre, teléfono, correo..." 
-                      className="pl-10"
+                      placeholder="Busca por nombre, apellido, identificación oficial, email y teléfono" 
+                      className="pl-10 h-10"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-              </CardHeader>
+                <Button variant="outline">Crear una audiencia con este listado</Button>
+                 <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline">
+                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setIsCombineModalOpen(true)}>
+                        <Combine className="mr-2 h-4 w-4" />
+                        <span>Combinar clientes</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast({ title: "Próximamente...", description: "Funcionalidad para descargar listado de clientes."})}>
+                        <Download className="mr-2 h-4 w-4" />
+                        <span>Descargar este listado</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+            </div>
+            <Card>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nombre y Apellido</TableHead>
-                      <TableHead>Teléfono</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Apellido</TableHead>
                       <TableHead>Correo</TableHead>
-                      <TableHead>Fecha de Registro</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
+                      <TableHead>Teléfono</TableHead>
+                      <TableHead>Identificación oficial</TableHead>
+                      <TableHead className="text-right">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {clientsLoading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
+                      Array.from({ length: 10 }).map((_, i) => (
                         <TableRow key={i}>
-                          <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                          <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                           <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                         </TableRow>
                       ))
                     ) : filteredClients.map((client) => (
                       <TableRow key={client.id}>
-                        <TableCell className="font-medium">{client.nombre} {client.apellido}</TableCell>
-                        <TableCell>{client.telefono}</TableCell>
+                        <TableCell className="font-medium">{client.nombre}</TableCell>
+                        <TableCell>{client.apellido}</TableCell>
                         <TableCell>{client.correo}</TableCell>
-                        <TableCell>{formatDate(client.creado_en)}</TableCell>
+                        <TableCell>{client.telefono}</TableCell>
+                        <TableCell>N/A</TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Abrir menú</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => handleViewDetails(client)}>
-                                <User className="mr-2 h-4 w-4" /> Ver Ficha
-                              </DropdownMenuItem>
-                              {client.telefono && (
-                                <DropdownMenuItem asChild>
-                                  <a href={`https://wa.me/${client.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
-                                    <VenetianMask className="mr-2 h-4 w-4" /> Enviar WhatsApp
-                                  </a>
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setClientToDelete(client)} className="text-destructive hover:!bg-destructive/10">
-                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                           <div className="flex items-center justify-end gap-2">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>
+                                    <User className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setClientToDelete(client)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -270,7 +255,7 @@ export default function ClientsPage() {
                 )}
               </CardContent>
             </Card>
-          </div>
+          </main>
         </div>
       </div>
 
@@ -337,3 +322,4 @@ export default function ClientsPage() {
     </>
   );
 }
+

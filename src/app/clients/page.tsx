@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client } from "@/lib/types";
@@ -109,6 +109,7 @@ export default function ClientsPage() {
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const { toast } = useToast();
 
   const [queryKey, setQueryKey] = useState(0);
@@ -121,7 +122,7 @@ export default function ClientsPage() {
   };
   
   const handleDeleteClient = async () => {
-    if (!clientToDelete) return;
+    if (!clientToDelete || deleteConfirmationText !== 'ELIMINAR') return;
     try {
       await deleteDoc(doc(db, "clientes", clientToDelete.id));
       toast({
@@ -138,6 +139,7 @@ export default function ClientsPage() {
       });
     } finally {
         setClientToDelete(null);
+        setDeleteConfirmationText('');
     }
   };
 
@@ -301,19 +303,36 @@ export default function ClientsPage() {
       )}
 
       {clientToDelete && (
-         <AlertDialog open={!!clientToDelete} onOpenChange={(open) => !open && setClientToDelete(null)}>
+         <AlertDialog open={!!clientToDelete} onOpenChange={(open) => {
+            if(!open) {
+                setClientToDelete(null);
+                setDeleteConfirmationText('');
+            }
+         }}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                    <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás seguro de eliminar el cliente seleccionado?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente
-                        <span className="font-bold"> {clientToDelete.nombre} {clientToDelete.apellido}</span>.
+                       Esta acción no se puede revertir. Se eliminará permanentemente al cliente <span className="font-bold">{clientToDelete.nombre} {clientToDelete.apellido}</span> y todo su historial.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                <div className="space-y-2 py-2">
+                    <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                    <Input 
+                        id="delete-confirm"
+                        value={deleteConfirmationText}
+                        onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                        placeholder="ELIMINAR"
+                    />
+                </div>
                 <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setClientToDelete(null)}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteClient} className="bg-destructive hover:bg-destructive/90">
-                        Sí, eliminar cliente
+                    <AlertDialogCancel onClick={() => { setClientToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={handleDeleteClient} 
+                        disabled={deleteConfirmationText !== 'ELIMINAR'}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        Eliminar
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
@@ -322,4 +341,3 @@ export default function ClientsPage() {
     </>
   );
 }
-

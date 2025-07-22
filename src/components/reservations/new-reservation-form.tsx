@@ -99,6 +99,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const selectedService = form.watch('servicio');
   const selectedProfessionalId = form.watch('barbero_id');
   const selectedDate = form.watch('fecha');
+  const selectedHour = form.watch('hora_inicio_h');
+  const selectedMinute = form.watch('hora_inicio_m');
 
   useEffect(() => {
     if (selectedService) {
@@ -147,6 +149,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
     return { hoursOptions: hOptions, timeSlots: slots };
   }, [selectedProfessionalId, selectedDate, professionals]);
+
+  // Real-time availability check
+  useEffect(() => {
+    if (selectedProfessionalId && selectedDate && selectedHour && selectedMinute) {
+      form.clearErrors('barbero_id'); // Clear previous errors
+      const professional = professionals.find(p => p.id === selectedProfessionalId);
+      if (!professional || !professional.schedule) return;
+
+      const dayOfWeekIndex = getDay(selectedDate);
+      const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+      const dayOfWeek = dayNames[dayOfWeekIndex];
+      const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
+      
+      const selectedTime = `${selectedHour}:${selectedMinute}`;
+
+      if (!schedule || !schedule.enabled || selectedTime < schedule.start || selectedTime >= schedule.end) {
+        form.setError('barbero_id', {
+            type: 'manual',
+            message: `El horario o día de la reserva no está disponible para este prestador(${professional.name})`
+        });
+      }
+    }
+  }, [selectedProfessionalId, selectedDate, selectedHour, selectedMinute, professionals, form]);
 
 
   useEffect(() => {
@@ -264,7 +289,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                     <FormControl>
                       <SelectTrigger className="w-[180px]">
                         <div className="flex items-center gap-2">
-                           <span className={cn('h-2.5 w-2.5 rounded-full', statusColor)} />
+                           <span className={cn('h-3 w-3 rounded-full', statusColor)} />
                            <SelectValue />
                         </div>
                       </SelectTrigger>
@@ -326,9 +351,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 <FormItem>
                     <div className="flex justify-between items-center">
                        <FormLabel>Cliente</FormLabel>
-                       <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                          <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                       </Button>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                             <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                             </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                             <NewClientForm onFormSubmit={handleClientCreated} />
+                          </DialogContent>
+                        </Dialog>
                     </div>
                     <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
@@ -397,8 +429,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         <DialogFooter className="p-6 border-t">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
           <Button type="button" variant="secondary">Agregar otra reserva</Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.barbero_id}>
+            {(isSubmitting || form.formState.isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar reserva
           </Button>
         </DialogFooter>
@@ -406,7 +438,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Form>
 
     <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
             <NewClientForm onFormSubmit={handleClientCreated} />
         </DialogContent>
     </Dialog>
@@ -421,5 +453,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Dialog>
   );
 }
-
-    

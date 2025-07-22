@@ -144,8 +144,8 @@ export default function AgendaView() {
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', queryKey, reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', queryKey, reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 

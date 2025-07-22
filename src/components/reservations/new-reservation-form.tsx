@@ -35,9 +35,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock } from 'lucide-react';
 import type { Profesional, Service, Reservation } from '@/lib/types';
 import type { Client } from '@/lib/types';
+import { NewClientForm } from '../clients/new-client-form';
 
 
 const reservationSchema = z.object({
@@ -79,6 +80,7 @@ const minutesOptions = ['00', '15', '30', '45'];
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveChanges, initialData, isEditMode = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -179,10 +181,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     }
   }
 
+  const handleClientCreated = (newClientId: string) => {
+    setIsClientModalOpen(false);
+    // You might want to trigger a refetch of clients here if not using realtime updates
+    form.setValue('cliente_id', newClientId, { shouldValidate: true });
+  }
+
   const selectedStatus = form.watch('estado');
   const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
 
   const FormContent = () => (
+    <>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
         <DialogHeader className="p-6 flex-row items-center justify-between border-b">
@@ -258,14 +267,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
             <FormField control={form.control} name="cliente_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Cliente</FormLabel>
-                    <div className="flex gap-2">
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Button variant="outline" type="button" className="shrink-0"><UserPlus className="h-4 w-4 mr-2"/>Nuevo cliente</Button>
+                    <div className="flex justify-between items-center">
+                       <FormLabel>Cliente</FormLabel>
+                       <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                          <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                       </Button>
                     </div>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                        <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                    </Select>
                     <FormMessage />
                 </FormItem>
             )}/>
@@ -329,6 +340,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         </DialogFooter>
       </form>
     </Form>
+
+    {isClientModalOpen && (
+      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+        <DialogContent>
+            <NewClientForm onFormSubmit={handleClientCreated} />
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 
   return (
@@ -339,4 +359,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Dialog>
   );
 }
-

@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus } from 'lucide-react';
 import type { Profesional, Service, Reservation } from '@/lib/types';
 import type { Client } from '@/lib/types';
 
@@ -45,7 +45,10 @@ const reservationSchema = z.object({
   barbero_id: z.string().min(1, 'Debes seleccionar un barbero.'),
   servicio: z.string().min(1, 'Debes seleccionar un servicio.'),
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  hora_inicio: z.string().min(1, 'Debes seleccionar una hora de inicio.'),
+  hora_inicio_h: z.string().min(1, 'Selecciona hora.'),
+  hora_inicio_m: z.string().min(1, 'Selecciona minuto.'),
+  precio: z.coerce.number().optional(),
+  estado: z.string().optional(),
   notas: z.string().optional(),
 });
 
@@ -60,10 +63,22 @@ interface NewReservationFormProps {
   initialData?: Partial<Reservation> & {id?: string};
 }
 
+const statusOptions = [
+    { value: 'Reservado', label: 'Reservado', color: 'bg-blue-500' },
+    { value: 'Confirmado', label: 'Confirmado', color: 'bg-yellow-500' },
+    { value: 'Asiste', label: 'Asiste', color: 'bg-pink-500' },
+    { value: 'No asiste', label: 'No asiste', color: 'bg-orange-500' },
+    { value: 'Pendiente', label: 'Pendiente', color: 'bg-red-500' },
+    { value: 'En espera', label: 'En espera', color: 'bg-green-500' },
+];
+
+const hoursOptions = Array.from({length: 24}, (_, i) => String(i).padStart(2,'0'));
+const minutesOptions = ['00', '15', '30', '45'];
+
+
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveChanges, initialData, isEditMode = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -73,6 +88,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     resolver: zodResolver(reservationSchema),
     defaultValues: {
       notas: '',
+      estado: 'Reservado',
     },
   });
   
@@ -85,136 +101,53 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         } else if (initialData.fecha instanceof Date) {
             fecha = initialData.fecha;
         }
+        
+        const [h, m] = initialData.hora_inicio?.split(':') || ['',''];
 
       form.reset({
-        ...initialData,
+        cliente_id: initialData.cliente_id,
+        barbero_id: initialData.barbero_id,
+        servicio: initialData.servicio,
         fecha,
-        notas: (initialData as any).notas || '',
+        hora_inicio_h: h,
+        hora_inicio_m: m,
+        estado: initialData.estado,
+        // TODO: Precio y notas
       });
     }
   }, [initialData, form, isOpen]);
 
-  const selectedBarberId = form.watch('barbero_id');
-  const selectedDate = form.watch('fecha');
-  const selectedService = form.watch('servicio');
 
   const getServiceDuration = useCallback((serviceName: string) => {
     const service = services.find(s => s.name === serviceName);
     return service ? service.duration : 30; // default to 30 mins
   }, [services]);
 
-  const generateTimeSlots = useCallback((professional: Profesional | undefined, date: Date | undefined) => {
-    if (!professional || !date || !professional.schedule) return [];
-    
-    const dayOfWeek = format(date, 'eeee', { locale: es }).toLowerCase();
-    const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
-    
-    if (!schedule || !schedule.enabled) return [];
-
-    const [startHour, startMinute] = schedule.start.split(':').map(Number);
-    const [endHour, endMinute] = schedule.end.split(':').map(Number);
-    
-    const slots = [];
-    let currentTime = set(date, { hours: startHour, minutes: startMinute, seconds: 0, milliseconds: 0 });
-    const endTime = set(date, { hours: endHour, minutes: endMinute, seconds: 0, milliseconds: 0 });
-
-    while (currentTime < endTime) {
-      slots.push(format(currentTime, 'HH:mm'));
-      currentTime.setMinutes(currentTime.getMinutes() + 30);
-    }
-    return slots;
-  }, []);
-
-  useEffect(() => {
-    const fetchAvailableTimes = async () => {
-      if (!selectedBarberId || !selectedDate || !selectedService) {
-        if(initialData?.hora_inicio) {
-           setAvailableTimes([initialData.hora_inicio]);
-        } else {
-           setAvailableTimes([]);
-        }
-        return;
-      }
-      
-      const professional = professionals.find(b => b.id === selectedBarberId);
-      if (!professional) {
-        setAvailableTimes([]);
-        return;
-      }
-      
-      const allSlots = generateTimeSlots(professional, selectedDate);
-      if (allSlots.length === 0) {
-        setAvailableTimes([]);
-        return;
-      }
-
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
-      const reservationsQuery = query(
-        collection(db, 'reservas'),
-        where('barbero_id', '==', selectedBarberId),
-        where('fecha', '==', formattedDate)
-      );
-
-      const blocksQuery = query(
-        collection(db, 'bloqueos_horario'),
-        where('barbero_id', '==', selectedBarberId),
-        where('fecha', '==', formattedDate)
-      );
-      
-      const [reservationsSnap, blocksSnap] = await Promise.all([
-        getDocs(reservationsQuery),
-        getDocs(blocksQuery),
-      ]);
-
-      const bookedSlots = new Set<string>();
-      
-      const addSlotsToBooked = (start: string, end: string) => {
-        for (let slot of allSlots) {
-            if (slot >= start && slot < end) {
-              bookedSlots.add(slot);
-            }
-        }
-      };
-
-      reservationsSnap.forEach(doc => {
-        // Exclude the current reservation when editing
-        if (isEditMode && doc.id === initialData?.id) return;
-        const { hora_inicio, hora_fin } = doc.data();
-        addSlotsToBooked(hora_inicio, hora_fin);
-      });
-
-      blocksSnap.forEach(doc => {
-        const { hora_inicio, hora_fin } = doc.data();
-        addSlotsToBooked(hora_inicio, hora_fin);
-      });
-      
-      const filteredSlots = allSlots.filter(slot => !bookedSlots.has(slot));
-      setAvailableTimes(filteredSlots);
-    };
-
-    fetchAvailableTimes();
-  }, [selectedBarberId, selectedDate, selectedService, professionals, services, generateTimeSlots, initialData, isEditMode]);
-
-  async function onSubmit(data: ReservationFormData) {
+  async function onSubmit(data: any) {
     if (isEditMode && onSaveChanges) {
-        onSaveChanges(data);
+        const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
+        onSaveChanges({...data, hora_inicio});
         return;
     }
     
     setIsSubmitting(true);
     try {
+      const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
       const serviceDuration = getServiceDuration(data.servicio);
-      const [hour, minute] = data.hora_inicio.split(':').map(Number);
-      const startTime = set(data.fecha, { hours: hour, minutes: minute });
+      const startTime = set(data.fecha, { hours: data.hora_inicio_h, minutes: data.hora_inicio_m });
       const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
 
       const dataToSave = {
         ...data,
         fecha: formattedDate,
+        hora_inicio: hora_inicio,
         hora_fin: format(endTime, 'HH:mm'),
+        estado: data.estado || 'Reservado',
       };
+      
+      delete dataToSave.hora_inicio_h;
+      delete dataToSave.hora_inicio_m;
       
       if (isEditMode && initialData?.id) {
          const resRef = doc(db, 'reservas', initialData.id);
@@ -223,7 +156,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
       } else {
         await addDoc(collection(db, 'reservas'), {
             ...dataToSave,
-            estado: 'Reservado',
             pago_estado: 'Pendiente',
             canal_reserva: 'agenda',
             creada_por: 'admin',
@@ -247,218 +179,164 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     }
   }
 
+  const selectedStatus = form.watch('estado');
+  const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
+
   const FormContent = () => (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        { !isEditMode && (
-        <DialogHeader>
-          <DialogTitle>Nueva Reserva</DialogTitle>
-          <DialogDescription>
-            Completa los detalles para agendar una nueva cita.
-          </DialogDescription>
-        </DialogHeader>
-        )}
-        
-        { isEditMode && (
-          <DialogHeader>
-            <DialogTitle>Editar Reserva</DialogTitle>
-            <DialogDescription>
-              Modifica los detalles de la cita.
-            </DialogDescription>
-          </DialogHeader>
-        )}
-
-        <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
-          {/* Form Fields */}
-          <FormField
+      <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
+        <DialogHeader className="p-6 flex-row items-center justify-between border-b">
+          <div className="space-y-1">
+            <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
+          </div>
+           <FormField
               control={form.control}
-              name="cliente_id"
+              name="estado"
               render={({ field }) => (
-              <FormItem>
-                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Cliente</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={clientsLoading}>
-                  <FormControl>
-                      <SelectTrigger>
-                      <SelectValue placeholder={clientsLoading ? "Cargando clientes..." : "Selecciona un cliente"} />
+                <FormItem>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="w-[180px]">
+                        <div className="flex items-center gap-2">
+                           <span className={cn('h-2.5 w-2.5 rounded-full', statusColor)} />
+                           <SelectValue />
+                        </div>
                       </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                      {clients.map(client => (
-                      <SelectItem key={client.id} value={client.id}>
-                          {client.nombre} {client.apellido}
-                      </SelectItem>
+                    </FormControl>
+                    <SelectContent>
+                      {statusOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                            <div className="flex items-center gap-2">
+                                <span className={cn('h-2.5 w-2.5 rounded-full', opt.color)} />
+                                {opt.label}
+                            </div>
+                        </SelectItem>
                       ))}
-                  </SelectContent>
+                    </SelectContent>
                   </Select>
                   <FormMessage />
-              </FormItem>
+                </FormItem>
               )}
-          />
-           <FormField
-                control={form.control}
-                name="barbero_id"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading}>
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder={professionalsLoading ? "Cargando barberos..." : "Selecciona un barbero"} />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {professionals.map(professional => (
-                        <SelectItem key={professional.id} value={professional.id}>
-                            {professional.name}
-                        </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
             />
-            <FormField
-                control={form.control}
-                name="servicio"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><Tag className="mr-2 h-4 w-4" /> Servicio</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={servicesLoading}>
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder={servicesLoading ? 'Cargando servicios...' : 'Selecciona un servicio'} />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {services.map(service => (
-                        <SelectItem key={service.id} value={service.name}>
-                            {service.name}
-                        </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="fecha"
-                render={({ field }) => (
-                <FormItem className="flex flex-col">
-                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
-                    <Popover>
-                    <PopoverTrigger asChild>
-                        <FormControl>
-                        <Button
-                            variant={"outline"}
-                            className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                            )}
-                        >
-                            {field.value ? (
-                            format(field.value, "PPP", { locale: es })
-                            ) : (
-                            <span>Selecciona una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                        </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                        locale={es}
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                        initialFocus
-                        />
-                    </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="hora_inicio"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora de Inicio</FormLabel>
-                    <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value}
-                    disabled={!selectedBarberId || !selectedDate || !selectedService || (availableTimes.length === 0 && !initialData?.hora_inicio)}
-                    >
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder={
-                            !selectedBarberId || !selectedDate || !selectedService 
-                                ? "Completa los campos anteriores" 
-                                : availableTimes.length === 0 && !initialData?.hora_inicio
-                                ? "No hay horarios disponibles" 
-                                : "Selecciona una hora"
-                            } />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {initialData?.hora_inicio && !availableTimes.includes(initialData.hora_inicio) && (
-                            <SelectItem value={initialData.hora_inicio}>
-                                {initialData.hora_inicio}
-                            </SelectItem>
-                        )}
-                        {availableTimes.map(time => (
-                        <SelectItem key={time} value={time}>
-                            {time}
-                        </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
+        </DialogHeader>
 
-            <FormField
-                control={form.control}
-                name="notas"
-                render={({ field }) => (
+        <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
+          {/* Main reservation fields */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-5 gap-4">
+               <FormField
+                  control={form.control}
+                  name="fecha"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col col-span-3">
+                      <FormLabel>Fecha</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {field.value ? format(field.value, "EEEE dd 'de' MMMM 'de' yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="col-span-2">
+                    <FormLabel>Hora</FormLabel>
+                    <div className="flex items-center gap-2">
+                        <FormField control={form.control} name="hora_inicio_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                        <span>:</span>
+                        <FormField control={form.control} name="hora_inicio_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                        <Button variant="ghost" size="icon" type="button"><RefreshCw className="h-4 w-4 text-muted-foreground" /></Button>
+                    </div>
+                </div>
+            </div>
+
+            <FormField control={form.control} name="cliente_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Notas (Opcional)</FormLabel>
-                    <FormControl>
-                    <Textarea placeholder="Alergias, preferencias especiales, etc." {...field} />
-                    </FormControl>
+                    <FormLabel>Cliente</FormLabel>
+                    <div className="flex gap-2">
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Button variant="outline" type="button" className="shrink-0"><UserPlus className="h-4 w-4 mr-2"/>Nuevo cliente</Button>
+                    </div>
                     <FormMessage />
                 </FormItem>
-                )}
-            />
+            )}/>
+            
+            <FormField control={form.control} name="barbero_id" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Profesional</FormLabel>
+                    <div className="flex gap-2">
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
+                            <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Button variant="outline" type="button" size="icon" className="shrink-0"><Lock className="h-4 w-4"/></Button>
+                    </div>
+                    <FormMessage />
+                </FormItem>
+            )}/>
+
+             <FormField control={form.control} name="servicio" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Servicios</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
+                        <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                </FormItem>
+            )}/>
+          </div>
+
+          {/* Additional Info */}
+          <div className="space-y-4 pt-6 border-t">
+            <h3 className="font-semibold text-lg">Información adicional</h3>
+             <FormField control={form.control} name="precio" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Precio</FormLabel>
+                    <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                        <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
+                    </div>
+                    <FormMessage />
+                </FormItem>
+            )}/>
+            <FormField control={form.control} name="notas" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Notas compartidas con el cliente</FormLabel>
+                    <FormControl><Textarea rows={4} placeholder="Estas notas serán visibles para el cliente" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )}/>
+          </div>
         </div>
         
-        {!isEditMode && (
-        <DialogFooter>
+        <DialogFooter className="p-6 border-t">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+          <Button type="button" variant="secondary">Agregar otra reserva</Button>
+          <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar Reserva
+            Guardar reserva
           </Button>
         </DialogFooter>
-        )}
       </form>
     </Form>
   );
 
-  if (isEditMode && onOpenChange === undefined) {
-      return <FormContent />;
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
             <FormContent />
         </DialogContent>
     </Dialog>
   );
 }
+

@@ -27,7 +27,8 @@ import {
   Calendar as CalendarIcon,
   Tag,
   Clock,
-  Circle
+  Circle,
+  Save
 } from 'lucide-react';
 import type { Reservation } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
@@ -48,6 +49,7 @@ interface ReservationDetailModalProps {
   onOpenChange: (isOpen: boolean) => void;
   onPay: () => void;
   onUpdateStatus: (reservationId: string, status: string) => void;
+  onEdit: () => void;
 }
 
 const statusOptions = [
@@ -65,25 +67,32 @@ export function ReservationDetailModal({
   onOpenChange,
   onPay,
   onUpdateStatus,
+  onEdit
 }: ReservationDetailModalProps) {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("reserva");
+
 
   if (!reservation) return null;
   
   const handleSaveChanges = async (data: any) => {
     setIsSaving(true);
     try {
+        const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
         const serviceDuration = 30; // Assuming a default, this should be dynamic based on the service
-        const [hour, minute] = data.hora_inicio.split(':').map(Number);
-        const startTime = new Date(data.fecha.setHours(hour, minute));
+        const startTime = new Date(data.fecha.setHours(data.hora_inicio_h, data.hora_inicio_m));
         const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
         
         const dataToSave = {
             ...data,
             fecha: format(data.fecha, 'yyyy-MM-dd'),
+            hora_inicio,
             hora_fin: format(endTime, 'HH:mm'),
         };
+        
+        delete dataToSave.hora_inicio_h;
+        delete dataToSave.hora_inicio_m;
 
         const resRef = doc(db, 'reservas', reservation.id);
         await updateDoc(resRef, dataToSave);
@@ -102,80 +111,17 @@ export function ReservationDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-2xl flex items-center gap-3">
-            <User className="h-6 w-6 text-primary" />
-            Reserva de {reservation.customer}
-          </DialogTitle>
-          <DialogDescription>
-            Detalles de la cita, historial del cliente y acciones rápidas.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+        
 
-        <div className="flex-grow overflow-hidden">
-          <Tabs defaultValue="reserva" className="flex-grow flex flex-col h-full">
-            <TabsList className="mb-4">
-              <TabsTrigger value="reserva">Reserva</TabsTrigger>
-              <TabsTrigger value="pago">Pago</TabsTrigger>
-              <TabsTrigger value="recordatorios">Recordatorios</TabsTrigger>
-              <TabsTrigger value="cliente">Cliente</TabsTrigger>
-            </TabsList>
-            <ScrollArea className="flex-grow pr-2">
-              <TabsContent value="reserva" className="space-y-4">
-                 <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">Estado:</p>
-                    <TooltipProvider>
-                    <div className="flex gap-2">
-                        {statusOptions.map(({ status, color, label }) => (
-                             <Tooltip key={status}>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => onUpdateStatus(reservation.id, status)}
-                                        className={cn(`h-6 w-6 rounded-full ${color} transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring`, {
-                                            'ring-2 ring-offset-2 ring-primary': reservation.estado === status
-                                        })}
-                                        aria-label={`Marcar como ${label}`}
-                                    />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>{label}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        ))}
-                    </div>
-                    </TooltipProvider>
-                 </div>
-                 <NewReservationForm
-                    onFormSubmit={() => {}}
-                    onSaveChanges={handleSaveChanges}
-                    initialData={reservation}
-                    isEditMode
-                 />
-              </TabsContent>
-              <TabsContent value="pago" className="text-center text-muted-foreground p-8">
-                 <p>Información de pago estará disponible aquí.</p>
-              </TabsContent>
-              <TabsContent value="recordatorios" className="text-center text-muted-foreground p-8">
-                <p>Historial de recordatorios enviados estará aquí.</p>
-              </TabsContent>
-              <TabsContent value="cliente" className="text-center text-muted-foreground p-8">
-                <p>Detalles del cliente e historial aquí.</p>
-              </TabsContent>
-            </ScrollArea>
-          </Tabs>
+        <div className="flex-grow overflow-hidden flex flex-col">
+          <NewReservationForm
+            onFormSubmit={() => {}}
+            onSaveChanges={handleSaveChanges}
+            initialData={reservation}
+            isEditMode
+          />
         </div>
-
-        <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cerrar
-            </Button>
-            <div className="flex-grow" />
-            <Button onClick={onPay}>
-                <CreditCard className="mr-2 h-4 w-4" /> 
-                {reservation.pago_estado === 'Pagado' ? 'Ver Pago' : 'Pagar'}
-            </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

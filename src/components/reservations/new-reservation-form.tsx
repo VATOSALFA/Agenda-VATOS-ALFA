@@ -103,7 +103,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const selectedMinute = form.watch('hora_inicio_m');
 
   useEffect(() => {
-    if (selectedService) {
+    if (selectedService && services) {
         const service = services.find(s => s.name === selectedService);
         if (service) {
             form.setValue('precio', service.price);
@@ -112,43 +112,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   }, [selectedService, services, form]);
 
   const { hoursOptions, timeSlots } = useMemo(() => {
-    if (!selectedProfessionalId || !selectedDate) {
-      return { hoursOptions: [], timeSlots: [] };
-    }
-    const professional = professionals.find(p => p.id === selectedProfessionalId);
-    if (!professional || !professional.schedule) {
-      return { hoursOptions: [], timeSlots: [] };
-    }
-
-    const dayOfWeekIndex = getDay(selectedDate);
-    const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-    const dayOfWeek = dayNames[dayOfWeekIndex];
-    
-    const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
-    
-    if (!schedule || !schedule.enabled) {
-      return { hoursOptions: [], timeSlots: [] };
-    }
-
-    const [startHour] = schedule.start.split(':').map(Number);
-    const [endHour] = schedule.end.split(':').map(Number);
+    // General business hours, not professional-specific
+    const startHour = 10;
+    const endHour = 21;
     
     const hOptions = [];
     for (let i = startHour; i <= endHour; i++) {
         hOptions.push(String(i).padStart(2, '0'));
     }
 
-    const slots = [];
-    let currentTime = set(selectedDate, { hours: startHour, minutes: 0 });
-    const endTime = set(selectedDate, { hours: endHour, minutes: 0 });
-
-    while (currentTime < endTime) {
-        slots.push(format(currentTime, 'HH:mm'));
-        currentTime = new Date(currentTime.getTime() + 30 * 60000); // 30 minutes
-    }
-
-    return { hoursOptions: hOptions, timeSlots: slots };
-  }, [selectedProfessionalId, selectedDate, professionals]);
+    return { hoursOptions: hOptions, timeSlots: [] }; // timeSlots not used for dropdowns anymore
+  }, []);
 
   // Real-time availability check
   useEffect(() => {
@@ -207,6 +181,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
 
   const getServiceDuration = useCallback((serviceName: string) => {
+    if (!services) return 30;
     const service = services.find(s => s.name === serviceName);
     return service ? service.duration : 30; // default to 30 mins
   }, [services]);
@@ -355,9 +330,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 <FormItem>
                     <div className="flex justify-between items-center">
                        <FormLabel>Cliente</FormLabel>
-                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                          <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                        </Button>
+                       <Dialog>
+                          <DialogTrigger asChild>
+                             <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                             </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-lg">
+                             <NewClientForm onFormSubmit={handleClientCreated} />
+                          </DialogContent>
+                       </Dialog>
                     </div>
                     <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
@@ -433,12 +415,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         </DialogFooter>
       </form>
     </Form>
-
-    <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent className="sm:max-w-lg">
-            <NewClientForm onFormSubmit={handleClientCreated} />
-        </DialogContent>
-    </Dialog>
     </>
   );
 
@@ -450,3 +426,4 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Dialog>
   );
 }
+

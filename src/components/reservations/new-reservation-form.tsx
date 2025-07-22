@@ -111,8 +111,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     }
   }, [selectedService, services, form]);
 
-  const { hoursOptions, timeSlots } = useMemo(() => {
-    // General business hours, not professional-specific
+  const { hoursOptions } = useMemo(() => {
     const startHour = 10;
     const endHour = 21;
     
@@ -121,13 +120,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         hOptions.push(String(i).padStart(2, '0'));
     }
 
-    return { hoursOptions: hOptions, timeSlots: [] }; // timeSlots not used for dropdowns anymore
+    return { hoursOptions: hOptions };
   }, []);
 
   // Real-time availability check
   useEffect(() => {
     if (selectedProfessionalId && selectedDate && selectedHour && selectedMinute) {
-      form.clearErrors('barbero_id'); // Clear previous errors
+      form.clearErrors('barbero_id'); 
       const professional = professionals.find(p => p.id === selectedProfessionalId);
       if (!professional || !professional.schedule) return;
 
@@ -149,7 +148,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
 
   useEffect(() => {
-    if (initialData) {
+    if (initialData && form) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
             const dateParts = initialData.fecha.split('-').map(Number);
@@ -330,7 +329,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 <FormItem>
                     <div className="flex justify-between items-center">
                        <FormLabel>Cliente</FormLabel>
-                       <Dialog>
+                       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
                           <DialogTrigger asChild>
                              <Button type="button" variant="link" size="sm" className="h-auto p-0">
                                 <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
@@ -426,5 +425,4 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Dialog>
   );
 }
-
 

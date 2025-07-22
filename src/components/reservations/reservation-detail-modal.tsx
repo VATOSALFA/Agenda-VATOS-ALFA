@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -34,13 +35,17 @@ import { es } from 'date-fns/locale';
 import { NewReservationForm } from './new-reservation-form';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Loader2 } from 'lucide-react';
 
 
 interface ReservationDetailModalProps {
   reservation: Reservation;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onEdit: () => void;
   onPay: () => void;
   onUpdateStatus: (reservationId: string, status: string) => void;
 }
@@ -58,11 +63,42 @@ export function ReservationDetailModal({
   reservation,
   isOpen,
   onOpenChange,
-  onEdit,
   onPay,
   onUpdateStatus,
 }: ReservationDetailModalProps) {
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
+
   if (!reservation) return null;
+  
+  const handleSaveChanges = async (data: any) => {
+    setIsSaving(true);
+    try {
+        const serviceDuration = 30; // Assuming a default, this should be dynamic based on the service
+        const [hour, minute] = data.hora_inicio.split(':').map(Number);
+        const startTime = new Date(data.fecha.setHours(hour, minute));
+        const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
+        
+        const dataToSave = {
+            ...data,
+            fecha: format(data.fecha, 'yyyy-MM-dd'),
+            hora_fin: format(endTime, 'HH:mm'),
+        };
+
+        const resRef = doc(db, 'reservas', reservation.id);
+        await updateDoc(resRef, dataToSave);
+        toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.' });
+        onUpdateStatus(reservation.id, reservation.estado); // to force a refetch
+        onOpenChange(false);
+
+    } catch (error) {
+        console.error('Error al actualizar la reserva:', error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar la reserva.' });
+    } finally {
+        setIsSaving(false);
+    }
+  }
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -111,7 +147,8 @@ export function ReservationDetailModal({
                     </TooltipProvider>
                  </div>
                  <NewReservationForm
-                    onFormSubmit={() => onOpenChange(false)}
+                    onFormSubmit={() => {}}
+                    onSaveChanges={handleSaveChanges}
                     initialData={reservation}
                     isEditMode
                  />
@@ -134,9 +171,6 @@ export function ReservationDetailModal({
                 Cerrar
             </Button>
             <div className="flex-grow" />
-            <Button variant="secondary" onClick={onEdit}>
-                <Pencil className="mr-2 h-4 w-4" /> Editar
-            </Button>
             <Button onClick={onPay}>
                 <CreditCard className="mr-2 h-4 w-4" /> 
                 {reservation.pago_estado === 'Pagado' ? 'Ver Pago' : 'Pagar'}

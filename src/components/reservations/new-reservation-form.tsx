@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -52,13 +53,14 @@ type ReservationFormData = z.infer<typeof reservationSchema>;
 
 interface NewReservationFormProps {
   onFormSubmit: () => void;
+  onSaveChanges?: (data: any) => void;
   isOpen?: boolean; // For standalone dialog usage
   onOpenChange?: (isOpen: boolean) => void; // For standalone dialog usage
   isEditMode?: boolean;
   initialData?: Partial<Reservation> & {id?: string};
 }
 
-export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false }: NewReservationFormProps) {
+export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveChanges, initialData, isEditMode = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
@@ -195,6 +197,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [selectedBarberId, selectedDate, selectedService, professionals, services, generateTimeSlots, initialData, isEditMode]);
 
   async function onSubmit(data: ReservationFormData) {
+    if (isEditMode && onSaveChanges) {
+        onSaveChanges(data);
+        return;
+    }
+    
     setIsSubmitting(true);
     try {
       const serviceDuration = getServiceDuration(data.servicio);
@@ -243,12 +250,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const FormContent = () => (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        { !isEditMode && (
         <DialogHeader>
-          <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
+          <DialogTitle>Nueva Reserva</DialogTitle>
           <DialogDescription>
-            {isEditMode ? 'Modifica los detalles de la cita.' : 'Completa los detalles para agendar una nueva cita.'}
+            Completa los detalles para agendar una nueva cita.
           </DialogDescription>
         </DialogHeader>
+        )}
+        
+        { isEditMode && (
+          <DialogHeader>
+            <DialogTitle>Editar Reserva</DialogTitle>
+            <DialogDescription>
+              Modifica los detalles de la cita.
+            </DialogDescription>
+          </DialogHeader>
+        )}
 
         <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
           {/* Form Fields */}
@@ -419,13 +437,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             />
         </div>
         
+        {!isEditMode && (
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditMode ? 'Guardar Cambios' : 'Guardar Reserva'}
+            Guardar Reserva
           </Button>
         </DialogFooter>
+        )}
       </form>
     </Form>
   );

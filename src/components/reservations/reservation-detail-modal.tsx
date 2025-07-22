@@ -33,6 +33,8 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { NewReservationForm } from './new-reservation-form';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { cn } from '@/lib/utils';
+
 
 interface ReservationDetailModalProps {
   reservation: Reservation;
@@ -94,7 +96,9 @@ export function ReservationDetailModal({
                                 <TooltipTrigger asChild>
                                     <button
                                         onClick={() => onUpdateStatus(reservation.id, status)}
-                                        className={`h-6 w-6 rounded-full ${color} transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring ${reservation.estado === status ? 'ring-2 ring-offset-2 ring-primary' : ''}`}
+                                        className={cn(`h-6 w-6 rounded-full ${color} transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring`, {
+                                            'ring-2 ring-offset-2 ring-primary': reservation.estado === status
+                                        })}
                                         aria-label={`Marcar como ${label}`}
                                     />
                                 </TooltipTrigger>

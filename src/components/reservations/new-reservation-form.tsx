@@ -78,7 +78,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     if (initialData) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
-            fecha = parseISO(initialData.fecha);
+            const [year, month, day] = initialData.fecha.split('-').map(Number);
+            fecha = new Date(year, month - 1, day);
         } else if (initialData.fecha instanceof Date) {
             fecha = initialData.fecha;
         }
@@ -216,6 +217,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         await addDoc(collection(db, 'reservas'), {
             ...dataToSave,
             estado: 'Reservado',
+            pago_estado: 'Pendiente',
             canal_reserva: 'agenda',
             creada_por: 'admin',
             creado_en: Timestamp.now(),
@@ -418,6 +420,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         </div>
         
         <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEditMode ? 'Guardar Cambios' : 'Guardar Reserva'}
@@ -427,7 +430,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Form>
   );
 
-  if (isEditMode) {
+  if (isEditMode && onOpenChange === undefined) {
       return <FormContent />;
   }
 

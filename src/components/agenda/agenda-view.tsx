@@ -15,7 +15,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle } from 'lucide-react';
 import { format, addDays, subDays, isToday, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -83,6 +83,27 @@ const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text
     </div>
 );
 
+const getStatusColor = (status: string | undefined) => {
+    switch (status) {
+        case 'Reservado':
+            return 'bg-blue-100 border-blue-500 text-blue-800';
+        case 'Confirmado':
+            return 'bg-yellow-100 border-yellow-500 text-yellow-800';
+        case 'Asiste':
+            return 'bg-pink-100 border-pink-500 text-pink-800';
+        case 'No asiste':
+            return 'bg-orange-100 border-orange-500 text-orange-800';
+        case 'Pendiente':
+            return 'bg-red-100 border-red-500 text-red-800';
+        case 'En espera':
+            return 'bg-green-100 border-green-500 text-green-800';
+        case 'Pagado':
+            return 'bg-green-100 border-green-500 text-green-800';
+        default:
+            return 'bg-gray-100 border-gray-500 text-gray-800';
+    }
+}
+
 
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
@@ -123,8 +144,8 @@ export default function AgendaView() {
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date, reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', queryKey, reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', queryKey, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 
@@ -143,7 +164,7 @@ export default function AgendaView() {
             customer: client ? `${client.nombre} ${client.apellido}` : 'Cliente Desconocido',
             start: start,
             duration: Math.max(0.5, end - start),
-            color: 'bg-pink-100 border-pink-500', // Default color, can be customized later
+            color: getStatusColor(res.estado),
             type: 'appointment'
         };
     });
@@ -232,8 +253,11 @@ export default function AgendaView() {
   };
   
   const handleOpenDetailModal = (event: any) => {
-      setSelectedReservation(event as Reservation);
-      setIsDetailModalOpen(true);
+      const fullReservation = reservations.find(r => r.id === event.id)
+      if (fullReservation) {
+        setSelectedReservation({ ...fullReservation, customer: event.customer });
+        setIsDetailModalOpen(true);
+      }
   }
 
   const handleEditFromDetail = () => {
@@ -261,6 +285,10 @@ export default function AgendaView() {
         const resRef = doc(db, 'reservas', reservationId);
         await updateDoc(resRef, { estado: newStatus });
         toast({ title: 'Estado actualizado', description: `La reserva ahora está en estado: ${newStatus}`});
+        setQueryKey(k => k + 1)
+        if(selectedReservation) {
+            setSelectedReservation({...selectedReservation, estado: newStatus})
+        }
     } catch(err) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.'})
     }
@@ -522,15 +550,21 @@ export default function AgendaView() {
                                           className={cn(
                                               "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
                                               event.color,
-                                              'text-[#1A1A1A]',
-                                              (event as any).pago_estado === 'Pagado' && 'border-green-500'
+                                              'text-slate-800'
                                           )} style={{...calculatePosition((event as any).start, (event as any).duration), left: '0px'}}>
-                                          <p className="font-bold text-xs truncate leading-tight">{(event as any).customer}</p>
+                                          <div className='flex items-center gap-1.5 w-full'>
+                                            {(event as any).pago_estado === 'Pagado' && <DollarSign className='h-3 w-3 text-green-700 flex-shrink-0' />}
+                                            <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer}</p>
+                                          </div>
                                         </div>
                                       </TooltipTrigger>
                                       {event.type === 'appointment' ? (
                                         <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                           <div className="space-y-2">
+                                            <div className='flex items-center gap-2'>
+                                               <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-100', '-500'))} fill="currentColor" />
+                                               <p className='font-semibold'>{(event as any).estado}</p>
+                                            </div>
                                             <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
                                             <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -574,6 +608,7 @@ export default function AgendaView() {
             setQueryKey(k => k + 1)
           }}
           initialData={reservationInitialData}
+          isEditMode={!!reservationInitialData?.id}
         />
       </Dialog>
       

@@ -28,7 +28,8 @@ import {
   Tag,
   Clock,
   Circle,
-  Save
+  Save,
+  Trash2
 } from 'lucide-react';
 import type { Reservation } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
@@ -38,9 +39,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
+import { CancelReservationModal } from './cancel-reservation-modal';
 
 
 interface ReservationDetailModalProps {
@@ -70,6 +72,7 @@ export function ReservationDetailModal({
   onEdit
 }: ReservationDetailModalProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("reserva");
 
@@ -108,23 +111,52 @@ export function ReservationDetailModal({
     }
   }
 
+  const handleDeleteReservation = async (reservationId: string) => {
+    try {
+        await deleteDoc(doc(db, "reservas", reservationId));
+        toast({
+            title: "Reserva cancelada con éxito",
+        });
+        onOpenChange(false);
+        // The parent component (AgendaView) will refetch due to the onSnapshot listener
+    } catch (error) {
+        console.error("Error deleting reservation: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
+        });
+    }
+  };
+
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-6 pb-0">
-            <DialogTitle>Detalle de la Reserva</DialogTitle>
-        </DialogHeader>
-        <div className="flex-grow overflow-hidden flex flex-col">
-          <NewReservationForm
-            onFormSubmit={() => {}}
-            onSaveChanges={handleSaveChanges}
-            initialData={reservation}
-            isEditMode
-            isDialogChild={true}
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-6 flex-row justify-between items-center border-b">
+              <DialogTitle>Detalle de la Reserva</DialogTitle>
+              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
+                  <Trash2 className="h-5 w-5" />
+              </Button>
+          </DialogHeader>
+          <div className="flex-grow overflow-hidden flex flex-col">
+            <NewReservationForm
+              onFormSubmit={() => {}}
+              onSaveChanges={handleSaveChanges}
+              initialData={reservation}
+              isEditMode
+              isDialogChild={true}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+      <CancelReservationModal
+        isOpen={isCancelModalOpen}
+        onOpenChange={setIsCancelModalOpen}
+        reservation={reservation}
+        onConfirm={handleDeleteReservation}
+      />
+    </>
   );
 }

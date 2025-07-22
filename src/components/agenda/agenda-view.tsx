@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useRef, MouseEvent, useEffect, useMemo } from 'react';
@@ -15,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2 } from 'lucide-react';
 import { format, addDays, subDays, isToday, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -29,10 +30,11 @@ import { ReservationDetailModal } from '../reservations/reservation-detail-modal
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where, doc, updateDoc } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Profesional, Client, Service, ScheduleDay, Reservation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // in pixels
@@ -122,6 +124,8 @@ export default function AgendaView() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
 
 
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
@@ -144,7 +148,7 @@ export default function AgendaView() {
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
+  const { data: reservations, setKey: setReservationsKey } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
@@ -285,7 +289,6 @@ export default function AgendaView() {
         const resRef = doc(db, 'reservas', reservationId);
         await updateDoc(resRef, { estado: newStatus });
         toast({ title: 'Estado actualizado', description: `La reserva ahora está en estado: ${newStatus}`});
-        setQueryKey(k => k + 1)
         if(selectedReservation) {
             setSelectedReservation({...selectedReservation, estado: newStatus})
         }
@@ -293,6 +296,24 @@ export default function AgendaView() {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.'})
     }
   };
+
+  const handleDeleteReservation = async (reservationId: string) => {
+    try {
+        await deleteDoc(doc(db, "reservas", reservationId));
+        toast({
+            title: "Reserva cancelada con éxito",
+        });
+        // The onSnapshot listener in useFirestoreQuery will handle the UI update
+    } catch (error) {
+        console.error("Error deleting reservation: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
+        });
+    }
+  };
+
 
   const calculatePosition = (start: number, duration: number) => {
     const top = (start - START_HOUR) * HOURLY_SLOT_HEIGHT;
@@ -561,9 +582,15 @@ export default function AgendaView() {
                                       {event.type === 'appointment' ? (
                                         <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                           <div className="space-y-2">
-                                            <div className='flex items-center gap-2'>
-                                               <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-100', '-500'))} fill="currentColor" />
-                                               <p className='font-semibold'>{(event as any).estado}</p>
+                                            <div className='flex items-center justify-between'>
+                                                <div className='flex items-center gap-2'>
+                                                  <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-100', '-500'))} fill="currentColor" />
+                                                  <p className='font-semibold'>{(event as any).estado}</p>
+                                                </div>
+                                                <div className='flex items-center'>
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenDetailModal(event as Reservation)}><Pencil className="h-4 w-4" /></Button>
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/80" onClick={() => { setReservationToCancel(event as Reservation); setIsCancelModalOpen(true); }}><Trash2 className="h-4 w-4" /></Button>
+                                                </div>
                                             </div>
                                             <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
                                             <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
@@ -605,7 +632,7 @@ export default function AgendaView() {
           onOpenChange={setIsReservationModalOpen}
           onFormSubmit={() => {
             setIsReservationModalOpen(false)
-            setQueryKey(k => k + 1)
+            setReservationsKey(k => k + 1)
           }}
           initialData={reservationInitialData}
           isEditMode={!!reservationInitialData?.id}
@@ -617,7 +644,7 @@ export default function AgendaView() {
         onOpenChange={setIsBlockScheduleModalOpen}
         onFormSubmit={() => {
             setIsBlockScheduleModalOpen(false);
-            setQueryKey(k => k + 1)
+            setReservationsKey(k => k + 1)
         }} 
         initialData={blockInitialData}
       />
@@ -637,6 +664,13 @@ export default function AgendaView() {
         isOpen={isSaleSheetOpen} 
         onOpenChange={setIsSaleSheetOpen}
         initialData={saleInitialData}
+      />
+
+      <CancelReservationModal
+        isOpen={isCancelModalOpen}
+        onOpenChange={setIsCancelModalOpen}
+        reservation={reservationToCancel}
+        onConfirm={handleDeleteReservation}
       />
     </TooltipProvider>
   );

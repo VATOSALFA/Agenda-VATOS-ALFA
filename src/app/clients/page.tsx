@@ -275,7 +275,10 @@ export default function ClientsPage() {
           client={selectedClient} 
           isOpen={isDetailModalOpen} 
           onOpenChange={setIsDetailModalOpen}
-          onNewReservation={() => setIsReservationModalOpen(true)}
+          onNewReservation={() => {
+            setIsDetailModalOpen(false); // Close detail modal
+            setIsReservationModalOpen(true); // Open reservation modal
+          }}
         />
       )}
 
@@ -285,7 +288,6 @@ export default function ClientsPage() {
                 <NewReservationForm
                     onFormSubmit={() => {
                         setIsReservationModalOpen(false);
-                        setIsDetailModalOpen(false);
                         handleDataUpdated();
                     }}
                     initialData={{ cliente_id: selectedClient?.id }}

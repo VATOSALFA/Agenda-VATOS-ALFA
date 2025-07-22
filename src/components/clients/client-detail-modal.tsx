@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank } from 'lucide-react';
 import type { Client } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where } from 'firebase/firestore';
@@ -49,6 +49,19 @@ const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label:
   </div>
 );
 
+const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | number, icon: React.ElementType, description?: string }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </CardContent>
+    </Card>
+);
+
 export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservation }: ClientDetailModalProps) {
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>(
     'reservas',
@@ -76,22 +89,25 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     return format(dateObj, includeTime ? 'PPP p' : 'PPP', { locale: es });
   };
   
+  const totalSpent = salesLoading ? 0 : sales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center gap-2">
-            <User className="h-6 w-6 text-primary" /> Ficha de Cliente
+            <User className="h-6 w-6 text-primary" /> Ficha de Cliente: {client.nombre} {client.apellido}
           </DialogTitle>
           <DialogDescription>
-            Información detallada, historial y acciones para {client.nombre} {client.apellido}.
+            Información detallada, historial y acciones para este cliente.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid md:grid-cols-3 gap-6 flex-grow overflow-hidden">
-          {/* Client Info */}
+        <div className="grid md:grid-cols-4 gap-6 flex-grow overflow-hidden py-4">
+          {/* Client Info and Actions */}
           <div className="md:col-span-1 space-y-6 bg-card/50 p-6 rounded-lg overflow-y-auto">
             <h3 className="text-xl font-bold text-primary">{client.nombre} {client.apellido}</h3>
+            <InfoRow icon={User} label="Número de cliente" value={client.id} />
             <InfoRow icon={Phone} label="Teléfono" value={client.telefono} />
             <InfoRow icon={Mail} label="Correo Electrónico" value={client.correo} />
             <InfoRow icon={Cake} label="Fecha de Nacimiento" value={client.fecha_nacimiento ? formatDate(client.fecha_nacimiento) : null} />
@@ -113,21 +129,32 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
           </div>
 
           {/* History Tabs */}
-          <div className="md:col-span-2 flex flex-col">
-            <Tabs defaultValue="reservations" className="flex-grow flex flex-col">
+          <div className="md:col-span-3 flex flex-col">
+            <Tabs defaultValue="general" className="flex-grow flex flex-col">
               <TabsList className="mb-4">
-                <TabsTrigger value="reservations"><Calendar className="mr-2 h-4 w-4" /> Historial de Reservas</TabsTrigger>
-                <TabsTrigger value="sales"><ShoppingCart className="mr-2 h-4 w-4" /> Historial de Ventas</TabsTrigger>
+                <TabsTrigger value="general">Información General</TabsTrigger>
+                <TabsTrigger value="reservations">Historial de Reservas</TabsTrigger>
+                <TabsTrigger value="sales">Historial de Compras</TabsTrigger>
               </TabsList>
               
               <ScrollArea className="flex-grow pr-2">
+                <TabsContent value="general" className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <StatCard title="Citas totales" value={reservationsLoading ? '...' : reservations.length} icon={Calendar} />
+                        <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : reservations.filter(r => r.estado === 'Asiste').length} icon={UserCheck} />
+                        <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : reservations.filter(r => r.estado === 'No asiste').length} icon={UserX} />
+                        <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-CL')}`} icon={PiggyBank} />
+                    </div>
+                    {/* Add more general info widgets here */}
+                </TabsContent>
                 <TabsContent value="reservations">
-                  {reservationsLoading ? <Skeleton className="h-40 w-full" /> : reservations.length > 0 ? (
+                  {reservationsLoading ? <Skeleton className="h-60 w-full" /> : reservations.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Fecha</TableHead>
                           <TableHead>Servicio</TableHead>
+                          <TableHead>Profesional</TableHead>
                           <TableHead>Estado</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -136,6 +163,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                           <TableRow key={res.id}>
                             <TableCell>{formatDate(res.fecha, true)}</TableCell>
                             <TableCell>{res.servicio}</TableCell>
+                            <TableCell>{res.barbero_id}</TableCell> {/* This would need a lookup to show name */}
                             <TableCell><Badge>{res.estado}</Badge></TableCell>
                           </TableRow>
                         ))}
@@ -145,26 +173,33 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                 </TabsContent>
 
                 <TabsContent value="sales">
-                  {salesLoading ? <Skeleton className="h-40 w-full" /> : sales.length > 0 ? (
-                    <div className="space-y-4">
-                      {sales.map(sale => (
-                        <Card key={sale.id} className="bg-card/70">
-                           <CardHeader className="flex flex-row justify-between items-center p-4">
-                                <div>
-                                    <CardTitle className="text-lg">{formatDate(sale.fecha_hora_venta, true)}</CardTitle>
-                                    <CardDescription>Total: ${(sale.total ?? 0).toLocaleString('es-CL')} ({sale.metodo_pago})</CardDescription>
-                                </div>
-                           </CardHeader>
-                           <CardContent className="p-4 pt-0">
-                                <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                                    {sale.items?.map((item, index) => (
-                                        <li key={index}>{item.cantidad}x {item.nombre} - ${(item.precio_unitario ?? 0).toLocaleString('es-CL')} c/u</li>
-                                    ))}
-                                </ul>
-                           </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                  {salesLoading ? <Skeleton className="h-60 w-full" /> : sales.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Items</TableHead>
+                                <TableHead>Método de pago</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {sales.map(sale => (
+                            <TableRow key={sale.id}>
+                                <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
+                                <TableCell>
+                                    <ul className="list-disc pl-4 text-xs">
+                                        {sale.items?.map((item, index) => (
+                                            <li key={index}>{item.cantidad}x {item.nombre}</li>
+                                        ))}
+                                    </ul>
+                                </TableCell>
+                                <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
+                                <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-CL')}</TableCell>
+                            </TableRow>
+                        ))}
+                        </TableBody>
+                    </Table>
                   ) : <p className="text-muted-foreground text-center py-10">No hay ventas registradas.</p>}
                 </TabsContent>
               </ScrollArea>

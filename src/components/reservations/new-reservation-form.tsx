@@ -48,7 +48,7 @@ const reservationSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   hora_inicio_h: z.string().min(1, 'Selecciona hora.'),
   hora_inicio_m: z.string().min(1, 'Selecciona minuto.'),
-  precio: z.coerce.number().optional(),
+  precio: z.coerce.number().optional().default(0),
   estado: z.string().optional(),
   notas: z.string().optional(),
   nota_interna: z.string().optional(),
@@ -249,6 +249,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
   const selectedStatus = form.watch('estado');
   const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
+  const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
 
   const FormContent = () => (
     <>
@@ -265,12 +266,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 <FormItem>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger className="w-[180px]">
-                        <div className="flex items-center gap-2">
-                           <span className={cn('h-3 w-3 rounded-full', statusColor)} />
-                           <SelectValue />
-                        </div>
-                      </SelectTrigger>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue asChild>
+                                <div className="flex items-center gap-2">
+                                    <span className={cn('h-3 w-3 rounded-full', statusColor)} />
+                                    <span>{selectedStatusLabel}</span>
+                                </div>
+                            </SelectValue>
+                        </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {statusOptions.map(opt => (

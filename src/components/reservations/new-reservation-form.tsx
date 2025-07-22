@@ -35,10 +35,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell } from 'lucide-react';
 import type { Profesional, Service, Reservation } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
+import { Card, CardContent } from '../ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Checkbox } from '../ui/checkbox';
 
 
 const reservationSchema = z.object({
@@ -52,6 +57,12 @@ const reservationSchema = z.object({
   estado: z.string().optional(),
   notas: z.string().optional(),
   nota_interna: z.string().optional(),
+  notifications: z.object({
+    email_notification: z.boolean().default(true),
+    email_reminder: z.boolean().default(true),
+    whatsapp_notification: z.boolean().default(true),
+    whatsapp_reminder: z.boolean().default(true),
+  }).optional()
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -94,6 +105,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
       nota_interna: '',
       estado: 'Reservado',
       precio: 0,
+      notifications: {
+        email_notification: true,
+        email_reminder: true,
+        whatsapp_notification: true,
+        whatsapp_reminder: true,
+      }
     },
   });
   
@@ -102,6 +119,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const selectedDate = form.watch('fecha');
   const selectedHour = form.watch('hora_inicio_h');
   const selectedMinute = form.watch('hora_inicio_m');
+  const selectedClientId = form.watch('cliente_id');
+
+  const selectedClient = useMemo(() => {
+    return clients.find(c => c.id === selectedClientId)
+  }, [selectedClientId, clients]);
+
 
   useEffect(() => {
     if (selectedService && services) {
@@ -331,28 +354,81 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 </div>
             </div>
 
-            <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                <FormItem>
-                    <div className="flex justify-between items-center">
-                       <FormLabel>Cliente</FormLabel>
-                       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-                          <DialogTrigger asChild>
-                             <Button type="button" variant="link" size="sm" className="h-auto p-0">
-                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                             </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-lg">
-                             <NewClientForm onFormSubmit={handleClientCreated} />
-                          </DialogContent>
-                       </Dialog>
-                    </div>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                        <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-            )}/>
+            {selectedClient ? (
+                <Card>
+                    <CardContent className="p-4">
+                         <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-4">
+                                <Avatar className="h-10 w-10">
+                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                            </div>
+                        </div>
+                        <Accordion type="single" collapsible className="w-full mt-2">
+                            <AccordionItem value="notifications">
+                                <AccordionTrigger className="text-sm py-2">Notificaciones automáticas de cita y recordatorios</AccordionTrigger>
+                                <AccordionContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead></TableHead>
+                                                <TableHead className="text-center">Email</TableHead>
+                                                <TableHead className="text-center">WhatsApp</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            <TableRow>
+                                                <TableCell className="font-medium">Notificaciones de cita</TableCell>
+                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.email_notification" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
+                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
+                                            </TableRow>
+                                            <TableRow>
+                                                <TableCell className="font-medium">Recordatorio</TableCell>
+                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.email_reminder" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
+                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
+                    </CardContent>
+                </Card>
+            ) : (
+                <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                    <FormItem>
+                        <div className="flex justify-between items-center">
+                           <FormLabel>Cliente</FormLabel>
+                           <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+                              <DialogTrigger asChild>
+                                 <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                 </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-lg">
+                                 <NewClientForm onFormSubmit={handleClientCreated} />
+                              </DialogContent>
+                           </Dialog>
+                        </div>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}/>
+            )}
             
             <FormField control={form.control} name="barbero_id" render={({ field }) => (
                 <FormItem>

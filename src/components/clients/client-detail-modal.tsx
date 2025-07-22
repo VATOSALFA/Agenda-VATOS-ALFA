@@ -152,13 +152,13 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                            <CardHeader className="flex flex-row justify-between items-center p-4">
                                 <div>
                                     <CardTitle className="text-lg">{formatDate(sale.fecha_hora_venta, true)}</CardTitle>
-                                    <CardDescription>Total: ${sale.total.toLocaleString('es-CL')} ({sale.metodo_pago})</CardDescription>
+                                    <CardDescription>Total: ${(sale.total ?? 0).toLocaleString('es-CL')} ({sale.metodo_pago})</CardDescription>
                                 </div>
                            </CardHeader>
                            <CardContent className="p-4 pt-0">
                                 <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                                    {sale.items.map((item, index) => (
-                                        <li key={index}>{item.cantidad}x {item.nombre} - ${item.precio_unitario.toLocaleString('es-CL')} c/u</li>
+                                    {sale.items?.map((item, index) => (
+                                        <li key={index}>{item.cantidad}x {item.nombre} - ${(item.precio_unitario ?? 0).toLocaleString('es-CL')} c/u</li>
                                     ))}
                                 </ul>
                            </CardContent>

@@ -290,7 +290,13 @@ export default function ClientsPage() {
 
       {isReservationModalOpen && (
         <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-xl p-0">
+                 <DialogHeader className="p-6 pb-0">
+                    <DialogTitle>Nueva Reserva</DialogTitle>
+                    <DialogDescription>
+                        Crea una nueva reserva para {selectedClient?.nombre} {selectedClient?.apellido}.
+                    </DialogDescription>
+                </DialogHeader>
                 <NewReservationForm
                     onFormSubmit={() => {
                         setIsReservationModalOpen(false);

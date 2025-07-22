@@ -281,10 +281,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     <>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-        <FormHeader className="p-6 flex-row items-center justify-between border-b">
-          <div className="space-y-1">
-             { !isDialogChild && <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle> }
-          </div>
+        <div className="p-6 flex-row items-center justify-between border-b">
            <FormField
               control={form.control}
               name="estado"
@@ -316,7 +313,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 </FormItem>
               )}
             />
-        </FormHeader>
+        </div>
 
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
           {/* Main reservation fields */}

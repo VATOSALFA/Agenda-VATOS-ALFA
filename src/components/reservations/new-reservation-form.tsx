@@ -1,8 +1,7 @@
 
-
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,7 +10,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, parseISO } from 'date-fns';
+import { parse, format, set, parseISO, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -51,6 +50,7 @@ const reservationSchema = z.object({
   precio: z.coerce.number().optional(),
   estado: z.string().optional(),
   notas: z.string().optional(),
+  nota_interna: z.string().optional(),
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -73,7 +73,6 @@ const statusOptions = [
     { value: 'En espera', label: 'En espera', color: 'bg-green-500' },
 ];
 
-const hoursOptions = Array.from({length: 24}, (_, i) => String(i).padStart(2,'0'));
 const minutesOptions = ['00', '15', '30', '45'];
 
 
@@ -82,7 +81,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   
-  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+  const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
   
@@ -90,10 +89,64 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     resolver: zodResolver(reservationSchema),
     defaultValues: {
       notas: '',
+      nota_interna: '',
       estado: 'Reservado',
     },
   });
   
+  const selectedService = form.watch('servicio');
+  const selectedProfessionalId = form.watch('barbero_id');
+  const selectedDate = form.watch('fecha');
+
+  useEffect(() => {
+    if (selectedService) {
+        const service = services.find(s => s.name === selectedService);
+        if (service) {
+            form.setValue('precio', service.price);
+        }
+    }
+  }, [selectedService, services, form]);
+
+  const { hoursOptions, timeSlots } = useMemo(() => {
+    if (!selectedProfessionalId || !selectedDate) {
+      return { hoursOptions: [], timeSlots: [] };
+    }
+    const professional = professionals.find(p => p.id === selectedProfessionalId);
+    if (!professional || !professional.schedule) {
+      return { hoursOptions: [], timeSlots: [] };
+    }
+
+    const dayOfWeekIndex = getDay(selectedDate);
+    const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+    const dayOfWeek = dayNames[dayOfWeekIndex];
+    
+    const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
+    
+    if (!schedule || !schedule.enabled) {
+      return { hoursOptions: [], timeSlots: [] };
+    }
+
+    const [startHour] = schedule.start.split(':').map(Number);
+    const [endHour] = schedule.end.split(':').map(Number);
+    
+    const hOptions = [];
+    for (let i = startHour; i <= endHour; i++) {
+        hOptions.push(String(i).padStart(2, '0'));
+    }
+
+    const slots = [];
+    let currentTime = set(selectedDate, { hours: startHour, minutes: 0 });
+    const endTime = set(selectedDate, { hours: endHour, minutes: 0 });
+
+    while (currentTime < endTime) {
+        slots.push(format(currentTime, 'HH:mm'));
+        currentTime = new Date(currentTime.getTime() + 30 * 60000); // 30 minutes
+    }
+
+    return { hoursOptions: hOptions, timeSlots: slots };
+  }, [selectedProfessionalId, selectedDate, professionals]);
+
+
   useEffect(() => {
     if (initialData) {
         let fecha = new Date();
@@ -114,7 +167,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         hora_inicio_h: h,
         hora_inicio_m: m,
         estado: initialData.estado,
-        // TODO: Precio y notas
+        precio: 'precio' in initialData ? initialData.precio : undefined,
+        notas: initialData.notas,
+        nota_interna: initialData.nota_interna,
       });
     }
   }, [initialData, form, isOpen]);
@@ -183,7 +238,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    // You might want to trigger a refetch of clients here if not using realtime updates
+    setClientQueryKey(prev => prev + 1);
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
@@ -257,9 +312,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 <div className="col-span-2">
                     <FormLabel>Hora</FormLabel>
                     <div className="flex items-center gap-2">
-                        <FormField control={form.control} name="hora_inicio_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                        <FormField control={form.control} name="hora_inicio_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
                         <span>:</span>
-                        <FormField control={form.control} name="hora_inicio_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                        <FormField control={form.control} name="hora_inicio_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM"/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
                         <Button variant="ghost" size="icon" type="button"><RefreshCw className="h-4 w-4 text-muted-foreground" /></Button>
                     </div>
                 </div>
@@ -327,6 +382,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                     <FormMessage />
                 </FormItem>
             )}/>
+             <FormField control={form.control} name="nota_interna" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Nota interna</FormLabel>
+                    <FormControl><Textarea rows={4} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )}/>
           </div>
         </div>
         
@@ -341,13 +403,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
       </form>
     </Form>
 
-    {isClientModalOpen && (
-      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+    <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent>
             <NewClientForm onFormSubmit={handleClientCreated} />
         </DialogContent>
-      </Dialog>
-    )}
+    </Dialog>
     </>
   );
 

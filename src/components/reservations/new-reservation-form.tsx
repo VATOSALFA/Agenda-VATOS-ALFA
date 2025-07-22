@@ -125,8 +125,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
   // Real-time availability check
   useEffect(() => {
+    form.clearErrors('barbero_id'); 
     if (selectedProfessionalId && selectedDate && selectedHour && selectedMinute) {
-      form.clearErrors('barbero_id'); 
       const professional = professionals.find(p => p.id === selectedProfessionalId);
       if (!professional || !professional.schedule) return;
 
@@ -425,3 +425,4 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Dialog>
   );
 }
+

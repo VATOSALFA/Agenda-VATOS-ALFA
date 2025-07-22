@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, parseISO, getDay } from 'date-fns';
+import { parse, format, set, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -178,10 +178,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     if (initialData) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
-            const [year, month, day] = initialData.fecha.split('-').map(Number);
-            fecha = new Date(year, month - 1, day);
+            const dateParts = initialData.fecha.split('-').map(Number);
+            if (dateParts.length === 3) {
+                fecha = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+            }
         } else if (initialData.fecha instanceof Date) {
             fecha = initialData.fecha;
+        } else if ((initialData.fecha as any)?.seconds) {
+            fecha = new Date((initialData.fecha as any).seconds * 1000);
         }
         
         const [h, m] = initialData.hora_inicio?.split(':') || ['',''];
@@ -351,16 +355,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                 <FormItem>
                     <div className="flex justify-between items-center">
                        <FormLabel>Cliente</FormLabel>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                             <Button type="button" variant="link" size="sm" className="h-auto p-0">
-                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                             </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                             <NewClientForm onFormSubmit={handleClientCreated} />
-                          </DialogContent>
-                        </Dialog>
+                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                          <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                        </Button>
                     </div>
                     <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>

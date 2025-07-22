@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -91,6 +92,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
       notas: '',
       nota_interna: '',
       estado: 'Reservado',
+      precio: 0,
     },
   });
   
@@ -167,7 +169,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         hora_inicio_h: h,
         hora_inicio_m: m,
         estado: initialData.estado,
-        precio: 'precio' in initialData ? initialData.precio : undefined,
+        precio: 'precio' in initialData ? initialData.precio : 0,
         notas: initialData.notas,
         nota_interna: initialData.nota_interna,
       });
@@ -419,3 +421,5 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </Dialog>
   );
 }
+
+    

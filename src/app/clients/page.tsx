@@ -282,8 +282,8 @@ export default function ClientsPage() {
           isOpen={isDetailModalOpen} 
           onOpenChange={setIsDetailModalOpen}
           onNewReservation={() => {
-            setIsDetailModalOpen(false); // Close detail modal
-            setIsReservationModalOpen(true); // Open reservation modal
+            setIsDetailModalOpen(false);
+            setIsReservationModalOpen(true);
           }}
         />
       )}

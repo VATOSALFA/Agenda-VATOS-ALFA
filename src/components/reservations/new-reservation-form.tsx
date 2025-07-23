@@ -280,16 +280,18 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const FormContent = () => (
     <>
     {isDialogChild && (
-        <DialogHeader>
-          <DialogTitle>Nueva Reserva</DialogTitle>
-          <DialogDescription>
-            Completa los detalles para agendar una nueva reserva para tu cliente.
-          </DialogDescription>
-        </DialogHeader>
+        <div className="p-6">
+          <DialogHeader>
+            <DialogTitle>Nueva Reserva</DialogTitle>
+            <DialogDescription>
+              Completa los detalles para agendar una nueva reserva para tu cliente.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
       )}
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-        <div className="p-6 flex-row items-center justify-between border-b">
+        <div className="flex-shrink-0 p-6 flex-row items-center justify-between border-b">
            <FormField
               control={form.control}
               name="estado"
@@ -491,7 +493,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
           </div>
         </div>
         
-        <DialogFooter className="p-6 border-t">
+        <DialogFooter className="flex-shrink-0 p-6 border-t">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
           <Button type="button" variant="secondary">Agregar otra reserva</Button>
           <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.barbero_id}>

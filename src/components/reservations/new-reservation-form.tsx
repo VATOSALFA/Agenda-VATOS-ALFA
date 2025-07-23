@@ -297,7 +297,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
   const FormContent = () => (
     <div className="flex flex-col h-full">
-      <div className="p-6">
+      <div className="p-6 pb-2">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Editar Reserva" : "Nueva Reserva"}</DialogTitle>
             <DialogDescription>
@@ -307,7 +307,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
       </div>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 px-6 pb-4 flex-row items-center justify-between border-b">
+        <div className="flex-shrink-0 px-6 pb-4 pt-2 flex-row items-center justify-between border-b">
            <FormField
               control={form.control}
               name="estado"
@@ -449,6 +449,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
                                  </Button>
                               </DialogTrigger>
                               <DialogContent className="sm:max-w-lg">
+                                 <DialogHeader>
+                                    <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                                    <DialogDescription>
+                                        Completa la información para registrar un nuevo cliente en el sistema.
+                                    </DialogDescription>
+                                  </DialogHeader>
                                  <NewClientForm onFormSubmit={handleClientCreated} />
                               </DialogContent>
                            </Dialog>

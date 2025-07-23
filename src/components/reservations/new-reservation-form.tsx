@@ -275,23 +275,19 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
   const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
 
-  const FormHeader = isDialogChild ? 'div' : DialogHeader;
-
   const FormContent = () => (
-    <>
-    {isDialogChild && (
-        <div className="p-6">
+    <div className="flex flex-col h-full">
+      <div className="p-6">
           <DialogHeader>
             <DialogTitle>Nueva Reserva</DialogTitle>
             <DialogDescription>
               Completa los detalles para agendar una nueva reserva para tu cliente.
             </DialogDescription>
           </DialogHeader>
-        </div>
-      )}
+      </div>
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-        <div className="flex-shrink-0 p-6 flex-row items-center justify-between border-b">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 px-6 pb-4 flex-row items-center justify-between border-b">
            <FormField
               control={form.control}
               name="estado"
@@ -503,7 +499,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         </DialogFooter>
       </form>
     </Form>
-    </>
+    </div>
   );
 
   if (isDialogChild) {

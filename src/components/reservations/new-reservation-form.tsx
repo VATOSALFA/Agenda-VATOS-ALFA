@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, getDay } from 'date-fns';
+import { parse, format, set, getDay, addMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,8 @@ const reservationSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   hora_inicio_h: z.string().min(1, 'Selecciona hora.'),
   hora_inicio_m: z.string().min(1, 'Selecciona minuto.'),
+  hora_fin_h: z.string().min(1, 'Selecciona hora.'),
+  hora_fin_m: z.string().min(1, 'Selecciona minuto.'),
   precio: z.coerce.number().optional().default(0),
   estado: z.string().optional(),
   notas: z.string().optional(),
@@ -63,6 +65,9 @@ const reservationSchema = z.object({
     whatsapp_notification: z.boolean().default(true),
     whatsapp_reminder: z.boolean().default(true),
   }).optional()
+}).refine(data => `${data.hora_fin_h}:${data.hora_fin_m}` > `${data.hora_inicio_h}:${data.hora_inicio_m}`, {
+  message: 'La hora de fin debe ser posterior a la hora de inicio.',
+  path: ['hora_fin_h'],
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -117,8 +122,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   const selectedService = form.watch('servicio');
   const selectedProfessionalId = form.watch('barbero_id');
   const selectedDate = form.watch('fecha');
-  const selectedHour = form.watch('hora_inicio_h');
-  const selectedMinute = form.watch('hora_inicio_m');
+  const selectedStartHour = form.watch('hora_inicio_h');
+  const selectedStartMinute = form.watch('hora_inicio_m');
   const selectedClientId = form.watch('cliente_id');
 
   const selectedClient = useMemo(() => {
@@ -150,7 +155,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   // Real-time availability check
   useEffect(() => {
     form.clearErrors('barbero_id'); 
-    if (selectedProfessionalId && selectedDate && selectedHour && selectedMinute) {
+    if (selectedProfessionalId && selectedDate && selectedStartHour && selectedStartMinute) {
       const professional = professionals.find(p => p.id === selectedProfessionalId);
       if (!professional || !professional.schedule) return;
 
@@ -159,7 +164,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
       const dayOfWeek = dayNames[dayOfWeekIndex];
       const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
       
-      const selectedTime = `${selectedHour}:${selectedMinute}`;
+      const selectedTime = `${selectedStartHour}:${selectedStartMinute}`;
 
       if (!schedule || !schedule.enabled || selectedTime < schedule.start || selectedTime >= schedule.end) {
         form.setError('barbero_id', {
@@ -168,7 +173,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         });
       }
     }
-  }, [selectedProfessionalId, selectedDate, selectedHour, selectedMinute, professionals, form]);
+  }, [selectedProfessionalId, selectedDate, selectedStartHour, selectedStartMinute, professionals, form]);
 
 
   useEffect(() => {
@@ -186,6 +191,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         }
         
         const [h, m] = initialData.hora_inicio?.split(':') || ['',''];
+        const [fh, fm] = initialData.hora_fin?.split(':') || ['', ''];
 
       form.reset({
         cliente_id: initialData.cliente_id,
@@ -194,6 +200,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         fecha,
         hora_inicio_h: h,
         hora_inicio_m: m,
+        hora_fin_h: fh,
+        hora_fin_m: fm,
         estado: initialData.estado,
         precio: 'precio' in initialData ? initialData.precio || 0 : 0,
         notas: initialData.notas,
@@ -208,32 +216,44 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     const service = services.find(s => s.name === serviceName);
     return service ? service.duration : 30; // default to 30 mins
   }, [services]);
+  
+  useEffect(() => {
+    if (selectedService && selectedDate && selectedStartHour && selectedStartMinute) {
+      const duration = getServiceDuration(selectedService);
+      const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
+      const endTime = addMinutes(startTime, duration);
+      
+      form.setValue('hora_fin_h', format(endTime, 'HH'));
+      form.setValue('hora_fin_m', format(endTime, 'mm'));
+    }
+  }, [selectedService, selectedDate, selectedStartHour, selectedStartMinute, getServiceDuration, form]);
 
   async function onSubmit(data: any) {
     if (isEditMode && onSaveChanges) {
         const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
-        onSaveChanges({...data, hora_inicio});
+        const hora_fin = `${data.hora_fin_h}:${data.hora_fin_m}`;
+        onSaveChanges({...data, hora_inicio, hora_fin});
         return;
     }
     
     setIsSubmitting(true);
     try {
       const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
-      const serviceDuration = getServiceDuration(data.servicio);
-      const startTime = set(data.fecha, { hours: data.hora_inicio_h, minutes: data.hora_inicio_m });
-      const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
+      const hora_fin = `${data.hora_fin_h}:${data.hora_fin_m}`;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
 
       const dataToSave = {
         ...data,
         fecha: formattedDate,
-        hora_inicio: hora_inicio,
-        hora_fin: format(endTime, 'HH:mm'),
+        hora_inicio,
+        hora_fin,
         estado: data.estado || 'Reservado',
       };
       
       delete dataToSave.hora_inicio_h;
       delete dataToSave.hora_inicio_m;
+      delete dataToSave.hora_fin_h;
+      delete dataToSave.hora_fin_m;
       
       if (isEditMode && initialData?.id) {
          const resRef = doc(db, 'reservas', initialData.id);
@@ -279,9 +299,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     <div className="flex flex-col h-full">
       <div className="p-6">
           <DialogHeader>
-            <DialogTitle>Nueva Reserva</DialogTitle>
+            <DialogTitle>{isEditMode ? "Editar Reserva" : "Nueva Reserva"}</DialogTitle>
             <DialogDescription>
-              Completa los detalles para agendar una nueva reserva para tu cliente.
+              {isEditMode ? "Modifica los detalles de la reserva." : "Completa los detalles para agendar una nueva reserva para tu cliente."}
             </DialogDescription>
           </DialogHeader>
       </div>
@@ -324,37 +344,46 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
           {/* Main reservation fields */}
           <div className="space-y-4">
-            <div className="grid grid-cols-5 gap-4">
-               <FormField
-                  control={form.control}
-                  name="fecha"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col col-span-3">
-                      <FormLabel>Fecha</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, "EEEE dd 'de' MMMM 'de' yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="col-span-2">
-                    <FormLabel>Hora</FormLabel>
-                    <div className="flex items-center gap-2">
-                        <FormField control={form.control} name="hora_inicio_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
-                        <span>:</span>
-                        <FormField control={form.control} name="hora_inicio_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM"/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
-                        <Button variant="ghost" size="icon" type="button"><RefreshCw className="h-4 w-4 text-muted-foreground" /></Button>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="fecha"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Fecha</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value ? format(field.value, "EEEE dd 'de' MMMM 'de' yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <FormLabel>Hora Inicio</FormLabel>
+                      <div className="flex items-center gap-2">
+                          <FormField control={form.control} name="hora_inicio_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={`start_h_${h}`} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                          <span>:</span>
+                          <FormField control={form.control} name="hora_inicio_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM"/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={`start_m_${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                      </div>
+                  </div>
+                   <div>
+                      <FormLabel>Hora Fin</FormLabel>
+                      <div className="flex items-center gap-2">
+                          <FormField control={form.control} name="hora_fin_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={`end_h_${h}`} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                          <span>:</span>
+                          <FormField control={form.control} name="hora_fin_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM"/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={`end_m_${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
+                      </div>
+                  </div>
+              </div>
             </div>
 
             {selectedClient ? (
@@ -489,7 +518,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
           </div>
         </div>
         
-        <DialogFooter className="flex-shrink-0 p-6 border-t">
+        <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
           <Button type="button" variant="secondary">Agregar otra reserva</Button>
           <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.barbero_id}>

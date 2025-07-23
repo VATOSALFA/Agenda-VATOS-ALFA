@@ -115,9 +115,6 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
             <InfoRow icon={MessageSquare} label="Notas" value={client.notas} />
             
             <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                <Button onClick={onNewReservation}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Crear nueva cita
-                </Button>
                 {client.telefono && (
                  <a href={`https://wa.me/${client.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
                     <Button variant="outline" className="w-full">

@@ -279,6 +279,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
 
   const FormContent = () => (
     <>
+    {isDialogChild && (
+        <DialogHeader>
+          <DialogTitle>Nueva Reserva</DialogTitle>
+          <DialogDescription>
+            Completa los detalles para agendar una nueva reserva para tu cliente.
+          </DialogDescription>
+        </DialogHeader>
+      )}
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
         <div className="p-6 flex-row items-center justify-between border-b">
@@ -496,15 +504,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
     </>
   );
 
-  if(isDialogChild) {
+  if (isDialogChild) {
     return <FormContent />;
   }
 
+  // This part is for when the form is a standalone dialog
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-            <FormContent />
-        </DialogContent>
+      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+        <FormContent />
+      </DialogContent>
     </Dialog>
   );
 }

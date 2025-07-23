@@ -458,10 +458,13 @@ export default function AgendaView() {
                       ) : professionals.map((barber) => {
                           const daySchedule = getDaySchedule(barber);
                           const isWorking = daySchedule && daySchedule.enabled;
+                          
                           let startHour = START_HOUR, endHour = END_HOUR;
                           if (isWorking) {
-                              startHour = parse(daySchedule.start, 'HH:mm', new Date()).getHours();
-                              endHour = parse(daySchedule.end, 'HH:mm', new Date()).getHours();
+                              const [startH, startM] = daySchedule.start.split(':').map(Number);
+                              const [endH, endM] = daySchedule.end.split(':').map(Number);
+                              startHour = startH + startM / 60;
+                              endHour = endH + endM / 60;
                           }
                           
                           return (

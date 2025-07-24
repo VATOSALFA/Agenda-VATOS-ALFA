@@ -678,15 +678,15 @@ export default function AgendaView() {
       </div>
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
         <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-            <NewReservationForm 
-              isDialogChild
-              onFormSubmit={() => {
-                setIsReservationModalOpen(false)
-                refreshData()
-              }}
-              initialData={reservationInitialData}
-              isEditMode={!!reservationInitialData?.id}
-            />
+          <NewReservationForm
+            isDialogChild
+            onFormSubmit={() => {
+              setIsReservationModalOpen(false);
+              refreshData();
+            }}
+            initialData={reservationInitialData}
+            isEditMode={!!reservationInitialData?.id}
+          />
         </DialogContent>
       </Dialog>
       

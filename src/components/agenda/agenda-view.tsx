@@ -148,10 +148,12 @@ export default function AgendaView() {
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
 
-  const { data: reservations, setKey: setReservationsKey } = useFirestoreQuery<Reservation>('reservas', date, reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', date, reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', queryKey, reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', queryKey, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
+
+  const refreshData = () => setQueryKey(prev => prev + 1);
 
   const allEvents = useMemo(() => {
     if (!reservations || !timeBlocks || !clients) return [];
@@ -638,7 +640,7 @@ export default function AgendaView() {
               isDialogChild
               onFormSubmit={() => {
                 setIsReservationModalOpen(false)
-                setReservationsKey(k => k + 1)
+                refreshData()
               }}
               initialData={reservationInitialData}
               isEditMode={!!reservationInitialData?.id}
@@ -651,7 +653,7 @@ export default function AgendaView() {
         onOpenChange={setIsBlockScheduleModalOpen}
         onFormSubmit={() => {
             setIsBlockScheduleModalOpen(false);
-            setReservationsKey(k => k + 1)
+            refreshData();
         }} 
         initialData={blockInitialData}
       />

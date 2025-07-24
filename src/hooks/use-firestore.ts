@@ -9,44 +9,34 @@ interface UseFirestoreQuery<T> {
   data: T[];
   loading: boolean;
   error: Error | null;
+  key?: any;
+  setKey?: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export function useFirestoreQuery<T>(
   collectionName: string,
-  ...queryConstraints: (QueryConstraint | undefined)[]
-): UseFirestoreQuery<T>;
-export function useFirestoreQuery<T>(
-  collectionName: string,
-  key?: any,
-  ...queryConstraints: (QueryConstraint | undefined)[]
-): UseFirestoreQuery<T>;
-
-
-export function useFirestoreQuery<T>(
-  collectionName: string,
-  keyOrConstraint?: any | QueryConstraint,
+  keyOrConstraint?: any,
   ...queryConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
-  let key: any;
-  let constraints: (QueryConstraint | undefined)[];
+  let key: any = collectionName;
+  let constraints: (QueryConstraint | undefined)[] = [];
 
-  if (keyOrConstraint && typeof keyOrConstraint === 'object' && 'type' in keyOrConstraint) {
+  if (typeof keyOrConstraint === 'object' && keyOrConstraint !== null && 'type' in keyOrConstraint) {
       constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
-      key = collectionName; // default key if not provided
+  } else if (keyOrConstraint !== undefined) {
+      key = keyOrConstraint;
+      constraints = queryConstraints;
   } else {
       constraints = queryConstraints;
-      key = keyOrConstraint;
   }
   
   const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
 
   useEffect(() => {
-    // If a constraint is undefined, it means a condition is not met (e.g., client ID not ready).
-    // In this case, we don't fetch and return empty data.
     if (constraints.some(c => c === undefined)) {
         setData([]);
         setLoading(false);
@@ -73,9 +63,7 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  // We serialize the constraints to use them as a dependency
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, key, JSON.stringify(finalConstraints.map(c => c.toString()))]);
+  }, [collectionName, key, JSON.stringify(finalConstraints.map(c => c ? c.toString() : ''))]);
 
   return { data, loading, error };
 }

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -8,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle } from 'lucide-react';
 import type { Client } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where } from 'firebase/firestore';
@@ -33,7 +34,7 @@ interface Reservation {
 
 interface Sale {
   id: string;
-  fecha_hora_venta: { seconds: number; nanoseconds: number };
+  fecha_hora_venta: { seconds: number; nanoseconds: number; };
   total: number;
   metodo_pago: string;
   items: { nombre: string; cantidad: number; precio_unitario: number }[];
@@ -90,6 +91,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   };
   
   const totalSpent = salesLoading ? 0 : sales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+  
+  const attendedAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
+  const unattendedAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length;
+  const cancelledAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Cancelado').length;
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -138,11 +144,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                 <TabsContent value="general" className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <StatCard title="Citas totales" value={reservationsLoading ? '...' : reservations.length} icon={Calendar} />
-                        <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : reservations.filter(r => r.estado === 'Asiste').length} icon={UserCheck} />
-                        <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : reservations.filter(r => r.estado === 'No asiste').length} icon={UserX} />
-                        <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-CL')}`} icon={PiggyBank} />
+                        <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : attendedAppointments} icon={UserCheck} />
+                        <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : unattendedAppointments} icon={UserX} />
+                        <StatCard title="Citas canceladas" value={reservationsLoading ? '...' : cancelledAppointments} icon={XCircle} />
+                        <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-CL')}`} icon={PiggyBank} description={`${sales.length} compras`} />
                     </div>
-                    {/* Add more general info widgets here */}
                 </TabsContent>
                 <TabsContent value="reservations">
                   {reservationsLoading ? <Skeleton className="h-60 w-full" /> : reservations.length > 0 ? (

@@ -93,12 +93,16 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
   }, [initialData, form, isOpen]);
 
   const timeSlots = useMemo(() => {
-    if (!selectedBarberId || !selectedDate) return [];
+    if (!selectedBarberId || !selectedDate || !professionals) return [];
     
     const professional = professionals.find(p => p.id === selectedBarberId);
     if (!professional || !professional.schedule) return [];
 
-    const dayOfWeek = format(selectedDate, 'eeee', { locale: es }).toLowerCase();
+    const dayOfWeek = format(selectedDate, 'eeee', { locale: es })
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""); // remove accents
+      
     const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
     
     if (!schedule || !schedule.enabled) return [];

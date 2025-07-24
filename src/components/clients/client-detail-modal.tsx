@@ -152,59 +152,67 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     </div>
                 </TabsContent>
                 <TabsContent value="reservations">
-                  {reservationsLoading ? <Skeleton className="h-60 w-full" /> : reservations.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Servicio</TableHead>
-                          <TableHead>Profesional</TableHead>
-                          <TableHead>Estado</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {reservations.map(res => (
-                          <TableRow key={res.id}>
-                            <TableCell>{formatDate(res.fecha, true)}</TableCell>
-                            <TableCell>{res.servicio}</TableCell>
-                            <TableCell>{res.barbero_id}</TableCell> {/* This would need a lookup to show name */}
-                            <TableCell><Badge>{res.estado}</Badge></TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : <p className="text-muted-foreground text-center py-10">No hay reservas registradas.</p>}
+                  {reservationsLoading ? <Skeleton className="h-60 w-full" /> : (
+                    reservations.length > 0 ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha</TableHead>
+                              <TableHead>Servicio</TableHead>
+                              <TableHead>Profesional</TableHead>
+                              <TableHead>Estado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {reservations.map(res => (
+                              <TableRow key={res.id}>
+                                <TableCell>{formatDate(res.fecha, true)}</TableCell>
+                                <TableCell>{res.servicio}</TableCell>
+                                <TableCell>{res.barbero_id}</TableCell>
+                                <TableCell><Badge>{res.estado}</Badge></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                    ) : (
+                        <p className="text-muted-foreground text-center py-10">No hay reservas registradas.</p>
+                    )
+                  )}
                 </TabsContent>
 
                 <TabsContent value="sales">
-                  {salesLoading ? <Skeleton className="h-60 w-full" /> : sales.length > 0 ? (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Fecha</TableHead>
-                                <TableHead>Items</TableHead>
-                                <TableHead>Método de pago</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {sales.map(sale => (
-                            <TableRow key={sale.id}>
-                                <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
-                                <TableCell>
-                                    <ul className="list-disc pl-4 text-xs">
-                                        {sale.items?.map((item, index) => (
-                                            <li key={index}>{item.cantidad}x {item.nombre}</li>
-                                        ))}
-                                    </ul>
-                                </TableCell>
-                                <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-CL')}</TableCell>
-                            </TableRow>
-                        ))}
-                        </TableBody>
-                    </Table>
-                  ) : <p className="text-muted-foreground text-center py-10">No hay ventas registradas.</p>}
+                  {salesLoading ? <Skeleton className="h-60 w-full" /> : (
+                    sales.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead>Items</TableHead>
+                                    <TableHead>Método de pago</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {sales.map(sale => (
+                                <TableRow key={sale.id}>
+                                    <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
+                                    <TableCell>
+                                        <ul className="list-disc pl-4 text-xs">
+                                            {sale.items?.map((item, index) => (
+                                                <li key={index}>{item.cantidad}x {item.nombre}</li>
+                                            ))}
+                                        </ul>
+                                    </TableCell>
+                                    <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
+                                    <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-CL')}</TableCell>
+                                </TableRow>
+                            ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <p className="text-muted-foreground text-center py-10">No hay ventas registradas.</p>
+                    )
+                  )}
                 </TabsContent>
               </ScrollArea>
             </Tabs>

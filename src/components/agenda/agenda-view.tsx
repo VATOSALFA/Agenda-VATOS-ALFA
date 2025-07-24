@@ -116,6 +116,8 @@ const getStatusColor = (status: string | undefined) => {
             return 'bg-green-100 border-green-500 text-green-800';
         case 'Pagado':
             return 'bg-green-100 border-green-500 text-green-800';
+        case 'Cancelado':
+            return 'bg-gray-200 border-gray-500 text-gray-800 line-through';
         default:
             return 'bg-gray-100 border-gray-500 text-gray-800';
     }
@@ -164,8 +166,11 @@ export default function AgendaView() {
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
   
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', reservationsQueryConstraint);
+  const reservationsQueryKey = useMemo(() => `reservations-${date ? format(date, 'yyyy-MM-dd') : ''}-${queryKey}`, [date, queryKey]);
+  const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${queryKey}`, [date, queryKey]);
+
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 
@@ -315,16 +320,16 @@ export default function AgendaView() {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.'})
     }
   };
-
-  const handleDeleteReservation = async (reservationId: string) => {
+  
+  const handleCancelReservation = async (reservationId: string) => {
     try {
-        await deleteDoc(doc(db, "reservas", reservationId));
+        const resRef = doc(db, 'reservas', reservationId);
+        await updateDoc(resRef, { estado: 'Cancelado' });
         toast({
             title: "Reserva cancelada con éxito",
         });
-        // The onSnapshot listener in useFirestoreQuery will handle the UI update
     } catch (error) {
-        console.error("Error deleting reservation: ", error);
+        console.error("Error canceling reservation: ", error);
         toast({
             variant: "destructive",
             title: "Error",
@@ -680,9 +685,7 @@ export default function AgendaView() {
         <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
           <NewReservationForm
             isDialogChild
-            onFormSubmit={() => {
-              setIsReservationModalOpen(false);
-            }}
+            onFormSubmit={refreshData}
             initialData={reservationInitialData}
             isEditMode={!!reservationInitialData?.id}
           />
@@ -692,7 +695,7 @@ export default function AgendaView() {
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
+        onFormSubmit={refreshData}
         initialData={blockInitialData}
       />
       
@@ -701,9 +704,9 @@ export default function AgendaView() {
             reservation={selectedReservation}
             isOpen={isDetailModalOpen}
             onOpenChange={setIsDetailModalOpen}
-            onEdit={handleEditFromDetail}
             onPay={handlePayFromDetail}
             onUpdateStatus={handleUpdateStatus}
+            onEdit={handleEditFromDetail}
           />
       )}
       
@@ -717,7 +720,7 @@ export default function AgendaView() {
         isOpen={isCancelModalOpen}
         onOpenChange={setIsCancelModalOpen}
         reservation={reservationToCancel}
-        onConfirm={handleDeleteReservation}
+        onConfirm={handleCancelReservation}
       />
       
       {blockToDelete && (
@@ -741,4 +744,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

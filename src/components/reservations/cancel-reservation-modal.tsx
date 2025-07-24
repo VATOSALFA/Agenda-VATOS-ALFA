@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -55,7 +56,7 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
                 </div>
                 <AlertDialogTitle className="text-center text-xl">¿Estás seguro que quieres cancelar esta reserva?</AlertDialogTitle>
                 <AlertDialogDescription className="text-center">
-                    Esta acción no se puede revertir. La reserva se eliminará permanentemente.
+                    Esta acción no se puede revertir. La reserva cambiará su estado a "Cancelado".
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="py-4 space-y-2">
@@ -76,7 +77,7 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
                     className="bg-destructive hover:bg-destructive/90"
                 >
                     {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Cancelar reserva
+                    Confirmar cancelación
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

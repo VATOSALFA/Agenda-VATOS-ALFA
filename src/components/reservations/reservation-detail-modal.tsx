@@ -111,16 +111,16 @@ export function ReservationDetailModal({
     }
   }
 
-  const handleDeleteReservation = async (reservationId: string) => {
+  const handleCancelReservation = async (reservationId: string) => {
     try {
-        await deleteDoc(doc(db, "reservas", reservationId));
+        const resRef = doc(db, 'reservas', reservationId);
+        await updateDoc(resRef, { estado: 'Cancelado' });
         toast({
             title: "Reserva cancelada con éxito",
         });
         onOpenChange(false);
-        // The parent component (AgendaView) will refetch due to the onSnapshot listener
     } catch (error) {
-        console.error("Error deleting reservation: ", error);
+        console.error("Error canceling reservation: ", error);
         toast({
             variant: "destructive",
             title: "Error",
@@ -132,7 +132,7 @@ export function ReservationDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
@@ -148,15 +148,15 @@ export function ReservationDetailModal({
               isDialogChild={true}
             />
           </div>
-        </DialogContent>
-        {isCancelModalOpen &&
+          {isCancelModalOpen &&
             <CancelReservationModal
                 isOpen={isCancelModalOpen}
                 onOpenChange={setIsCancelModalOpen}
                 reservation={reservation}
-                onConfirm={handleDeleteReservation}
+                onConfirm={handleCancelReservation}
             />
-        }
+          }
+      </DialogContent>
     </Dialog>
   );
 }

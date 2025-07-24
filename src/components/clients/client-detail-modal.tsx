@@ -95,6 +95,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const attendedAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
   const unattendedAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length;
   const cancelledAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Cancelado').length;
+  const totalAppointments = reservationsLoading ? 0 : reservations.length;
 
 
   return (
@@ -143,7 +144,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
               <ScrollArea className="flex-grow pr-2">
                 <TabsContent value="general" className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard title="Citas totales" value={reservationsLoading ? '...' : reservations.length} icon={Calendar} />
+                        <StatCard title="Citas totales" value={reservationsLoading ? '...' : totalAppointments} icon={Calendar} />
                         <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : attendedAppointments} icon={UserCheck} />
                         <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : unattendedAppointments} icon={UserX} />
                         <StatCard title="Citas canceladas" value={reservationsLoading ? '...' : cancelledAppointments} icon={XCircle} />

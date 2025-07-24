@@ -77,8 +77,8 @@ const useCurrentTime = () => {
   }, []);
   
   const calculateTopPosition = () => {
-    const hours = currentTime.getUTCHours();
-    const minutes = currentTime.getUTCMinutes();
+    const hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
     const totalMinutes = (hours - START_HOUR) * 60 + minutes;
     const top = (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
 

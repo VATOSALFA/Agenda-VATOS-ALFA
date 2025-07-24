@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
@@ -630,16 +630,17 @@ export default function AgendaView() {
         </main>
       </div>
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-        <NewReservationForm 
-          isOpen={isReservationModalOpen}
-          onOpenChange={setIsReservationModalOpen}
-          onFormSubmit={() => {
-            setIsReservationModalOpen(false)
-            setReservationsKey(k => k + 1)
-          }}
-          initialData={reservationInitialData}
-          isEditMode={!!reservationInitialData?.id}
-        />
+        <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+          <NewReservationForm 
+            isDialogChild
+            onFormSubmit={() => {
+              setIsReservationModalOpen(false)
+              setReservationsKey(k => k + 1)
+            }}
+            initialData={reservationInitialData}
+            isEditMode={!!reservationInitialData?.id}
+          />
+        </DialogContent>
       </Dialog>
       
       <BlockScheduleForm

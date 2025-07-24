@@ -131,8 +131,7 @@ export function ReservationDetailModal({
 
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
@@ -150,13 +149,14 @@ export function ReservationDetailModal({
             />
           </div>
         </DialogContent>
-      </Dialog>
-      <CancelReservationModal
-        isOpen={isCancelModalOpen}
-        onOpenChange={setIsCancelModalOpen}
-        reservation={reservation}
-        onConfirm={handleDeleteReservation}
-      />
-    </>
+        {isCancelModalOpen &&
+            <CancelReservationModal
+                isOpen={isCancelModalOpen}
+                onOpenChange={setIsCancelModalOpen}
+                reservation={reservation}
+                onConfirm={handleDeleteReservation}
+            />
+        }
+    </Dialog>
   );
 }

@@ -77,8 +77,10 @@ const useCurrentTime = () => {
   }, []);
   
   const calculateTopPosition = () => {
-    const hours = currentTime.getHours();
-    const minutes = currentTime.getMinutes();
+    const timeZoneOffset = currentTime.getTimezoneOffset(); // in minutes
+    const hours = currentTime.getUTCHours() - Math.floor(timeZoneOffset / 60);
+    const minutes = currentTime.getUTCMinutes() - (timeZoneOffset % 60);
+
     const totalMinutes = (hours - START_HOUR) * 60 + minutes;
     const top = (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
 
@@ -328,6 +330,7 @@ export default function AgendaView() {
         toast({
             title: "Reserva cancelada con éxito",
         });
+        onOpenChange(false);
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({
@@ -335,6 +338,9 @@ export default function AgendaView() {
             title: "Error",
             description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
         });
+    } finally {
+        setIsCancelModalOpen(false);
+        refreshData();
     }
   };
 
@@ -644,7 +650,7 @@ export default function AgendaView() {
                                                 </div>
                                                 <div className='flex items-center'>
                                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenDetailModal(event as Reservation)}><Pencil className="h-4 w-4" /></Button>
-                                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/80" onClick={() => { setReservationToCancel(event as Reservation); setIsCancelModalOpen(true); }}><Trash2 className="h-4 w-4" /></Button>
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/80" onClick={() => { setReservationToCancel(event as Reservation); }}><Trash2 className="h-4 w-4" /></Button>
                                                 </div>
                                             </div>
                                             <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
@@ -717,8 +723,8 @@ export default function AgendaView() {
       />
 
       <CancelReservationModal
-        isOpen={isCancelModalOpen}
-        onOpenChange={setIsCancelModalOpen}
+        isOpen={!!reservationToCancel}
+        onOpenChange={() => setReservationToCancel(null)}
         reservation={reservationToCancel}
         onConfirm={handleCancelReservation}
       />

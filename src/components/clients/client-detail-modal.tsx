@@ -2,6 +2,7 @@
 
 'use client';
 
+import { useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle } from 'lucide-react';
-import type { Client } from '@/lib/types';
+import type { Client, Profesional } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where } from 'firebase/firestore';
 import { format, parseISO } from 'date-fns';
@@ -73,6 +74,14 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     'ventas',
     isOpen ? where('cliente_id', '==', client.id) : undefined
   );
+  
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', isOpen);
+  
+  const professionalMap = useMemo(() => {
+    if (professionalsLoading) return new Map();
+    return new Map(professionals.map(p => [p.id, p.name]));
+  }, [professionals, professionalsLoading]);
+
 
   const formatDate = (date: any, includeTime = false) => {
     if (!date) return 'N/A';
@@ -168,7 +177,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                               <TableRow key={res.id}>
                                 <TableCell>{formatDate(res.fecha, true)}</TableCell>
                                 <TableCell>{res.servicio}</TableCell>
-                                <TableCell>{res.barbero_id}</TableCell>
+                                <TableCell>{professionalMap.get(res.barbero_id) || res.barbero_id}</TableCell>
                                 <TableCell><Badge>{res.estado}</Badge></TableCell>
                               </TableRow>
                             ))}

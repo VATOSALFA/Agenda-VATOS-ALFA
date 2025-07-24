@@ -63,7 +63,7 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  }, [collectionName, key, JSON.stringify(finalConstraints.map(c => c ? c.toString() : ''))]);
+  }, [collectionName, key]);
 
   return { data, loading, error };
 }

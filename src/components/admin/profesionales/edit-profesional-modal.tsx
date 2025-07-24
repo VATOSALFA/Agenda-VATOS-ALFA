@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -30,19 +30,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { Local } from '@/components/admin/locales/new-local-modal';
+
 
 interface EditProfesionalModalProps {
   profesional: Profesional | null;
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: () => void;
+  local: Local | null;
 }
-
-const timeOptions = Array.from({ length: 48 }, (_, i) => {
-  const hour = Math.floor(i / 2);
-  const minute = i % 2 === 0 ? '00' : '30';
-  return `${String(hour).padStart(2, '0')}:${minute}`;
-});
 
 const daysOfWeek = [
     { id: 'lunes', label: 'Lunes' },
@@ -81,17 +78,17 @@ const servicesByCategory = [
 ];
 
 const defaultSchedule: Schedule = {
-  lunes: { enabled: true, start: '09:00', end: '18:00' },
-  martes: { enabled: true, start: '09:00', end: '18:00' },
-  miercoles: { enabled: true, start: '09:00', end: '18:00' },
-  jueves: { enabled: true, start: '09:00', end: '18:00' },
-  viernes: { enabled: true, start: '09:00', end: '18:00' },
-  sabado: { enabled: false, start: '09:00', end: '18:00' },
-  domingo: { enabled: false, start: '09:00', end: '18:00' },
+  lunes: { enabled: true, start: '10:00', end: '21:00' },
+  martes: { enabled: true, start: '10:00', end: '21:00' },
+  miercoles: { enabled: true, start: '10:00', end: '21:00' },
+  jueves: { enabled: true, start: '10:00', end: '21:00' },
+  viernes: { enabled: true, start: '10:00', end: '21:00' },
+  sabado: { enabled: false, start: '10:00', end: '21:00' },
+  domingo: { enabled: false, start: '10:00', end: '21:00' },
 };
 
 
-export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved }: EditProfesionalModalProps) {
+export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved, local }: EditProfesionalModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -109,6 +106,37 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     },
   });
   
+  const timeOptions = useMemo(() => {
+    if (!local || !local.schedule) {
+        // Fallback if local data is not available
+        return Array.from({ length: 48 }, (_, i) => {
+            const hour = Math.floor(i / 2);
+            const minute = i % 2 === 0 ? '00' : '30';
+            return `${String(hour).padStart(2, '0')}:${minute}`;
+        });
+    }
+
+    const start = local.schedule.lunes.start; // Assuming schedule is consistent across days
+    const end = local.schedule.lunes.end;
+    
+    const [startHour, startMinute] = start.split(':').map(Number);
+    const [endHour, endMinute] = end.split(':').map(Number);
+
+    const options = [];
+    let currentHour = startHour;
+    let currentMinute = startMinute;
+
+    while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
+        options.push(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
+        currentMinute += 30;
+        if (currentMinute >= 60) {
+            currentHour++;
+            currentMinute = 0;
+        }
+    }
+    return options;
+  }, [local]);
+
   useEffect(() => {
     if(isOpen) {
         form.reset(profesional ? 

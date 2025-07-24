@@ -74,6 +74,8 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Local } from '@/components/admin/locales/new-local-modal';
+
 
 export interface ScheduleDay {
     enabled: boolean;
@@ -201,7 +203,8 @@ export default function ProfessionalsPage() {
   const [queryKey, setQueryKey] = useState(0);
   const { data: professionalsData, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const [professionals, setProfessionals] = useState<Profesional[]>([]);
-  
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+
   const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
   const [specialDayProfessional, setSpecialDayProfessional] = useState<Profesional | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -297,7 +300,7 @@ export default function ProfessionalsPage() {
 
   const activeProfessional = useMemo(() => professionals.find(p => p.id === activeId), [activeId, professionals]);
   
-  if (professionalsLoading && !isClientMounted) {
+  if ((professionalsLoading || localesLoading) && !isClientMounted) {
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <Skeleton className="h-10 w-64" />
@@ -420,6 +423,7 @@ export default function ProfessionalsPage() {
           isOpen={!!editingProfessional}
           onClose={handleCloseModal}
           onDataSaved={handleDataUpdated}
+          local={locales[0]}
         />
       )}
       

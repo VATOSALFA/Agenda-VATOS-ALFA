@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import type { Schedule } from '@/app/admin/profesionales/page';
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
@@ -35,6 +37,20 @@ const daysOfWeek = [
     { id: 'domingo', label: 'Domingo' },
 ];
 
+export interface Local {
+  id: string;
+  name: string;
+  address: string;
+  timezone: string;
+  phone: string;
+  email: string;
+  schedule: Schedule;
+  acceptsOnline: boolean;
+  delivery: boolean;
+  secondaryPhone?: string;
+  description?: string;
+}
+
 const localSchema = z.object({
   name: z.string().min(1, "El nombre es requerido."),
   address: z.string().min(1, "La dirección es requerida."),
@@ -50,9 +66,6 @@ const localSchema = z.object({
 
 type LocalFormData = z.infer<typeof localSchema>;
 
-interface Local extends LocalFormData {
-    id: string;
-}
 
 interface NewLocalModalProps {
   isOpen: boolean;
@@ -75,13 +88,13 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
         phone: '',
         email: '',
         schedule: {
-          lunes: { enabled: true, start: '09:00', end: '18:00' },
-          martes: { enabled: true, start: '09:00', end: '18:00' },
-          miercoles: { enabled: true, start: '09:00', end: '18:00' },
-          jueves: { enabled: true, start: '09:00', end: '18:00' },
-          viernes: { enabled: true, start: '09:00', end: '18:00' },
-          sabado: { enabled: false, start: '', end: '' },
-          domingo: { enabled: false, start: '', end: '' },
+          lunes: { enabled: true, start: '10:00', end: '21:00' },
+          martes: { enabled: true, start: '10:00', end: '21:00' },
+          miercoles: { enabled: true, start: '10:00', end: '21:00' },
+          jueves: { enabled: true, start: '10:00', end: '21:00' },
+          viernes: { enabled: true, start: '10:00', end: '21:00' },
+          sabado: { enabled: false, start: '10:00', end: '21:00' },
+          domingo: { enabled: false, start: '10:00', end: '21:00' },
         },
         acceptsOnline: true,
         delivery: false,
@@ -101,13 +114,13 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
             phone: '',
             email: '',
             schedule: {
-              lunes: { enabled: true, start: '09:00', end: '18:00' },
-              martes: { enabled: true, start: '09:00', end: '18:00' },
-              miercoles: { enabled: true, start: '09:00', end: '18:00' },
-              jueves: { enabled: true, start: '09:00', end: '18:00' },
-              viernes: { enabled: true, start: '09:00', end: '18:00' },
-              sabado: { enabled: false, start: '', end: '' },
-              domingo: { enabled: false, start: '', end: '' },
+              lunes: { enabled: true, start: '10:00', end: '21:00' },
+              martes: { enabled: true, start: '10:00', end: '21:00' },
+              miercoles: { enabled: true, start: '10:00', end: '21:00' },
+              jueves: { enabled: true, start: '10:00', end: '21:00' },
+              viernes: { enabled: true, start: '10:00', end: '21:00' },
+              sabado: { enabled: false, start: '10:00', end: '21:00' },
+              domingo: { enabled: false, start: '10:00', end: '21:00' },
             },
             acceptsOnline: true,
             delivery: false,

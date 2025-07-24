@@ -24,6 +24,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
@@ -48,6 +58,11 @@ interface TimeBlock {
     fecha: string;
     hora_inicio: string;
     hora_fin: string;
+    type?: 'block';
+    customer?: string;
+    start?: number;
+    duration?: number;
+    color?: string;
 }
 
 const useCurrentTime = () => {
@@ -126,7 +141,7 @@ export default function AgendaView() {
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
-
+  const [blockToDelete, setBlockToDelete] = useState<TimeBlock | null>(null);
 
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const { time: currentTime, top: currentTimeTop } = useCurrentTime();
@@ -179,6 +194,7 @@ export default function AgendaView() {
         const start = parse(block.hora_inicio, 'HH:mm', new Date()).getHours() + parse(block.hora_inicio, 'HH:mm', new Date()).getMinutes() / 60;
         const end = parse(block.hora_fin, 'HH:mm', new Date()).getHours() + parse(block.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
         return {
+          ...block,
           id: block.id,
           barberId: block.barbero_id,
           customer: block.motivo,
@@ -316,6 +332,26 @@ export default function AgendaView() {
     }
   };
 
+  const handleDeleteBlock = async () => {
+    if (!blockToDelete) return;
+    try {
+      await deleteDoc(doc(db, "bloqueos_horario", blockToDelete.id));
+      toast({
+        title: "Horario desbloqueado",
+        description: `El bloqueo para "${blockToDelete.motivo}" ha sido eliminado.`,
+      });
+      refreshData();
+    } catch (error) {
+      console.error("Error deleting block: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar el bloqueo. Inténtalo de nuevo.",
+      });
+    } finally {
+        setBlockToDelete(null);
+    }
+  };
 
   const calculatePosition = (start: number, duration: number) => {
     const top = (start - START_HOUR) * HOURLY_SLOT_HEIGHT;
@@ -575,7 +611,13 @@ export default function AgendaView() {
                                     <Tooltip key={event.id}>
                                       <TooltipTrigger asChild>
                                         <div 
-                                          onClick={() => event.type === 'appointment' && handleOpenDetailModal(event as Reservation)}
+                                          onClick={() => {
+                                            if (event.type === 'appointment') {
+                                                handleOpenDetailModal(event as Reservation);
+                                            } else if (event.type === 'block') {
+                                                setBlockToDelete(event as TimeBlock);
+                                            }
+                                          }}
                                           className={cn(
                                               "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
                                               event.color,
@@ -678,6 +720,25 @@ export default function AgendaView() {
         reservation={reservationToCancel}
         onConfirm={handleDeleteReservation}
       />
+      
+      {blockToDelete && (
+        <AlertDialog open={!!blockToDelete} onOpenChange={() => setBlockToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Desbloquear Horario?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                       Se eliminará el bloqueo "{blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteBlock}>
+                        Sí, desbloquear
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
     </TooltipProvider>
   );
 }

@@ -39,7 +39,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';

@@ -77,10 +77,9 @@ const useCurrentTime = () => {
   }, []);
   
   const calculateTopPosition = () => {
-    const timeZoneOffset = currentTime.getTimezoneOffset(); // in minutes
-    const hours = currentTime.getUTCHours() - Math.floor(timeZoneOffset / 60);
-    const minutes = currentTime.getUTCMinutes() - (timeZoneOffset % 60);
-
+    const hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
+    
     const totalMinutes = (hours - START_HOUR) * 60 + minutes;
     const top = (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
 
@@ -330,7 +329,8 @@ export default function AgendaView() {
         toast({
             title: "Reserva cancelada con éxito",
         });
-        onOpenChange(false);
+        setIsCancelModalOpen(false);
+        refreshData();
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({
@@ -338,9 +338,6 @@ export default function AgendaView() {
             title: "Error",
             description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
         });
-    } finally {
-        setIsCancelModalOpen(false);
-        refreshData();
     }
   };
 

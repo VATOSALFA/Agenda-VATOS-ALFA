@@ -336,7 +336,10 @@ export default function AgendaView() {
 
   const getDaySchedule = (barber: Profesional): ScheduleDay | null => {
     if (!date || !barber.schedule) return null;
-    const dayOfWeek = format(date, 'eeee', { locale: es }).toLowerCase();
+    const dayOfWeek = format(date, 'eeee', { locale: es })
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""); // Remove accents
     return barber.schedule[dayOfWeek as keyof typeof barber.schedule];
   };
 
@@ -527,7 +530,7 @@ export default function AgendaView() {
                                               <NonWorkBlock top={0} height={(startHour - START_HOUR) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
                                           {endHour < END_HOUR && (
-                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR - endHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR - endHour + 1) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}

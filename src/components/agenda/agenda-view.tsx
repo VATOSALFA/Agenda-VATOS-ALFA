@@ -571,7 +571,7 @@ export default function AgendaView() {
                                   )}
 
                                   {/* Events */}
-                                  {allEvents.filter(a => (a as any).barbero_id === barber.id).map(event => (
+                                  {allEvents.filter(a => (a as any).barberId === barber.id).map(event => (
                                     <Tooltip key={event.id}>
                                       <TooltipTrigger asChild>
                                         <div 
@@ -651,10 +651,7 @@ export default function AgendaView() {
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={() => {
-            setIsBlockScheduleModalOpen(false);
-            refreshData();
-        }} 
+        onFormSubmit={refreshData} 
         initialData={blockInitialData}
       />
       

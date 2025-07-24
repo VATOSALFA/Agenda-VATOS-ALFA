@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Local } from '@/components/admin/locales/new-local-modal';
+import { ImageUploader } from '@/components/shared/image-uploader';
 
 
 interface EditProfesionalModalProps {
@@ -348,11 +349,17 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                       </div>
                       <div className="space-y-2">
                          <Label>Foto del profesional</Label>
-                         <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg text-center">
-                            <UploadCloud className="h-12 w-12 text-muted-foreground mb-4" />
-                            <p className="text-muted-foreground mb-4">Arrastra o selecciona el archivo</p>
-                            <Button variant="outline" type="button">Subir archivo</Button>
-                         </div>
+                         <Controller
+                            name="avatar"
+                            control={form.control}
+                            render={({ field }) => (
+                                <ImageUploader
+                                    folder="profesionales"
+                                    currentImageUrl={field.value}
+                                    onUpload={(url) => field.onChange(url)}
+                                />
+                            )}
+                         />
                       </div>
                       {profesional && (
                           <div className="pt-6 border-t">

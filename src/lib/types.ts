@@ -79,6 +79,7 @@ export interface Product {
     created_at?: any;
     active: boolean;
     order: number;
+    images?: string[];
 }
 
 export interface ProductCategory {

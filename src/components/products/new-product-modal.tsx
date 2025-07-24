@@ -1,8 +1,9 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +24,8 @@ import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestor
 import { BrandModal } from './brand-modal';
 import { CategoryModal } from './category-modal';
 import { PresentationModal } from './presentation-modal';
+import { ImageUploader } from '../shared/image-uploader';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 const newProductSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
@@ -40,6 +43,7 @@ const newProductSchema = z.object({
   description: z.string().optional(),
   stock_alarm_threshold: z.coerce.number().optional(),
   notification_email: z.string().email('Email inválido').optional().or(z.literal('')),
+  images: z.array(z.string()).optional().default([]),
 });
 
 type NewProductFormData = z.infer<typeof newProductSchema>;
@@ -68,23 +72,32 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     defaultValues: product ? {
         ...product,
         commission_value: product.commission?.value,
-        commission_type: product.commission?.type
+        commission_type: product.commission?.type,
+        images: product.images || []
     } : {
       stock: 0,
       includes_vat: false,
-      commission_type: '%'
+      commission_type: '%',
+      images: []
     }
   });
-  
+
+   const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "images"
+   });
+
   useEffect(() => {
     form.reset(product ? { 
         ...product,
         commission_value: product.commission?.value,
-        commission_type: product.commission?.type
+        commission_type: product.commission?.type,
+        images: product.images || []
     } : {
         nombre: '', barcode: '', brand_id: '', category_id: '', presentation_id: '',
         public_price: 0, stock: 0, purchase_cost: 0, internal_price: 0, commission_value: 0,
-        commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: 0, notification_email: ''
+        commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: 0, notification_email: '',
+        images: []
     })
   }, [product, form]);
 
@@ -149,6 +162,29 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                     <FormField name="public_price" control={form.control} render={({ field }) => (<FormItem><FormLabel>Precio de venta al público *</FormLabel><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span><FormControl><Input type="number" placeholder="0" className="pl-6" {...field} /></FormControl></div><FormMessage /></FormItem>)} />
                     <FormField name="stock" control={form.control} render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Cantidad en stock *</FormLabel><FormControl><Input type="number" placeholder="0" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Agregar imágenes</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            ¡Carga hasta 3 imágenes de tu servicio! Te recomendamos que tengan un tamaño mínimo de 200x200px y un peso máximo de 3MB.
+                        </p>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[0, 1, 2].map(index => (
+                                <ImageUploader
+                                    key={index}
+                                    folder="productos"
+                                    currentImageUrl={form.getValues(`images.${index}`)}
+                                    onUpload={(url) => form.setValue(`images.${index}`, url)}
+                                    onRemove={() => form.setValue(`images.${index}`, '')}
+                                />
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <div className="space-y-4 pt-6 border-t"><h3 className="text-lg font-semibold">Opciones avanzadas</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField name="purchase_cost" control={form.control} render={({ field }) => (<FormItem><FormLabel>Costo de compra</FormLabel><FormControl><Input type="number" placeholder="$ 0" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -196,5 +232,3 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     </>
   );
 }
-
-    

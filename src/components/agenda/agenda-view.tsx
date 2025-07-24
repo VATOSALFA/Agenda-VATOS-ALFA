@@ -164,10 +164,8 @@ export default function AgendaView() {
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
   
-  const eventsQueryKey = date ? `${queryKey}-${format(date, 'yyyy-MM-dd')}` : queryKey;
-
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', eventsQueryKey, reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', eventsQueryKey, reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 
@@ -343,7 +341,6 @@ export default function AgendaView() {
         title: "Horario desbloqueado",
         description: `El bloqueo para "${blockToDelete.motivo}" ha sido eliminado.`,
       });
-      refreshData();
     } catch (error) {
       console.error("Error deleting block: ", error);
       toast({
@@ -610,7 +607,7 @@ export default function AgendaView() {
                                   )}
 
                                   {/* Events */}
-                                  {allEvents.filter(a => (a as any).barberId === barber.id).map(event => (
+                                  {allEvents.filter(a => a.barbero_id === barber.id).map(event => (
                                     <Tooltip key={event.id}>
                                       <TooltipTrigger asChild>
                                         <div 
@@ -685,7 +682,6 @@ export default function AgendaView() {
             isDialogChild
             onFormSubmit={() => {
               setIsReservationModalOpen(false);
-              refreshData();
             }}
             initialData={reservationInitialData}
             isEditMode={!!reservationInitialData?.id}
@@ -696,7 +692,7 @@ export default function AgendaView() {
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={refreshData} 
+        onFormSubmit={() => setIsBlockScheduleModalOpen(false)} 
         initialData={blockInitialData}
       />
       
@@ -745,3 +741,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

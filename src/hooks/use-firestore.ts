@@ -63,7 +63,9 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  }, [collectionName, key]);
+  // Using JSON.stringify on constraints makes sure the effect reruns when the query details change.
+  }, [collectionName, JSON.stringify(finalConstraints)]);
 
   return { data, loading, error };
 }
+

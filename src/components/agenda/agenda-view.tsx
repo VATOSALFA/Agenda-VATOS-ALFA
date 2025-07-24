@@ -148,12 +148,13 @@ export default function AgendaView() {
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
   const { toast } = useToast();
   
+  const [queryKey, setQueryKey] = useState(0);
+
   useEffect(() => {
     setDate(new Date());
     setRenderTimeIndicator(true)
   }, []);
 
-  const [queryKey, setQueryKey] = useState(0);
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
@@ -162,9 +163,11 @@ export default function AgendaView() {
     if (!date) return undefined;
     return where('fecha', '==', format(date, 'yyyy-MM-dd'));
   }, [date]);
+  
+  const eventsQueryKey = date ? `${queryKey}-${format(date, 'yyyy-MM-dd')}` : queryKey;
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', queryKey, reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', queryKey, reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', eventsQueryKey, reservationsQueryConstraint);
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', eventsQueryKey, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 

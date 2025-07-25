@@ -71,10 +71,10 @@ const useCurrentTime = () => {
 
   const calculateTopPosition = useCallback(() => {
     const now = new Date();
-    const currentHours = now.getHours();
+    const currentHour = now.getHours();
     const currentMinutes = now.getMinutes();
 
-    const totalMinutesNow = currentHours * 60 + currentMinutes;
+    const totalMinutesNow = (currentHour * 60) + currentMinutes;
     const totalMinutesStart = START_HOUR * 60;
     
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
@@ -95,7 +95,7 @@ const useCurrentTime = () => {
 
   useEffect(() => {
       setTopPosition(calculateTopPosition());
-  }, [currentTime, calculateTopPosition]);
+  }, [currentTime]);
 
   return { time: currentTime, top: topPosition };
 };
@@ -509,7 +509,7 @@ export default function AgendaView() {
                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
                         <>
                           <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
-                          <div className="absolute left-0 right-0 h-px bg-blue-500 z-10" style={{ top: 121, transform: 'translateY(4px)' }} />
+                          <div className="absolute left-0 right-0 h-px bg-blue-500 z-10" style={{ top: 131, transform: 'translateY(4px)' }} />
                         </>
                       )}
                       {isLoading ? (
@@ -580,6 +580,8 @@ export default function AgendaView() {
                                   {/* Background Grid Lines */}
                                   {hours.map((hour, hourIndex) => (
                                     <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border relative">
+                                        <div className="absolute top-[9.5px] left-0 w-full h-px bg-green-300 opacity-50" />
+                                        <div className="absolute top-[19.5px] left-0 w-full h-px bg-green-300 opacity-50" />
                                     </div>
                                   ))}
                                   

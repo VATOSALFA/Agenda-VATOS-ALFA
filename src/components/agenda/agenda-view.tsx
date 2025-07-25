@@ -80,16 +80,14 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-  
-    // Si la hora actual está fuera del rango de la agenda, no mostrar la línea.
+
     if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
-      return null;
+        return null;
     }
-    
-    // Calcular minutos totales transcurridos desde el inicio de la jornada (START_HOUR)
+
     const minutesFromAgendaStart = (currentHour - START_HOUR) * 60 + currentMinute;
-  
-    // La regla es: 1px por cada 2 minutos.
+    
+    // 1 pixel every 2 minutes
     const topPosition = minutesFromAgendaStart / 2;
   
     return topPosition;
@@ -568,6 +566,7 @@ export default function AgendaView() {
                               {/* Appointments Grid */}
                               <div 
                                 className="relative bg-white/60"
+                                style={{backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 1px, #f0f0f0 1px, #f0f0f0 2px)', backgroundSize: '100% 2px'}}
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}

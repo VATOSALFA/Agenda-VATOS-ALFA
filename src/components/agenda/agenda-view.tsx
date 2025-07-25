@@ -48,13 +48,11 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Profesional, Client, Service, ScheduleDay, Reservation } from '@/lib/types';
+import type { Profesional, Client, Service, ScheduleDay, Reservation, Local } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const START_HOUR = 10;
-const END_HOUR = 20;
 const ROW_HEIGHT = 48; // Each slot is 48px tall
 
 interface TimeBlock {
@@ -121,6 +119,7 @@ export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
+  const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -153,6 +152,42 @@ export default function AgendaView() {
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+
+  useEffect(() => {
+    if (!selectedLocalId && locales.length > 0) {
+      setSelectedLocalId(locales[0].id);
+    }
+  }, [locales, selectedLocalId]);
+
+  const selectedLocal = useMemo(() => {
+    if (!selectedLocalId || locales.length === 0) return null;
+    return locales.find(l => l.id === selectedLocalId) || locales[0];
+  }, [selectedLocalId, locales]);
+  
+  const { timeSlots, startHour, endHour } = useMemo(() => {
+    if (!selectedLocal || !selectedLocal.schedule) {
+      return { timeSlots: [], startHour: 10, endHour: 20 };
+    }
+    const dayOfWeek = date ? format(date, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : 'lunes';
+    const daySchedule = selectedLocal.schedule[dayOfWeek as keyof typeof selectedLocal.schedule] || selectedLocal.schedule.lunes;
+    
+    const [startH, startM] = daySchedule.start.split(':').map(Number);
+    const [endH, endM] = daySchedule.end.split(':').map(Number);
+    
+    const slots = [];
+    let currentTime = set(new Date(), { hours: startH, minutes: startM, seconds: 0 });
+    const endTime = set(new Date(), { hours: endH, minutes: endM, seconds: 0 });
+
+    while (currentTime < endTime) {
+        slots.push(format(currentTime, 'HH:mm'));
+        currentTime = addMinutes(currentTime, slotDurationMinutes);
+    }
+    slots.push(format(endTime, 'HH:mm'));
+
+    return { timeSlots: slots, startHour: startH + startM/60, endHour: endH + endM/60 };
+  }, [date, selectedLocal, slotDurationMinutes]);
+
 
   const reservationsQueryConstraint = useMemo(() => {
     if (!date) return undefined;
@@ -165,21 +200,9 @@ export default function AgendaView() {
   const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, reservationsQueryConstraint);
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, reservationsQueryConstraint);
   
-  const isLoading = professionalsLoading || clientsLoading || servicesLoading;
+  const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading;
 
   const refreshData = () => setQueryKey(prev => prev + 1);
-
-  const timeSlots = useMemo(() => {
-    const slots = [];
-    for (let h = START_HOUR; h < END_HOUR; h++) {
-      for (let m = 0; m < 60; m += slotDurationMinutes) {
-        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-      }
-    }
-    slots.push(`${String(END_HOUR).padStart(2, '0')}:00`);
-    return slots;
-  }, [slotDurationMinutes]);
-
 
   const allEvents = useMemo(() => {
     if (!reservations || !timeBlocks || !clients) return [];
@@ -362,7 +385,7 @@ export default function AgendaView() {
   };
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
-    const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
+    const minutesFromAgendaStart = (startDecimal - startHour) * 60;
     const top = (minutesFromAgendaStart / slotDurationMinutes) * ROW_HEIGHT;
     const height = (durationDecimal * 60 / slotDurationMinutes) * ROW_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
@@ -371,14 +394,14 @@ export default function AgendaView() {
   const calculatePopoverPosition = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
-    const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
+    const minutesFromAgendaStart = (startDecimal - startHour) * 60;
     const top = (minutesFromAgendaStart / slotDurationMinutes) * ROW_HEIGHT;
     return { top: `${top}px` };
   }
 
   const calculateCurrentTimePosition = () => {
     const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
-    const totalMinutesStart = START_HOUR * 60;
+    const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart) return -1;
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
     return (elapsedMinutes / slotDurationMinutes) * ROW_HEIGHT;
@@ -416,13 +439,14 @@ export default function AgendaView() {
               <CardContent className="space-y-4">
                   <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-600">Sucursal</label>
-                      <Select defaultValue="principal">
+                      <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
                       <SelectTrigger className="text-sm">
                           <SelectValue placeholder="Seleccionar sucursal" />
                       </SelectTrigger>
                       <SelectContent>
-                          <SelectItem value="principal">Vatos Alfa Principal</SelectItem>
-                          <SelectItem value="norte">Vatos Alfa Norte</SelectItem>
+                        {locales.map(local => (
+                            <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                        ))}
                       </SelectContent>
                       </Select>
                   </div>
@@ -479,7 +503,7 @@ export default function AgendaView() {
               <div>
                   <h2 className="text-xl font-semibold text-[#202A49] capitalize">{selectedDateFormatted}</h2>
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Store className='w-4 h-4'/> VATOS ALFA Principal
+                      <Store className='w-4 h-4'/> {selectedLocal?.name || 'Cargando...'}
                   </p>
               </div>
           </div>
@@ -540,12 +564,13 @@ export default function AgendaView() {
                           const daySchedule = getDaySchedule(barber);
                           const isWorking = daySchedule && daySchedule.enabled;
                           
-                          let startHour = START_HOUR, endHour = END_HOUR;
+                          let barberStartHour = startHour;
+                          let barberEndHour = endHour;
                           if (isWorking) {
                               const [startH, startM] = daySchedule.start.split(':').map(Number);
                               const [endH, endM] = daySchedule.end.split(':').map(Number);
-                              startHour = startH + startM / 60;
-                              endHour = endH + endM / 60;
+                              barberStartHour = startH + startM / 60;
+                              barberEndHour = endH + endM / 60;
                           }
                           
                           return (
@@ -585,11 +610,11 @@ export default function AgendaView() {
                                       <NonWorkBlock top={0} height={ROW_HEIGHT * (timeSlots.length - 1)} text="Profesional no disponible" />
                                   ) : (
                                       <>
-                                          {startHour > START_HOUR && (
-                                              <NonWorkBlock top={0} height={((startHour - START_HOUR) * 60 / slotDurationMinutes) * ROW_HEIGHT} text="Fuera de horario" />
+                                          {barberStartHour > startHour && (
+                                              <NonWorkBlock top={0} height={((barberStartHour - startHour) * 60 / slotDurationMinutes) * ROW_HEIGHT} text="Fuera de horario" />
                                           )}
-                                          {endHour < END_HOUR && (
-                                              <NonWorkBlock top={((endHour - START_HOUR) * 60 / slotDurationMinutes) * ROW_HEIGHT} height={((END_HOUR - endHour) * 60 / slotDurationMinutes) * ROW_HEIGHT} text="Fuera de horario" />
+                                          {barberEndHour < endHour && (
+                                              <NonWorkBlock top={((barberEndHour - startHour) * 60 / slotDurationMinutes) * ROW_HEIGHT} height={((endHour - barberEndHour) * 60 / slotDurationMinutes) * ROW_HEIGHT} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}

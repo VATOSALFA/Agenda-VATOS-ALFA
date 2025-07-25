@@ -11,6 +11,17 @@ export interface Client {
   creado_en: any; // Firestore Timestamp
 }
 
+export interface Local {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  email: string;
+  status: 'active' | 'inactive';
+  schedule: Schedule;
+}
+
+
 export interface Profesional {
     id: string;
     name: string;

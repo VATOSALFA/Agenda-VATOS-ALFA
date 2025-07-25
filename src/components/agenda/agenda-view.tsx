@@ -78,7 +78,7 @@ const useCurrentTime = () => {
   
   const calculateTopPosition = () => {
     const now = new Date();
-    const currentHour = now.getHours();
+    const currentHour = now.getHours() + 1;
     const currentMinute = now.getMinutes();
 
     if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {

@@ -55,6 +55,7 @@ import { CancelReservationModal } from '../reservations/cancel-reservation-modal
 
 const START_HOUR = 10;
 const END_HOUR = 20;
+const ROW_HEIGHT = 48; // Each slot is 48px tall
 
 interface TimeBlock {
     id: string;
@@ -70,30 +71,19 @@ interface TimeBlock {
     color?: string;
 }
 
-const useCurrentTime = (hourlySlotHeight: number) => {
-    const calculateTopPosition = useCallback(() => {
-        const now = new Date();
-        const totalMinutesNow = now.getHours() * 60 + now.getMinutes();
-        const totalMinutesStart = START_HOUR * 60;
-        const elapsedMinutes = totalMinutesNow - totalMinutesStart;
-        return elapsedMinutes * (hourlySlotHeight / 60);
-    }, [hourlySlotHeight]);
-
-    const [topPosition, setTopPosition] = useState(calculateTopPosition);
-    const [currentTime, setCurrentTime] = useState(new Date());
+const useCurrentTime = () => {
+    const [time, setTime] = useState(new Date());
 
     useEffect(() => {
         const timer = setInterval(() => {
-            setCurrentTime(new Date());
-            setTopPosition(calculateTopPosition());
+            setTime(new Date());
         }, 60000); // Update every minute
 
         return () => clearInterval(timer);
-    }, [calculateTopPosition]);
+    }, []);
 
-    return { time: currentTime, top: topPosition };
+    return time;
 };
-
 
 const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
     <div
@@ -130,8 +120,7 @@ const getStatusColor = (status: string | undefined) => {
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
-  const [slotHeight, setSlotHeight] = useState(50);
-  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -150,7 +139,7 @@ export default function AgendaView() {
   const [blockToDelete, setBlockToDelete] = useState<TimeBlock | null>(null);
 
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
-  const { time: currentTime, top: currentTimeTop } = useCurrentTime(slotHeight);
+  const currentTime = useCurrentTime();
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
   const { toast } = useToast();
   
@@ -179,6 +168,18 @@ export default function AgendaView() {
   const isLoading = professionalsLoading || clientsLoading || servicesLoading;
 
   const refreshData = () => setQueryKey(prev => prev + 1);
+
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let h = START_HOUR; h < END_HOUR; h++) {
+      for (let m = 0; m < 60; m += slotDurationMinutes) {
+        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      }
+    }
+    slots.push(`${String(END_HOUR).padStart(2, '0')}:00`);
+    return slots;
+  }, [slotDurationMinutes]);
+
 
   const allEvents = useMemo(() => {
     if (!reservations || !timeBlocks || !clients) return [];
@@ -222,8 +223,6 @@ export default function AgendaView() {
       return [...appointmentEvents, ...blockEvents];
   }, [reservations, timeBlocks, clients]);
 
-
-  const SLOT_DURATION_MINUTES = 30;
   
   const handleSetToday = () => setDate(new Date());
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
@@ -235,18 +234,13 @@ export default function AgendaView() {
     const rect = gridEl.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    const slotsPerHour = 60 / SLOT_DURATION_MINUTES;
-    const slotIndex = Math.floor(y / (slotHeight / slotsPerHour));
-    
-    const hour = START_HOUR + Math.floor(slotIndex / slotsPerHour);
-    const minute = (slotIndex % slotsPerHour) * SLOT_DURATION_MINUTES;
-
-    if (hour < START_HOUR || hour > END_HOUR) {
-      setHoveredSlot(null);
-      return;
+    const slotIndex = Math.floor(y / ROW_HEIGHT);
+    if (slotIndex < 0 || slotIndex >= timeSlots.length - 1) {
+        setHoveredSlot(null);
+        return;
     }
 
-    const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    const time = timeSlots[slotIndex];
     setHoveredSlot({ barberId, time });
   }
 
@@ -369,8 +363,8 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * (slotHeight / 60);
-    const height = durationDecimal * slotHeight;
+    const top = (minutesFromAgendaStart / slotDurationMinutes) * ROW_HEIGHT;
+    const height = (durationDecimal * 60 / slotDurationMinutes) * ROW_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
   
@@ -378,8 +372,16 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * (slotHeight / 60);
+    const top = (minutesFromAgendaStart / slotDurationMinutes) * ROW_HEIGHT;
     return { top: `${top}px` };
+  }
+
+  const calculateCurrentTimePosition = () => {
+    const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
+    const totalMinutesStart = START_HOUR * 60;
+    if (totalMinutesNow < totalMinutesStart) return -1;
+    const elapsedMinutes = totalMinutesNow - totalMinutesStart;
+    return (elapsedMinutes / slotDurationMinutes) * ROW_HEIGHT;
   }
 
   const formatHour = (hour: number) => {
@@ -400,6 +402,8 @@ export default function AgendaView() {
   const selectedDateFormatted = date 
     ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
     : 'Cargando...';
+
+  const currentTimeTop = calculateCurrentTimePosition();
 
   return (
     <TooltipProvider>
@@ -436,6 +440,20 @@ export default function AgendaView() {
                       </SelectContent>
                       </Select>
                   </div>
+                   <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-600">Intervalo</label>
+                      <Select value={String(slotDurationMinutes)} onValueChange={(val) => setSlotDurationMinutes(Number(val))}>
+                      <SelectTrigger className="text-sm">
+                          <SelectValue placeholder="Intervalo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="5">5 min</SelectItem>
+                          <SelectItem value="15">15 min</SelectItem>
+                          <SelectItem value="30">30 min</SelectItem>
+                          <SelectItem value="60">60 min</SelectItem>
+                      </SelectContent>
+                      </Select>
+                  </div>
               </CardContent>
           </Card>
           <Card className="shadow-md bg-white rounded-lg h-auto">
@@ -458,23 +476,6 @@ export default function AgendaView() {
                     </div>
                   )}
               </CardContent>
-          </Card>
-          <Card className="shadow-md bg-white rounded-lg">
-            <CardContent className="p-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-start gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span>Zoom: {slotHeight}px</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onSelect={() => setSlotHeight(15)}>15px</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setSlotHeight(30)}>30px</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setSlotHeight(50)}>50px</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-            </CardContent>
           </Card>
         </aside>
         <main className="flex-1 flex flex-col">
@@ -501,21 +502,21 @@ export default function AgendaView() {
                   {/* Time Column */}
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-r border-transparent">&nbsp;</div> {/* Header Spacer */}
-                       {hours.map((hour) => (
-                          <div key={hour} style={{ height: `${slotHeight}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r border-border">
-                              <span className="text-xs text-muted-foreground">{`${hour}:00`}</span>
+                       {timeSlots.slice(0, -1).map((time, index) => (
+                          <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-r border-border">
+                              <span className="text-xs text-muted-foreground">{time.endsWith('00') ? time : ''}</span>
                           </div>
                       ))}
                   </div>
                   
-                  {/* Barbers Columns Container */}
+                  {/* Main Grid Content */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min relative">
                       {/* Current Time Indicator */}
-                      {renderTimeIndicator && date && isToday(date) && (
-                          <div
-                          className="absolute h-px bg-red-500 z-30 pointer-events-none left-16 right-0"
-                          style={{ top: `${currentTimeTop}px` }}
-                          >
+                      {renderTimeIndicator && date && isToday(date) && currentTimeTop >= 0 && (
+                           <div
+                              className="absolute h-px bg-red-500 z-30 pointer-events-none left-0 right-0"
+                              style={{ top: `${currentTimeTop}px` }}
+                           >
                             <div className="absolute left-0 -translate-y-1/2">
                                <div className="relative -translate-x-[calc(100%+4px)]">
                                 <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">
@@ -523,14 +524,15 @@ export default function AgendaView() {
                                 </div>
                                </div>
                             </div>
-                          </div>
+                           </div>
                       )}
 
+                      {/* Professionals Columns */}
                       {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (
-                            <div key={i} className="w-64 flex-shrink-0">
-                                <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton style={{height: `${(END_HOUR - START_HOUR + 1) * slotHeight}px`}} className="w-full" /></div>
+                            <div key={i} className="w-64 flex-shrink-0 border-r">
+                                <div className="p-3 sticky top-0 z-10 h-14 bg-white border-b"><Skeleton className="h-8 w-full" /></div>
+                                <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * ROW_HEIGHT}px`}} className="w-full" /></div>
                             </div>
                         ))
                       ) : professionals.map((barber) => {
@@ -546,10 +548,10 @@ export default function AgendaView() {
                           }
                           
                           return (
-                          <div key={barber.id} className="w-64 flex-shrink-0">
+                          <div key={barber.id} className="w-64 flex-shrink-0 border-r">
                               {/* Professional Header */}
                               <div 
-                                className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b border-l-0 border-r-0 h-14"
+                                className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
                               >
@@ -559,13 +561,6 @@ export default function AgendaView() {
                                   </Avatar>
                                   <div className="flex-grow">
                                       <p className="font-semibold text-sm text-gray-800">{barber.name}</p>
-                                      <Badge variant={barber.active ? 'default' : 'destructive'} 
-                                          className={cn(
-                                              'text-xs py-0.5 px-2 font-medium',
-                                              barber.active && 'bg-green-100 text-green-800 border-green-200',
-                                              !barber.active && 'bg-red-100 text-red-800 border-red-200'
-                                          )}
-                                      >{barber.active ? 'disponible' : 'inactivo'}</Badge>
                                   </div>
                                   {hoveredBarberId === barber.id && (
                                     <Tooltip>
@@ -585,7 +580,7 @@ export default function AgendaView() {
 
                               {/* Appointments Grid */}
                               <div 
-                                className="relative bg-white/60"
+                                className="relative"
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
@@ -593,21 +588,21 @@ export default function AgendaView() {
                               >
                                   {/* Background Grid Lines */}
                                   <div className="absolute inset-0 z-0">
-                                    {hours.map((hour) => (
-                                        <div key={hour} style={{ height: `${slotHeight}px`}} className="border-b border-border" />
+                                    {timeSlots.slice(0, -1).map((time, index) => (
+                                        <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="border-b border-border" />
                                     ))}
                                   </div>
                                   
                                   {/* Non-working hours blocks */}
                                   {!isWorking ? (
-                                      <NonWorkBlock top={0} height={slotHeight * hours.length} text="Profesional no disponible" />
+                                      <NonWorkBlock top={0} height={ROW_HEIGHT * (timeSlots.length - 1)} text="Profesional no disponible" />
                                   ) : (
                                       <>
                                           {startHour > START_HOUR && (
-                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * slotHeight} text="Fuera de horario" />
+                                              <NonWorkBlock top={0} height={((startHour - START_HOUR) * 60 / slotDurationMinutes) * ROW_HEIGHT} text="Fuera de horario" />
                                           )}
                                           {endHour < END_HOUR && (
-                                              <NonWorkBlock top={(endHour - START_HOUR) * slotHeight} height={(END_HOUR - endHour + 1) * slotHeight} text="Fuera de horario" />
+                                              <NonWorkBlock top={((endHour - START_HOUR) * 60 / slotDurationMinutes) * ROW_HEIGHT} height={((END_HOUR - endHour) * 60 / slotDurationMinutes) * ROW_HEIGHT} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}
@@ -615,8 +610,8 @@ export default function AgendaView() {
                                   {/* Hover Popover */}
                                   {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
-                                        className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES * (slotHeight / 60)}px`}}
+                                        className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${ROW_HEIGHT}px`}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
                                             <Plus className="w-3 h-3 mr-1" />
@@ -778,4 +773,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

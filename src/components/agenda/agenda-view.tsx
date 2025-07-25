@@ -374,7 +374,7 @@ export default function AgendaView() {
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
     const top = minutesFromAgendaStart * 0.5;
-    const height = durationDecimal * 30;
+    const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
 
@@ -582,6 +582,9 @@ export default function AgendaView() {
                                     </div>
                                   ))}
                                   
+                                  <div className="absolute left-0 right-0 h-px bg-blue-500 z-20" style={{ top: '0px' }} />
+                                  <div className="absolute left-0 right-0 h-px bg-green-500 z-20" style={{ top: '120px' }} />
+
                                   {/* Non-working hours blocks */}
                                   {!isWorking ? (
                                       <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />

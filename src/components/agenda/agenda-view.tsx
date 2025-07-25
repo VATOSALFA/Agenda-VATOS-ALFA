@@ -80,16 +80,13 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-    
-    const minutesSinceStartOfDay = (currentHour * 60) + currentMinute;
-    const agendaStartInMinutes = START_HOUR * 60;
-    
-    const minutesSinceAgendaStart = minutesSinceStartOfDay - agendaStartInMinutes;
+
+    const minutesSinceAgendaStart = (currentHour - START_HOUR) * 60 + currentMinute;
     
     const topPosition = (minutesSinceAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
 
-    if (topPosition < 0 || topPosition > (HOURLY_SLOT_HEIGHT * (END_HOUR - START_HOUR + 1))) {
-      return null;
+    if (currentHour < START_HOUR || currentHour > END_HOUR + 1) {
+        return null;
     }
     
     return topPosition;

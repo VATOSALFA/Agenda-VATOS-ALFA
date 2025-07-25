@@ -94,7 +94,7 @@ const useCurrentTime = () => {
     const minutesSinceAgendaStart = totalMinutesNow - totalMinutesStart;
 
     // 1 pixel for every 2 minutes
-    const topPosition = minutesSinceAgendaStart / 2;
+    const topPosition = minutesSinceAgendaStart * 2;
   
     return topPosition;
   };
@@ -765,3 +765,5 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
+    

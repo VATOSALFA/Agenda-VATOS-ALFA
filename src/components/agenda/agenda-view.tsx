@@ -74,10 +74,6 @@ const useCurrentTime = () => {
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
 
-    if (currentHours < START_HOUR || currentHours > END_HOUR) {
-        return null;
-    }
-
     const totalMinutesNow = currentHours * 60 + currentMinutes;
     const totalMinutesStart = START_HOUR * 60;
     
@@ -89,7 +85,6 @@ const useCurrentTime = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      setTopPosition(calculateTopPosition());
     }, 1000); // Update every second
     
     // Set initial position
@@ -97,6 +92,10 @@ const useCurrentTime = () => {
     
     return () => clearInterval(timer);
   }, [calculateTopPosition]);
+
+  useEffect(() => {
+      setTopPosition(calculateTopPosition());
+  }, [currentTime, calculateTopPosition]);
 
   return { time: currentTime, top: topPosition };
 };
@@ -510,7 +509,7 @@ export default function AgendaView() {
                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
                         <>
                           <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
-                          <div className="absolute left-0 right-0 h-px bg-blue-500 z-10" style={{ top: currentTimeTop, transform: 'translateY(4px)' }} />
+                          <div className="absolute left-0 right-0 h-px bg-blue-500 z-10" style={{ top: 121, transform: 'translateY(4px)' }} />
                         </>
                       )}
                       {isLoading ? (

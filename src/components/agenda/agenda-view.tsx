@@ -491,13 +491,13 @@ export default function AgendaView() {
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
-                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                         <div className="absolute w-full -left-16" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                      {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
+                         <div className="absolute left-0 w-full" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
                             <div className="flex items-center">
-                                <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded mr-1">
+                                <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded -translate-x-full -mr-1 z-10">
                                     {format(currentTime, 'HH:mm')}
                                 </span>
-                                <div className="flex-grow h-px bg-red-500"></div>
+                                <div className="flex-grow h-px bg-red-500 w-full"></div>
                             </div>
                           </div>
                       )}
@@ -695,14 +695,14 @@ export default function AgendaView() {
         </main>
       </div>
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-        <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-          <NewReservationForm
-            isDialogChild
-            onFormSubmit={refreshData}
-            initialData={reservationInitialData}
-            isEditMode={!!reservationInitialData?.id}
-          />
-        </DialogContent>
+          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+            <NewReservationForm
+              isDialogChild
+              onFormSubmit={refreshData}
+              initialData={reservationInitialData}
+              isEditMode={!!reservationInitialData?.id}
+            />
+          </DialogContent>
       </Dialog>
       
       <BlockScheduleForm

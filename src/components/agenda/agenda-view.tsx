@@ -92,10 +92,9 @@ const useCurrentTime = () => {
     }
 
     const minutesSinceAgendaStart = totalMinutesNow - totalMinutesStart;
-
-    // 1 pixel for every 2 minutes
+    
     const topPosition = minutesSinceAgendaStart * 0.5;
-  
+
     return topPosition;
   };
 
@@ -376,7 +375,7 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = (minutesFromAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
+    const top = minutesFromAgendaStart * 0.5;
     const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
@@ -385,7 +384,7 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = (minutesFromAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
+    const top = minutesFromAgendaStart * 0.5;
     return { top: `${top}px` };
   }
 
@@ -577,12 +576,14 @@ export default function AgendaView() {
                                 onMouseLeave={handleMouseLeave}
                                 onClick={(e) => isWorking && handleClickSlot(e)}
                               >
-                                  {/* Pixel 0 Marker */}
                                   <div className="absolute top-0 left-0 w-full border-t-2 border-green-500 z-10"></div>
 
                                   {/* Background Grid Lines */}
-                                  {hours.map((hour) => (
-                                      <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border"></div>
+                                  {hours.map((hour, hourIndex) => (
+                                    <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border relative">
+                                        <div className="absolute top-[10px] w-full border-t border-green-500/30"></div>
+                                        <div className="absolute top-[20px] w-full border-t border-green-500/30"></div>
+                                    </div>
                                   ))}
                                   
                                   {/* Non-working hours blocks */}

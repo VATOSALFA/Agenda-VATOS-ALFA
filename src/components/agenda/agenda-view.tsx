@@ -71,7 +71,7 @@ const useCurrentTime = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 2000); 
+    }, 1000); // Update every second
     
     return () => clearInterval(timer);
   }, []);
@@ -80,15 +80,23 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-
-    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
+    
+    if (currentHour < START_HOUR || currentHour > END_HOUR) {
         return null;
     }
 
-    const minutesFromAgendaStart = (currentHour - START_HOUR) * 60 + currentMinute;
+    // Calculate total minutes passed since the start of the day
+    const totalMinutesSinceDayStart = currentHour * 60 + currentMinute;
+    // Calculate total minutes from the agenda's start time
+    const agendaStartInMinutes = START_HOUR * 60;
     
-    // 1 pixel every 2 minutes
-    const topPosition = minutesFromAgendaStart / 2;
+    // Calculate minutes passed since the agenda started
+    const minutesSinceAgendaStart = totalMinutesSinceDayStart - agendaStartInMinutes;
+    
+    if (minutesSinceAgendaStart < 0) return 0;
+
+    // 1 pixel for every 2 minutes
+    const topPosition = minutesSinceAgendaStart / 2;
   
     return topPosition;
   };
@@ -566,12 +574,15 @@ export default function AgendaView() {
                               {/* Appointments Grid */}
                               <div 
                                 className="relative bg-white/60"
-                                style={{backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 1px, #f0f0f0 1px, #f0f0f0 2px)', backgroundSize: '100% 2px'}}
+                                style={{backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 1px, #e0e0e0 1px, #e0e0e0 2px)', backgroundSize: '100% 2px'}}
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
                                 onClick={(e) => isWorking && handleClickSlot(e)}
                               >
+                                  {/* Pixel 0 Marker */}
+                                  <div className="absolute top-0 left-0 w-full border-t-2 border-green-500 z-10"></div>
+
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
                                       <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border"></div>

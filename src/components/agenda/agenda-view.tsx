@@ -73,14 +73,17 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    
-    // Check if current time is outside the visible agenda hours
-    if (currentHours < START_HOUR || currentHours >= END_HOUR + 1) {
+
+    if (currentHours < START_HOUR || currentHours > END_HOUR) {
         return null;
     }
 
-    const minutesSinceStart = (currentHours - START_HOUR) * 60 + currentMinutes;
-    return minutesSinceStart * 0.5;
+    const totalMinutesNow = currentHours * 60 + currentMinutes;
+    const totalMinutesStart = START_HOUR * 60;
+    
+    const elapsedMinutes = totalMinutesNow - totalMinutesStart;
+
+    return elapsedMinutes * 0.5;
   }, []);
 
   useEffect(() => {
@@ -505,7 +508,10 @@ export default function AgendaView() {
                   {/* Barbers Columns */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                        <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
+                        <>
+                          <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
+                          <div className="absolute left-0 right-0 h-px bg-blue-500 z-10" style={{ top: currentTimeTop, transform: 'translateY(4px)' }} />
+                        </>
                       )}
                       {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (

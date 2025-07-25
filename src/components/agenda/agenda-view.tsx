@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useRef, MouseEvent, useEffect, useMemo } from 'react';
+import { useState, useRef, MouseEvent, useEffect, useMemo, useCallback } from 'react';
 import {
   Select,
   SelectContent,
@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 30; // 30 pixels per hour
+const HOURLY_SLOT_HEIGHT = 60;
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -67,32 +67,35 @@ interface TimeBlock {
 
 const useCurrentTime = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [topPosition, setTopPosition] = useState<number | null>(null);
+
+  const calculateTopPosition = useCallback(() => {
+    const now = new Date();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    
+    // Check if current time is outside the visible agenda hours
+    if (currentHours < START_HOUR || currentHours >= END_HOUR + 1) {
+        return null;
+    }
+
+    const minutesSinceStart = (currentHours - START_HOUR) * 60 + currentMinutes;
+    return minutesSinceStart * 0.5;
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
+      setTopPosition(calculateTopPosition());
     }, 1000); // Update every second
     
+    // Set initial position
+    setTopPosition(calculateTopPosition());
+    
     return () => clearInterval(timer);
-  }, []);
-  
-  const calculateTopPosition = () => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+  }, [calculateTopPosition]);
 
-    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
-        return null;
-    }
-
-    const minutesSinceStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    const topPosition = minutesSinceStart * 0.5;
-
-    return topPosition;
-  };
-
-
-  return { time: currentTime, top: calculateTopPosition() };
+  return { time: currentTime, top: topPosition };
 };
 
 const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
@@ -369,7 +372,7 @@ export default function AgendaView() {
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
     const top = minutesFromAgendaStart * 0.5;
-    const height = durationDecimal * HOURLY_SLOT_HEIGHT;
+    const height = durationDecimal * 30;
     return { top: `${top}px`, height: `${height}px` };
   };
 
@@ -581,10 +584,10 @@ export default function AgendaView() {
                                   ) : (
                                       <>
                                           {startHour > START_HOUR && (
-                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * 30} text="Fuera de horario" />
                                           )}
                                           {endHour < END_HOUR && (
-                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR - endHour + 1) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                              <NonWorkBlock top={(endHour - START_HOUR) * 30} height={(END_HOUR - endHour + 1) * 30} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}
@@ -593,7 +596,7 @@ export default function AgendaView() {
                                   {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
                                         className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${HOURLY_SLOT_HEIGHT/2}px`}}
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${30}px`}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
                                             <Plus className="w-3 h-3 mr-1" />

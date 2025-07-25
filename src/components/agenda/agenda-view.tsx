@@ -87,12 +87,13 @@ const useCurrentTime = () => {
     const totalMinutesStart = START_HOUR * 60;
 
     // Check if current time is outside the working hours range
-    if (totalMinutesNow < totalMinutesStart || totalMinutesNow > (END_HOUR * 60)) {
+    if (currentHour < START_HOUR || currentHour > END_HOUR) {
         return null; // Don't show the line outside of work hours
     }
 
     const minutesSinceAgendaStart = totalMinutesNow - totalMinutesStart;
     
+    // 1 pixel for every 2 minutes
     const topPosition = minutesSinceAgendaStart * 0.5;
 
     return topPosition;
@@ -577,6 +578,7 @@ export default function AgendaView() {
                                 onClick={(e) => isWorking && handleClickSlot(e)}
                               >
                                   <div className="absolute top-0 left-0 w-full border-t-2 border-green-500 z-10"></div>
+                                  <div className="absolute left-0 w-full h-px bg-blue-500 z-20" style={{top: '116.5px'}} />
 
                                   {/* Background Grid Lines */}
                                   {hours.map((hour, hourIndex) => (

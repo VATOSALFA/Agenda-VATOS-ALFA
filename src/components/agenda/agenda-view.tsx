@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 30;
+const HOURLY_SLOT_HEIGHT = 60;
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -76,7 +76,7 @@ const useCurrentTime = () => {
     
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
 
-    return elapsedMinutes * 0.5; // 0.5px per minute
+    return elapsedMinutes * (HOURLY_SLOT_HEIGHT / 60);
   }, []);
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -87,7 +87,7 @@ const useCurrentTime = () => {
       const now = new Date();
       setCurrentTime(now);
       setTopPosition(calculateTopPosition());
-    }, 1000); // Update every second
+    }, 60000); // Update every minute
     
     return () => clearInterval(timer);
   }, [calculateTopPosition]);
@@ -369,7 +369,7 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * 0.5;
+    const top = minutesFromAgendaStart * (HOURLY_SLOT_HEIGHT / 60);
     const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
@@ -378,7 +378,7 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * 0.5;
+    const top = minutesFromAgendaStart * (HOURLY_SLOT_HEIGHT / 60);
     return { top: `${top}px` };
   }
 
@@ -583,7 +583,7 @@ export default function AgendaView() {
                                   {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
                                         className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES * 0.5}px`}}
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES * (HOURLY_SLOT_HEIGHT / 60)}px`}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
                                             <Plus className="w-3 h-3 mr-1" />
@@ -677,19 +677,18 @@ export default function AgendaView() {
                           </div>
                           )
                       })}
-                  </div>
-
-                   {/* Current Time Indicator */}
-                    {renderTimeIndicator && date && isToday(date) && (
-                      <div className="absolute left-16 right-0 z-30 pointer-events-none" style={{ top: currentTimeTop }}>
-                        <div className="flex items-center">
-                           <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded -translate-x-full -mr-1 z-10">
-                              {format(currentTime, 'HH:mm')}
-                           </span>
-                           <div className="w-full h-px bg-red-500"></div>
+                      {/* Current Time Indicator */}
+                      {renderTimeIndicator && date && isToday(date) && (
+                        <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: currentTimeTop }}>
+                            <div className="flex items-center -translate-y-1/2">
+                              <span className="text-[10px] font-bold text-white bg-[#202A49] px-1.5 py-0.5 rounded-r z-10 -ml-16">
+                                  {format(currentTime, 'HH:mm')}
+                              </span>
+                              <div className="w-full h-px bg-red-500"></div>
+                            </div>
                         </div>
-                      </div>
-                  )}
+                      )}
+                  </div>
               </div>
           </ScrollArea>
         </main>

@@ -80,16 +80,14 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-    
-    if (currentHour < START_HOUR || currentHour > END_HOUR + 1) {
+
+    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
         return null;
     }
 
     const hoursSinceStart = currentHour - START_HOUR;
-    const minutesInHour = currentMinute;
-    
-    const topPosition = (hoursSinceStart * HOURLY_SLOT_HEIGHT) + (minutesInHour / 60) * HOURLY_SLOT_HEIGHT;
-    
+    const topPosition = (hoursSinceStart * HOURLY_SLOT_HEIGHT) + (currentMinute / 60) * HOURLY_SLOT_HEIGHT;
+
     return topPosition;
   };
 
@@ -498,7 +496,7 @@ export default function AgendaView() {
                   {/* Barbers Columns */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                        <div className="absolute left-0 right-0 h-px bg-[#202A49] z-10" style={{ top: currentTimeTop }} />
+                        <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
                       )}
                       {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (

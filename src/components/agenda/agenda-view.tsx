@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 48; // in pixels
+const HOURLY_SLOT_HEIGHT = 60; // 60px per hour -> 1px per minute
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -78,15 +78,15 @@ const useCurrentTime = () => {
   
   const calculateTopPosition = () => {
     const now = new Date();
-    const currentHour = getHours(now);
-    const currentMinute = getMinutes(now);
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
 
     if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
       return null;
     }
     
     const minutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    const topPosition = (minutesFromStart / 60) * HOURLY_SLOT_HEIGHT;
+    const topPosition = minutesFromStart * (HOURLY_SLOT_HEIGHT / 60);
 
     return topPosition;
   };
@@ -365,16 +365,18 @@ export default function AgendaView() {
     }
   };
 
-  const calculatePosition = (start: number, duration: number) => {
-    const top = (start - START_HOUR) * HOURLY_SLOT_HEIGHT;
-    const height = duration * HOURLY_SLOT_HEIGHT;
+  const calculatePosition = (startDecimal: number, durationDecimal: number) => {
+    const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
+    const top = minutesFromAgendaStart * (HOURLY_SLOT_HEIGHT / 60);
+    const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
 
   const calculatePopoverPosition = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
-    const start = hour + (minute / 60);
-    const top = (start - START_HOUR) * HOURLY_SLOT_HEIGHT;
+    const startDecimal = hour + minute / 60;
+    const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
+    const top = minutesFromAgendaStart * (HOURLY_SLOT_HEIGHT / 60);
     return { top: `${top}px` };
   }
 
@@ -481,7 +483,7 @@ export default function AgendaView() {
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                       {hours.map((hour) => (
-                          <div key={hour} className="h-[48px] text-right pr-2 border-b border-border">
+                          <div key={hour} className="h-[60px] text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
@@ -568,7 +570,7 @@ export default function AgendaView() {
                               >
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
-                                      <div key={hour} className="h-[48px] border-b border-border"></div>
+                                      <div key={hour} className="h-[60px] border-b border-border"></div>
                                   ))}
                                   
                                   {/* Non-working hours blocks */}

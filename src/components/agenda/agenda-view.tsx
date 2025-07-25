@@ -77,16 +77,17 @@ const useCurrentTime = () => {
   }, []);
   
   const calculateTopPosition = () => {
-    const hours = currentTime.getHours();
-    const minutes = currentTime.getMinutes();
-    
-    const totalMinutes = (hours - START_HOUR) * 60 + minutes;
-    const top = (totalMinutes / 60) * HOURLY_SLOT_HEIGHT;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
 
-    if (top < 0 || top > HOURLY_SLOT_HEIGHT * (END_HOUR - START_HOUR + 1)) {
+    const minutesSinceStart = (currentHour - START_HOUR) * 60 + currentMinute;
+    const topPosition = (minutesSinceStart / 60) * HOURLY_SLOT_HEIGHT;
+
+    if (topPosition < 0 || topPosition > HOURLY_SLOT_HEIGHT * (END_HOUR - START_HOUR + 1)) {
       return null;
     }
-    return top;
+    return topPosition;
   };
 
   return { time: currentTime, top: calculateTopPosition() };

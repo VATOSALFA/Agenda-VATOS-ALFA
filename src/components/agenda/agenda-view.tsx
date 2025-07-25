@@ -80,20 +80,18 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-    
-    if (currentHour < START_HOUR || currentHour > END_HOUR) {
-        return null;
+
+    // Calculate total minutes from midnight for the current time
+    const totalMinutesNow = currentHour * 60 + currentMinute;
+    // Calculate total minutes from midnight for the start hour
+    const totalMinutesStart = START_HOUR * 60;
+
+    // Check if current time is outside the working hours range
+    if (totalMinutesNow < totalMinutesStart || totalMinutesNow > (END_HOUR * 60)) {
+        return null; // Don't show the line outside of work hours
     }
 
-    // Calculate total minutes passed since the start of the day
-    const totalMinutesSinceDayStart = currentHour * 60 + currentMinute;
-    // Calculate total minutes from the agenda's start time
-    const agendaStartInMinutes = START_HOUR * 60;
-    
-    // Calculate minutes passed since the agenda started
-    const minutesSinceAgendaStart = totalMinutesSinceDayStart - agendaStartInMinutes;
-    
-    if (minutesSinceAgendaStart < 0) return 0;
+    const minutesSinceAgendaStart = totalMinutesNow - totalMinutesStart;
 
     // 1 pixel for every 2 minutes
     const topPosition = minutesSinceAgendaStart / 2;
@@ -574,7 +572,6 @@ export default function AgendaView() {
                               {/* Appointments Grid */}
                               <div 
                                 className="relative bg-white/60"
-                                style={{backgroundImage: 'repeating-linear-gradient(to bottom, transparent, transparent 1px, #e0e0e0 1px, #e0e0e0 2px)', backgroundSize: '100% 2px'}}
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}

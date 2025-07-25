@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 30;
+const HOURLY_SLOT_HEIGHT = 50;
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -489,12 +489,13 @@ export default function AgendaView() {
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
                       {/* Current Time Indicator - Now relative to this container */}
                        {renderTimeIndicator && date && isToday(date) && (
-                        <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none" style={{ transform: `translateY(${currentTimeTop}px)` }}>
-                            <div className="relative h-px bg-red-500">
-                                <span className="absolute -left-16 text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-r z-10 -translate-y-1/2">
-                                    {format(currentTime, 'HH:mm')}
-                                </span>
-                            </div>
+                        <div
+                          className="absolute h-px bg-red-500 z-30 pointer-events-none w-[calc(100%+4rem)] -ml-16"
+                          style={{ top: `${currentTimeTop}px` }}
+                        >
+                            <span className="absolute left-10 -translate-y-1/2 text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded">
+                                {format(currentTime, 'HH:mm')}
+                            </span>
                         </div>
                       )}
 

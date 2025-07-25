@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2 } from 'lucide-react';
-import { format, addDays, subDays, isToday, parse, getHours, getMinutes } from 'date-fns';
+import { format, addDays, subDays, isToday, parse, getHours, getMinutes, set } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 60; // 60px per hour -> 1px per minute
+const HOURLY_SLOT_HEIGHT = 1800; // 60 minutes * 30px/minute (where 1 second = 0.5px)
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -71,7 +71,7 @@ const useCurrentTime = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Update every minute
+    }, 1000); // Update every second for smooth movement
     
     return () => clearInterval(timer);
   }, []);
@@ -80,16 +80,21 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
+    const currentSecond = now.getSeconds();
 
-    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
+    if (currentHour < START_HOUR || currentHour > END_HOUR) {
       return null;
     }
     
     const minutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    const topPosition = minutesFromStart * (HOURLY_SLOT_HEIGHT / 60);
+    const secondsInMinute = currentSecond;
+    
+    // 1 minute = 30px, so 1 second = 0.5px
+    const topPosition = minutesFromStart * (HOURLY_SLOT_HEIGHT / 60) + (secondsInMinute * 0.5);
 
     return topPosition;
   };
+
 
   return { time: currentTime, top: calculateTopPosition() };
 };
@@ -483,7 +488,7 @@ export default function AgendaView() {
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                       {hours.map((hour) => (
-                          <div key={hour} className="h-[60px] text-right pr-2 border-b border-border">
+                          <div key={hour} className="h-[1800px] text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
@@ -507,7 +512,7 @@ export default function AgendaView() {
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
                                 <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton className="h-[528px] w-full" /></div>
+                                <div className="relative"><Skeleton className="h-[19800px] w-full" /></div>
                             </div>
                         ))
                       ) : professionals.map((barber) => {
@@ -570,7 +575,7 @@ export default function AgendaView() {
                               >
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
-                                      <div key={hour} className="h-[60px] border-b border-border"></div>
+                                      <div key={hour} className="h-[1800px] border-b border-border"></div>
                                   ))}
                                   
                                   {/* Non-working hours blocks */}

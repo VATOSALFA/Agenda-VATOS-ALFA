@@ -80,20 +80,18 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-
+  
+    // Si la hora actual está fuera del rango de la agenda, no mostrar la línea.
     if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
       return null;
     }
     
+    // Calcular minutos totales transcurridos desde el inicio de la jornada (START_HOUR)
     const minutesFromAgendaStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    
-    if (minutesFromAgendaStart < 0) {
-        return null;
-    }
-
-    // 1 pixel every 2 minutes
+  
+    // La regla es: 1px por cada 2 minutos.
     const topPosition = minutesFromAgendaStart / 2;
-
+  
     return topPosition;
   };
 

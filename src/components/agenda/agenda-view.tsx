@@ -80,8 +80,8 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-
-    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
+    
+    if (currentHour < START_HOUR || currentHour > END_HOUR) {
         return null;
     }
 
@@ -184,13 +184,14 @@ export default function AgendaView() {
     const clientMap = new Map(clients.map(c => [c.id, c]));
 
     const appointmentEvents = reservations.map(res => {
-        const client = clientMap.get(res.cliente_id);
-        const start = parse(res.hora_inicio, 'HH:mm', new Date()).getHours() + parse(res.hora_inicio, 'HH:mm', new Date()).getMinutes() / 60;
-        const end = parse(res.hora_fin, 'HH:mm', new Date()).getHours() + parse(res.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
+        const [startH, startM] = res.hora_inicio.split(':').map(Number);
+        const [endH, endM] = res.hora_fin.split(':').map(Number);
+        const start = startH + startM / 60;
+        const end = endH + endM / 60;
         
         return {
             ...res,
-            customer: client ? `${client.nombre} ${client.apellido}` : 'Cliente Desconocido',
+            customer: clientMap.get(res.cliente_id)?.nombre || 'Cliente Desconocido',
             start: start,
             duration: Math.max(0.5, end - start),
             color: getStatusColor(res.estado),
@@ -199,8 +200,10 @@ export default function AgendaView() {
     });
 
     const blockEvents = timeBlocks.map(block => {
-        const start = parse(block.hora_inicio, 'HH:mm', new Date()).getHours() + parse(block.hora_inicio, 'HH:mm', new Date()).getMinutes() / 60;
-        const end = parse(block.hora_fin, 'HH:mm', new Date()).getHours() + parse(block.hora_fin, 'HH:mm', new Date()).getMinutes() / 60;
+        const [startH, startM] = block.hora_inicio.split(':').map(Number);
+        const [endH, endM] = block.hora_fin.split(':').map(Number);
+        const start = startH + startM / 60;
+        const end = endH + endM / 60;
         return {
           ...block,
           id: block.id,

@@ -66,8 +66,6 @@ interface TimeBlock {
 }
 
 const useCurrentTime = () => {
-  const [currentTime, setCurrentTime] = useState(new Date());
-
   const calculateTopPosition = useCallback(() => {
     const now = new Date();
     const currentHour = now.getHours();
@@ -81,8 +79,8 @@ const useCurrentTime = () => {
     return elapsedMinutes * 0.5; // 0.5px per minute
   }, []);
 
-  const [topPosition, setTopPosition] = useState<number | null>(calculateTopPosition);
-
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [topPosition, setTopPosition] = useState<number>(calculateTopPosition);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -482,7 +480,7 @@ export default function AgendaView() {
               </div>
           </div>
           <ScrollArea className="h-full">
-              <div className="flex">
+              <div className="flex relative">
                   {/* Time Column */}
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
@@ -491,16 +489,6 @@ export default function AgendaView() {
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
-                      {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                         <div className="absolute left-0 w-full" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
-                            <div className="flex items-center">
-                                <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded -translate-x-full -mr-1 z-10">
-                                    {format(currentTime, 'HH:mm')}
-                                </span>
-                                <div className="flex-grow h-px bg-red-500 w-full"></div>
-                            </div>
-                          </div>
-                      )}
                   </div>
                   
                   {/* Barbers Columns */}
@@ -570,7 +558,7 @@ export default function AgendaView() {
                                 onMouseLeave={handleMouseLeave}
                                 onClick={(e) => isWorking && handleClickSlot(e)}
                               >
-                                  {/* Background Grid Lines & Time Indicator */}
+                                  {/* Background Grid Lines */}
                                   <div className="absolute inset-0 z-0">
                                     {hours.map((hour) => (
                                         <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border" />
@@ -690,6 +678,18 @@ export default function AgendaView() {
                           )
                       })}
                   </div>
+
+                   {/* Current Time Indicator */}
+                    {renderTimeIndicator && date && isToday(date) && (
+                      <div className="absolute left-16 right-0 z-30 pointer-events-none" style={{ top: currentTimeTop }}>
+                        <div className="flex items-center">
+                           <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded -translate-x-full -mr-1 z-10">
+                              {format(currentTime, 'HH:mm')}
+                           </span>
+                           <div className="w-full h-px bg-red-500"></div>
+                        </div>
+                      </div>
+                  )}
               </div>
           </ScrollArea>
         </main>

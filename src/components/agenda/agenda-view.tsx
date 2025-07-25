@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 60; // 60 pixels per hour
+const HOURLY_SLOT_HEIGHT = 30; // 30 pixels per hour
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -86,7 +86,7 @@ const useCurrentTime = () => {
     }
     
     const minutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    const topPosition = minutesFromStart;
+    const topPosition = (minutesFromStart / 60) * HOURLY_SLOT_HEIGHT;
 
     return topPosition;
   };
@@ -368,7 +368,7 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart;
+    const top = (minutesFromAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
     const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
@@ -377,7 +377,7 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart;
+    const top = (minutesFromAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px` };
   }
 
@@ -484,7 +484,7 @@ export default function AgendaView() {
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
                       {hours.map((hour) => (
-                          <div key={hour} className="h-[60px] text-right pr-2 border-b border-border">
+                          <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
@@ -508,7 +508,7 @@ export default function AgendaView() {
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
                                 <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton className="h-[660px] w-full" /></div>
+                                <div className="relative"><Skeleton style={{height: `${(END_HOUR - START_HOUR + 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
                             </div>
                         ))
                       ) : professionals.map((barber) => {
@@ -571,7 +571,7 @@ export default function AgendaView() {
                               >
                                   {/* Background Grid Lines */}
                                   {hours.map((hour) => (
-                                      <div key={hour} className="h-[60px] border-b border-border"></div>
+                                      <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border"></div>
                                   ))}
                                   
                                   {/* Non-working hours blocks */}

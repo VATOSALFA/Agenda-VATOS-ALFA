@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2 } from 'lucide-react';
-import { format, addDays, subDays, isToday, parse } from 'date-fns';
+import { format, addDays, subDays, isToday, parse, getHours, getMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -78,15 +78,15 @@ const useCurrentTime = () => {
   
   const calculateTopPosition = () => {
     const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
-    if (currentHour < START_HOUR || currentHour > END_HOUR) {
-        return null;
-    }
+    const currentHour = getHours(now);
+    const currentMinute = getMinutes(now);
 
-    const hoursSinceStart = currentHour - START_HOUR;
-    const topPosition = (hoursSinceStart * HOURLY_SLOT_HEIGHT) + (currentMinute / 60) * HOURLY_SLOT_HEIGHT;
+    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
+      return null;
+    }
+    
+    const minutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
+    const topPosition = (minutesFromStart / 60) * HOURLY_SLOT_HEIGHT;
 
     return topPosition;
   };

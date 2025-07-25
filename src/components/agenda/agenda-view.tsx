@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useRef, MouseEvent, useEffect, useMemo, useCallback } from 'react';
@@ -46,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 60;
+const HOURLY_SLOT_HEIGHT = 30;
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -66,7 +67,6 @@ interface TimeBlock {
 
 const useCurrentTime = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [topPosition, setTopPosition] = useState<number | null>(null);
 
   const calculateTopPosition = useCallback(() => {
     const now = new Date();
@@ -78,8 +78,11 @@ const useCurrentTime = () => {
     
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
 
-    return elapsedMinutes; // Each minute is 1px now with 60px height
+    return elapsedMinutes * 0.5; // 0.5px per minute
   }, []);
+
+  const [topPosition, setTopPosition] = useState<number | null>(calculateTopPosition);
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -87,8 +90,6 @@ const useCurrentTime = () => {
       setCurrentTime(now);
       setTopPosition(calculateTopPosition());
     }, 1000); // Update every second
-    
-    setTopPosition(calculateTopPosition());
     
     return () => clearInterval(timer);
   }, [calculateTopPosition]);
@@ -370,7 +371,7 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart; // 1 minute = 1px
+    const top = minutesFromAgendaStart * 0.5;
     const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
@@ -379,7 +380,7 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart; // 1 minute = 1px
+    const top = minutesFromAgendaStart * 0.5;
     return { top: `${top}px` };
   }
 
@@ -485,17 +486,18 @@ export default function AgendaView() {
                   {/* Time Column */}
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
-                      {hours.map((hour) => (
+                       {hours.map((hour) => (
                           <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="text-right pr-2 border-b border-border">
                               <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
                           </div>
                       ))}
                        {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                         <div className="absolute w-full" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
-                            <div className="text-right pr-2">
-                              <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded">
-                                {format(currentTime, 'HH:mm')}
-                              </span>
+                         <div className="absolute w-full -left-16" style={{ top: currentTimeTop, transform: 'translateY(-50%)' }}>
+                            <div className="flex items-center">
+                                <span className="text-[10px] font-bold text-white bg-[#202A49] px-1 py-0.5 rounded mr-1">
+                                    {format(currentTime, 'HH:mm')}
+                                </span>
+                                <div className="flex-grow h-px bg-red-500"></div>
                             </div>
                           </div>
                       )}
@@ -569,14 +571,12 @@ export default function AgendaView() {
                                 onClick={(e) => isWorking && handleClickSlot(e)}
                               >
                                   {/* Background Grid Lines & Time Indicator */}
-                                  {hours.map((hour) => (
-                                      <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border" />
-                                  ))}
-
-                                  {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                                    <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: `${currentTimeTop}px` }} />
-                                  )}
-
+                                  <div className="absolute inset-0 z-0">
+                                    {hours.map((hour) => (
+                                        <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border" />
+                                    ))}
+                                  </div>
+                                  
                                   {/* Non-working hours blocks */}
                                   {!isWorking ? (
                                       <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />
@@ -595,7 +595,7 @@ export default function AgendaView() {
                                   {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
                                         className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES}px`}}
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES * 0.5}px`}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
                                             <Plus className="w-3 h-3 mr-1" />

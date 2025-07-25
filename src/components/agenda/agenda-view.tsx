@@ -71,7 +71,7 @@ const useCurrentTime = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000); 
+    }, 2000); 
     
     return () => clearInterval(timer);
   }, []);
@@ -760,4 +760,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

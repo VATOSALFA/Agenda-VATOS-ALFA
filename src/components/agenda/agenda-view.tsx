@@ -81,13 +81,18 @@ const useCurrentTime = () => {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    if (currentHour < START_HOUR || currentHour > END_HOUR) {
+    if (currentHour < START_HOUR || currentHour >= END_HOUR + 1) {
       return null;
     }
     
-    const minutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    // 2 minutes = 1 pixel, so 1 minute = 0.5 pixels
-    const topPosition = minutesFromStart / 2;
+    const minutesFromAgendaStart = (currentHour - START_HOUR) * 60 + currentMinute;
+    
+    if (minutesFromAgendaStart < 0) {
+        return null;
+    }
+
+    // 1 pixel every 2 minutes
+    const topPosition = minutesFromAgendaStart / 2;
 
     return topPosition;
   };
@@ -755,3 +760,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

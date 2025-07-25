@@ -66,33 +66,27 @@ interface TimeBlock {
 }
 
 const useCurrentTime = () => {
-  const calculateTopPosition = useCallback(() => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinutes = now.getMinutes();
-    
-    const totalMinutesNow = (currentHour * 60) + currentMinutes;
-    const totalMinutesStart = START_HOUR * 60;
-    
-    const elapsedMinutes = totalMinutesNow - totalMinutesStart;
+    const calculateTopPosition = useCallback(() => {
+        const now = new Date();
+        const totalMinutesNow = now.getHours() * 60 + now.getMinutes();
+        const totalMinutesStart = START_HOUR * 60;
+        const elapsedMinutes = totalMinutesNow - totalMinutesStart;
+        return elapsedMinutes * (HOURLY_SLOT_HEIGHT / 60);
+    }, []);
 
-    return elapsedMinutes * (HOURLY_SLOT_HEIGHT / 60);
-  }, []);
+    const [topPosition, setTopPosition] = useState(calculateTopPosition);
+    const [currentTime, setCurrentTime] = useState(new Date());
 
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [topPosition, setTopPosition] = useState<number>(calculateTopPosition);
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+            setTopPosition(calculateTopPosition());
+        }, 60000); // Update every minute
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(now);
-      setTopPosition(calculateTopPosition());
-    }, 60000); // Update every minute
-    
-    return () => clearInterval(timer);
-  }, [calculateTopPosition]);
+        return () => clearInterval(timer);
+    }, [calculateTopPosition]);
 
-  return { time: currentTime, top: topPosition };
+    return { time: currentTime, top: topPosition };
 };
 
 
@@ -491,8 +485,20 @@ export default function AgendaView() {
                       ))}
                   </div>
                   
-                  {/* Barbers Columns */}
+                  {/* Barbers Columns and Time Indicator */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
+                      {/* Current Time Indicator */}
+                      {renderTimeIndicator && date && isToday(date) && (
+                        <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: currentTimeTop }}>
+                            <div className="flex items-center -translate-y-1/2">
+                                <span className="text-[10px] font-bold text-white bg-[#202A49] px-1.5 py-0.5 rounded-r z-10 -ml-16">
+                                    {format(currentTime, 'HH:mm')}
+                                </span>
+                                <div className="w-full h-px bg-red-500"></div>
+                            </div>
+                        </div>
+                      )}
+
                       {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
@@ -677,17 +683,6 @@ export default function AgendaView() {
                           </div>
                           )
                       })}
-                      {/* Current Time Indicator */}
-                      {renderTimeIndicator && date && isToday(date) && (
-                        <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: currentTimeTop }}>
-                            <div className="flex items-center -translate-y-1/2">
-                              <span className="text-[10px] font-bold text-white bg-[#202A49] px-1.5 py-0.5 rounded-r z-10 -ml-16">
-                                  {format(currentTime, 'HH:mm')}
-                              </span>
-                              <div className="w-full h-px bg-red-500"></div>
-                            </div>
-                        </div>
-                      )}
                   </div>
               </div>
           </ScrollArea>
@@ -756,3 +751,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

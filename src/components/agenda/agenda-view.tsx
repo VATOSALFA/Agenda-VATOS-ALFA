@@ -485,17 +485,15 @@ export default function AgendaView() {
                       ))}
                   </div>
                   
-                  {/* Barbers Columns and Time Indicator */}
+                  {/* Barbers Columns Container */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
-                      {/* Current Time Indicator */}
+                      {/* Current Time Indicator - Now relative to this container */}
                       {renderTimeIndicator && date && isToday(date) && (
                         <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: currentTimeTop }}>
-                            <div className="flex items-center -translate-y-1/2">
-                                <span className="text-[10px] font-bold text-white bg-[#202A49] px-1.5 py-0.5 rounded-r z-10 -ml-16">
-                                    {format(currentTime, 'HH:mm')}
-                                </span>
-                                <div className="w-full h-px bg-red-500"></div>
-                            </div>
+                            <div className="absolute left-0 right-0 h-px bg-red-500 -translate-y-1/2"></div>
+                            <span className="absolute -left-16 text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-r z-10 -translate-y-1/2">
+                                {format(currentTime, 'HH:mm')}
+                            </span>
                         </div>
                       )}
 
@@ -751,4 +749,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

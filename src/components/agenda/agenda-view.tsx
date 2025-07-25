@@ -474,7 +474,7 @@ export default function AgendaView() {
               </div>
           </div>
           <ScrollArea className="h-full">
-              <div className="flex relative">
+              <div className="flex">
                   {/* Time Column */}
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
@@ -487,16 +487,18 @@ export default function AgendaView() {
                   
                   {/* Barbers Columns Container */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
-                      {/* Current Time Indicator - Now relative to this container */}
-                       {renderTimeIndicator && date && isToday(date) && (
-                        <div
-                          className="absolute h-px bg-red-500 z-30 pointer-events-none w-[calc(100%+4rem)] -ml-16"
+                      {/* Current Time Indicator */}
+                      {renderTimeIndicator && date && isToday(date) && (
+                          <div
+                          className="absolute h-px bg-red-500 z-30 pointer-events-none left-0 right-0"
                           style={{ top: `${currentTimeTop}px` }}
-                        >
-                            <span className="absolute left-10 -translate-y-1/2 text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded">
-                                {format(currentTime, 'HH:mm')}
-                            </span>
-                        </div>
+                          >
+                              <div
+                                  className="absolute left-0 -translate-y-1/2 -translate-x-[calc(100%+4px)] bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded"
+                              >
+                                  {format(currentTime, 'HH:mm')}
+                              </div>
+                          </div>
                       )}
 
                       {isLoading ? (

@@ -440,20 +440,6 @@ export default function AgendaView() {
                       </SelectContent>
                       </Select>
                   </div>
-                   <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-600">Intervalo</label>
-                      <Select value={String(slotDurationMinutes)} onValueChange={(val) => setSlotDurationMinutes(Number(val))}>
-                      <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Intervalo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="5">5 min</SelectItem>
-                          <SelectItem value="15">15 min</SelectItem>
-                          <SelectItem value="30">30 min</SelectItem>
-                          <SelectItem value="60">60 min</SelectItem>
-                      </SelectContent>
-                      </Select>
-                  </div>
               </CardContent>
           </Card>
           <Card className="shadow-md bg-white rounded-lg h-auto">
@@ -501,10 +487,25 @@ export default function AgendaView() {
               <div className="flex">
                   {/* Time Column */}
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
-                      <div className="h-14 border-b border-r border-transparent">&nbsp;</div> {/* Header Spacer */}
+                      <div className="h-14 border-b border-r flex items-center justify-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <Clock className="h-5 w-5 text-gray-600"/>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              {[5, 15, 30, 45, 60].map(min => (
+                                <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
+                                  {min} minutos
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                      </div>
                        {timeSlots.slice(0, -1).map((time, index) => (
-                          <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-r border-border">
-                              <span className="text-xs text-muted-foreground">{time.endsWith('00') ? time : ''}</span>
+                          <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r">
+                              <span className="text-xs text-muted-foreground">{time}</span>
                           </div>
                       ))}
                   </div>
@@ -551,7 +552,7 @@ export default function AgendaView() {
                           <div key={barber.id} className="w-64 flex-shrink-0 border-r">
                               {/* Professional Header */}
                               <div 
-                                className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
+                                className="flex flex-col items-center justify-center space-y-1 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
                               >
@@ -562,20 +563,6 @@ export default function AgendaView() {
                                   <div className="flex-grow">
                                       <p className="font-semibold text-sm text-gray-800">{barber.name}</p>
                                   </div>
-                                  {hoveredBarberId === barber.id && (
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Link href={`/agenda/semanal/${barber.id}`} passHref>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Ver agenda semanal</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                  )}
                               </div>
 
                               {/* Appointments Grid */}
@@ -589,7 +576,7 @@ export default function AgendaView() {
                                   {/* Background Grid Lines */}
                                   <div className="absolute inset-0 z-0">
                                     {timeSlots.slice(0, -1).map((time, index) => (
-                                        <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="border-b border-border" />
+                                        <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="border-b" />
                                     ))}
                                   </div>
                                   

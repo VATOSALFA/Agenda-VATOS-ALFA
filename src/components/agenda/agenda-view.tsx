@@ -86,7 +86,8 @@ const useCurrentTime = () => {
     }
     
     const minutesFromStart = (currentHour - START_HOUR) * 60 + currentMinute;
-    const topPosition = (minutesFromStart / 60) * HOURLY_SLOT_HEIGHT;
+    // 2 minutes = 1 pixel, so 1 minute = 0.5 pixels
+    const topPosition = minutesFromStart / 2;
 
     return topPosition;
   };

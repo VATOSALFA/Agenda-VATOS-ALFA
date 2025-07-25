@@ -46,7 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 30;
+const HOURLY_SLOT_HEIGHT = 60;
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -78,16 +78,16 @@ const useCurrentTime = () => {
     
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
 
-    return elapsedMinutes * 0.5;
+    return elapsedMinutes; // Each minute is 1px now with 60px height
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      const now = new Date();
+      setCurrentTime(now);
       setTopPosition(calculateTopPosition());
     }, 1000); // Update every second
     
-    // Set initial position
     setTopPosition(calculateTopPosition());
     
     return () => clearInterval(timer);
@@ -95,6 +95,7 @@ const useCurrentTime = () => {
 
   return { time: currentTime, top: topPosition };
 };
+
 
 const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
     <div
@@ -369,16 +370,16 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * 0.5;
+    const top = minutesFromAgendaStart; // 1 minute = 1px
     const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
-
+  
   const calculatePopoverPosition = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * 0.5;
+    const top = minutesFromAgendaStart; // 1 minute = 1px
     return { top: `${top}px` };
   }
 
@@ -502,12 +503,6 @@ export default function AgendaView() {
                   
                   {/* Barbers Columns */}
                   <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
-                      {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
-                        <>
-                          <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
-                          <div className="absolute left-0 right-0 h-px bg-green-500 z-10" style={{ top: '143.5px' }} />
-                        </>
-                      )}
                       {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
@@ -573,22 +568,25 @@ export default function AgendaView() {
                                 onMouseLeave={handleMouseLeave}
                                 onClick={(e) => isWorking && handleClickSlot(e)}
                               >
-                                  {/* Background Grid Lines */}
-                                  {hours.map((hour, hourIndex) => (
-                                    <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border relative">
-                                    </div>
+                                  {/* Background Grid Lines & Time Indicator */}
+                                  {hours.map((hour) => (
+                                      <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border" />
                                   ))}
-                                  
+
+                                  {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
+                                    <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: `${currentTimeTop}px` }} />
+                                  )}
+
                                   {/* Non-working hours blocks */}
                                   {!isWorking ? (
                                       <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />
                                   ) : (
                                       <>
                                           {startHour > START_HOUR && (
-                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * 30} text="Fuera de horario" />
+                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
                                           {endHour < END_HOUR && (
-                                              <NonWorkBlock top={(endHour - START_HOUR) * 30} height={(END_HOUR - endHour + 1) * 30} text="Fuera de horario" />
+                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR - endHour + 1) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}
@@ -597,7 +595,7 @@ export default function AgendaView() {
                                   {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
                                         className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${30}px`}}
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES}px`}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
                                             <Plus className="w-3 h-3 mr-1" />
@@ -759,5 +757,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-
-    

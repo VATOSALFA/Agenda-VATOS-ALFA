@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useRef, MouseEvent, useEffect, useMemo, useCallback } from 'react';
@@ -85,6 +84,7 @@ const useCurrentTime = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
+      setTopPosition(calculateTopPosition());
     }, 1000); // Update every second
     
     // Set initial position
@@ -92,10 +92,6 @@ const useCurrentTime = () => {
     
     return () => clearInterval(timer);
   }, [calculateTopPosition]);
-
-  useEffect(() => {
-      setTopPosition(calculateTopPosition());
-  }, [currentTime]);
 
   return { time: currentTime, top: topPosition };
 };
@@ -509,6 +505,7 @@ export default function AgendaView() {
                       {renderTimeIndicator && date && isToday(date) && currentTimeTop !== null && (
                         <>
                           <div className="absolute left-0 right-0 h-px bg-red-500 z-10" style={{ top: currentTimeTop }} />
+                          <div className="absolute left-0 right-0 h-px bg-green-500 z-10" style={{ top: '143.5px' }} />
                         </>
                       )}
                       {isLoading ? (
@@ -582,9 +579,6 @@ export default function AgendaView() {
                                     </div>
                                   ))}
                                   
-                                  <div className="absolute left-0 right-0 h-px bg-blue-500 z-20" style={{ top: '0px' }} />
-                                  <div className="absolute left-0 right-0 h-px bg-green-500 z-20" style={{ top: '120px' }} />
-
                                   {/* Non-working hours blocks */}
                                   {!isWorking ? (
                                       <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />
@@ -765,3 +759,5 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
+    

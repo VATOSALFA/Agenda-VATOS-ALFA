@@ -80,14 +80,15 @@ const useCurrentTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-
-    const minutesSinceAgendaStart = (currentHour - START_HOUR) * 60 + currentMinute;
     
-    const topPosition = (minutesSinceAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
-
     if (currentHour < START_HOUR || currentHour > END_HOUR + 1) {
         return null;
     }
+
+    const hoursSinceStart = currentHour - START_HOUR;
+    const minutesInHour = currentMinute;
+    
+    const topPosition = (hoursSinceStart * HOURLY_SLOT_HEIGHT) + (minutesInHour / 60) * HOURLY_SLOT_HEIGHT;
     
     return topPosition;
   };
@@ -111,15 +112,14 @@ const getStatusColor = (status: string | undefined) => {
         case 'Confirmado':
             return 'bg-yellow-100 border-yellow-500 text-yellow-800';
         case 'Asiste':
-            return 'bg-pink-100 border-pink-500 text-pink-800';
+        case 'Pagado':
+            return 'bg-green-100 border-green-500 text-green-800';
         case 'No asiste':
             return 'bg-orange-100 border-orange-500 text-orange-800';
         case 'Pendiente':
             return 'bg-red-100 border-red-500 text-red-800';
         case 'En espera':
-            return 'bg-green-100 border-green-500 text-green-800';
-        case 'Pagado':
-            return 'bg-green-100 border-green-500 text-green-800';
+            return 'bg-pink-100 border-pink-500 text-pink-800';
         case 'Cancelado':
             return 'bg-gray-200 border-gray-500 text-gray-800 line-through';
         default:

@@ -477,27 +477,29 @@ export default function AgendaView() {
               <div className="flex">
                   {/* Time Column */}
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
-                      <div className="h-14 border-b border-transparent">&nbsp;</div> {/* Header Spacer */}
+                      <div className="h-14 border-b border-r border-transparent">&nbsp;</div> {/* Header Spacer */}
                        {hours.map((hour) => (
-                          <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="text-right pr-2 border-b border-border">
-                              <span className="text-xs text-muted-foreground relative -top-2">{`${hour}:00`}</span>
+                          <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r border-border">
+                              <span className="text-xs text-muted-foreground">{`${hour}:00`}</span>
                           </div>
                       ))}
                   </div>
                   
                   {/* Barbers Columns Container */}
-                  <div className="flex-grow grid grid-flow-col auto-cols-min gap-6 relative">
+                  <div className="flex-grow grid grid-flow-col auto-cols-min relative">
                       {/* Current Time Indicator */}
                       {renderTimeIndicator && date && isToday(date) && (
                           <div
                           className="absolute h-px bg-red-500 z-30 pointer-events-none left-0 right-0"
                           style={{ top: `${currentTimeTop}px` }}
                           >
-                              <div
-                                  className="absolute left-0 -translate-y-1/2 -translate-x-[calc(100%+4px)] bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded"
-                              >
-                                  {format(currentTime, 'HH:mm')}
-                              </div>
+                            <div className="absolute left-0 -translate-y-1/2">
+                               <div className="relative -translate-x-[calc(100%+4px)]">
+                                <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                                    {format(currentTime, 'HH:mm')}
+                                </div>
+                               </div>
+                            </div>
                           </div>
                       )}
 
@@ -524,7 +526,7 @@ export default function AgendaView() {
                           <div key={barber.id} className="w-64 flex-shrink-0">
                               {/* Professional Header */}
                               <div 
-                                className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
+                                className="flex items-center space-x-3 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b border-l-0 border-r-0 h-14"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
                               >

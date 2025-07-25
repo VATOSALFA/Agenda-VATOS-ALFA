@@ -25,6 +25,12 @@ import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -47,7 +53,6 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 50;
 const START_HOUR = 10;
 const END_HOUR = 20;
 
@@ -65,14 +70,14 @@ interface TimeBlock {
     color?: string;
 }
 
-const useCurrentTime = () => {
+const useCurrentTime = (hourlySlotHeight: number) => {
     const calculateTopPosition = useCallback(() => {
         const now = new Date();
         const totalMinutesNow = now.getHours() * 60 + now.getMinutes();
         const totalMinutesStart = START_HOUR * 60;
         const elapsedMinutes = totalMinutesNow - totalMinutesStart;
-        return elapsedMinutes * (HOURLY_SLOT_HEIGHT / 60);
-    }, []);
+        return elapsedMinutes * (hourlySlotHeight / 60);
+    }, [hourlySlotHeight]);
 
     const [topPosition, setTopPosition] = useState(calculateTopPosition);
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -125,6 +130,7 @@ const getStatusColor = (status: string | undefined) => {
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
+  const [slotHeight, setSlotHeight] = useState(50);
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
@@ -144,7 +150,7 @@ export default function AgendaView() {
   const [blockToDelete, setBlockToDelete] = useState<TimeBlock | null>(null);
 
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
-  const { time: currentTime, top: currentTimeTop } = useCurrentTime();
+  const { time: currentTime, top: currentTimeTop } = useCurrentTime(slotHeight);
   const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
   const { toast } = useToast();
   
@@ -230,7 +236,7 @@ export default function AgendaView() {
     const y = e.clientY - rect.top;
     
     const slotsPerHour = 60 / SLOT_DURATION_MINUTES;
-    const slotIndex = Math.floor(y / (HOURLY_SLOT_HEIGHT / slotsPerHour));
+    const slotIndex = Math.floor(y / (slotHeight / slotsPerHour));
     
     const hour = START_HOUR + Math.floor(slotIndex / slotsPerHour);
     const minute = (slotIndex % slotsPerHour) * SLOT_DURATION_MINUTES;
@@ -363,8 +369,8 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * (HOURLY_SLOT_HEIGHT / 60);
-    const height = durationDecimal * HOURLY_SLOT_HEIGHT;
+    const top = minutesFromAgendaStart * (slotHeight / 60);
+    const height = durationDecimal * slotHeight;
     return { top: `${top}px`, height: `${height}px` };
   };
   
@@ -372,7 +378,7 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - START_HOUR) * 60;
-    const top = minutesFromAgendaStart * (HOURLY_SLOT_HEIGHT / 60);
+    const top = minutesFromAgendaStart * (slotHeight / 60);
     return { top: `${top}px` };
   }
 
@@ -453,6 +459,23 @@ export default function AgendaView() {
                   )}
               </CardContent>
           </Card>
+          <Card className="shadow-md bg-white rounded-lg">
+            <CardContent className="p-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="w-full justify-start gap-2">
+                      <Clock className="h-4 w-4" />
+                      <span>Zoom: {slotHeight}px</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setSlotHeight(15)}>15px</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setSlotHeight(30)}>30px</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setSlotHeight(50)}>50px</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </CardContent>
+          </Card>
         </aside>
         <main className="flex-1 flex flex-col">
           {/* Agenda Navigation Header */}
@@ -479,7 +502,7 @@ export default function AgendaView() {
                   <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
                       <div className="h-14 border-b border-r border-transparent">&nbsp;</div> {/* Header Spacer */}
                        {hours.map((hour) => (
-                          <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r border-border">
+                          <div key={hour} style={{ height: `${slotHeight}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r border-border">
                               <span className="text-xs text-muted-foreground">{`${hour}:00`}</span>
                           </div>
                       ))}
@@ -490,7 +513,7 @@ export default function AgendaView() {
                       {/* Current Time Indicator */}
                       {renderTimeIndicator && date && isToday(date) && (
                           <div
-                          className="absolute h-px bg-red-500 z-30 pointer-events-none left-0 right-0"
+                          className="absolute h-px bg-red-500 z-30 pointer-events-none left-16 right-0"
                           style={{ top: `${currentTimeTop}px` }}
                           >
                             <div className="absolute left-0 -translate-y-1/2">
@@ -507,7 +530,7 @@ export default function AgendaView() {
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0">
                                 <div className="p-3 sticky top-0 z-10 h-14"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton style={{height: `${(END_HOUR - START_HOUR + 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
+                                <div className="relative"><Skeleton style={{height: `${(END_HOUR - START_HOUR + 1) * slotHeight}px`}} className="w-full" /></div>
                             </div>
                         ))
                       ) : professionals.map((barber) => {
@@ -571,20 +594,20 @@ export default function AgendaView() {
                                   {/* Background Grid Lines */}
                                   <div className="absolute inset-0 z-0">
                                     {hours.map((hour) => (
-                                        <div key={hour} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b border-border" />
+                                        <div key={hour} style={{ height: `${slotHeight}px`}} className="border-b border-border" />
                                     ))}
                                   </div>
                                   
                                   {/* Non-working hours blocks */}
                                   {!isWorking ? (
-                                      <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * hours.length} text="Profesional no disponible" />
+                                      <NonWorkBlock top={0} height={slotHeight * hours.length} text="Profesional no disponible" />
                                   ) : (
                                       <>
                                           {startHour > START_HOUR && (
-                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                              <NonWorkBlock top={0} height={(startHour - START_HOUR) * slotHeight} text="Fuera de horario" />
                                           )}
                                           {endHour < END_HOUR && (
-                                              <NonWorkBlock top={(endHour - START_HOUR) * HOURLY_SLOT_HEIGHT} height={(END_HOUR - endHour + 1) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                              <NonWorkBlock top={(endHour - START_HOUR) * slotHeight} height={(END_HOUR - endHour + 1) * slotHeight} text="Fuera de horario" />
                                           )}
                                       </>
                                   )}
@@ -593,7 +616,7 @@ export default function AgendaView() {
                                   {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
                                         className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES * (HOURLY_SLOT_HEIGHT / 60)}px`}}
+                                        style={{...calculatePopoverPosition(hoveredSlot.time), height: `${SLOT_DURATION_MINUTES * (slotHeight / 60)}px`}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
                                             <Plus className="w-3 h-3 mr-1" />
@@ -755,3 +778,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

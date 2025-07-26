@@ -513,7 +513,7 @@ export default function AgendaView() {
             <div className="flex">
                 {/* Time Column */}
                 <div className="w-20 flex-shrink-0">
-                    <div className="h-20 border-r flex items-center justify-center mb-6">
+                    <div className="h-20 flex items-center justify-center border-r">
                         <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -543,7 +543,7 @@ export default function AgendaView() {
                     {isLoading ? (
                     Array.from({length: 5}).map((_, i) => (
                         <div key={i} className="w-64 flex-shrink-0 border-r">
-                            <div className="p-3 sticky top-0 z-10 h-20 bg-white mb-6"><Skeleton className="h-16 w-full" /></div>
+                            <div className="p-3 sticky top-0 z-10 h-20 mb-6"><Skeleton className="h-16 w-full" /></div>
                             <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
                         </div>
                     ))
@@ -565,7 +565,7 @@ export default function AgendaView() {
                             {/* Professional Header */}
                             <div className="mb-6">
                             <div 
-                                className="flex flex-col items-center justify-center space-y-1 p-3 rounded-t-lg bg-white sticky top-0 z-10 h-20"
+                                className="flex flex-col items-center justify-center space-y-1 p-3 sticky top-0 z-10 h-20"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
                             >

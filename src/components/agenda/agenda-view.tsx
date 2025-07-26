@@ -53,7 +53,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 
 
-const HOURLY_SLOT_HEIGHT = 50; // Each hour slot is 50px tall
+const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
 
 interface TimeBlock {
     id: string;
@@ -388,8 +388,8 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
-    const height = (durationDecimal / 1) * HOURLY_SLOT_HEIGHT;
+    const top = (minutesFromAgendaStart / slotDurationMinutes) * HOURLY_SLOT_HEIGHT;
+    const height = (durationDecimal * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
   
@@ -397,8 +397,8 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / 60) * HOURLY_SLOT_HEIGHT;
-    return { top: `${top}px`, height: `${(slotDurationMinutes / 60) * HOURLY_SLOT_HEIGHT}px`};
+    const top = (minutesFromAgendaStart / slotDurationMinutes) * HOURLY_SLOT_HEIGHT;
+    return { top: `${top}px`, height: `${HOURLY_SLOT_HEIGHT}px`};
   }
 
   const calculateCurrentTimePosition = () => {
@@ -510,214 +510,218 @@ export default function AgendaView() {
               </div>
           </div>
           <ScrollArea className="h-full">
-              <div className="flex">
-                  {/* Time Column */}
-                  <div className="sticky left-0 z-20 bg-[#f8f9fc] w-16 flex-shrink-0">
-                      <div className="h-14 border-b border-r flex items-center justify-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Clock className="h-5 w-5 text-gray-600"/>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              {[5, 10, 15, 30, 40, 45, 60].map(min => (
-                                <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
-                                  {min} minutos
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                      </div>
-                       {timeSlots.slice(0, -1).map((time, index) => (
-                          <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r">
-                              <span className="text-xs text-muted-foreground">{time}</span>
-                          </div>
-                      ))}
-                  </div>
-                  
-                  {/* Main Grid Content */}
-                  <div className="flex-grow grid grid-flow-col auto-cols-min relative">
-                      {/* Professionals Columns */}
-                      {isLoading ? (
-                        Array.from({length: 5}).map((_, i) => (
-                            <div key={i} className="w-64 flex-shrink-0 border-r">
-                                <div className="p-3 sticky top-0 z-10 h-14 bg-white border-b"><Skeleton className="h-8 w-full" /></div>
-                                <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
-                            </div>
-                        ))
-                      ) : professionals.map((barber) => {
-                          const daySchedule = getDaySchedule(barber);
-                          const isWorking = daySchedule && daySchedule.enabled;
-                          
-                          let barberStartHour = startHour;
-                          let barberEndHour = endHour;
-                          if (isWorking) {
-                              const [startH, startM] = daySchedule.start.split(':').map(Number);
-                              const [endH, endM] = daySchedule.end.split(':').map(Number);
-                              barberStartHour = startH + startM / 60;
-                              barberEndHour = endH + endM / 60;
-                          }
-                          
-                          return (
-                          <div key={barber.id} className="w-64 flex-shrink-0 border-r">
-                              {/* Professional Header */}
-                              <div 
-                                className="flex flex-col items-center justify-center space-y-1 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
+            <div className="flex">
+                {/* Time Column */}
+                <div className="w-20 flex-shrink-0">
+                    <div className="h-20 border-r flex items-center justify-center mb-6">
+                        <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                            <Clock className="h-5 w-5 text-gray-600"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            {[5, 10, 15, 30, 40, 45, 60].map(min => (
+                            <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
+                                {min} minutos
+                            </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    {timeSlots.slice(0, -1).map((time, index) => (
+                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-t border-r">
+                            <span className="text-xs text-muted-foreground">{time}</span>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Main Grid Content */}
+                <div className="flex-grow grid grid-flow-col auto-cols-min relative">
+                    {/* Professionals Columns */}
+                    <div className="contents">
+                    {isLoading ? (
+                    Array.from({length: 5}).map((_, i) => (
+                        <div key={i} className="w-64 flex-shrink-0 border-r">
+                            <div className="p-3 sticky top-0 z-10 h-20 bg-white mb-6"><Skeleton className="h-16 w-full" /></div>
+                            <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
+                        </div>
+                    ))
+                    ) : professionals.map((barber) => {
+                        const daySchedule = getDaySchedule(barber);
+                        const isWorking = daySchedule && daySchedule.enabled;
+                        
+                        let barberStartHour = startHour;
+                        let barberEndHour = endHour;
+                        if (isWorking) {
+                            const [startH, startM] = daySchedule.start.split(':').map(Number);
+                            const [endH, endM] = daySchedule.end.split(':').map(Number);
+                            barberStartHour = startH + startM / 60;
+                            barberEndHour = endH + endM / 60;
+                        }
+                        
+                        return (
+                        <div key={barber.id} className="w-64 flex-shrink-0 border-r">
+                            {/* Professional Header */}
+                            <div className="mb-6">
+                            <div 
+                                className="flex flex-col items-center justify-center space-y-1 p-3 rounded-t-lg bg-white sticky top-0 z-10 h-20"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
-                              >
-                                  <Avatar className="h-8 w-8">
-                                      <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                      <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex-grow">
-                                      <p className="font-semibold text-sm text-gray-800">{barber.name}</p>
-                                  </div>
-                              </div>
-
-                              {/* Appointments Grid */}
-                              <div 
-                                className="relative"
-                                ref={el => gridRefs.current[barber.id] = el}
-                                onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
-                                onMouseLeave={handleMouseLeave}
-                                onClick={(e) => isWorking && handleClickSlot(e)}
-                              >
-                                  {/* Background Grid Lines */}
-                                  <div className="absolute inset-0 z-0">
-                                    {timeSlots.slice(0, -1).map((time, index) => (
-                                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b" />
-                                    ))}
-                                  </div>
-                                  
-                                  {/* Non-working hours blocks */}
-                                  {!isWorking ? (
-                                      <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * (timeSlots.length - 1)} text="Profesional no disponible" />
-                                  ) : (
-                                      <>
-                                          {barberStartHour > startHour && (
-                                              <NonWorkBlock top={0} height={((barberStartHour - startHour) / 1) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
-                                          )}
-                                          {barberEndHour < endHour && (
-                                              <NonWorkBlock top={((barberEndHour - startHour) / 1) * HOURLY_SLOT_HEIGHT} height={((endHour - barberEndHour) / 1) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
-                                          )}
-                                      </>
-                                  )}
-                                  
-                                  {/* Hover Popover */}
-                                  {isWorking && hoveredSlot?.barberId === barber.id && (
-                                    <div
-                                        className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
-                                        style={{...calculatePopoverPosition(hoveredSlot.time)}}
-                                    >
-                                        <p className="text-xs font-bold text-primary flex items-center">
-                                            <Plus className="w-3 h-3 mr-1" />
-                                            {hoveredSlot.time}
-                                        </p>
-                                    </div>
-                                  )}
-
-                                  {/* Click Popover */}
-                                  {isWorking && popoverState?.barberId === barber.id && (
-                                      <div
-                                        className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
-                                        style={{top: calculatePopoverPosition(popoverState.time).top}}
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <Card className="shadow-lg border-primary">
-                                            <CardContent className="p-2 space-y-1">
-                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenReservationModal}>
-                                                    <Plus className="w-4 h-4 mr-2" /> Agregar Reserva
-                                                </Button>
-                                                <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}>
-                                                    <Lock className="w-4 h-4 mr-2" /> Bloquear horario
-                                                </Button>
-                                            </CardContent>
-                                        </Card>
-                                      </div>
-                                  )}
-
-                                  {/* Events */}
-                                  {allEvents.filter(a => a.barbero_id === barber.id).map(event => (
-                                    <Tooltip key={event.id}>
-                                      <TooltipTrigger asChild>
-                                        <div 
-                                          onClick={() => {
-                                            if (event.type === 'appointment') {
-                                                handleOpenDetailModal(event as Reservation);
-                                            } else if (event.type === 'block') {
-                                                setBlockToDelete(event as TimeBlock);
-                                            }
-                                          }}
-                                          className={cn(
-                                              "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
-                                              event.color,
-                                              'text-slate-800'
-                                          )} style={{...calculatePosition((event as any).start, (event as any).duration), left: '0px'}}>
-                                          <div className='flex items-center gap-1.5 w-full'>
-                                            {(event as any).pago_estado === 'Pagado' && <DollarSign className='h-3 w-3 text-green-700 flex-shrink-0' />}
-                                            <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer}</p>
-                                          </div>
-                                        </div>
-                                      </TooltipTrigger>
-                                      {event.type === 'appointment' ? (
-                                        <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
-                                          <div className="space-y-2">
-                                            <div className='flex items-center justify-between'>
-                                                <div className='flex items-center gap-2'>
-                                                  <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-100', '-500'))} fill="currentColor" />
-                                                  <p className='font-semibold'>{(event as any).estado}</p>
-                                                </div>
-                                                <div className='flex items-center'>
-                                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenDetailModal(event as Reservation)}><Pencil className="h-4 w-4" /></Button>
-                                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/80" onClick={() => { setReservationToCancel(event as Reservation); }}><Trash2 className="h-4 w-4" /></Button>
-                                                </div>
-                                            </div>
-                                            <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
-                                            <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                              <Clock className="w-4 h-4" />
-                                              <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
-                                            </div>
-                                            {(event as any).pago_estado &&
-                                              <div className="flex items-center gap-2 text-sm">
-                                                  <DollarSign className="w-4 h-4" />
-                                                  <span className={cn(
-                                                      (event as any).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
-                                                  )}>
-                                                      {(event as any).pago_estado}
-                                                  </span>
-                                              </div>
-                                            }
-                                          </div>
-                                        </TooltipContent>
-                                      ) : (
-                                        <TooltipContent>
-                                            <p>Horario Bloqueado: {(event as any).customer}</p>
-                                        </TooltipContent>
-                                      )}
-                                    </Tooltip>
-                                  ))}
-                              </div>
-                          </div>
-                          )
-                      })}
-                       {/* Current Time Indicator */}
-                      {renderTimeIndicator && date && isToday(date) && currentTimeTop >= 0 && (
-                           <div
-                              className="absolute h-px bg-red-500 z-30 pointer-events-none left-16 right-0"
-                              style={{ top: `${currentTimeTop}px` }}
-                           >
-                            <div className="absolute left-0 -translate-y-1/2">
-                               <div className="relative -translate-x-[calc(100%+4px)] bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-                                    {format(currentTime, 'HH:mm')}
+                            >
+                                <Avatar className="h-8 w-8">
+                                    <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-grow">
+                                    <p className="font-semibold text-sm text-gray-800 text-center">{barber.name}</p>
                                 </div>
                             </div>
-                           </div>
-                      )}
-                  </div>
-              </div>
+                            </div>
+
+                            {/* Appointments Grid */}
+                            <div 
+                            className="relative"
+                            ref={el => gridRefs.current[barber.id] = el}
+                            onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
+                            onMouseLeave={handleMouseLeave}
+                            onClick={(e) => isWorking && handleClickSlot(e)}
+                            >
+                            {/* Background Grid Lines */}
+                            <div className="absolute inset-0 z-0">
+                                {timeSlots.slice(0, -1).map((time, index) => (
+                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-t" />
+                                ))}
+                            </div>
+                            
+                            {/* Non-working hours blocks */}
+                            {!isWorking ? (
+                                <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * (timeSlots.length - 1)} text="Profesional no disponible" />
+                            ) : (
+                                <>
+                                    {barberStartHour > startHour && (
+                                        <NonWorkBlock top={0} height={((barberStartHour - startHour) * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                    )}
+                                    {barberEndHour < endHour && (
+                                        <NonWorkBlock top={((barberEndHour - startHour) * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT} height={((endHour - barberEndHour) * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                    )}
+                                </>
+                            )}
+                            
+                            {/* Hover Popover */}
+                            {isWorking && hoveredSlot?.barberId === barber.id && (
+                                <div
+                                    className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
+                                    style={{...calculatePopoverPosition(hoveredSlot.time)}}
+                                >
+                                    <p className="text-xs font-bold text-primary flex items-center">
+                                        <Plus className="w-3 h-3 mr-1" />
+                                        {hoveredSlot.time}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Click Popover */}
+                            {isWorking && popoverState?.barberId === barber.id && (
+                                <div
+                                    className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
+                                    style={{top: calculatePopoverPosition(popoverState.time).top}}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <Card className="shadow-lg border-primary">
+                                        <CardContent className="p-2 space-y-1">
+                                            <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenReservationModal}>
+                                                <Plus className="w-4 h-4 mr-2" /> Agregar Reserva
+                                            </Button>
+                                            <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}>
+                                                <Lock className="w-4 h-4 mr-2" /> Bloquear horario
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            )}
+
+                            {/* Events */}
+                            {allEvents.filter(a => a.barbero_id === barber.id).map(event => (
+                                <Tooltip key={event.id}>
+                                <TooltipTrigger asChild>
+                                    <div 
+                                    onClick={() => {
+                                        if (event.type === 'appointment') {
+                                            handleOpenDetailModal(event as Reservation);
+                                        } else if (event.type === 'block') {
+                                            setBlockToDelete(event as TimeBlock);
+                                        }
+                                    }}
+                                    className={cn(
+                                        "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
+                                        event.color,
+                                        'text-slate-800'
+                                    )} style={{...calculatePosition((event as any).start, (event as any).duration), left: '0px'}}>
+                                    <div className='flex items-center gap-1.5 w-full'>
+                                        {(event as any).pago_estado === 'Pagado' && <DollarSign className='h-3 w-3 text-green-700 flex-shrink-0' />}
+                                        <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer}</p>
+                                    </div>
+                                    </div>
+                                </TooltipTrigger>
+                                {event.type === 'appointment' ? (
+                                    <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
+                                    <div className="space-y-2">
+                                        <div className='flex items-center justify-between'>
+                                            <div className='flex items-center gap-2'>
+                                            <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-100', '-500'))} fill="currentColor" />
+                                            <p className='font-semibold'>{(event as any).estado}</p>
+                                            </div>
+                                            <div className='flex items-center'>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenDetailModal(event as Reservation)}><Pencil className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/80" onClick={() => { setReservationToCancel(event as Reservation); }}><Trash2 className="h-4 w-4" /></Button>
+                                            </div>
+                                        </div>
+                                        <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
+                                        <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Clock className="w-4 h-4" />
+                                        <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
+                                        </div>
+                                        {(event as any).pago_estado &&
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <DollarSign className="w-4 h-4" />
+                                            <span className={cn(
+                                                (event as any).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                            )}>
+                                                {(event as any).pago_estado}
+                                            </span>
+                                        </div>
+                                        }
+                                    </div>
+                                    </TooltipContent>
+                                ) : (
+                                    <TooltipContent>
+                                        <p>Horario Bloqueado: {(event as any).customer}</p>
+                                    </TooltipContent>
+                                )}
+                                </Tooltip>
+                            ))}
+                            </div>
+                        </div>
+                        )
+                    })}
+                    </div>
+                    {/* Current Time Indicator */}
+                    {renderTimeIndicator && date && isToday(date) && currentTimeTop >= 0 && (
+                        <div
+                            className="absolute h-px bg-red-500 z-30 pointer-events-none left-20 right-0"
+                            style={{ top: `${currentTimeTop}px` }}
+                        >
+                        <div className="absolute left-0 -translate-y-1/2">
+                            <div className="relative -translate-x-[calc(100%+4px)] bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                                {format(currentTime, 'HH:mm')}
+                            </div>
+                        </div>
+                        </div>
+                    )}
+                </div>
+            </div>
           </ScrollArea>
         </main>
       </div>

@@ -257,7 +257,10 @@ export default function AgendaView() {
     const rect = gridEl.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    const minutesSinceStart = (y / HOURLY_SLOT_HEIGHT) * 60;
+    const totalMinutesInGrid = (endHour - startHour) * 60;
+    const gridHeight = (HOURLY_SLOT_HEIGHT * totalMinutesInGrid) / 60;
+
+    const minutesSinceStart = (y / gridHeight) * totalMinutesInGrid;
     const slotIndex = Math.floor(minutesSinceStart / slotDurationMinutes);
     const time = format(addMinutes(set(new Date(), { hours: startHour, minutes: 0 }), slotIndex * slotDurationMinutes), 'HH:mm');
 
@@ -387,26 +390,38 @@ export default function AgendaView() {
   };
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
+    const totalMinutesInGrid = (endHour - startHour) * 60;
+    const gridHeight = (HOURLY_SLOT_HEIGHT * totalMinutesInGrid) / 60;
+
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
-    const height = (durationDecimal * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
+    const top = (minutesFromAgendaStart / totalMinutesInGrid) * gridHeight;
+    const height = (durationDecimal * 60 / totalMinutesInGrid) * gridHeight;
+    
     return { top: `${top}px`, height: `${height}px` };
   };
   
   const calculatePopoverPosition = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
+
+    const totalMinutesInGrid = (endHour - startHour) * 60;
+    const gridHeight = (HOURLY_SLOT_HEIGHT * totalMinutesInGrid) / 60;
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
-    return { top: `${top}px`, height: `${(HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes))}px`};
+    const top = (minutesFromAgendaStart / totalMinutesInGrid) * gridHeight;
+
+    return { top: `${top}px`, height: `${HOURLY_SLOT_HEIGHT / (60 / slotDurationMinutes)}px`};
   }
 
   const calculateCurrentTimePosition = () => {
     const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesStart = startHour * 60;
-    if (totalMinutesNow < totalMinutesStart) return -1;
+    if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
+    
+    const totalMinutesInGrid = (endHour - startHour) * 60;
+    const gridHeight = (HOURLY_SLOT_HEIGHT * totalMinutesInGrid) / 60;
+
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
-    return (elapsedMinutes / 60) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
+    return (elapsedMinutes / totalMinutesInGrid) * gridHeight;
   }
 
   const formatHour = (hour: number) => {
@@ -530,7 +545,7 @@ export default function AgendaView() {
                         </DropdownMenu>
                     </div>
                     {timeSlots.slice(0, -1).map((time, index) => (
-                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="flex items-start justify-center text-center pt-1 pr-2 border-t border-r">
+                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-start justify-center text-center pt-1 pr-2 border-t border-r">
                             <span className="text-xs text-muted-foreground">{time}</span>
                         </div>
                     ))}
@@ -544,7 +559,7 @@ export default function AgendaView() {
                     Array.from({length: 5}).map((_, i) => (
                         <div key={i} className="w-64 flex-shrink-0 border-r">
                             <div className="p-3 sticky top-0 z-10 h-20 mb-6"><Skeleton className="h-16 w-full" /></div>
-                            <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="w-full" /></div>
+                            <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
                         </div>
                     ))
                     ) : professionals.map((barber) => {
@@ -561,9 +576,9 @@ export default function AgendaView() {
                         }
                         
                         return (
-                        <div key={barber.id} className="w-64 flex-shrink-0">
+                        <div key={barber.id} className="w-64 flex-shrink-0 border-r">
                             {/* Professional Header */}
-                            <div className="p-3 sticky top-0 z-10 h-20">
+                            <div className="p-3 sticky top-0 z-10 h-20 border-b">
                                 <div 
                                     className="flex flex-col items-center justify-center"
                                     onMouseEnter={() => setHoveredBarberId(barber.id)}
@@ -590,20 +605,20 @@ export default function AgendaView() {
                             {/* Background Grid Lines */}
                             <div className="absolute inset-0 z-0">
                                 {timeSlots.slice(0, -1).map((time, index) => (
-                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="border-t" />
+                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-t" />
                                 ))}
                             </div>
                             
                             {/* Non-working hours blocks */}
                             {!isWorking ? (
-                                <NonWorkBlock top={0} height={(HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)) * (timeSlots.length - 1)} text="Profesional no disponible" />
+                                <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * (timeSlots.length - 1)} text="Profesional no disponible" />
                             ) : (
                                 <>
                                     {barberStartHour > startHour && (
-                                        <NonWorkBlock top={0} height={((barberStartHour - startHour) * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60/slotDurationMinutes))} text="Fuera de horario" />
+                                        <NonWorkBlock top={0} height={(barberStartHour - startHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                     )}
                                     {barberEndHour < endHour && (
-                                        <NonWorkBlock top={((barberEndHour - startHour) * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60/slotDurationMinutes))} height={((endHour - barberEndHour) * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60/slotDurationMinutes))} text="Fuera de horario" />
+                                        <NonWorkBlock top={(barberEndHour - startHour) * HOURLY_SLOT_HEIGHT} height={(endHour - barberEndHour) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
                                     )}
                                 </>
                             )}

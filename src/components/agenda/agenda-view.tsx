@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2 } from 'lucide-react';
-import { format, addDays, subDays, isToday, parse, getHours, getMinutes, set, addMinutes, getDay } from 'date-fns';
+import { format, addDays, subDays, isToday, parse, getHours, getMinutes, set, getDay, addMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -565,7 +565,7 @@ export default function AgendaView() {
                             {/* Professional Header */}
                             <div className="mb-6">
                             <div 
-                                className="flex flex-col items-center justify-center space-y-1 p-3 sticky top-0 z-10 h-20"
+                                className="flex flex-col items-center justify-center p-3 rounded-t-lg bg-white sticky top-0 z-10 h-20"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
                             >

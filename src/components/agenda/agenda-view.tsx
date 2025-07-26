@@ -388,8 +388,8 @@ export default function AgendaView() {
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / slotDurationMinutes) * HOURLY_SLOT_HEIGHT;
-    const height = (durationDecimal * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT;
+    const top = (minutesFromAgendaStart / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
+    const height = (durationDecimal * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
     return { top: `${top}px`, height: `${height}px` };
   };
   
@@ -397,8 +397,8 @@ export default function AgendaView() {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / slotDurationMinutes) * HOURLY_SLOT_HEIGHT;
-    return { top: `${top}px`, height: `${HOURLY_SLOT_HEIGHT}px`};
+    const top = (minutesFromAgendaStart / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
+    return { top: `${top}px`, height: `${(HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes))}px`};
   }
 
   const calculateCurrentTimePosition = () => {
@@ -406,7 +406,7 @@ export default function AgendaView() {
     const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart) return -1;
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
-    return (elapsedMinutes / 60) * HOURLY_SLOT_HEIGHT;
+    return (elapsedMinutes / 60) * (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes));
   }
 
   const formatHour = (hour: number) => {
@@ -513,7 +513,7 @@ export default function AgendaView() {
             <div className="flex">
                 {/* Time Column */}
                 <div className="w-20 flex-shrink-0">
-                    <div className="h-20 flex items-center justify-center border-r">
+                    <div className="h-20 flex items-center justify-center border-r border-b">
                         <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -530,7 +530,7 @@ export default function AgendaView() {
                         </DropdownMenu>
                     </div>
                     {timeSlots.slice(0, -1).map((time, index) => (
-                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-t border-r">
+                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="flex items-start justify-center text-center pt-1 pr-2 border-t border-r">
                             <span className="text-xs text-muted-foreground">{time}</span>
                         </div>
                     ))}
@@ -544,7 +544,7 @@ export default function AgendaView() {
                     Array.from({length: 5}).map((_, i) => (
                         <div key={i} className="w-64 flex-shrink-0 border-r">
                             <div className="p-3 sticky top-0 z-10 h-20 mb-6"><Skeleton className="h-16 w-full" /></div>
-                            <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
+                            <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="w-full" /></div>
                         </div>
                     ))
                     ) : professionals.map((barber) => {
@@ -563,20 +563,20 @@ export default function AgendaView() {
                         return (
                         <div key={barber.id} className="w-64 flex-shrink-0 border-r">
                             {/* Professional Header */}
-                            <div className="mb-6">
-                            <div 
-                                className="flex flex-col items-center justify-center p-3 rounded-t-lg bg-white sticky top-0 z-10 h-20"
-                                onMouseEnter={() => setHoveredBarberId(barber.id)}
-                                onMouseLeave={() => setHoveredBarberId(null)}
-                            >
-                                <Avatar className="h-8 w-8">
-                                    <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-grow">
-                                    <p className="font-semibold text-sm text-gray-800 text-center">{barber.name}</p>
+                            <div className="p-3 rounded-t-lg bg-white sticky top-0 z-10 h-20 border-b">
+                                <div 
+                                    className="flex flex-col items-center justify-center"
+                                    onMouseEnter={() => setHoveredBarberId(barber.id)}
+                                    onMouseLeave={() => setHoveredBarberId(null)}
+                                >
+                                    <Avatar className="h-8 w-8">
+                                        <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                        <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-grow">
+                                        <p className="font-semibold text-sm text-gray-800 text-center">{barber.name}</p>
+                                    </div>
                                 </div>
-                            </div>
                             </div>
 
                             {/* Appointments Grid */}
@@ -590,20 +590,20 @@ export default function AgendaView() {
                             {/* Background Grid Lines */}
                             <div className="absolute inset-0 z-0">
                                 {timeSlots.slice(0, -1).map((time, index) => (
-                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-t" />
+                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="border-t" />
                                 ))}
                             </div>
                             
                             {/* Non-working hours blocks */}
                             {!isWorking ? (
-                                <NonWorkBlock top={0} height={HOURLY_SLOT_HEIGHT * (timeSlots.length - 1)} text="Profesional no disponible" />
+                                <NonWorkBlock top={0} height={(HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)) * (timeSlots.length - 1)} text="Profesional no disponible" />
                             ) : (
                                 <>
                                     {barberStartHour > startHour && (
-                                        <NonWorkBlock top={0} height={((barberStartHour - startHour) * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                        <NonWorkBlock top={0} height={((barberStartHour - startHour) * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60/slotDurationMinutes))} text="Fuera de horario" />
                                     )}
                                     {barberEndHour < endHour && (
-                                        <NonWorkBlock top={((barberEndHour - startHour) * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT} height={((endHour - barberEndHour) * 60 / slotDurationMinutes) * HOURLY_SLOT_HEIGHT} text="Fuera de horario" />
+                                        <NonWorkBlock top={((barberEndHour - startHour) * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60/slotDurationMinutes))} height={((endHour - barberEndHour) * 60 / slotDurationMinutes) * (HOURLY_SLOT_HEIGHT * (60/slotDurationMinutes))} text="Fuera de horario" />
                                     )}
                                 </>
                             )}

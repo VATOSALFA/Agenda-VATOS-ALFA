@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2 } from 'lucide-react';
-import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays } from 'date-fns';
+import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -85,32 +85,32 @@ const useCurrentTime = () => {
 
 const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
     <div
-      className="absolute w-full bg-gray-100 flex items-center justify-center p-2 z-0"
+      className="absolute w-full bg-striped-gray flex items-center justify-center p-2 z-0"
       style={{ top: `${top}px`, height: `${height}px` }}
     >
-        <p className="text-xs text-center font-medium text-gray-400">{text}</p>
+        <p className="text-xs text-center font-medium text-gray-500">{text}</p>
     </div>
 );
 
 const getStatusColor = (status: string | undefined) => {
     switch (status) {
         case 'Reservado':
-            return 'bg-blue-100 border-blue-500 text-blue-800';
+            return 'bg-blue-300/80 border-blue-500 text-blue-900';
         case 'Confirmado':
-            return 'bg-yellow-100 border-yellow-500 text-yellow-800';
+            return 'bg-yellow-300/80 border-yellow-500 text-yellow-900';
         case 'Asiste':
         case 'Pagado':
-            return 'bg-green-100 border-green-500 text-green-800';
+            return 'bg-green-300/80 border-green-500 text-green-900';
         case 'No asiste':
-            return 'bg-orange-100 border-orange-500 text-orange-800';
+            return 'bg-orange-300/80 border-orange-500 text-orange-900';
         case 'Pendiente':
-            return 'bg-red-100 border-red-500 text-red-800';
+            return 'bg-red-300/80 border-red-500 text-red-900';
         case 'En espera':
-            return 'bg-pink-100 border-pink-500 text-pink-800';
+            return 'bg-pink-300/80 border-pink-500 text-pink-900';
         case 'Cancelado':
-            return 'bg-gray-200 border-gray-500 text-gray-800 line-through';
+            return 'bg-gray-300/80 border-gray-500 text-gray-800 line-through';
         default:
-            return 'bg-gray-100 border-gray-500 text-gray-800';
+            return 'bg-gray-200/80 border-gray-500 text-gray-800';
     }
 }
 
@@ -172,6 +172,10 @@ export default function AgendaView() {
     const dayOfWeek = date ? format(date, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : 'lunes';
     const daySchedule = selectedLocal.schedule[dayOfWeek as keyof typeof selectedLocal.schedule] || selectedLocal.schedule.lunes;
     
+    if (!daySchedule.enabled) {
+        return { timeSlots: [], startHour: 10, endHour: 20 };
+    }
+
     const [startH, startM] = daySchedule.start.split(':').map(Number);
     const [endH, endM] = daySchedule.end.split(':').map(Number);
     
@@ -181,7 +185,7 @@ export default function AgendaView() {
 
     while (currentTime < endTime) {
         slots.push(format(currentTime, 'HH:mm'));
-        currentTime = addMinutes(currentTime, slotDurationMinutes);
+        currentTime = dateFnsAddDays(addMinutes(currentTime, slotDurationMinutes), 0);
     }
     slots.push(format(endTime, 'HH:mm'));
 
@@ -249,7 +253,7 @@ export default function AgendaView() {
   
   const handleSetToday = () => setDate(new Date());
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
-  const handleNextDay = () => setDate(d => addDays(d || new Date(), 1));
+  const handleNextDay = () => setDate(d => dateFnsAddDays(d || new Date(), 1));
 
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
     const gridEl = gridRefs.current[barberId];
@@ -524,12 +528,12 @@ export default function AgendaView() {
                   </p>
               </div>
           </div>
-          <div className="flex-grow overflow-hidden">
+          <div className="flex-grow overflow-hidden bg-white rounded-lg shadow-md">
             <ScrollArea className="h-full">
               <div className="flex">
                   {/* Time Column */}
-                  <div className="w-20 flex-shrink-0 sticky left-0 bg-[#f8f9fc] z-20">
-                      <div className="h-20 flex items-center justify-center border-r border-b">
+                  <div className="w-20 flex-shrink-0 sticky left-0 bg-white z-20">
+                      <div className="h-24 flex items-center justify-center border-r border-b">
                           <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
@@ -546,8 +550,8 @@ export default function AgendaView() {
                           </DropdownMenu>
                       </div>
                       {timeSlots.slice(0, -1).map((time, index) => (
-                          <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-start justify-center text-center pt-1 pr-2 border-t border-r">
-                              <span className="text-xs text-muted-foreground">{time}</span>
+                          <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-start justify-end text-center pt-1 pr-2 border-t border-r">
+                              <span className="text-xs text-muted-foreground relative -top-2">{time}</span>
                           </div>
                       ))}
                   </div>
@@ -559,7 +563,7 @@ export default function AgendaView() {
                         {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (
                             <div key={i} className="w-64 flex-shrink-0 border-r">
-                                <div className="p-3 sticky top-0 z-10 h-20 bg-white border-b"><Skeleton className="h-12 w-full" /></div>
+                                <div className="p-3 sticky top-0 z-10 h-24 bg-white border-b"><Skeleton className="h-16 w-full" /></div>
                                 <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
                             </div>
                         ))
@@ -579,19 +583,13 @@ export default function AgendaView() {
                             return (
                             <div key={barber.id} className="w-64 flex-shrink-0 border-r">
                                 {/* Professional Header */}
-                                <div className="p-3 sticky top-0 z-10 h-20 bg-white border-b">
-                                    <div 
-                                        className="flex flex-col items-center justify-center"
-                                        onMouseEnter={() => setHoveredBarberId(barber.id)}
-                                        onMouseLeave={() => setHoveredBarberId(null)}
-                                    >
-                                        <Avatar className="h-8 w-8">
+                                <div className="p-3 sticky top-0 z-10 h-24 bg-white border-b">
+                                    <div className="flex flex-col items-center justify-center text-center">
+                                        <Avatar className="h-10 w-10 mb-2">
                                             <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                             <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                         </Avatar>
-                                        <div className="flex-grow">
-                                            <p className="font-semibold text-sm text-gray-800 text-center">{barber.name}</p>
-                                        </div>
+                                        <p className="font-semibold text-sm text-gray-800 truncate w-full">{barber.name}</p>
                                     </div>
                                 </div>
 
@@ -670,14 +668,12 @@ export default function AgendaView() {
                                             }
                                         }}
                                         className={cn(
-                                            "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-start text-left py-1 pl-3 pr-2.5 z-10", 
+                                            "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 pl-2 pr-1.5 z-10", 
                                             event.color,
-                                            'text-slate-800'
+                                            'text-slate-900'
                                         )} style={{...calculatePosition((event as any).start, (event as any).duration), left: '0px'}}>
-                                        <div className='flex items-center gap-1.5 w-full'>
-                                            {(event as any).pago_estado === 'Pagado' && <DollarSign className='h-3 w-3 text-green-700 flex-shrink-0' />}
                                             <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer}</p>
-                                        </div>
+                                            <p className="text-[11px] truncate leading-tight">{(event as any).servicio}</p>
                                         </div>
                                     </TooltipTrigger>
                                     {event.type === 'appointment' ? (
@@ -685,7 +681,7 @@ export default function AgendaView() {
                                         <div className="space-y-2">
                                             <div className='flex items-center justify-between'>
                                                 <div className='flex items-center gap-2'>
-                                                <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-100', '-500'))} fill="currentColor" />
+                                                <Circle className={cn('h-3 w-3', (event as any).color.replace('bg-', 'text-').replace('-300/80', '-500'))} fill="currentColor" />
                                                 <p className='font-semibold'>{(event as any).estado}</p>
                                                 </div>
                                                 <div className='flex items-center'>
@@ -805,5 +801,6 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
 
 

@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2 } from 'lucide-react';
-import { format, addDays, subDays, isToday, parse, getHours, getMinutes, set, addMinutes } from 'date-fns';
+import { format, addDays, subDays, isToday, parse, getHours, getMinutes, set, addMinutes, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -530,7 +530,7 @@ export default function AgendaView() {
                           </DropdownMenu>
                       </div>
                        {timeSlots.slice(0, -1).map((time, index) => (
-                          <div key={index} style={{ height: `${(HOURLY_SLOT_HEIGHT * slotDurationMinutes) / 60}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r">
+                          <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-center justify-center text-center pr-2 border-b border-r">
                               <span className="text-xs text-muted-foreground">{time}</span>
                           </div>
                       ))}
@@ -563,7 +563,7 @@ export default function AgendaView() {
                           <div key={barber.id} className="w-64 flex-shrink-0 border-r">
                               {/* Professional Header */}
                               <div 
-                                className="flex flex-col items-center justify-center space-y-1 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14 mb-8"
+                                className="flex flex-col items-center justify-center space-y-1 p-3 rounded-t-lg bg-white sticky top-0 z-10 border-b h-14"
                                 onMouseEnter={() => setHoveredBarberId(barber.id)}
                                 onMouseLeave={() => setHoveredBarberId(null)}
                               >
@@ -587,7 +587,7 @@ export default function AgendaView() {
                                   {/* Background Grid Lines */}
                                   <div className="absolute inset-0 z-0">
                                     {timeSlots.slice(0, -1).map((time, index) => (
-                                        <div key={index} style={{ height: `${(HOURLY_SLOT_HEIGHT * slotDurationMinutes) / 60}px`}} className="border-b" />
+                                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b" />
                                     ))}
                                   </div>
                                   

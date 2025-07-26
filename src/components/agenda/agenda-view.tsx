@@ -453,15 +453,15 @@ export default function AgendaView() {
     <TooltipProvider>
       <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]" onClick={() => setPopoverState(null)}>
         <aside className="w-full lg:w-[250px] space-y-6 flex-shrink-0">
-           <Card className="shadow-md bg-white rounded-lg">
+           <Card>
               <CardHeader>
-                  <CardTitle className="text-base font-semibold text-gray-800">Filtros</CardTitle>
+                  <CardTitle>Filtros</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                   <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-600">Sucursal</label>
+                      <label>Sucursal</label>
                       <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
-                      <SelectTrigger className="text-sm">
+                      <SelectTrigger>
                           <SelectValue placeholder="Seleccionar sucursal" />
                       </SelectTrigger>
                       <SelectContent>
@@ -472,9 +472,9 @@ export default function AgendaView() {
                       </Select>
                   </div>
                   <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-600">Profesional</label>
+                      <label>Profesional</label>
                       <Select defaultValue="todos">
-                      <SelectTrigger className="text-sm">
+                      <SelectTrigger>
                           <SelectValue placeholder="Seleccionar profesional" />
                       </SelectTrigger>
                       <SelectContent>
@@ -487,7 +487,7 @@ export default function AgendaView() {
                   </div>
               </CardContent>
           </Card>
-          <Card className="shadow-md bg-white rounded-lg h-auto">
+          <Card>
               <CardContent className="p-2">
                   {date ? (
                     <Calendar
@@ -522,13 +522,13 @@ export default function AgendaView() {
                   </Button>
               </div>
               <div>
-                  <h2 className="text-xl font-semibold text-[#202A49] capitalize">{selectedDateFormatted}</h2>
+                  <h2 className="text-xl font-semibold capitalize">{selectedDateFormatted}</h2>
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                       <Store className='w-4 h-4'/> {selectedLocal?.name || 'Cargando...'}
                   </p>
               </div>
           </div>
-          <div className="flex-grow overflow-hidden bg-white rounded-lg shadow-md">
+          <div className="flex-grow overflow-hidden">
             <ScrollArea className="h-full">
               <div className="flex">
                   {/* Time Column */}
@@ -537,7 +537,7 @@ export default function AgendaView() {
                           <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
-                              <Clock className="h-5 w-5 text-gray-600"/>
+                              <Clock className="h-5 w-5"/>
                               </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
@@ -589,7 +589,7 @@ export default function AgendaView() {
                                             <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                             <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                         </Avatar>
-                                        <p className="font-semibold text-sm text-gray-800 truncate w-full">{barber.name}</p>
+                                        <p className="font-semibold text-sm">{barber.name}</p>
                                     </div>
                                 </div>
 
@@ -625,7 +625,7 @@ export default function AgendaView() {
                                 {/* Hover Popover */}
                                 {isWorking && hoveredSlot?.barberId === barber.id && (
                                     <div
-                                        className="absolute w-[calc(100%-8px)] ml-[4px] p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
+                                        className="absolute w-full p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
                                         style={{...calculatePopoverPosition(hoveredSlot.time)}}
                                     >
                                         <p className="text-xs font-bold text-primary flex items-center">
@@ -668,11 +668,10 @@ export default function AgendaView() {
                                             }
                                         }}
                                         className={cn(
-                                            "absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 pl-2 pr-1.5 z-10", 
-                                            event.color,
-                                            'text-slate-900'
-                                        )} style={{...calculatePosition((event as any).start, (event as any).duration), left: '0px'}}>
-                                            <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer}</p>
+                                            "absolute w-[calc(100%-8px)] ml-[4px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", 
+                                            event.color
+                                        )} style={calculatePosition((event as any).start, (event as any).duration)}>
+                                            <p className="font-bold text-xs truncate leading-tight">{(event as any).customer}</p>
                                             <p className="text-[11px] truncate leading-tight">{(event as any).servicio}</p>
                                         </div>
                                     </TooltipTrigger>
@@ -801,6 +800,7 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
 
 
 

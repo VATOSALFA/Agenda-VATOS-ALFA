@@ -28,6 +28,10 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -86,6 +90,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [clientQueryKey, setClientQueryKey] = useState(0);
@@ -104,6 +109,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
     if (!products) return [];
     return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, products]);
+  
+  const addItemFilteredServices = useMemo(() => {
+    if (!services) return [];
+    return services.filter(s => s && s.name && s.name.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+  }, [addItemSearchTerm, services]);
+
+  const addItemFilteredProducts = useMemo(() => {
+    if (!products) return [];
+    return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+  }, [addItemSearchTerm, products]);
 
 
   const addToCart = (item: Product | ServiceType, tipo: 'producto' | 'servicio') => {
@@ -285,54 +300,116 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
   }
 
   const ResumenCarrito = () => (
-    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
-      <div className="p-4 border-b">
-        <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
-      </div>
-      <ScrollArea className="flex-grow">
-        <div className="p-4 space-y-4">
-          {cart.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
-          ) : cart.map(item => (
-            <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
-              <div className="flex-grow pr-2">
-                <p className="font-medium capitalize">{item.nombre}</p>
-                <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-CL') || '0'}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
-                  <span className="w-5 text-center font-bold">{item.cantidad}</span>
-                  <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
+    <Dialog>
+        <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
+        <div className="p-4 border-b flex justify-between items-center">
+            <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
+            {step === 2 && (
+                <DialogTrigger asChild>
+                    <Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
+                </DialogTrigger>
+            )}
+        </div>
+        <ScrollArea className="flex-grow">
+            <div className="p-4 space-y-4">
+            {cart.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
+            ) : cart.map(item => (
+                <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
+                <div className="flex-grow pr-2">
+                    <p className="font-medium capitalize">{item.nombre}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-CL') || '0'}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                    <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
+                    <span className="w-5 text-center font-bold">{item.cantidad}</span>
+                    <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
+                    </div>
+                    <div className="mt-2">
+                        <Select onValueChange={(value) => updateItemProfessional(item.id, value)} value={item.barbero_id}>
+                            <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Seleccionar profesional" />
+                            </SelectTrigger>
+                            <SelectContent>
+                            {barbers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
-                 <div className="mt-2">
-                    <Select onValueChange={(value) => updateItemProfessional(item.id, value)} value={item.barbero_id}>
-                        <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Seleccionar profesional" />
-                        </SelectTrigger>
-                        <SelectContent>
-                           {barbers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                 </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-CL')}</p>
-                <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
-                    <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+                <div className="text-right flex-shrink-0">
+                    <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-CL')}</p>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
+                </div>
+            ))}
             </div>
-          ))}
+        </ScrollArea>
+        {cart.length > 0 && (
+            <div className="p-4 border-t space-y-4">
+            <div className="flex justify-between font-semibold text-xl">
+                <span>Total:</span>
+                <span className="text-primary">${total.toLocaleString('es-CL')}</span>
+            </div>
+            </div>
+        )}
         </div>
-      </ScrollArea>
-      {cart.length > 0 && (
-        <div className="p-4 border-t space-y-4">
-          <div className="flex justify-between font-semibold text-xl">
-            <span>Total:</span>
-            <span className="text-primary">${total.toLocaleString('es-CL')}</span>
-          </div>
-        </div>
-      )}
-    </div>
+        <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Agregar Ítem a la Venta</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col h-[60vh]">
+                    <div className="relative mb-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Buscar por nombre..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
+                    </div>
+                     <Tabs defaultValue="servicios" className="flex-grow flex flex-col overflow-hidden">
+                        <TabsList>
+                            <TabsTrigger value="servicios">Servicios</TabsTrigger>
+                            <TabsTrigger value="productos">Productos</TabsTrigger>
+                        </TabsList>
+                        <ScrollArea className="flex-grow mt-4 pr-4">
+                            <TabsContent value="servicios" className="mt-0">
+                                <div className="space-y-2">
+                                {(servicesLoading ? Array.from({length: 3}) : addItemFilteredServices).map((service, idx) => (
+                                     service ? (
+                                    <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
+                                        <div>
+                                          <p className="font-semibold">{service.name}</p>
+                                          <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-CL')}</p>
+                                        </div>
+                                        <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
+                                    </div>
+                                     ) : ( <div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" /> )
+                                ))}
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="productos" className="mt-0">
+                                <div className="space-y-2">
+                                {(productsLoading ? Array.from({length: 3}) : addItemFilteredProducts).map((product, idx) => (
+                                     product ? (
+                                     <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
+                                        <div>
+                                            <p className="font-semibold">{product.nombre}</p>
+                                            <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-CL')}</p>
+                                            <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                        </div>
+                                        <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
+                                    </div>
+                                    ) : ( <div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" /> )
+                                ))}
+                                </div>
+                            </TabsContent>
+                        </ScrollArea>
+                    </Tabs>
+                </div>
+                 <SheetFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="secondary">Cerrar</Button>
+                    </DialogClose>
+                </SheetFooter>
+        </DialogContent>
+    </Dialog>
   );
 
   return (
@@ -527,4 +604,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
     </>
   );
 }
-

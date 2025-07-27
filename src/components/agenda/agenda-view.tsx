@@ -643,7 +643,7 @@ export default function AgendaView() {
                                                     <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event as any).customer?.nombre : (event as any).motivo}</p>
                                                 </div>
                                                 {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
-                                                    <div className="flex-shrink-0 bg-green-500 h-full w-6 flex items-center justify-center rounded-r-md -mr-2">
+                                                    <div className="flex-shrink-0 bg-green-500 w-6 flex items-center justify-center rounded-r-md -mr-2 self-stretch">
                                                         <DollarSign className="h-4 w-4 text-black font-bold" />
                                                     </div>
                                                 )}

@@ -71,9 +71,10 @@ interface TimeBlock {
 }
 
 const useCurrentTime = () => {
-    const [time, setTime] = useState(new Date());
+    const [time, setTime] = useState<Date | null>(null);
 
     useEffect(() => {
+        setTime(new Date());
         const timer = setInterval(() => {
             setTime(new Date());
         }, 60000); // Update every minute
@@ -426,7 +427,7 @@ export default function AgendaView() {
   }
 
   const calculateCurrentTimePosition = () => {
-    if (!isClientMounted) return -1;
+    if (!currentTime) return -1;
     const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
@@ -526,11 +527,11 @@ export default function AgendaView() {
             {/* Main Content Area */}
             <div className="flex-grow flex flex-col overflow-hidden">
                 <ScrollArea className="flex-grow" orientation="both">
-                    <div className="grid gap-0" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
+                    <div className="grid gap-2" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                             <div className="h-28 bg-white flex items-center justify-center p-2 border-b border-r">
+                             <div className="h-28 bg-muted/40 flex items-center justify-center p-2">
                                 <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
@@ -563,7 +564,7 @@ export default function AgendaView() {
                         <div className="flex-shrink-0 sticky left-0 z-20">
                              <div className="flex flex-col">
                                 {timeSlots.slice(0, -1).map((time, index) => (
-                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b border-r flex items-center justify-center text-center">
+                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b flex items-center justify-center text-center">
                                         <span className="text-xs text-muted-foreground font-semibold">{time}</span>
                                     </div>
                                 ))}
@@ -596,7 +597,7 @@ export default function AgendaView() {
                                     {/* Background Grid Cells */}
                                     <div className="flex flex-col">
                                         {timeSlots.slice(0, -1).map((time, index) => (
-                                            <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b border-r" />
+                                            <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b" />
                                         ))}
                                     </div>
                                     

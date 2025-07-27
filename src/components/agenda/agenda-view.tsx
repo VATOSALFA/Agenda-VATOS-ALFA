@@ -147,7 +147,6 @@ export default function AgendaView() {
   const [queryKey, setQueryKey] = useState(0);
 
   useEffect(() => {
-    // We initialize the date on the client to avoid hydration errors
     setDate(new Date());
     setIsClientMounted(true)
   }, []);
@@ -464,7 +463,7 @@ export default function AgendaView() {
     <TooltipProvider>
       <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-4">
         {/* Left Panel */}
-        <aside className="flex-shrink-0 p-4 bg-white rounded-lg border-r">
+        <aside className="p-4 bg-white rounded-lg border-r flex flex-col">
           <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="branch-select">Sucursal</Label>
@@ -552,7 +551,7 @@ export default function AgendaView() {
                         {filteredProfessionals.map(barber => (
                             <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
                                 <div className="h-28 flex flex-col items-center justify-center p-2">
-                                    <Avatar className="h-12 w-12">
+                                    <Avatar className="h-[60px] w-[60px]">
                                         <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                         <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                     </Avatar>

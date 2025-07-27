@@ -94,10 +94,7 @@ const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text
     </div>
 );
 
-const getStatusColor = (status: string | undefined, pago_estado?: string) => {
-    if (pago_estado === 'Pagado') {
-        return 'bg-green-300/80 border-green-500 text-green-900';
-    }
+const getStatusColor = (status: string | undefined) => {
     switch (status) {
         case 'Reservado':
             return 'bg-blue-300/80 border-blue-500 text-blue-900';
@@ -238,7 +235,7 @@ export default function AgendaView() {
             professionalName: professionalMap.get(res.barbero_id) || 'N/A',
             start: start,
             duration: Math.max(0.5, end - start),
-            color: getStatusColor(res.estado, res.pago_estado),
+            color: getStatusColor(res.estado),
             type: 'appointment'
         };
     });
@@ -642,9 +639,11 @@ export default function AgendaView() {
                                                 className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10", (event as any).color)} 
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >
-                                                <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer?.nombre}</p>
+                                               <div className="flex-grow overflow-hidden pr-1">
+                                                    <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event as any).customer?.nombre : (event as any).motivo}</p>
+                                                </div>
                                                 {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
-                                                     <div className="ml-2 flex-shrink-0 bg-transparent text-black rounded-sm h-4 w-4 flex items-center justify-center">
+                                                     <div className="flex-shrink-0 bg-green-500 text-white rounded-sm h-full w-6 flex items-center justify-center">
                                                         <DollarSign className="h-4 w-4" />
                                                     </div>
                                                 )}

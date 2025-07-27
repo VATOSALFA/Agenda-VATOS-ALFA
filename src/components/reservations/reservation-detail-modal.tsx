@@ -100,6 +100,9 @@ export function ReservationDetailModal({
       <DialogContent className="max-w-xl">
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                  <Pencil className="mr-2 h-4 w-4" /> Editar
+              </Button>
           </DialogHeader>
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-start">
@@ -170,11 +173,8 @@ export function ReservationDetailModal({
                   <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
               </Button>
               <div className="flex-grow" />
-              <Button variant="outline" onClick={onPay}>
+               <Button onClick={onPay}>
                   <CreditCard className="mr-2 h-4 w-4" /> Pagar
-              </Button>
-               <Button onClick={onEdit}>
-                  <Pencil className="mr-2 h-4 w-4" /> Editar
               </Button>
           </DialogFooter>
       </DialogContent>

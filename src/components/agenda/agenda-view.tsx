@@ -451,9 +451,30 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full bg-muted/40 p-4">
+      <div className="flex h-full bg-[#f8f9fc] p-4">
+        {/* Left Panel */}
+        <aside className="hidden md:block w-72 flex-shrink-0">
+            <div className="h-full bg-white border-r rounded-lg p-4 space-y-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Filtros</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>Filtros aquí...</p>
+                    </CardContent>
+                </Card>
+                <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-md border"
+                    locale={es}
+                />
+            </div>
+        </aside>
+
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-4 md:pl-4">
             {/* Agenda Header */}
             <div className="flex-shrink-0 bg-white p-4 rounded-lg border flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -472,13 +493,13 @@ export default function AgendaView() {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-grow flex flex-col overflow-hidden">
+            <div className="flex-grow flex flex-col overflow-hidden bg-white rounded-lg border">
                 <ScrollArea className="flex-grow" orientation="both">
                     <div className="grid gap-0" style={{gridTemplateColumns: `96px repeat(${professionals.length}, minmax(200px, 1fr))`}}>
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                            <div className="h-28 flex items-center justify-center bg-white border rounded-lg">
+                            <div className="h-28 flex items-center justify-center bg-white border-b border-r">
                                 <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon"><Clock className="h-5 w-5"/></Button>
@@ -497,25 +518,31 @@ export default function AgendaView() {
                         {/* Professional Headers */}
                         {professionals.map(barber => (
                             <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
-                                <div className="bg-white rounded-t-lg border h-20 flex items-center justify-center">
-                                    <Avatar className="h-12 w-12">
-                                        <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                        <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                    </Avatar>
-                                </div>
-                                <div className="bg-white rounded-b-lg border-b border-x h-8 flex items-center justify-center">
-                                     <p className="font-semibold text-sm text-center">{barber.name}</p>
+                                <div className="bg-white border-b border-r h-28 flex flex-col items-center justify-center p-2">
+                                     <div className="mb-6">
+                                        <div className="bg-white rounded-lg border h-14 w-14 flex items-center justify-center mb-1">
+                                            <Avatar className="h-12 w-12">
+                                                <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                                <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                            </Avatar>
+                                        </div>
+                                         <div className="bg-white rounded-b-lg border-b border-x h-8 flex items-center justify-center">
+                                            <p className="font-semibold text-sm text-center">{barber.name}</p>
+                                        </div>
+                                     </div>
                                 </div>
                             </div>
                         ))}
 
                         {/* Time Column */}
                         <div className="flex-shrink-0 sticky left-0 z-20">
-                             {timeSlots.slice(0, -1).map((time, index) => (
-                                <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white rounded-lg border flex items-center justify-center text-center">
-                                    <span className="text-xs text-muted-foreground font-semibold">{time}</span>
-                                </div>
-                            ))}
+                             <div className="flex flex-col">
+                                {timeSlots.slice(0, -1).map((time, index) => (
+                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b border-r flex items-center justify-center text-center">
+                                        <span className="text-xs text-muted-foreground font-semibold">{time}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Grid Cells */}
@@ -542,9 +569,9 @@ export default function AgendaView() {
                                     onClick={(e) => isWorking && handleClickSlot(e)}
                                 >
                                     {/* Background Grid Cells */}
-                                    <div>
+                                    <div className="flex flex-col">
                                         {timeSlots.slice(0, -1).map((time, index) => (
-                                            <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border rounded-lg" />
+                                            <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b border-r" />
                                         ))}
                                     </div>
                                     

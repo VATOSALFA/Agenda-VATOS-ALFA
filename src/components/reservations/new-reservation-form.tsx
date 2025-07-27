@@ -139,15 +139,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [selectedClientId, clients]);
 
 
+  const getServiceData = useCallback((serviceName: string) => {
+    if (!services) return null;
+    return services.find(s => s.name === serviceName);
+  }, [services]);
+
   useEffect(() => {
     if (selectedItems && services) {
         const total = selectedItems.reduce((acc, currentItem) => {
-            const service = services.find(s => s.name === currentItem.servicio);
+            const service = getServiceData(currentItem.servicio);
             return acc + (service?.price || 0);
         }, 0);
-        form.setValue('precio', total);
+        form.setValue('precio', total, { shouldValidate: true });
     }
-  }, [selectedItems, services, form]);
+  }, [selectedItems, services, form, getServiceData]);
 
   const { hoursOptions } = useMemo(() => {
     const startHour = 10;
@@ -222,23 +227,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
   }, [initialData, form, isOpen]);
 
-
-  const getServiceDuration = useCallback((serviceName: string) => {
-    if (!services) return 30;
-    const service = services.find(s => s.name === serviceName);
-    return service ? service.duration : 30; // default to 30 mins
-  }, [services]);
-  
   useEffect(() => {
     if (selectedItems && selectedDate && selectedStartHour && selectedStartMinute) {
-      const totalDuration = selectedItems.reduce((acc, item) => acc + getServiceDuration(item.servicio), 0);
+      const totalDuration = selectedItems.reduce((acc, item) => {
+        const service = getServiceData(item.servicio);
+        return acc + (service?.duration || 0);
+      }, 0);
+      
       const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
       const endTime = addMinutes(startTime, totalDuration);
       
       form.setValue('hora_fin_h', format(endTime, 'HH'));
       form.setValue('hora_fin_m', format(endTime, 'mm'));
     }
-  }, [selectedItems, selectedDate, selectedStartHour, selectedStartMinute, getServiceDuration, form]);
+  }, [selectedItems, selectedDate, selectedStartHour, selectedStartMinute, getServiceData, form]);
 
   async function onSubmit(data: any) {
     setIsSubmitting(true);

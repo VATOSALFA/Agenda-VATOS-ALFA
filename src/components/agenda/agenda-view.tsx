@@ -461,9 +461,9 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full bg-muted/40 p-4">
+      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 p-4 gap-4">
         {/* Left Panel */}
-        <aside className="hidden md:block w-72 flex-shrink-0">
+        <aside className="flex-shrink-0">
           <div className="h-full bg-white border rounded-lg p-4 space-y-6">
             <div className="space-y-2">
               <Label htmlFor="branch-select">Sucursal</Label>
@@ -503,9 +503,9 @@ export default function AgendaView() {
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col gap-4 md:pl-4">
+        <div className="flex-1 flex flex-col gap-4">
             {/* Agenda Header */}
-            <div className="flex-shrink-0 bg-white p-4 rounded-lg border flex items-center justify-between">
+            <div className="flex-shrink-0 flex items-center justify-between p-4">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
                     <div className='flex items-center gap-2'>

@@ -636,14 +636,14 @@ export default function AgendaView() {
                                         <TooltipTrigger asChild>
                                             <div
                                                 onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10", (event as any).color)} 
+                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >
                                                <div className="flex-grow overflow-hidden pr-1">
                                                     <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event as any).customer?.nombre : (event as any).motivo}</p>
                                                 </div>
                                                 {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
-                                                    <div className="flex-shrink-0 bg-green-500 w-6 flex items-center justify-center rounded-r-md -mr-2 self-stretch">
+                                                    <div className="absolute top-0 right-0 bottom-0 w-6 bg-green-500 flex items-center justify-center">
                                                         <DollarSign className="h-4 w-4 text-black font-bold" />
                                                     </div>
                                                 )}
@@ -749,3 +749,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

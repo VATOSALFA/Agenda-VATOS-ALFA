@@ -341,11 +341,14 @@ export default function AgendaView() {
   const handlePayFromDetail = () => {
     if (!selectedReservation || !clients || !services) return;
     const client = clients.find(c => c.id === selectedReservation.cliente_id);
-    const service = services.find(s => s.name === selectedReservation.servicio);
-    if (client && service) {
+    if (client && selectedReservation.items) {
+        const cartItems = selectedReservation.items.map(item => {
+            return services.find(s => s.name === item.servicio);
+        }).filter((i): i is Service => !!i);
+
         setSaleInitialData({
             client,
-            items: [{...service, tipo: 'servicio'}],
+            items: cartItems,
             reservationId: selectedReservation.id
         });
         setIsDetailModalOpen(false);
@@ -631,19 +634,19 @@ export default function AgendaView() {
                                     )}
 
                                      {/* Events */}
-                                    {allEvents.filter(a => a.barbero_id === barber.id).map(event => (
+                                    {allEvents.filter(a => (a as any).barbero_id === barber.id || (a as any).items?.some((i: any) => i.barbero_id === barber.id)).map(event => (
                                         <Tooltip key={event.id}>
                                         <TooltipTrigger asChild>
                                             <div
                                                 onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
+                                                className={cn("absolute w-[calc(100%_-_2px)] left-[1px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >
                                                <div className="flex-grow overflow-hidden pr-1">
                                                     <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event as any).customer?.nombre : (event as any).motivo}</p>
                                                 </div>
                                                 {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
-                                                    <div className="absolute top-0 right-0 bottom-0 w-6 bg-green-500 flex items-center justify-center">
+                                                     <div className="absolute top-0 right-0 h-full w-6 bg-green-500 flex items-center justify-center">
                                                         <DollarSign className="h-4 w-4 text-black font-bold" />
                                                     </div>
                                                 )}
@@ -653,7 +656,7 @@ export default function AgendaView() {
                                             <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                                 <div className="space-y-2">
                                                     <p className="font-bold text-base text-foreground">{(event as any).customer.nombre}</p>
-                                                    <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
+                                                    <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : (event as any).servicio}</p>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                         <Clock className="w-4 h-4" />
                                                         <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
@@ -749,4 +752,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc } from 'firebase/firestore';
@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
 import type { Profesional, Service, Reservation } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
@@ -48,8 +48,12 @@ import { Checkbox } from '../ui/checkbox';
 
 const reservationSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
-  barbero_id: z.string().min(1, 'Debes seleccionar un barbero.'),
-  servicio: z.string().min(1, 'Debes seleccionar un servicio.'),
+  items: z.array(
+    z.object({
+      servicio: z.string().min(1, 'Debes seleccionar un servicio.'),
+      barbero_id: z.string().min(1, 'Debes seleccionar un profesional.'),
+    })
+  ).min(1, 'Debes agregar al menos un servicio.'),
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   hora_inicio_h: z.string().min(1, 'Selecciona hora.'),
   hora_inicio_m: z.string().min(1, 'Selecciona minuto.'),
@@ -109,6 +113,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       nota_interna: '',
       estado: 'Reservado',
       precio: 0,
+      items: [{ servicio: '', barbero_id: '' }],
       notifications: {
         email_notification: true,
         email_reminder: true,
@@ -118,8 +123,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     },
   });
   
-  const selectedService = form.watch('servicio');
-  const selectedProfessionalId = form.watch('barbero_id');
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "items"
+  });
+
+  const selectedItems = form.watch('items');
   const selectedDate = form.watch('fecha');
   const selectedStartHour = form.watch('hora_inicio_h');
   const selectedStartMinute = form.watch('hora_inicio_m');
@@ -131,13 +140,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
 
   useEffect(() => {
-    if (selectedService && services) {
-        const service = services.find(s => s.name === selectedService);
-        if (service) {
-            form.setValue('precio', service.price || 0);
-        }
+    if (selectedItems && services) {
+        const total = selectedItems.reduce((acc, currentItem) => {
+            const service = services.find(s => s.name === currentItem.servicio);
+            return acc + (service?.price || 0);
+        }, 0);
+        form.setValue('precio', total);
     }
-  }, [selectedService, services, form]);
+  }, [selectedItems, services, form]);
 
   const { hoursOptions } = useMemo(() => {
     const startHour = 10;
@@ -151,28 +161,32 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hoursOptions: hOptions };
   }, []);
 
-  // Real-time availability check
+  // Real-time availability check for multiple items
   useEffect(() => {
-    form.clearErrors('barbero_id'); 
-    if (selectedProfessionalId && selectedDate && selectedStartHour && selectedStartMinute) {
-      const professional = professionals.find(p => p.id === selectedProfessionalId);
-      if (!professional || !professional.schedule) return;
+    form.clearErrors('items'); 
+    if (selectedItems && selectedDate && selectedStartHour && selectedStartMinute) {
+      selectedItems.forEach((item, index) => {
+          if (item.barbero_id) {
+              const professional = professionals.find(p => p.id === item.barbero_id);
+              if (!professional || !professional.schedule) return;
 
-      const dayOfWeekIndex = getDay(selectedDate);
-      const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-      const dayOfWeek = dayNames[dayOfWeekIndex];
-      const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
-      
-      const selectedTime = `${selectedStartHour}:${selectedStartMinute}`;
+              const dayOfWeekIndex = getDay(selectedDate);
+              const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+              const dayOfWeek = dayNames[dayOfWeekIndex];
+              const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
+              
+              const selectedTime = `${selectedStartHour}:${selectedStartMinute}`;
 
-      if (!schedule || !schedule.enabled || selectedTime < schedule.start || selectedTime >= schedule.end) {
-        form.setError('barbero_id', {
-            type: 'manual',
-            message: `El horario o día de la reserva no está disponible para este prestador(${professional.name})`
-        });
-      }
+              if (!schedule || !schedule.enabled || selectedTime < schedule.start || selectedTime >= schedule.end) {
+                form.setError(`items.${index}.barbero_id`, {
+                    type: 'manual',
+                    message: `Horario no disponible para ${professional.name}`
+                });
+              }
+          }
+      })
     }
-  }, [selectedProfessionalId, selectedDate, selectedStartHour, selectedStartMinute, professionals, form]);
+  }, [selectedItems, selectedDate, selectedStartHour, selectedStartMinute, professionals, form]);
 
 
   useEffect(() => {
@@ -194,8 +208,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       form.reset({
         cliente_id: initialData.cliente_id,
-        barbero_id: initialData.barbero_id,
-        servicio: initialData.servicio,
+        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.nombre, barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
         fecha,
         hora_inicio_h: h,
         hora_inicio_m: m,
@@ -217,15 +230,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [services]);
   
   useEffect(() => {
-    if (selectedService && selectedDate && selectedStartHour && selectedStartMinute) {
-      const duration = getServiceDuration(selectedService);
+    if (selectedItems && selectedDate && selectedStartHour && selectedStartMinute) {
+      const totalDuration = selectedItems.reduce((acc, item) => acc + getServiceDuration(item.servicio), 0);
       const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
-      const endTime = addMinutes(startTime, duration);
+      const endTime = addMinutes(startTime, totalDuration);
       
       form.setValue('hora_fin_h', format(endTime, 'HH'));
       form.setValue('hora_fin_m', format(endTime, 'mm'));
     }
-  }, [selectedService, selectedDate, selectedStartHour, selectedStartMinute, getServiceDuration, form]);
+  }, [selectedItems, selectedDate, selectedStartHour, selectedStartMinute, getServiceDuration, form]);
 
   async function onSubmit(data: any) {
     setIsSubmitting(true);
@@ -233,9 +246,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
       const hora_fin = `${data.hora_fin_h}:${data.hora_fin_m}`;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
+      const serviceNames = data.items.map((item: any) => services.find(s => s.name === item.servicio)?.name || item.servicio).join(', ');
 
       const dataToSave = {
         ...data,
+        servicio: serviceNames, // Keep a concatenated string for simple display
         fecha: formattedDate,
         hora_inicio,
         hora_fin,
@@ -460,34 +475,46 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 )}/>
             )}
             
-            <FormField control={form.control} name="barbero_id" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Profesional</FormLabel>
-                    <div className="flex gap-2">
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
-                            <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Button variant="outline" type="button" size="icon" className="shrink-0"><Lock className="h-4 w-4"/></Button>
-                    </div>
-                    <FormMessage />
-                </FormItem>
-            )}/>
-
-             <FormField control={form.control} name="servicio" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Servicios</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
-                        <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-            )}/>
+            <div className="space-y-4">
+                {fields.map((field, index) => (
+                    <Card key={field.id} className="p-4 relative">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Servicios</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
+                                        <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                            <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Profesional</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
+                                        <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                        </div>
+                        {fields.length > 1 && (
+                             <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </Card>
+                ))}
+                 <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '' })} className="w-full">
+                    <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
+                </Button>
+            </div>
           </div>
 
           {/* Additional Info */}
-          <div className="space-y-4 pt-6 border-t">
+          <div className="space-y-4 pt-6 border-t px-6">
             <h3 className="font-semibold text-lg">Información adicional</h3>
              <FormField control={form.control} name="precio" render={({ field }) => (
                 <FormItem>
@@ -542,5 +569,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-
-

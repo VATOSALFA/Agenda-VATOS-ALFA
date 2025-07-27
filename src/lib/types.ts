@@ -38,9 +38,9 @@ export interface Profesional {
 
 export interface Reservation {
     id: string;
-    barbero_id: string;
+    items: { servicio: string; barbero_id: string; nombre?: string; }[];
     cliente_id: string;
-    servicio: string;
+    servicio: string; // Concatenated services for simple display
     hora_inicio: string;
     hora_fin: string;
     fecha: string;
@@ -51,6 +51,9 @@ export interface Reservation {
     type?: 'appointment' | 'block';
     start?: number; // transient
     duration?: number; // transient
+    precio?: number;
+    notas?: string;
+    nota_interna?: string;
 }
 
 export interface Schedule {

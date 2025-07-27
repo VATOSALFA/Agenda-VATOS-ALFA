@@ -281,7 +281,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
         if (initialData?.reservationId) {
             const reservationRef = doc(db, 'reservas', initialData.reservationId);
-            transaction.update(reservationRef, { pago_estado: 'Pagado' });
+            transaction.update(reservationRef, { 
+                pago_estado: 'Pagado',
+                estado: 'Asiste'
+            });
         }
       });
 

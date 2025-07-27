@@ -505,7 +505,7 @@ export default function AgendaView() {
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col gap-4">
+        <div className="flex-1 flex flex-col">
             {/* Agenda Header */}
             <div className="flex-shrink-0 flex items-center justify-between gap-4 p-4">
                 <div className="flex items-center gap-4">
@@ -530,7 +530,7 @@ export default function AgendaView() {
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                             <div className="h-28 flex items-center justify-center p-2 border-b">
+                             <div className="h-28 bg-white flex items-center justify-center p-2 border-b border-r">
                                 <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>

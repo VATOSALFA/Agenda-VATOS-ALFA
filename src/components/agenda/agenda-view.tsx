@@ -642,10 +642,20 @@ export default function AgendaView() {
                                         </TooltipTrigger>
                                         {event.type === 'appointment' ? (
                                             <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
-                                            <div className="space-y-2">
-                                                <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
-                                                <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
-                                            </div>
+                                                <div className="space-y-2">
+                                                    <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
+                                                    <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                        <Clock className="w-4 h-4" />
+                                                        <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <DollarSign className="w-4 h-4" />
+                                                        <span className={cn((event as Reservation).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600')}>
+                                                            {(event as Reservation).pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </TooltipContent>
                                         ) : (
                                             <TooltipContent><p>Horario Bloqueado: {(event as any).customer}</p></TooltipContent>

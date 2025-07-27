@@ -11,9 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   User,
   Phone,
@@ -34,7 +32,6 @@ import {
 import type { Reservation } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { NewReservationForm } from './new-reservation-form';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';

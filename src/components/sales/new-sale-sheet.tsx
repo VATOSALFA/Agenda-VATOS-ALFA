@@ -82,10 +82,12 @@ interface NewSaleSheetProps {
   initialData?: {
     client: Client;
     items: (Product | ServiceType)[];
-  }
+    reservationId?: string;
+  };
+  onSaleComplete?: () => void;
 }
 
-export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheetProps) {
+export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -236,7 +238,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
-        // --- 1. READ PHASE ---
         const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
         for (const item of cart) {
           if (item.tipo === 'producto') {
@@ -249,7 +250,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
           productRefs.map(p => transaction.get(p.ref))
         );
 
-        // --- 2. WRITE PHASE ---
         productDocs.forEach((productDoc, index) => {
             const { item, ref } = productRefs[index];
             if (!productDoc.exists()) {
@@ -271,14 +271,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
             subtotal: (precio || 0) * cantidad,
         }));
   
-        // Create sale record
         transaction.set(ventaRef, {
             ...data,
             items: itemsToSave,
             total,
             fecha_hora_venta: Timestamp.now(),
-            creado_por: 'admin' // Or use actual user ID
+            creado_por: 'admin'
         });
+
+        if (initialData?.reservationId) {
+            const reservationRef = doc(db, 'reservas', initialData.reservationId);
+            transaction.update(reservationRef, { pago_estado: 'Pagado' });
+        }
       });
 
       toast({
@@ -287,6 +291,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
       });
       resetFlow();
       onOpenChange(false);
+      onSaleComplete?.();
     } catch (error: any) {
       console.error('Error al registrar la venta: ', error);
       toast({

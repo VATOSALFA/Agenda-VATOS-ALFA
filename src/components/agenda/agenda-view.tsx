@@ -346,7 +346,8 @@ export default function AgendaView() {
     if (client && service) {
         setSaleInitialData({
             client,
-            items: [{...service, tipo: 'servicio'}]
+            items: [{...service, tipo: 'servicio'}],
+            reservationId: selectedReservation.id
         });
         setIsDetailModalOpen(false);
         setIsSaleSheetOpen(true);
@@ -712,6 +713,7 @@ export default function AgendaView() {
         isOpen={isSaleSheetOpen} 
         onOpenChange={setIsSaleSheetOpen}
         initialData={saleInitialData}
+        onSaleComplete={refreshData}
       />
 
       <CancelReservationModal

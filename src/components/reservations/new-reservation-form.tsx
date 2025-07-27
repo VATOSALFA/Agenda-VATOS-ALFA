@@ -144,16 +144,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return services.find(s => s.name === serviceName);
   }, [services]);
 
-  useEffect(() => {
-    if (selectedItems && services) {
-        const total = selectedItems.reduce((acc, currentItem) => {
-            const service = getServiceData(currentItem.servicio);
-            return acc + (service?.price || 0);
-        }, 0);
-        form.setValue('precio', total, { shouldValidate: true });
-    }
-  }, [selectedItems, services, form, getServiceData]);
-
   const { hoursOptions } = useMemo(() => {
     const startHour = 10;
     const endHour = 21;
@@ -213,7 +203,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       form.reset({
         cliente_id: initialData.cliente_id,
-        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.nombre, barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
+        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.nombre || i.servicio, barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
         fecha,
         hora_inicio_h: h,
         hora_inicio_m: m,
@@ -226,21 +216,34 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       });
     }
   }, [initialData, form, isOpen]);
-
+  
   useEffect(() => {
-    if (selectedItems && selectedDate && selectedStartHour && selectedStartMinute) {
-      const totalDuration = selectedItems.reduce((acc, item) => {
-        const service = getServiceData(item.servicio);
-        return acc + (service?.duration || 0);
-      }, 0);
-      
+    if (!selectedItems || !services) return;
+
+    // Calculate total price and duration
+    const { totalPrice, totalDuration } = selectedItems.reduce((acc, currentItem) => {
+        const service = getServiceData(currentItem.servicio);
+        if (service) {
+            acc.totalPrice += service.price || 0;
+            acc.totalDuration += service.duration || 0;
+        }
+        return acc;
+    }, { totalPrice: 0, totalDuration: 0 });
+
+    // Update form price
+    form.setValue('precio', totalPrice, { shouldValidate: true });
+    
+    // Update form end time
+    if (selectedDate && selectedStartHour && selectedStartMinute) {
       const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
       const endTime = addMinutes(startTime, totalDuration);
       
-      form.setValue('hora_fin_h', format(endTime, 'HH'));
-      form.setValue('hora_fin_m', format(endTime, 'mm'));
+      form.setValue('hora_fin_h', format(endTime, 'HH'), { shouldValidate: true });
+      form.setValue('hora_fin_m', format(endTime, 'mm'), { shouldValidate: true });
     }
-  }, [selectedItems, selectedDate, selectedStartHour, selectedStartMinute, getServiceData, form]);
+
+  }, [selectedItems, services, getServiceData, form, selectedDate, selectedStartHour, selectedStartMinute]);
+
 
   async function onSubmit(data: any) {
     setIsSubmitting(true);
@@ -248,21 +251,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
       const hora_fin = `${data.hora_fin_h}:${data.hora_fin_m}`;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
-      const serviceNames = data.items.map((item: any) => services.find(s => s.name === item.servicio)?.name || item.servicio).join(', ');
+      
+      const itemsToSave = data.items.map((item: any) => {
+          const service = services.find(s => s.name === item.servicio);
+          return {
+              servicio: item.servicio,
+              barbero_id: item.barbero_id,
+              precio: service?.price || 0,
+              duracion: service?.duration || 0,
+          }
+      });
 
       const dataToSave = {
-        ...data,
-        servicio: serviceNames, // Keep a concatenated string for simple display
+        cliente_id: data.cliente_id,
+        items: itemsToSave,
         fecha: formattedDate,
         hora_inicio,
         hora_fin,
         estado: data.estado || 'Reservado',
+        precio: data.precio,
+        notas: data.notas,
+        nota_interna: data.nota_interna,
+        notifications: data.notifications,
       };
-      
-      delete dataToSave.hora_inicio_h;
-      delete dataToSave.hora_inicio_m;
-      delete dataToSave.hora_fin_h;
-      delete dataToSave.hora_fin_m;
       
       if (isEditMode && initialData?.id) {
          const resRef = doc(db, 'reservas', initialData.id);

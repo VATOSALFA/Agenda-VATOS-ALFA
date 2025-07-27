@@ -94,21 +94,23 @@ const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text
     </div>
 );
 
-const getStatusColor = (status: string | undefined) => {
+const getStatusColor = (status: string | undefined, pago_estado?: string) => {
+    if (pago_estado === 'Pagado') {
+        return 'bg-green-300/80 border-green-500 text-green-900';
+    }
     switch (status) {
         case 'Reservado':
             return 'bg-blue-300/80 border-blue-500 text-blue-900';
         case 'Confirmado':
             return 'bg-yellow-300/80 border-yellow-500 text-yellow-900';
         case 'Asiste':
-        case 'Pagado':
-            return 'bg-green-300/80 border-green-500 text-green-900';
+            return 'bg-pink-300/80 border-pink-500 text-pink-900';
         case 'No asiste':
             return 'bg-orange-300/80 border-orange-500 text-orange-900';
         case 'Pendiente':
             return 'bg-red-300/80 border-red-500 text-red-900';
         case 'En espera':
-            return 'bg-pink-300/80 border-pink-500 text-pink-900';
+            return 'bg-indigo-300/80 border-indigo-500 text-indigo-900';
         case 'Cancelado':
             return 'bg-gray-300/80 border-gray-500 text-gray-800 line-through';
         default:
@@ -236,7 +238,7 @@ export default function AgendaView() {
             professionalName: professionalMap.get(res.barbero_id) || 'N/A',
             start: start,
             duration: Math.max(0.5, end - start),
-            color: getStatusColor(res.estado),
+            color: getStatusColor(res.estado, res.pago_estado),
             type: 'appointment'
         };
     });
@@ -642,8 +644,8 @@ export default function AgendaView() {
                                             >
                                                 <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer?.nombre}</p>
                                                 {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
-                                                    <div className="ml-2 flex-shrink-0 bg-green-500 text-white rounded-sm h-4 w-4 flex items-center justify-center">
-                                                        <DollarSign className="h-3 w-3" />
+                                                     <div className="ml-2 flex-shrink-0 bg-transparent text-black rounded-sm h-4 w-4 flex items-center justify-center">
+                                                        <DollarSign className="h-4 w-4" />
                                                     </div>
                                                 )}
                                             </div>
@@ -651,18 +653,22 @@ export default function AgendaView() {
                                         {event.type === 'appointment' ? (
                                             <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                                 <div className="space-y-2">
-                                                    <p className="font-bold text-base text-foreground">{(event as Reservation).customer?.nombre}</p>
+                                                    <p className="font-bold text-base text-foreground">{(event as any).customer.nombre}</p>
                                                     <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                         <Clock className="w-4 h-4" />
                                                         <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <DollarSign className="w-4 h-4" />
-                                                        <span className={cn((event as Reservation).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600')}>
-                                                            {(event as Reservation).pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
-                                                        </span>
-                                                    </div>
+                                                    {(event as Reservation).pago_estado &&
+                                                        <div className="flex items-center gap-2 text-sm">
+                                                            <DollarSign className="w-4 h-4" />
+                                                            <span className={cn(
+                                                                (event as Reservation).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                                            )}>
+                                                                {(event as Reservation).pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
+                                                            </span>
+                                                        </div>
+                                                    }
                                                 </div>
                                             </TooltipContent>
                                         ) : (

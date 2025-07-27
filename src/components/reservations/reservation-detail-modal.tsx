@@ -168,12 +168,11 @@ export function ReservationDetailModal({
                 ))}
             </div>
           </div>
-          <DialogFooter className="p-6 border-t">
+          <DialogFooter className="p-6 border-t flex justify-between">
               <Button variant="destructive" onClick={() => setIsCancelModalOpen(true)}>
                   <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
               </Button>
-              <div className="flex-grow" />
-               <Button onClick={onPay}>
+               <Button onClick={onPay} className="bg-primary hover:bg-primary/90">
                   <CreditCard className="mr-2 h-4 w-4" /> Pagar
               </Button>
           </DialogFooter>

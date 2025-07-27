@@ -462,7 +462,7 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40">
+      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-2">
         {/* Left Panel */}
         <aside className="bg-white border-r flex flex-col">
           <div className="p-4 space-y-4">
@@ -549,14 +549,12 @@ export default function AgendaView() {
 
                         {/* Professional Headers */}
                         {filteredProfessionals.map(barber => (
-                            <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
-                                <div className="h-28 flex flex-col items-center justify-center p-2 border-b">
-                                    <Avatar className="h-[60px] w-[60px]">
-                                        <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                        <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                    </Avatar>
-                                    <p className="font-semibold text-sm text-center mt-2">{barber.name}</p>
-                                </div>
+                            <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20 p-2 h-28 flex flex-col items-center justify-center">
+                                <Avatar className="h-[60px] w-[60px]">
+                                    <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                </Avatar>
+                                <p className="font-semibold text-sm text-center mt-2">{barber.name}</p>
                             </div>
                         ))}
 
@@ -635,7 +633,7 @@ export default function AgendaView() {
                                         <Tooltip key={event.id}>
                                         <TooltipTrigger asChild>
                                             <div 
-                                                onClick={() => { if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
+                                                onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
                                                 className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", event.color)} 
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >

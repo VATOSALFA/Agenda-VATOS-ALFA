@@ -51,6 +51,7 @@ import { db } from '@/lib/firebase';
 import type { Profesional, Client, Service, ScheduleDay, Reservation, Local } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
+import { Label } from '../ui/label';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
@@ -120,6 +121,7 @@ export default function AgendaView() {
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
   const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
+  const [selectedProfessionalFilter, setSelectedProfessionalFilter] = useState('todos');
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -145,6 +147,7 @@ export default function AgendaView() {
   const [queryKey, setQueryKey] = useState(0);
 
   useEffect(() => {
+    // We initialize the date on the client to avoid hydration errors
     setDate(new Date());
     setRenderTimeIndicator(true)
   }, []);
@@ -205,6 +208,13 @@ export default function AgendaView() {
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, reservationsQueryConstraint);
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading;
+
+  const filteredProfessionals = useMemo(() => {
+    if (selectedProfessionalFilter === 'todos') {
+      return professionals;
+    }
+    return professionals.filter(p => p.id === selectedProfessionalFilter);
+  }, [professionals, selectedProfessionalFilter]);
 
   const refreshData = () => setQueryKey(prev => prev + 1);
 
@@ -451,26 +461,45 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full bg-[#f8f9fc] p-4">
+      <div className="flex h-full bg-muted/40 p-4">
         {/* Left Panel */}
         <aside className="hidden md:block w-72 flex-shrink-0">
-            <div className="h-full bg-white border-r rounded-lg p-4 space-y-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Filtros</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p>Filtros aquí...</p>
-                    </CardContent>
-                </Card>
-                <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    className="rounded-md border"
-                    locale={es}
-                />
+          <div className="h-full bg-white border-r rounded-lg p-4 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="branch-select">Sucursal</Label>
+              <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId}>
+                <SelectTrigger id="branch-select">
+                  <SelectValue placeholder="Seleccionar sucursal..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {locales.map(local => (
+                    <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="professional-select">Profesional</Label>
+              <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
+                <SelectTrigger id="professional-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {professionals.map(prof => (
+                    <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={setDate}
+              className="rounded-md border"
+              locale={es}
+            />
+          </div>
         </aside>
 
         {/* Main Content Area */}
@@ -495,7 +524,7 @@ export default function AgendaView() {
             {/* Main Content Area */}
             <div className="flex-grow flex flex-col overflow-hidden bg-white rounded-lg border">
                 <ScrollArea className="flex-grow" orientation="both">
-                    <div className="grid gap-0" style={{gridTemplateColumns: `96px repeat(${professionals.length}, minmax(200px, 1fr))`}}>
+                    <div className="grid gap-0" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
@@ -516,7 +545,7 @@ export default function AgendaView() {
                         </div>
 
                         {/* Professional Headers */}
-                        {professionals.map(barber => (
+                        {filteredProfessionals.map(barber => (
                             <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
                                 <div className="bg-white border-b border-r h-28 flex flex-col items-center justify-center p-2">
                                      <div className="mb-6">
@@ -546,7 +575,7 @@ export default function AgendaView() {
                         </div>
 
                         {/* Grid Cells */}
-                         {professionals.map((barber) => {
+                         {filteredProfessionals.map((barber) => {
                             const daySchedule = getDaySchedule(barber);
                             const isWorking = daySchedule && daySchedule.enabled;
                             

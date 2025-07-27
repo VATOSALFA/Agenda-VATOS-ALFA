@@ -451,15 +451,15 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col lg:flex-row gap-6 h-full p-4 md:p-6 bg-[#f8f9fc]" onClick={() => setPopoverState(null)}>
-        <aside className="w-full lg:w-[250px] space-y-6 flex-shrink-0">
-           <Card>
-              <CardHeader>
+      <div className="flex flex-col lg:flex-row h-full bg-[#f8f9fc]" onClick={() => setPopoverState(null)}>
+        <aside className="w-full lg:w-[250px] space-y-6 flex-shrink-0 bg-white border-r p-4">
+           <Card className="shadow-none border-none">
+              <CardHeader className="p-0 mb-4">
                   <CardTitle>Filtros</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-0 space-y-4">
                   <div className="space-y-2">
-                      <label>Sucursal</label>
+                      <label className="text-sm font-medium">Sucursal</label>
                       <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
                       <SelectTrigger>
                           <SelectValue placeholder="Seleccionar sucursal" />
@@ -472,7 +472,7 @@ export default function AgendaView() {
                       </Select>
                   </div>
                   <div className="space-y-2">
-                      <label>Profesional</label>
+                      <label className="text-sm font-medium">Profesional</label>
                       <Select defaultValue="todos">
                       <SelectTrigger>
                           <SelectValue placeholder="Seleccionar profesional" />
@@ -487,8 +487,8 @@ export default function AgendaView() {
                   </div>
               </CardContent>
           </Card>
-          <Card>
-              <CardContent className="p-2">
+          <Card className="shadow-none border-none">
+              <CardContent className="p-0">
                   {date ? (
                     <Calendar
                         mode="single"
@@ -509,9 +509,9 @@ export default function AgendaView() {
               </CardContent>
           </Card>
         </aside>
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden p-4 md:p-6">
           {/* Agenda Navigation Header */}
-          <div className="flex items-center gap-4 mb-4 pb-4 border-b h-[90px] flex-shrink-0">
+          <div className="flex items-center gap-4 mb-4 pb-4 flex-shrink-0">
               <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
               <div className='flex items-center gap-2'>
                   <Button variant="ghost" size="icon" onClick={handlePrevDay}>
@@ -528,42 +528,52 @@ export default function AgendaView() {
                   </p>
               </div>
           </div>
-          <div className="flex-grow overflow-hidden">
-            <ScrollArea className="h-full">
+          
+           {/* Professionals Header */}
+            <ScrollArea orientation="horizontal" className="flex-shrink-0">
+                <div className="flex pb-4">
+                     <div className="w-20 flex-shrink-0 sticky left-0 z-10">&nbsp;</div> {/* Spacer for time column */}
+                     {isLoading ? (
+                         Array.from({length: 5}).map((_, i) => (
+                            <div key={i} className="w-64 flex-shrink-0 p-2"><Skeleton className="h-20 w-full" /></div>
+                         ))
+                     ) : (
+                        professionals.map(barber => (
+                            <div key={barber.id} className="w-64 flex-shrink-0 px-2">
+                                <div className="flex flex-col items-center justify-center text-center p-2 rounded-lg bg-white border">
+                                    <Avatar className="h-10 w-10 mb-2">
+                                        <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                        <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                    </Avatar>
+                                    <p className="font-semibold text-sm">{barber.name}</p>
+                                </div>
+                            </div>
+                        ))
+                     )}
+                </div>
+            </ScrollArea>
+
+          <div className="flex-grow overflow-hidden relative">
+            <ScrollArea className="h-full absolute inset-0">
               <div className="flex">
                   {/* Time Column */}
-                  <div className="w-20 flex-shrink-0 sticky left-0 bg-white z-20">
-                      <div className="h-24 flex items-center justify-center border-r border-b">
-                          <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                              <Clock className="h-5 w-5"/>
-                              </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                              {[5, 10, 15, 30, 40, 45, 60].map(min => (
-                              <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
-                                  {min} minutos
-                              </DropdownMenuItem>
-                              ))}
-                          </DropdownMenuContent>
-                          </DropdownMenu>
+                  <div className="w-20 flex-shrink-0 sticky left-0 z-20">
+                      <div className="flex flex-col">
+                        {timeSlots.slice(0, -1).map((time, index) => (
+                            <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-start justify-end text-center pt-1 pr-2">
+                                <span className="text-xs text-muted-foreground relative -top-2">{time}</span>
+                            </div>
+                        ))}
                       </div>
-                      {timeSlots.slice(0, -1).map((time, index) => (
-                          <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="flex items-start justify-end text-center pt-1 pr-2 border-t border-r">
-                              <span className="text-xs text-muted-foreground relative -top-2">{time}</span>
-                          </div>
-                      ))}
                   </div>
                   
                   {/* Main Grid Content */}
-                  <ScrollArea className="flex-grow" orientation="horizontal">
+                  <div className="flex-grow">
                     <div className="flex relative">
                         {/* Professionals Columns */}
                         {isLoading ? (
                         Array.from({length: 5}).map((_, i) => (
-                            <div key={i} className="w-64 flex-shrink-0 border-r">
-                                <div className="p-3 sticky top-0 z-10 h-24 bg-white border-b"><Skeleton className="h-16 w-full" /></div>
+                            <div key={i} className="w-64 flex-shrink-0 px-2">
                                 <div className="relative"><Skeleton style={{height: `${(timeSlots.length - 1) * HOURLY_SLOT_HEIGHT}px`}} className="w-full" /></div>
                             </div>
                         ))
@@ -581,21 +591,10 @@ export default function AgendaView() {
                             }
                             
                             return (
-                            <div key={barber.id} className="w-64 flex-shrink-0 border-r">
-                                {/* Professional Header */}
-                                <div className="p-3 sticky top-0 z-10 h-24 bg-white border-b">
-                                    <div className="flex flex-col items-center justify-center text-center">
-                                        <Avatar className="h-10 w-10 mb-2">
-                                            <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                            <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                        </Avatar>
-                                        <p className="font-semibold text-sm">{barber.name}</p>
-                                    </div>
-                                </div>
-
+                            <div key={barber.id} className="w-64 flex-shrink-0 px-2">
                                 {/* Appointments Grid */}
                                 <div 
-                                className="relative"
+                                className="relative bg-white border-x"
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
@@ -731,8 +730,8 @@ export default function AgendaView() {
                             </div>
                         )}
                       </div>
-                  </ScrollArea>
-                </div>
+                  </div>
+              </div>
             </ScrollArea>
           </div>
         </main>
@@ -800,7 +799,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-
-
-
-

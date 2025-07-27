@@ -427,6 +427,7 @@ export default function AgendaView() {
   }
 
   const calculateCurrentTimePosition = () => {
+    if (!isClientMounted) return -1;
     const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
@@ -505,7 +506,7 @@ export default function AgendaView() {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col gap-4">
             {/* Agenda Header */}
-            <div className="flex-shrink-0 flex items-center justify-between p-4">
+            <div className="flex-shrink-0 flex items-center justify-between p-4 gap-4">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
                     <div className='flex items-center gap-2'>
@@ -547,18 +548,12 @@ export default function AgendaView() {
                         {/* Professional Headers */}
                         {filteredProfessionals.map(barber => (
                             <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
-                                <div className="bg-white border-b border-r h-28 flex flex-col items-center justify-center p-2">
-                                     <div className="mb-6">
-                                        <div className="bg-white rounded-lg border h-14 w-14 flex items-center justify-center mb-1">
-                                            <Avatar className="h-12 w-12">
-                                                <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                                <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                            </Avatar>
-                                        </div>
-                                         <div className="bg-white rounded-b-lg border-b border-x h-8 flex items-center justify-center">
-                                            <p className="font-semibold text-sm text-center">{barber.name}</p>
-                                        </div>
-                                     </div>
+                                <div className="h-28 flex flex-col items-center justify-center p-2">
+                                    <Avatar className="h-12 w-12">
+                                        <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                        <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                    </Avatar>
+                                    <p className="font-semibold text-sm text-center mt-2">{barber.name}</p>
                                 </div>
                             </div>
                         ))}
@@ -730,3 +725,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

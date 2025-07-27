@@ -44,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -56,7 +57,17 @@ interface CartItem { id: string; nombre: string; precio: number; cantidad: numbe
 const saleSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
   metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
+  pago_efectivo: z.coerce.number().optional(),
+  pago_tarjeta: z.coerce.number().optional(),
   notas: z.string().optional(),
+}).refine(data => {
+    if (data.metodo_pago === 'combinado') {
+        return (data.pago_efectivo || 0) > 0 && (data.pago_tarjeta || 0) > 0;
+    }
+    return true;
+}, {
+    message: 'Debes ingresar montos para ambos métodos de pago.',
+    path: ['pago_efectivo'],
 });
 
 type SaleFormData = z.infer<typeof saleSchema>;
@@ -142,6 +153,21 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
         notas: '',
     },
   });
+
+  const paymentMethod = form.watch('metodo_pago');
+  const cashAmount = form.watch('pago_efectivo');
+  const cardAmount = form.watch('pago_tarjeta');
+
+  useEffect(() => {
+    if (paymentMethod === 'combinado') {
+        const combinedTotal = (cashAmount || 0) + (cardAmount || 0);
+        if (combinedTotal !== total) {
+            form.setError('pago_tarjeta', { type: 'manual', message: `El total combinado debe ser $${total.toLocaleString('es-CL')}`});
+        } else {
+            form.clearErrors('pago_tarjeta');
+        }
+    }
+  }, [paymentMethod, cashAmount, cardAmount, total, form]);
 
   useEffect(() => {
     if (initialData) {
@@ -396,20 +422,69 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
                             </FormItem>
                         )} />
                         
-                        <FormField control={form.control} name="metodo_pago" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un método" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="efectivo">Efectivo</SelectItem>
-                                        <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                                        <SelectItem value="transferencia">Transferencia</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
+                        <FormField
+                          control={form.control}
+                          name="metodo_pago"
+                          render={({ field }) => (
+                            <FormItem className="space-y-3">
+                              <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
+                              <FormControl>
+                                <RadioGroup
+                                  onValueChange={field.onChange}
+                                  defaultValue={field.value}
+                                  className="flex flex-wrap gap-2"
+                                >
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="efectivo" id="efectivo" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
+                                  </FormItem>
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="tarjeta" id="tarjeta" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
+                                  </FormItem>
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="transferencia" id="transferencia" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
+                                  </FormItem>
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="combinado" id="combinado" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
+                                  </FormItem>
+                                </RadioGroup>
+                              </FormControl>
+                              <FormMessage />
                             </FormItem>
-                        )} />
+                          )}
+                        />
+                         {paymentMethod === 'combinado' && (
+                          <Card className="p-4 bg-muted/50">
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="pago_efectivo"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Efectivo</FormLabel>
+                                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="pago_tarjeta"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Tarjeta</FormLabel>
+                                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <FormMessage className="mt-2 text-center text-xs">
+                              {form.formState.errors.pago_tarjeta?.message}
+                            </FormMessage>
+                          </Card>
+                        )}
                          <FormField control={form.control} name="notas" render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Notas (Opcional)</FormLabel>

@@ -499,7 +499,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
                     <ResumenCarrito />
                 </div>
                  <SheetFooter className="p-6 bg-background border-t mt-auto">
-                    <Button variant="outline" type="button" onClick={() => setStep(1)}>Volver</Button>
+                    <Button variant="outline" type="button" onClick={() => setStep(1)}>Volver y agregar más ítems</Button>
                     <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Finalizar Venta

@@ -57,8 +57,8 @@ interface CartItem { id: string; nombre: string; precio: number; cantidad: numbe
 const saleSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
   metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
-  pago_efectivo: z.coerce.number().optional(),
-  pago_tarjeta: z.coerce.number().optional(),
+  pago_efectivo: z.coerce.number().optional().default(0),
+  pago_tarjeta: z.coerce.number().optional().default(0),
   notas: z.string().optional(),
 }).refine(data => {
     if (data.metodo_pago === 'combinado') {
@@ -151,6 +151,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
     resolver: zodResolver(saleSchema),
     defaultValues: {
         notas: '',
+        pago_efectivo: 0,
+        pago_tarjeta: 0,
     },
   });
 
@@ -161,7 +163,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
   useEffect(() => {
     if (paymentMethod === 'combinado') {
         const combinedTotal = (cashAmount || 0) + (cardAmount || 0);
-        if (combinedTotal !== total) {
+        if (combinedTotal > 0 && combinedTotal !== total) {
             form.setError('pago_tarjeta', { type: 'manual', message: `El total combinado debe ser $${total.toLocaleString('es-CL')}`});
         } else {
             form.clearErrors('pago_tarjeta');
@@ -525,3 +527,4 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData }: NewSaleSheet
     </>
   );
 }
+

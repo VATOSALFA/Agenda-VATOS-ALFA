@@ -451,44 +451,8 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full bg-muted/40 p-4 gap-4">
-        {/* Left Panel */}
-        <div className="w-[280px] flex-shrink-0 bg-white rounded-lg border">
-          <div className="p-4 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Sucursal</label>
-              <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar sucursal" /></SelectTrigger>
-                <SelectContent>
-                  {locales.map(local => <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-             <div className="space-y-2">
-                <label className="text-sm font-medium">Profesional</label>
-                <Select defaultValue="todos">
-                  <SelectTrigger><SelectValue placeholder="Seleccionar profesional" /></SelectTrigger>
-                  <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      {professionals.map((barber) => (<SelectItem key={barber.id} value={String(barber.id)}>{barber.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-            </div>
-          </div>
-          {date ? (
-            <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                className="p-3"
-                locale={es}
-                components={{ IconLeft: () => <ChevronLeft className="h-4 w-4" />, IconRight: () => <ChevronRight className="h-4 w-4" /> }}
-            />
-            ) : ( <div className="p-3"><Skeleton className="h-[250px] w-full" /></div>)
-          }
-        </div>
-        
-        {/* Right Panel - Agenda */}
+      <div className="flex h-full bg-muted/40 p-4">
+        {/* Main Content Area */}
         <div className="flex-1 flex flex-col gap-4">
             {/* Agenda Header */}
             <div className="flex-shrink-0 bg-white p-4 rounded-lg border flex items-center justify-between">
@@ -510,7 +474,7 @@ export default function AgendaView() {
             {/* Main Content Area */}
             <div className="flex-grow flex flex-col overflow-hidden">
                 <ScrollArea className="flex-grow" orientation="both">
-                    <div className="grid gap-4" style={{gridTemplateColumns: `auto repeat(${professionals.length}, minmax(200px, 1fr))`}}>
+                    <div className="grid gap-0" style={{gridTemplateColumns: `96px repeat(${professionals.length}, minmax(200px, 1fr))`}}>
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
@@ -532,21 +496,21 @@ export default function AgendaView() {
 
                         {/* Professional Headers */}
                         {professionals.map(barber => (
-                            <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20 space-y-2">
-                                <div className="bg-white rounded-lg border h-20 flex items-center justify-center">
+                            <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
+                                <div className="bg-white rounded-t-lg border h-20 flex items-center justify-center">
                                     <Avatar className="h-12 w-12">
                                         <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                         <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                     </Avatar>
                                 </div>
-                                <div className="bg-white rounded-lg border h-7 flex items-center justify-center">
+                                <div className="bg-white rounded-b-lg border-b border-x h-8 flex items-center justify-center">
                                      <p className="font-semibold text-sm text-center">{barber.name}</p>
                                 </div>
                             </div>
                         ))}
 
                         {/* Time Column */}
-                        <div className="flex-shrink-0 sticky left-0 z-20 space-y-2">
+                        <div className="flex-shrink-0 sticky left-0 z-20">
                              {timeSlots.slice(0, -1).map((time, index) => (
                                 <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white rounded-lg border flex items-center justify-center text-center">
                                     <span className="text-xs text-muted-foreground font-semibold">{time}</span>
@@ -578,7 +542,7 @@ export default function AgendaView() {
                                     onClick={(e) => isWorking && handleClickSlot(e)}
                                 >
                                     {/* Background Grid Cells */}
-                                    <div className="space-y-2">
+                                    <div>
                                         {timeSlots.slice(0, -1).map((time, index) => (
                                             <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border rounded-lg" />
                                         ))}

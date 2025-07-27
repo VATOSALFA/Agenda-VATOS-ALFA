@@ -147,8 +147,8 @@ export default function AgendaView() {
   const [queryKey, setQueryKey] = useState(0);
 
   useEffect(() => {
-    setDate(new Date());
     setIsClientMounted(true)
+    setDate(new Date());
   }, []);
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
@@ -463,7 +463,7 @@ export default function AgendaView() {
     <TooltipProvider>
       <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-4">
         {/* Left Panel */}
-        <aside className="p-4 bg-white rounded-lg border-r flex flex-col">
+        <aside className="p-4 bg-white border-r flex flex-col">
           <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="branch-select">Sucursal</Label>
@@ -507,7 +507,7 @@ export default function AgendaView() {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col gap-4">
             {/* Agenda Header */}
-            <div className="flex-shrink-0 flex items-center justify-between gap-4">
+            <div className="flex-shrink-0 flex items-center justify-between gap-4 p-4">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
                     <div className='flex items-center gap-2'>
@@ -521,18 +521,6 @@ export default function AgendaView() {
                         </p>
                     </div>
                 </div>
-                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                      {[5, 10, 15, 30, 40, 45, 60].map(min => (
-                          <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
-                              {min} minutos
-                          </DropdownMenuItem>
-                      ))}
-                  </DropdownMenuContent>
-                  </DropdownMenu>
             </div>
 
             {/* Main Content Area */}
@@ -542,8 +530,19 @@ export default function AgendaView() {
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                            <div className="h-28 flex items-center justify-center">
-                                {/* Empty cell */}
+                            <div className="h-28 flex items-center justify-center p-2">
+                                <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    {[5, 10, 15, 30, 40, 45, 60].map(min => (
+                                        <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
+                                            {min} minutos
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
 

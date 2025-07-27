@@ -462,10 +462,10 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 p-4 gap-4">
+      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-4">
         {/* Left Panel */}
-        <aside className="flex-shrink-0">
-          <div className="h-full bg-white border rounded-lg p-4 space-y-6">
+        <aside className="flex-shrink-0 p-4 bg-white rounded-lg border-r">
+          <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="branch-select">Sucursal</Label>
               <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId}>
@@ -493,20 +493,22 @@ export default function AgendaView() {
                 </SelectContent>
               </Select>
             </div>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={setDate}
-              className="rounded-md border"
-              locale={es}
-            />
+             {isClientMounted && (
+                <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-md border"
+                    locale={es}
+                />
+            )}
           </div>
         </aside>
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col gap-4">
             {/* Agenda Header */}
-            <div className="flex-shrink-0 flex items-center justify-between p-4 gap-4">
+            <div className="flex-shrink-0 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
                     <div className='flex items-center gap-2'>
@@ -520,28 +522,29 @@ export default function AgendaView() {
                         </p>
                     </div>
                 </div>
+                 <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                      {[5, 10, 15, 30, 40, 45, 60].map(min => (
+                          <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
+                              {min} minutos
+                          </DropdownMenuItem>
+                      ))}
+                  </DropdownMenuContent>
+                  </DropdownMenu>
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-grow flex flex-col overflow-hidden bg-white rounded-lg border">
+            <div className="flex-grow flex flex-col overflow-hidden">
                 <ScrollArea className="flex-grow" orientation="both">
                     <div className="grid gap-0" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                            <div className="h-28 flex items-center justify-center bg-white border-b border-r">
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon"><Clock className="h-5 w-5"/></Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    {[5, 10, 15, 30, 40, 45, 60].map(min => (
-                                        <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
-                                            {min} minutos
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                                </DropdownMenu>
+                            <div className="h-28 flex items-center justify-center">
+                                {/* Empty cell */}
                             </div>
                         </div>
 
@@ -725,4 +728,3 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
-

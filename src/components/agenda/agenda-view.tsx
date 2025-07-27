@@ -638,7 +638,6 @@ export default function AgendaView() {
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >
                                                 <p className="font-bold text-xs truncate leading-tight">{(event as any).customer}</p>
-                                                <p className="text-[11px] truncate leading-tight">{(event as any).servicio}</p>
                                             </div>
                                         </TooltipTrigger>
                                         {event.type === 'appointment' ? (

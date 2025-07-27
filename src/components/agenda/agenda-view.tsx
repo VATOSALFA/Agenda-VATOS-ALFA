@@ -531,7 +531,7 @@ export default function AgendaView() {
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                             <div className="h-28 bg-muted/40 flex items-center justify-center p-2">
+                             <div className="h-28 flex items-center justify-center p-2 border-b">
                                 <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
@@ -550,7 +550,7 @@ export default function AgendaView() {
                         {/* Professional Headers */}
                         {filteredProfessionals.map(barber => (
                             <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20">
-                                <div className="h-28 flex flex-col items-center justify-center p-2">
+                                <div className="h-28 flex flex-col items-center justify-center p-2 border-b">
                                     <Avatar className="h-[60px] w-[60px]">
                                         <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                         <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
@@ -635,9 +635,10 @@ export default function AgendaView() {
                                         <Tooltip key={event.id}>
                                         <TooltipTrigger asChild>
                                             <div 
-                                            onClick={() => { if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                            className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", event.color)} 
-                                            style={calculatePosition((event as any).start, (event as any).duration)}>
+                                                onClick={() => { if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
+                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", event.color)} 
+                                                style={calculatePosition((event as any).start, (event as any).duration)}
+                                            >
                                                 <p className="font-bold text-xs truncate leading-tight">{(event as any).customer}</p>
                                                 <p className="text-[11px] truncate leading-tight">{(event as any).servicio}</p>
                                             </div>

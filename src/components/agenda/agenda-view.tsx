@@ -634,12 +634,17 @@ export default function AgendaView() {
                                     {allEvents.filter(a => a.barbero_id === barber.id).map(event => (
                                         <Tooltip key={event.id}>
                                         <TooltipTrigger asChild>
-                                            <div 
+                                            <div
                                                 onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", (event as any).color)} 
+                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10", (event as any).color)} 
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >
-                                                <p className="font-bold text-xs truncate leading-tight">{(event as any).customer?.nombre}</p>
+                                                <p className="font-bold text-xs truncate leading-tight flex-grow">{(event as any).customer?.nombre}</p>
+                                                {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
+                                                    <div className="ml-2 flex-shrink-0 bg-green-500 text-white rounded-sm h-4 w-4 flex items-center justify-center">
+                                                        <DollarSign className="h-3 w-3" />
+                                                    </div>
+                                                )}
                                             </div>
                                         </TooltipTrigger>
                                         {event.type === 'appointment' ? (

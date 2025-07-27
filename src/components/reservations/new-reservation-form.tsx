@@ -74,7 +74,6 @@ type ReservationFormData = z.infer<typeof reservationSchema>;
 
 interface NewReservationFormProps {
   onFormSubmit: () => void;
-  onSaveChanges?: (data: any) => void;
   isOpen?: boolean; // For standalone dialog usage
   onOpenChange?: (isOpen: boolean) => void; // For standalone dialog usage
   isEditMode?: boolean;
@@ -94,7 +93,7 @@ const statusOptions = [
 const minutesOptions = ['00', '15', '30', '45'];
 
 
-export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveChanges, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
+export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -229,13 +228,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, onSaveC
   }, [selectedService, selectedDate, selectedStartHour, selectedStartMinute, getServiceDuration, form]);
 
   async function onSubmit(data: any) {
-    if (isEditMode && onSaveChanges) {
-        const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
-        const hora_fin = `${data.hora_fin_h}:${data.hora_fin_m}`;
-        onSaveChanges({...data, hora_inicio, hora_fin});
-        return;
-    }
-    
     setIsSubmitting(true);
     try {
       const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;

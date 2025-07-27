@@ -71,46 +71,11 @@ export function ReservationDetailModal({
   onUpdateStatus,
   onEdit
 }: ReservationDetailModalProps) {
-  const [isSaving, setIsSaving] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("reserva");
-
 
   if (!reservation) return null;
   
-  const handleSaveChanges = async (data: any) => {
-    setIsSaving(true);
-    try {
-        const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
-        const serviceDuration = 30; // Assuming a default, this should be dynamic based on the service
-        const startTime = new Date(data.fecha.setHours(data.hora_inicio_h, data.hora_inicio_m));
-        const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
-        
-        const dataToSave = {
-            ...data,
-            fecha: format(data.fecha, 'yyyy-MM-dd'),
-            hora_inicio,
-            hora_fin: format(endTime, 'HH:mm'),
-        };
-        
-        delete dataToSave.hora_inicio_h;
-        delete dataToSave.hora_inicio_m;
-
-        const resRef = doc(db, 'reservas', reservation.id);
-        await updateDoc(resRef, dataToSave);
-        toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.' });
-        onUpdateStatus(reservation.id, reservation.estado); // to force a refetch
-        onOpenChange(false);
-
-    } catch (error) {
-        console.error('Error al actualizar la reserva:', error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar la reserva.' });
-    } finally {
-        setIsSaving(false);
-    }
-  }
-
   const handleCancelReservation = async (reservationId: string) => {
     try {
         const resRef = doc(db, 'reservas', reservationId);
@@ -119,6 +84,7 @@ export function ReservationDetailModal({
             title: "Reserva cancelada con éxito",
         });
         onOpenChange(false);
+        onUpdateStatus(reservationId, 'Cancelado'); // Force refetch
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({
@@ -131,32 +97,67 @@ export function ReservationDetailModal({
 
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-xl">
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
-              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
-                  <Trash2 className="h-5 w-5" />
-              </Button>
           </DialogHeader>
-          <div className="flex-grow overflow-hidden flex flex-col">
-            <NewReservationForm
-              onFormSubmit={() => {}}
-              onSaveChanges={handleSaveChanges}
-              initialData={reservation}
-              isEditMode
-              isDialogChild={true}
-            />
+          <div className="p-6 space-y-4">
+            <div>
+              <p className="font-semibold">{reservation.customer}</p>
+              <p className="text-sm text-muted-foreground">{reservation.servicio}</p>
+            </div>
+            <div>
+              <p className="text-sm">
+                {format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", {locale: es})}
+              </p>
+              <p className="text-sm">{reservation.hora_inicio} - {reservation.hora_fin}</p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+                {statusOptions.map(({ status, color, label }) => (
+                  <TooltipProvider key={status}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => onUpdateStatus(reservation.id, status)}
+                          className={cn(
+                            'h-8 w-8 rounded-full border-2 transition-all',
+                            reservation.estado === status ? 'border-primary scale-110' : 'border-transparent opacity-50 hover:opacity-100',
+                            color
+                          )}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{label}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+            </div>
           </div>
-          {isCancelModalOpen &&
-            <CancelReservationModal
-                isOpen={isCancelModalOpen}
-                onOpenChange={setIsCancelModalOpen}
-                reservation={reservation}
-                onConfirm={handleCancelReservation}
-            />
-          }
+          <DialogFooter className="p-6 border-t">
+              <Button variant="destructive" onClick={() => setIsCancelModalOpen(true)}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
+              </Button>
+              <div className="flex-grow" />
+              <Button variant="outline" onClick={onPay}>
+                  <CreditCard className="mr-2 h-4 w-4" /> Pagar
+              </Button>
+               <Button onClick={onEdit}>
+                  <Pencil className="mr-2 h-4 w-4" /> Editar
+              </Button>
+          </DialogFooter>
       </DialogContent>
     </Dialog>
+    
+    <CancelReservationModal
+        isOpen={isCancelModalOpen}
+        onOpenChange={setIsCancelModalOpen}
+        reservation={reservation}
+        onConfirm={handleCancelReservation}
+    />
+    </>
   );
 }

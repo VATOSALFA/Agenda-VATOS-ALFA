@@ -27,7 +27,8 @@ import {
   Clock,
   Circle,
   Save,
-  Trash2
+  Trash2,
+  Send,
 } from 'lucide-react';
 import type { Reservation } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
@@ -100,16 +101,46 @@ export function ReservationDetailModal({
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
           </DialogHeader>
-          <div className="p-6 space-y-4">
-            <div>
-              <p className="font-semibold">{reservation.customer}</p>
-              <p className="text-sm text-muted-foreground">{reservation.servicio}</p>
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</p>
+                    <p className="text-sm text-muted-foreground">{reservation.servicio}</p>
+                </div>
+                <Badge variant={reservation.pago_estado === 'Pagado' ? 'default' : 'secondary'} className={cn(reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800')}>
+                    {reservation.pago_estado}
+                </Badge>
             </div>
-            <div>
-              <p className="text-sm">
-                {format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", {locale: es})}
-              </p>
-              <p className="text-sm">{reservation.hora_inicio} - {reservation.hora_fin}</p>
+            
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="font-medium flex items-center gap-2"><CalendarIcon className="w-4 h-4 text-primary" /> Fecha y Hora</p>
+                  <p className="pl-6">{format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", {locale: es})}</p>
+                  <p className="pl-6">{reservation.hora_inicio} - {reservation.hora_fin}</p>
+                </div>
+                <div>
+                  <p className="font-medium flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" /> Profesional</p>
+                  <p className="pl-6">{reservation.professionalName}</p>
+                </div>
+            </div>
+
+            <div className="space-y-3 pt-4 border-t">
+                <h4 className="font-semibold">Información del Cliente</h4>
+                <div className="flex items-center gap-3">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
+                    <span>{reservation.customer?.correo || 'No registrado'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <span>{reservation.customer?.telefono || 'No registrado'}</span>
+                    </div>
+                    {reservation.customer?.telefono && (
+                        <a href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm"><Send className="w-4 h-4 mr-2"/> Enviar WhatsApp</Button>
+                        </a>
+                    )}
+                </div>
             </div>
             
             <div className="flex items-center gap-2">

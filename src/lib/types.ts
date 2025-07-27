@@ -46,7 +46,8 @@ export interface Reservation {
     fecha: string;
     estado: string;
     pago_estado?: string;
-    customer?: string; // transient property
+    customer?: Client; // Updated from string to Client object
+    professionalName?: string; // transient property
     type?: 'appointment' | 'block';
     start?: number; // transient
     duration?: number; // transient

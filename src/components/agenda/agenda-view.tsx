@@ -219,9 +219,10 @@ export default function AgendaView() {
   const refreshData = () => setQueryKey(prev => prev + 1);
 
   const allEvents = useMemo(() => {
-    if (!reservations || !timeBlocks || !clients) return [];
+    if (!reservations || !timeBlocks || !clients || !professionals) return [];
 
     const clientMap = new Map(clients.map(c => [c.id, c]));
+    const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
 
     const appointmentEvents = reservations.map(res => {
         const [startH, startM] = res.hora_inicio.split(':').map(Number);
@@ -231,7 +232,8 @@ export default function AgendaView() {
         
         return {
             ...res,
-            customer: clientMap.get(res.cliente_id)?.nombre || 'Cliente Desconocido',
+            customer: clientMap.get(res.cliente_id),
+            professionalName: professionalMap.get(res.barbero_id) || 'N/A',
             start: start,
             duration: Math.max(0.5, end - start),
             color: getStatusColor(res.estado),
@@ -248,7 +250,7 @@ export default function AgendaView() {
           ...block,
           id: block.id,
           barberId: block.barbero_id,
-          customer: block.motivo,
+          customer: { nombre: block.motivo },
           service: 'Bloqueado',
           start: start,
           duration: Math.max(0.5, end - start),
@@ -258,7 +260,7 @@ export default function AgendaView() {
       });
 
       return [...appointmentEvents, ...blockEvents];
-  }, [reservations, timeBlocks, clients]);
+  }, [reservations, timeBlocks, clients, professionals]);
 
   
   const handleSetToday = () => setDate(new Date());
@@ -324,9 +326,9 @@ export default function AgendaView() {
   };
   
   const handleOpenDetailModal = (event: any) => {
-      const fullReservation = reservations.find(r => r.id === event.id)
+      const fullReservation = allEvents.find(r => r.id === event.id) as Reservation | undefined;
       if (fullReservation) {
-        setSelectedReservation({ ...fullReservation, customer: event.customer });
+        setSelectedReservation(fullReservation);
         setIsDetailModalOpen(true);
       }
   }
@@ -634,16 +636,16 @@ export default function AgendaView() {
                                         <TooltipTrigger asChild>
                                             <div 
                                                 onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", event.color)} 
+                                                className={cn("absolute w-full rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex flex-col justify-center text-left py-1 px-2 z-10", (event as any).color)} 
                                                 style={calculatePosition((event as any).start, (event as any).duration)}
                                             >
-                                                <p className="font-bold text-xs truncate leading-tight">{(event as any).customer}</p>
+                                                <p className="font-bold text-xs truncate leading-tight">{(event as any).customer?.nombre}</p>
                                             </div>
                                         </TooltipTrigger>
                                         {event.type === 'appointment' ? (
                                             <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                                 <div className="space-y-2">
-                                                    <p className="font-bold text-base text-foreground">{(event as any).customer}</p>
+                                                    <p className="font-bold text-base text-foreground">{(event as Reservation).customer?.nombre}</p>
                                                     <p className="text-sm text-muted-foreground">{(event as any).servicio}</p>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                         <Clock className="w-4 h-4" />
@@ -658,7 +660,7 @@ export default function AgendaView() {
                                                 </div>
                                             </TooltipContent>
                                         ) : (
-                                            <TooltipContent><p>Horario Bloqueado: {(event as any).customer}</p></TooltipContent>
+                                            <TooltipContent><p>Horario Bloqueado: {(event as any).customer.nombre}</p></TooltipContent>
                                         )}
                                         </Tooltip>
                                     ))}

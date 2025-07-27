@@ -141,7 +141,7 @@ export default function AgendaView() {
 
   const gridRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const currentTime = useCurrentTime();
-  const [renderTimeIndicator, setRenderTimeIndicator] = useState(false);
+  const [isClientMounted, setIsClientMounted] = useState(false);
   const { toast } = useToast();
   
   const [queryKey, setQueryKey] = useState(0);
@@ -149,7 +149,7 @@ export default function AgendaView() {
   useEffect(() => {
     // We initialize the date on the client to avoid hydration errors
     setDate(new Date());
-    setRenderTimeIndicator(true)
+    setIsClientMounted(true)
   }, []);
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
@@ -464,7 +464,7 @@ export default function AgendaView() {
       <div className="flex h-full bg-muted/40 p-4">
         {/* Left Panel */}
         <aside className="hidden md:block w-72 flex-shrink-0">
-          <div className="h-full bg-white border-r rounded-lg p-4 space-y-6">
+          <div className="h-full bg-white border rounded-lg p-4 space-y-6">
             <div className="space-y-2">
               <Label htmlFor="branch-select">Sucursal</Label>
               <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId}>

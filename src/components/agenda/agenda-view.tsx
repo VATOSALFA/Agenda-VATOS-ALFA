@@ -461,10 +461,10 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-4">
+      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40">
         {/* Left Panel */}
-        <aside className="p-4 bg-white border-r flex flex-col">
-          <div className="space-y-6">
+        <aside className="bg-white border-r flex flex-col">
+          <div className="p-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="branch-select">Sucursal</Label>
               <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId}>
@@ -492,16 +492,16 @@ export default function AgendaView() {
                 </SelectContent>
               </Select>
             </div>
-             {isClientMounted && (
-                <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    className="rounded-md border"
-                    locale={es}
-                />
-            )}
           </div>
+          {isClientMounted && (
+              <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  className="rounded-md border mx-4"
+                  locale={es}
+              />
+          )}
         </aside>
 
         {/* Main Content Area */}
@@ -530,7 +530,7 @@ export default function AgendaView() {
                         
                         {/* Top-left empty cell & time interval selector */}
                         <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                            <div className="h-28 flex items-center justify-center p-2">
+                             <div className="h-28 flex items-center justify-center p-2 border-b">
                                 <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>

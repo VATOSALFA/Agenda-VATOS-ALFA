@@ -15,6 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon, Search, Download, Briefcase, FileText, ShoppingBag, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import type { Local, Profesional } from "@/lib/types";
 
 const mockCommissions = [
     { id: '1', professional: 'El Patrón', totalSales: 750000, commissionAmount: 75000, internalSales: 50000 },
@@ -28,6 +30,8 @@ const totalCommission = mockCommissions.reduce((acc, item) => acc + item.commiss
 
 export default function CommissionsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -67,15 +71,41 @@ export default function CommissionsPage() {
                     </div>
                     <div className="space-y-2">
                          <label className="text-sm font-medium">Locales</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent /></Select>
+                        <Select disabled={localesLoading}><SelectTrigger>
+                            <SelectValue placeholder={localesLoading ? "Cargando..." : "Todos"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos</SelectItem>
+                                {locales.map(local => (
+                                    <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Tipo de usuario</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent /></Select>
+                        <Select><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos-prestadores">Todos los prestadores</SelectItem>
+                                <SelectItem value="prestadores-activos">Prestadores activos</SelectItem>
+                                <SelectItem value="prestadores-inactivos">Prestadores inactivos</SelectItem>
+                                <SelectItem value="usuarios">Usuarios</SelectItem>
+                                <SelectItem value="cajero">Cajero</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Usuarios</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent /></Select>
+                        <Select disabled={professionalsLoading}><SelectTrigger>
+                            <SelectValue placeholder={professionalsLoading ? "Cargando..." : "Todos"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Seleccionar todos</SelectItem>
+                                {professionals.map(prof => (
+                                    <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <Button className="w-full lg:w-auto"><Search className="mr-2 h-4 w-4" /> Buscar</Button>
                 </div>

@@ -122,7 +122,15 @@ export default function EmpresaPage() {
                       <ImageUploader
                           folder="empresa"
                           currentImageUrl={field.value}
-                          onUpload={(url) => field.onChange(url)}
+                          onUpload={(url) => {
+                            field.onChange(url);
+                            // Also trigger form submission to save the new logo immediately
+                            form.handleSubmit(onSubmit)();
+                          }}
+                          onRemove={() => {
+                            field.onChange('');
+                            form.handleSubmit(onSubmit)();
+                          }}
                       />
                   )}
                />

@@ -135,9 +135,9 @@ export default function Header() {
         <div className="flex h-16 items-center px-4 md:px-6">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             {logoUrl ? (
-                <Image src={logoUrl} alt="Logo" width={125} height={50} className="h-[50px] w-auto" />
+                <Image src={logoUrl} alt="Logo" width={125} height={60} className="h-[60px] w-auto" />
             ) : (
-                <svg viewBox="0 0 165 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-[50px] w-auto">
+                <svg viewBox="0 0 165 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-[60px] w-auto">
                     <path d="M52.331 43.14L41.363 19.98H45.203L53.747 38.388L53.915 38.388L62.543 19.98H66.215L55.331 43.14H52.331Z" fill="white"/>
                     <path d="M68.6146 43.14V19.98H72.0386V36.3H79.8746V38.868H72.0386V40.452C72.0386 41.508 72.4106 42.06 73.1546 42.06C73.8986 42.06 74.4506 41.676 74.8226 41.208L76.6106 43.14C75.8666 43.8 74.8226 44.22 73.5266 44.22C71.5946 44.22 70.1826 43.224 69.4386 41.292L68.6146 43.14Z" fill="white"/>
                     <path d="M96.0691 40.536L92.2291 33.48L95.5351 27.684L91.6111 19.98H87.1951L90.7591 29.832L84.8431 40.092L82.1311 35.076L85.6111 27.852L81.7711 19.98H77.2711L82.8991 32.556L88.9831 43.14H92.5471L96.0691 40.536Z" fill="white"/>

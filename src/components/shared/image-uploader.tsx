@@ -90,7 +90,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
 
   if (currentImageUrl) {
     return (
-      <div className={`relative w-[60px] h-[60px] rounded-lg overflow-hidden group ${className}`}>
+      <div className={`relative w-48 h-48 rounded-lg overflow-hidden group ${className}`}>
         <Image src={currentImageUrl} alt="Preview" layout="fill" objectFit="cover" />
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <Button variant="destructive" size="icon" onClick={handleRemoveImage}>
@@ -103,7 +103,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
 
   if (isUploading) {
     return (
-      <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-[60px] w-[60px] ${className}`}>
+      <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-48 w-48 ${className}`}>
         <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
         <p className="text-sm text-muted-foreground mb-3">Subiendo...</p>
         <Progress value={uploadProgress} className="w-full" />
@@ -114,10 +114,11 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
   return (
     <div
       {...getRootProps()}
-      className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-[60px] w-[60px] cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/10' : ''} ${className}`}
+      className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-48 w-48 cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/10' : ''} ${className}`}
     >
       <input {...getInputProps()} />
       <UploadCloud className="h-10 w-10 text-muted-foreground" />
+      <p className="mt-2 text-sm text-muted-foreground">Arrastra o selecciona la imagen</p>
     </div>
   );
 }

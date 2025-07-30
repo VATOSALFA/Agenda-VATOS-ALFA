@@ -108,9 +108,9 @@ export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Editando comisiones para {product.nombre}</DialogTitle>
+          <DialogTitle>Editando comisiones para producto</DialogTitle>
           <DialogDescription>
-            Configura la comisión para cada profesional que vende este producto.
+            Configura la comisión para cada profesional que vende <strong>{product.nombre}</strong>.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>

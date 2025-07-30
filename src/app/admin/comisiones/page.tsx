@@ -97,7 +97,6 @@ export default function ComisionesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingProfessional(prof)}>Editar</Button>
-                      <Button variant="secondary" size="sm" onClick={() => setEditingDefault(prof)}>Editar Por Defecto</Button>
                     </div>
                   </Card>
                 ))
@@ -120,7 +119,6 @@ export default function ComisionesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingService(serv)}>Editar</Button>
-                      <Button variant="secondary" size="sm" onClick={() => setEditingDefaultService(serv)}>Editar Por Defecto</Button>
                     </div>
                   </Card>
                 ))

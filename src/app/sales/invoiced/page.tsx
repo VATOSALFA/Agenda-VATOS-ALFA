@@ -18,13 +18,14 @@ import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where } from "firebase/firestore";
-import type { Client } from "@/lib/types";
+import type { Client, Local } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 
 interface Sale {
     id: string;
     fecha_hora_venta?: { seconds: number };
     cliente_id: string;
+    local_id?: string;
     metodo_pago: string;
     total: number;
     items?: { nombre: string }[];
@@ -89,12 +90,15 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
 
 export default function InvoicedSalesPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [localFilter, setLocalFilter] = useState('todos');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
+        local: string;
         paymentMethod: string;
     }>({
         dateRange: undefined,
+        local: 'todos',
         paymentMethod: 'todos'
     });
     const { toast } = useToast();
@@ -102,8 +106,9 @@ export default function InvoicedSalesPage() {
     useEffect(() => {
         // Set initial date range on client-side to avoid hydration mismatch
         const today = new Date();
-        setDateRange({ from: today, to: today });
-        setActiveFilters({ dateRange: { from: today, to: today }, paymentMethod: 'todos' });
+        const initialDateRange = { from: today, to: today };
+        setDateRange(initialDateRange);
+        setActiveFilters({ dateRange: initialDateRange, local: 'todos', paymentMethod: 'todos' });
     }, []);
 
 
@@ -115,6 +120,9 @@ export default function InvoicedSalesPage() {
         if (activeFilters.dateRange?.to) {
             constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
+        if (activeFilters.local !== 'todos') {
+            constraints.push(where('local_id', '==', activeFilters.local));
+        }
         if (activeFilters.paymentMethod !== 'todos') {
             constraints.push(where('metodo_pago', '==', activeFilters.paymentMethod));
         }
@@ -123,6 +131,7 @@ export default function InvoicedSalesPage() {
 
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
     const clientMap = useMemo(() => {
         if (!clients) return new Map();
@@ -165,6 +174,7 @@ export default function InvoicedSalesPage() {
     const handleSearch = () => {
         setActiveFilters({
             dateRange,
+            local: localFilter,
             paymentMethod: paymentMethodFilter
         });
         toast({
@@ -198,7 +208,17 @@ export default function InvoicedSalesPage() {
                             <Calendar mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
                         </PopoverContent>
                     </Popover>
-                    <Select><SelectTrigger><SelectValue placeholder="Todas las sucursales" /></SelectTrigger><SelectContent /></Select>
+                    <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={localesLoading ? "Cargando..." : "Todas las sucursales"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas las sucursales</SelectItem>
+                        {locales.map(local => (
+                          <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -304,6 +324,3 @@ export default function InvoicedSalesPage() {
         </div>
     );
 }
-
-
-    

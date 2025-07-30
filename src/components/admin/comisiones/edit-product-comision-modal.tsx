@@ -23,100 +23,158 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Product } from '@/app/admin/comisiones/page';
+import type { Product, Professional, Commission } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Separator } from '@/components/ui/separator';
 
 interface EditProductComisionModalProps {
   product: Product;
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: () => void;
+  professionals: Professional[];
 }
 
-export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved }: EditProductComisionModalProps) {
+const getDefaultValues = (product: Product, professionals: Professional[]) => {
+    const values: { [key: string]: Commission } = {};
+    professionals.forEach(prof => {
+        values[prof.id] = product.comisionesPorProfesional?.[prof.id] || product.defaultCommission || { value: 0, type: '%' };
+    });
+    return values;
+}
+
+export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved, professionals }: EditProductComisionModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [masterValue, setMasterValue] = useState<number | ''>('');
+  const [masterType, setMasterType] = useState<'%' | '$'>('%');
   
-  const { control, handleSubmit, reset } = useForm({
-    defaultValues: {
-      defaultCommission: product.defaultCommission || { value: 0, type: '%' },
-    },
+  const { control, handleSubmit, reset, setValue } = useForm({
+    defaultValues: getDefaultValues(product, professionals),
   });
 
   useEffect(() => {
     if (isOpen) {
-        reset({ defaultCommission: product.defaultCommission || { value: 0, type: '%' } });
+        reset(getDefaultValues(product, professionals));
     }
-  }, [product, isOpen, reset]);
+  }, [product, professionals, isOpen, reset]);
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
         const productRef = doc(db, 'productos', product.id);
         await updateDoc(productRef, {
-            defaultCommission: data.defaultCommission
+            comisionesPorProfesional: data
         });
         toast({
-            title: 'Comisión guardada con éxito',
-            description: `La comisión para ${product.name} ha sido actualizada.`,
+            title: 'Comisiones guardadas con éxito',
+            description: `Las comisiones para el producto ${product.nombre} han sido actualizadas.`,
         });
         onDataSaved();
         onClose();
     } catch(error) {
-        console.error('Error al guardar comisión de producto:', error);
+        console.error('Error al guardar comisiones de producto:', error);
         toast({
             variant: 'destructive',
             title: 'Error al guardar',
-            description: 'No se pudo guardar la comisión. Inténtalo de nuevo.',
+            description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
         });
     } finally {
         setIsSubmitting(false);
     }
   };
+  
+  const applyToAll = () => {
+    if (masterValue === '') {
+      toast({
+        variant: 'destructive',
+        title: 'Valor no especificado',
+        description: 'Por favor, introduce un valor de comisión para aplicar a todos.',
+      });
+      return;
+    }
+    professionals.forEach(prof => {
+      setValue(`${prof.id}.value`, masterValue, { shouldDirty: true });
+      setValue(`${prof.id}.type`, masterType, { shouldDirty: true });
+    });
+    toast({
+      title: 'Valores aplicados',
+      description: 'Se ha establecido la comisión para todos los profesionales.',
+    });
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Editando comisión por defecto</DialogTitle>
+          <DialogTitle>Editando comisiones para {product.nombre}</DialogTitle>
           <DialogDescription>
-             Esta comisión se aplicará a la venta del producto: <span className="font-semibold">{product.name}</span>.
+            Configura la comisión para cada profesional que vende este producto.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="py-4">
-            <Label htmlFor="commission-value">Comisión por defecto</Label>
-            <div className="flex items-center gap-2 mt-1">
-                <Controller
-                    name="defaultCommission.value"
-                    control={control}
-                    render={({ field }) => (
-                    <Input
-                        id="commission-value"
-                        type="number"
-                        placeholder="Comisión"
-                        className="flex-grow"
-                        {...field}
-                        onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+          <div className="py-4 space-y-4">
+             <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
+              <Label className="font-semibold">Aplicar a todos</Label>
+               <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Valor"
+                    value={masterValue}
+                    onChange={e => setMasterValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="flex-grow"
+                  />
+                  <Select value={masterType} onValueChange={(v: '%' | '$') => setMasterType(v)}>
+                    <SelectTrigger className="w-[80px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="%">%</SelectItem>
+                      <SelectItem value="$">$</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" onClick={applyToAll}>Aplicar</Button>
+               </div>
+            </div>
+
+            <Separator />
+            <div className="max-h-[40vh] overflow-y-auto px-1 space-y-4">
+              {professionals.map((prof) => (
+                <div key={prof.id}>
+                  <Label htmlFor={`value-${prof.id}`}>{prof.name}</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Controller
+                      name={`${prof.id}.value`}
+                      control={control}
+                      render={({ field }) => (
+                        <Input
+                          id={`value-${prof.id}`}
+                          type="number"
+                          className="flex-grow"
+                          {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                        />
+                      )}
                     />
-                    )}
-                />
-                <Controller
-                    name="defaultCommission.type"
-                    control={control}
-                    render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger className="w-[80px]">
-                                <SelectValue placeholder="Tipo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="%">%</SelectItem>
-                                <SelectItem value="$">$</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    )}
-                />
+                    <Controller
+                        name={`${prof.id}.type`}
+                        control={control}
+                        render={({ field }) => (
+                             <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger className="w-[80px]">
+                                    <SelectValue placeholder="Tipo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="%">%</SelectItem>
+                                    <SelectItem value="$">$</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           <DialogFooter className="pt-6 border-t">

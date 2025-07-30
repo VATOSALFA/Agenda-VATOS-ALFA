@@ -35,6 +35,7 @@ export interface Product {
   id: string;
   nombre: string;
   defaultCommission: Commission;
+  comisionesPorProfesional?: { [profesionalId: string]: Commission };
 }
 
 export default function ComisionesPage() {
@@ -165,6 +166,7 @@ export default function ComisionesPage() {
           onClose={handleCloseModals}
           product={editingProduct}
           onDataSaved={handleDataUpdated}
+          professionals={sortedProfessionals}
         />
       )}
     </>

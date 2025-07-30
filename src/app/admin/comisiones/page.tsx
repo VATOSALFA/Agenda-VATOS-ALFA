@@ -53,6 +53,7 @@ export default function ComisionesPage() {
 
   const sortedProfessionals = useMemo(() => [...professionals].sort((a, b) => a.name.localeCompare(b.name)), [professionals]);
   const sortedServices = useMemo(() => [...services].sort((a, b) => a.name.localeCompare(b.name)), [services]);
+  const sortedProducts = useMemo(() => [...products].sort((a, b) => a.name.localeCompare(b.name)), [products]);
 
   const handleDataUpdated = () => {
     setQueryKey(prev => prev + 1);
@@ -87,7 +88,7 @@ export default function ComisionesPage() {
               {isLoading ? (
                 Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
               ) : (
-                professionals.map((prof) => (
+                sortedProfessionals.map((prof) => (
                   <Card key={prof.id} className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-bold">{prof.name}</p>
@@ -106,7 +107,7 @@ export default function ComisionesPage() {
                {isLoading ? (
                 Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
               ) : (
-                services.map((serv) => (
+                sortedServices.map((serv) => (
                   <Card key={serv.id} className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-bold">{serv.name}</p>
@@ -125,7 +126,7 @@ export default function ComisionesPage() {
               {isLoading ? (
                 Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
               ) : (
-                products.map((prod) => (
+                sortedProducts.map((prod) => (
                   <Card key={prod.id} className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-bold">{prod.name}</p>

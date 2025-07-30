@@ -78,7 +78,7 @@ export default function ComisionesPage() {
           </TabsList>
           
           <TabsContent value="por-profesional">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {isLoading ? (
                 Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
               ) : (
@@ -97,7 +97,7 @@ export default function ComisionesPage() {
           </TabsContent>
 
           <TabsContent value="por-servicio">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                {isLoading ? (
                 Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
               ) : (
@@ -116,7 +116,7 @@ export default function ComisionesPage() {
           </TabsContent>
 
           <TabsContent value="por-producto">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {isLoading ? (
                 Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
               ) : (

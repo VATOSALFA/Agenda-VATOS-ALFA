@@ -26,6 +26,7 @@ import { Loader2 } from 'lucide-react';
 import type { Service, Professional, Commission } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Separator } from '@/components/ui/separator';
 
 interface EditServiceComisionesModalProps {
   service: Service;
@@ -46,8 +47,10 @@ const getDefaultValues = (service: Service, professionals: Professional[]) => {
 export function EditServiceComisionesModal({ service, isOpen, onClose, onDataSaved, professionals }: EditServiceComisionesModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [masterValue, setMasterValue] = useState<number | ''>('');
+  const [masterType, setMasterType] = useState<'%' | '$'>('%');
   
-  const { control, handleSubmit, reset } = useForm({
+  const { control, handleSubmit, reset, setValue } = useForm({
     defaultValues: getDefaultValues(service, professionals),
   });
 
@@ -82,9 +85,28 @@ export function EditServiceComisionesModal({ service, isOpen, onClose, onDataSav
     }
   };
 
+  const applyToAll = () => {
+    if (masterValue === '') {
+      toast({
+        variant: 'destructive',
+        title: 'Valor no especificado',
+        description: 'Por favor, introduce un valor de comisión para aplicar a todos.',
+      });
+      return;
+    }
+    professionals.forEach(prof => {
+      setValue(`${prof.id}.value`, masterValue, { shouldDirty: true });
+      setValue(`${prof.id}.type`, masterType, { shouldDirty: true });
+    });
+    toast({
+      title: 'Valores aplicados',
+      description: 'Se ha establecido la comisión para todos los profesionales.',
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Editando comisiones para {service.name}</DialogTitle>
           <DialogDescription>
@@ -92,8 +114,32 @@ export function EditServiceComisionesModal({ service, isOpen, onClose, onDataSav
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="py-4 max-h-[60vh] overflow-y-auto px-1">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+          <div className="py-4 space-y-4">
+             <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
+              <Label className="font-semibold">Aplicar a todos</Label>
+               <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Valor"
+                    value={masterValue}
+                    onChange={e => setMasterValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="flex-grow"
+                  />
+                  <Select value={masterType} onValueChange={(v: '%' | '$') => setMasterType(v)}>
+                    <SelectTrigger className="w-[80px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="%">%</SelectItem>
+                      <SelectItem value="$">$</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" onClick={applyToAll}>Aplicar</Button>
+               </div>
+            </div>
+
+            <Separator />
+            <div className="max-h-[40vh] overflow-y-auto px-1 space-y-4">
               {professionals.map((prof) => (
                 <div key={prof.id}>
                   <Label htmlFor={`value-${prof.id}`}>{prof.name}</Label>

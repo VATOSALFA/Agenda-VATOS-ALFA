@@ -33,6 +33,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { db } from "@/lib/firebase";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 
 interface Sale {
@@ -143,6 +145,7 @@ export default function InvoicedSalesPage() {
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
+    const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
     const [queryKey, setQueryKey] = useState(0);
 
@@ -262,7 +265,7 @@ export default function InvoicedSalesPage() {
     };
 
     const handleDeleteSale = async () => {
-        if (!saleToDelete) return;
+        if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR') return;
         try {
             await deleteDoc(doc(db, 'ventas', saleToDelete.id));
             toast({
@@ -279,6 +282,7 @@ export default function InvoicedSalesPage() {
             });
         } finally {
             setSaleToDelete(null);
+            setDeleteConfirmationText('');
         }
     };
 
@@ -461,7 +465,12 @@ export default function InvoicedSalesPage() {
             />
         )}
         {saleToDelete && (
-         <AlertDialog open={!!saleToDelete} onOpenChange={(open) => !open && setSaleToDelete(null)}>
+         <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
+             if(!open) {
+                setSaleToDelete(null);
+                setDeleteConfirmationText('');
+            }
+         }}>
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás absolutamente seguro?</AlertDialogTitle>
@@ -469,9 +478,22 @@ export default function InvoicedSalesPage() {
                         Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                 <div className="space-y-2 py-2">
+                    <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                    <Input 
+                        id="delete-confirm"
+                        value={deleteConfirmationText}
+                        onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                        placeholder="ELIMINAR"
+                    />
+                </div>
                 <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setSaleToDelete(null)}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteSale} className="bg-destructive hover:bg-destructive/90">
+                    <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={handleDeleteSale} 
+                        disabled={deleteConfirmationText !== 'ELIMINAR'}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
                         Sí, eliminar venta
                     </AlertDialogAction>
                 </AlertDialogFooter>
@@ -481,4 +503,3 @@ export default function InvoicedSalesPage() {
         </>
     );
 }
-

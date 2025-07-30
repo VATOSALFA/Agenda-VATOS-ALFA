@@ -308,6 +308,7 @@ export default function InvoicedSalesPage() {
             'Fecha de pago': formatDate(sale.fecha_hora_venta),
             'Cliente': sale.client?.nombre ? `${sale.client.nombre} ${sale.client.apellido}` : 'Desconocido',
             'Detalle': sale.items?.map(i => i.nombre).join(', ') || 'N/A',
+            'Profesional': sale.professionalNames || 'N/A',
             'Método de Pago': sale.metodo_pago,
             'Total': sale.total,
             'Descuento': '0.00%', // Placeholder
@@ -427,6 +428,7 @@ export default function InvoicedSalesPage() {
                                         <TableHead>Fecha de pago</TableHead>
                                         <TableHead>Cliente</TableHead>
                                         <TableHead>Detalle</TableHead>
+                                        <TableHead>Profesional</TableHead>
                                         <TableHead>Método de Pago</TableHead>
                                         <TableHead>Total</TableHead>
                                         <TableHead>Descuento</TableHead>
@@ -437,7 +439,7 @@ export default function InvoicedSalesPage() {
                                     {salesLoading ? (
                                         Array.from({length: 5}).map((_, i) => (
                                             <TableRow key={i}>
-                                                <TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell>
+                                                <TableCell colSpan={8}><Skeleton className="h-6 w-full" /></TableCell>
                                             </TableRow>
                                         ))
                                     ) : populatedSales.length > 0 ? (
@@ -446,6 +448,7 @@ export default function InvoicedSalesPage() {
                                             <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
                                             <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
+                                            <TableCell>{sale.professionalNames}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
                                             <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
                                             <TableCell>0.00%</TableCell>
@@ -481,7 +484,7 @@ export default function InvoicedSalesPage() {
                                     ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                                            <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
                                                 No hay ventas para el período seleccionado.
                                             </TableCell>
                                         </TableRow>
@@ -490,7 +493,7 @@ export default function InvoicedSalesPage() {
                                 {!salesLoading && populatedSales.length > 0 && (
                                      <TableFooter>
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-right font-bold">Total</TableCell>
+                                            <TableCell colSpan={5} className="text-right font-bold">Total</TableCell>
                                             <TableCell className="font-bold">
                                                 ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
                                             </TableCell>

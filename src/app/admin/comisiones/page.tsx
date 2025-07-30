@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EditComisionesModal } from '@/components/admin/comisiones/edit-comisiones-modal';
@@ -50,6 +50,9 @@ export default function ComisionesPage() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingDefaultService, setEditingDefaultService] = useState<Service | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  const sortedProfessionals = useMemo(() => [...professionals].sort((a, b) => a.name.localeCompare(b.name)), [professionals]);
+  const sortedServices = useMemo(() => [...services].sort((a, b) => a.name.localeCompare(b.name)), [services]);
 
   const handleDataUpdated = () => {
     setQueryKey(prev => prev + 1);
@@ -156,7 +159,7 @@ export default function ComisionesPage() {
           onClose={handleCloseModals}
           professional={editingProfessional}
           onDataSaved={handleDataUpdated}
-          services={services}
+          services={sortedServices}
         />
       )}
        {editingDefault && (
@@ -175,7 +178,7 @@ export default function ComisionesPage() {
           onClose={handleCloseModals}
           service={editingService}
           onDataSaved={handleDataUpdated}
-          professionals={professionals}
+          professionals={sortedProfessionals}
         />
       )}
       {editingDefaultService && (

@@ -558,7 +558,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         
         <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
-          <Button type="button" variant="secondary">Agregar otra reserva</Button>
           <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.barbero_id}>
             {(isSubmitting || form.formState.isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar reserva

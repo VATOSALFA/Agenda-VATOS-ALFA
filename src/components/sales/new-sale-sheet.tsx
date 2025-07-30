@@ -31,7 +31,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose
+  DialogClose,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -52,8 +53,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2 } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; }
@@ -101,6 +103,21 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+  
+  const form = useForm<SaleFormData>({
+    resolver: zodResolver(saleSchema),
+    defaultValues: {
+        notas: '',
+        pago_efectivo: 0,
+        pago_tarjeta: 0,
+    },
+  });
+  
+  const selectedClientId = form.watch('cliente_id');
+  const selectedClient = useMemo(() => {
+    return clients.find(c => c.id === selectedClientId)
+  }, [selectedClientId, clients]);
+
 
   const filteredServices = useMemo(() => {
     if (!services) return [];
@@ -164,15 +181,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     [cart]
   );
   
-  const form = useForm<SaleFormData>({
-    resolver: zodResolver(saleSchema),
-    defaultValues: {
-        notas: '',
-        pago_efectivo: 0,
-        pago_tarjeta: 0,
-    },
-  });
-
   const paymentMethod = form.watch('metodo_pago');
   const cashAmount = form.watch('pago_efectivo');
   const cardAmount = form.watch('pago_tarjeta');
@@ -495,19 +503,48 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 overflow-y-auto">
                     {/* Sale Details Form */}
                     <div className="space-y-4">
-                        <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                            <FormItem>
-                                <div className="flex justify-between items-center">
-                                    <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" /> Cliente</FormLabel>
-                                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>+ Nuevo cliente</Button>
-                                </div>
-                                <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Selecciona un cliente'} /></SelectTrigger></FormControl>
-                                    <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
+                        
+                         {selectedClient ? (
+                            <Card>
+                                <CardContent className="p-4">
+                                     <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                                    <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                                    <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                                <FormItem>
+                                    <div className="flex justify-between items-center">
+                                       <FormLabel>Cliente</FormLabel>
+                                       <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                       </Button>
+                                    </div>
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                                        <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                        )}
+
                         
                         <FormField
                           control={form.control}
@@ -606,6 +643,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-lg">
+             <DialogHeader>
+                <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                <DialogDescription>
+                    Completa la información para registrar un nuevo cliente en el sistema.
+                </DialogDescription>
+              </DialogHeader>
             <NewClientForm onFormSubmit={handleClientCreated} />
         </DialogContent>
     </Dialog>

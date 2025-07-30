@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -317,14 +317,15 @@ export default function InvoicedSalesPage() {
                                         <TableHead>Detalle</TableHead>
                                         <TableHead>Método de Pago</TableHead>
                                         <TableHead>Total</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
+                                        <TableHead>Descuento</TableHead>
+                                        <TableHead className="text-right">Opciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {salesLoading ? (
                                         Array.from({length: 5}).map((_, i) => (
                                             <TableRow key={i}>
-                                                <TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell>
+                                                <TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell>
                                             </TableRow>
                                         ))
                                     ) : sales.map((sale) => (
@@ -334,16 +335,23 @@ export default function InvoicedSalesPage() {
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
                                             <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>0.00%</TableCell>
                                             <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem>Ver Detalle</DropdownMenuItem>
-                                                        <DropdownMenuItem>Anular Venta</DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Button variant="outline" size="sm">
+                                                        <Eye className="mr-2 h-4 w-4" /> Ver
+                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="outline" size="sm">
+                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem>Anular Venta</DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -355,7 +363,7 @@ export default function InvoicedSalesPage() {
                                             <TableCell className="font-bold">
                                                 ${sales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
                                             </TableCell>
-                                            <TableCell></TableCell>
+                                            <TableCell colSpan={2}></TableCell>
                                         </TableRow>
                                     </TableFooter>
                                 )}

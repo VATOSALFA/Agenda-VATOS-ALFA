@@ -97,9 +97,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  const [clientQueryKey, setClientQueryKey] = useState(0);
-
-  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
+  
+  const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
@@ -238,7 +237,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    setClientQueryKey(prev => prev + 1); // Refetch clients
+    if(setClientQueryKey) setClientQueryKey(prev => prev + 1); // Refetch clients
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
@@ -446,6 +445,21 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
                 {/* Item Selection */}
                 <div className="col-span-2 flex flex-col">
+                     <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                        <FormItem className="mb-4">
+                            <div className="flex justify-between items-center">
+                               <FormLabel>Cliente</FormLabel>
+                               <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                               </Button>
+                            </div>
+                            <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    )}/>
                     <div className="relative mb-4">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Buscar por nombre..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -633,7 +647,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         
         {step === 1 && (
             <SheetFooter className="p-6 bg-background border-t">
-                 <Button type="button" className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-white" onClick={handleNextStep} disabled={cart.length === 0}>
+                 <Button type="button" className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-white" onClick={handleNextStep} disabled={cart.length === 0 || !selectedClientId}>
                     Continuar
                 </Button>
             </SheetFooter>

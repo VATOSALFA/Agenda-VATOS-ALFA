@@ -194,6 +194,7 @@ export default function InvoicedSalesPage() {
     }, [professionals]);
     
     const populatedSales = useMemo(() => {
+        if (!sales || !clientMap.size || !professionalMap.size) return [];
         return sales.map(sale => ({
             ...sale,
             client: clientMap.get(sale.cliente_id),
@@ -416,94 +417,86 @@ export default function InvoicedSalesPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <Tabs defaultValue="pagos">
-                        <TabsList>
-                            <TabsTrigger value="pagos">Pagos</TabsTrigger>
-                            <TabsTrigger value="ventas-internas" disabled>Ventas Internas</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="pagos">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Fecha de pago</TableHead>
-                                        <TableHead>Cliente</TableHead>
-                                        <TableHead>Detalle</TableHead>
-                                        <TableHead>Profesional</TableHead>
-                                        <TableHead>Método de Pago</TableHead>
-                                        <TableHead>Total</TableHead>
-                                        <TableHead>Descuento</TableHead>
-                                        <TableHead className="text-right">Opciones</TableHead>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Fecha de pago</TableHead>
+                                <TableHead>Cliente</TableHead>
+                                <TableHead>Detalle</TableHead>
+                                <TableHead>Profesional</TableHead>
+                                <TableHead>Método de Pago</TableHead>
+                                <TableHead>Total</TableHead>
+                                <TableHead>Descuento</TableHead>
+                                <TableHead className="text-right">Opciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {salesLoading ? (
+                                Array.from({length: 5}).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell colSpan={8}><Skeleton className="h-6 w-full" /></TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {salesLoading ? (
-                                        Array.from({length: 5}).map((_, i) => (
-                                            <TableRow key={i}>
-                                                <TableCell colSpan={8}><Skeleton className="h-6 w-full" /></TableCell>
-                                            </TableRow>
-                                        ))
-                                    ) : populatedSales.length > 0 ? (
-                                        populatedSales.map((sale) => (
-                                        <TableRow key={sale.id}>
-                                            <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
-                                            <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
-                                            <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
-                                            <TableCell>{sale.professionalNames}</TableCell>
-                                            <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                            <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
-                                            <TableCell>0.00%</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
-                                                        <Eye className="mr-2 h-4 w-4" /> Ver
+                                ))
+                            ) : populatedSales.length > 0 ? (
+                                populatedSales.map((sale) => (
+                                <TableRow key={sale.id}>
+                                    <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
+                                    <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
+                                    <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
+                                    <TableCell>{sale.professionalNames}</TableCell>
+                                    <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
+                                    <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
+                                    <TableCell>0.00%</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
+                                                <Eye className="mr-2 h-4 w-4" /> Ver
+                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="sm">
+                                                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
                                                     </Button>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="outline" size="sm">
-                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada", description: "El envío de comprobantes estará disponible próximamente." })}>
-                                                                <Send className="mr-2 h-4 w-4 text-blue-500" />
-                                                                <span className="text-blue-500">Enviar Comprobante</span>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onSelect={() => window.print()}>
-                                                                <Printer className="mr-2 h-4 w-4 text-yellow-500" />
-                                                                <span className="text-yellow-500">Imprimir</span>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onSelect={() => setSaleToDelete(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                Eliminar
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
-                                                No hay ventas para el período seleccionado.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                                {!salesLoading && populatedSales.length > 0 && (
-                                     <TableFooter>
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="text-right font-bold">Total</TableCell>
-                                            <TableCell className="font-bold">
-                                                ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
-                                            </TableCell>
-                                            <TableCell colSpan={2}></TableCell>
-                                        </TableRow>
-                                    </TableFooter>
-                                )}
-                            </Table>
-                        </TabsContent>
-                    </Tabs>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada", description: "El envío de comprobantes estará disponible próximamente." })}>
+                                                        <Send className="mr-2 h-4 w-4 text-blue-500" />
+                                                        <span className="text-blue-500">Enviar Comprobante</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => window.print()}>
+                                                        <Printer className="mr-2 h-4 w-4 text-yellow-500" />
+                                                        <span className="text-yellow-500">Imprimir</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => setSaleToDelete(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Eliminar
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
+                                        No hay ventas para el período seleccionado.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                        {!salesLoading && populatedSales.length > 0 && (
+                             <TableFooter>
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-right font-bold">Total</TableCell>
+                                    <TableCell className="font-bold">
+                                        ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
+                                    </TableCell>
+                                    <TableCell colSpan={2}></TableCell>
+                                </TableRow>
+                            </TableFooter>
+                        )}
+                    </Table>
                 </CardContent>
             </Card>
 

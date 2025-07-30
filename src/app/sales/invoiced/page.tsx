@@ -34,7 +34,7 @@ interface Sale {
 const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, data: any[], total: number, dataLabels?: string[] }) => {
     const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
     
-    const allLabels = dataLabels || ['efectivo', 'tarjeta', 'transferencia'];
+    const allLabels = dataLabels || ['Efectivo', 'Tarjeta', 'Transferencia'];
     
     const tableData = allLabels.map(label => {
         const found = data.find(d => d.name.toLowerCase() === label.toLowerCase());
@@ -285,7 +285,8 @@ export default function InvoicedSalesPage() {
                         <DonutChartCard 
                             title="Medios de Pago" 
                             data={salesData.paymentMethods.data} 
-                            total={salesData.paymentMethods.total} 
+                            total={salesData.paymentMethods.total}
+                            dataLabels={['Efectivo', 'Tarjeta', 'Transferencia']}
                         />
                     </>
                 )}
@@ -299,7 +300,6 @@ export default function InvoicedSalesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar pagos</Button>
-                        <Button><Plus className="mr-2 h-4 w-4" /> Nueva venta</Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -368,4 +368,3 @@ export default function InvoicedSalesPage() {
         </div>
     );
 }
-

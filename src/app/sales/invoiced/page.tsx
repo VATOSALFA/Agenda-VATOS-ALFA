@@ -35,6 +35,7 @@ import {
 import { db } from "@/lib/firebase";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import * as XLSX from 'xlsx';
 
 
 interface Sale {
@@ -201,7 +202,7 @@ export default function InvoicedSalesPage() {
     }, [sales, clientMap, professionalMap]);
 
     const salesData = useMemo(() => {
-        if (salesLoading || !populatedSales) {
+        if (!populatedSales) {
             return {
                 totalSales: { data: [], total: 0, dataLabels: ['Servicios', 'Productos'] },
                 paymentMethods: { data: [], total: 0, dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia'] }
@@ -238,7 +239,7 @@ export default function InvoicedSalesPage() {
                 dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia']
             },
         };
-    }, [populatedSales, salesLoading]);
+    }, [populatedSales]);
 
     const handleSearch = () => {
         setActiveFilters({
@@ -293,6 +294,38 @@ export default function InvoicedSalesPage() {
             setDeleteConfirmationText('');
         }
     };
+    
+    const handleDownloadExcel = () => {
+        if (populatedSales.length === 0) {
+            toast({
+                title: "No hay datos para exportar",
+                description: "No hay ventas en el período seleccionado.",
+            });
+            return;
+        }
+    
+        const dataForExcel = populatedSales.map(sale => ({
+            'Fecha de pago': formatDate(sale.fecha_hora_venta),
+            'Cliente': sale.client?.nombre ? `${sale.client.nombre} ${sale.client.apellido}` : 'Desconocido',
+            'Detalle': sale.items?.map(i => i.nombre).join(', ') || 'N/A',
+            'Método de Pago': sale.metodo_pago,
+            'Total': sale.total,
+            'Descuento': '0.00%', // Placeholder
+        }));
+    
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Pagos");
+    
+        // Trigger download
+        XLSX.writeFile(workbook, `Pagos_VATOS_ALFA_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    
+        toast({
+            title: "Descarga iniciada",
+            description: "Tu archivo de Excel se está descargando.",
+        });
+    };
+
 
     return (
         <>
@@ -378,7 +411,7 @@ export default function InvoicedSalesPage() {
                         <CardDescription>Listado de ventas facturadas en el período seleccionado.</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar pagos</Button>
+                        <Button variant="outline" onClick={handleDownloadExcel}><Download className="mr-2 h-4 w-4" /> Descargar pagos</Button>
                     </div>
                 </CardHeader>
                 <CardContent>

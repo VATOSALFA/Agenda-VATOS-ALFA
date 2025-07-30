@@ -119,7 +119,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                         {sale.items?.map((item, index) => (
                             <TableRow key={index}>
                                 <TableCell>{item.nombre}</TableCell>
-                                <TableCell>${item.precio.toLocaleString('es-CL')}</TableCell>
+                                <TableCell>${(item.precio || 0).toLocaleString('es-CL')}</TableCell>
                                 <TableCell>{sale.professionalNames}</TableCell>
                             </TableRow>
                         ))}

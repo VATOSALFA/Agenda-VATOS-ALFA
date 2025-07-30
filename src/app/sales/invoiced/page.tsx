@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -201,6 +201,20 @@ export default function InvoicedSalesPage() {
             description: "Los datos de ventas han sido actualizados."
         })
     };
+    
+    const formatDate = (date: any) => {
+        if (!date) return 'Fecha no disponible';
+        let dateObj: Date;
+        if (date.seconds) { // Firestore Timestamp
+          dateObj = new Date(date.seconds * 1000);
+        } else if (typeof date === 'string') { // ISO String
+          dateObj = parseISO(date);
+        } else {
+            return 'Fecha inválida';
+        }
+        if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+        return format(dateObj, 'PP p', { locale: es });
+    };
 
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -315,11 +329,7 @@ export default function InvoicedSalesPage() {
                                         ))
                                     ) : sales.map((sale) => (
                                         <TableRow key={sale.id}>
-                                            <TableCell>
-                                                {sale.fecha_hora_venta?.seconds
-                                                  ? format(sale.fecha_hora_venta.seconds * 1000, 'PP p', { locale: es })
-                                                  : 'Fecha no disponible'}
-                                            </TableCell>
+                                            <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
                                             <TableCell>{clientMap.get(sale.cliente_id)?.nombre || 'Desconocido'}</TableCell>
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
@@ -338,12 +348,18 @@ export default function InvoicedSalesPage() {
                                         </TableRow>
                                     ))}
                                 </TableBody>
+                                {!salesLoading && sales.length > 0 && (
+                                     <TableFooter>
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-right font-bold">Total</TableCell>
+                                            <TableCell className="font-bold">
+                                                ${sales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
+                                            </TableCell>
+                                            <TableCell></TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                )}
                             </Table>
-                            { !salesLoading && sales.length > 0 &&
-                                <div className="flex justify-end font-bold text-lg pt-4 pr-4">
-                                    Total: ${sales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
-                                </div>
-                            }
                         </TabsContent>
                     </Tabs>
                 </CardContent>
@@ -352,3 +368,4 @@ export default function InvoicedSalesPage() {
         </div>
     );
 }
+

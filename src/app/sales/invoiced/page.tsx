@@ -18,8 +18,9 @@ import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where } from "firebase/firestore";
-import type { Client, Local } from "@/lib/types";
+import type { Client, Local, Profesional, Service } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
 
 interface Sale {
     id: string;
@@ -28,7 +29,12 @@ interface Sale {
     local_id?: string;
     metodo_pago: string;
     total: number;
-    items?: { nombre: string }[];
+    items?: { 
+        nombre: string;
+        barbero_id: string;
+    }[];
+    client?: Client;
+    professionalNames?: string;
 }
 
 const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, data: any[], total: number, dataLabels?: string[] }) => {
@@ -81,7 +87,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                         <span className="text-2xl font-bold">${total.toLocaleString('es-CL')}</span>
                     </div>
                 </div>
-                <div className="text-sm">
+                 <div className="text-sm">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -121,9 +127,10 @@ export default function InvoicedSalesPage() {
         paymentMethod: 'todos'
     });
     const { toast } = useToast();
+    const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
     useEffect(() => {
-        // Set initial date range on client-side to avoid hydration mismatch
         const today = new Date();
         const initialDateRange = { from: today, to: today };
         setDateRange(initialDateRange);
@@ -151,16 +158,30 @@ export default function InvoicedSalesPage() {
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
 
     const clientMap = useMemo(() => {
         if (!clients) return new Map();
         return new Map(clients.map(c => [c.id, c]));
     }, [clients]);
 
-    const salesData = useMemo(() => {
-        if (salesLoading || !sales || sales.length === 0) return null;
+    const professionalMap = useMemo(() => {
+        if (!professionals) return new Map();
+        return new Map(professionals.map(p => [p.id, p.name]));
+    }, [professionals]);
+    
+    const populatedSales = useMemo(() => {
+        return sales.map(sale => ({
+            ...sale,
+            client: clientMap.get(sale.cliente_id),
+            professionalNames: sale.items?.map(item => professionalMap.get(item.barbero_id)).filter(Boolean).join(', ') || 'N/A'
+        }));
+    }, [sales, clientMap, professionalMap]);
 
-        const salesByType = sales.reduce((acc, sale) => {
+    const salesData = useMemo(() => {
+        if (salesLoading || !populatedSales || populatedSales.length === 0) return null;
+
+        const salesByType = populatedSales.reduce((acc, sale) => {
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(item => {
                     const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
@@ -170,13 +191,13 @@ export default function InvoicedSalesPage() {
             return acc;
         }, {} as Record<string, number>);
 
-        const salesByPaymentMethod = sales.reduce((acc, sale) => {
+        const salesByPaymentMethod = populatedSales.reduce((acc, sale) => {
             const method = sale.metodo_pago || 'otro';
             acc[method] = (acc[method] || 0) + (sale.total || 0);
             return acc;
         }, {} as Record<string, number>);
 
-        const totalSales = sales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+        const totalSales = populatedSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
 
         return {
             totalSales: {
@@ -188,7 +209,7 @@ export default function InvoicedSalesPage() {
                 total: totalSales,
             },
         };
-    }, [sales, salesLoading]);
+    }, [populatedSales, salesLoading]);
 
     const handleSearch = () => {
         setActiveFilters({
@@ -201,6 +222,11 @@ export default function InvoicedSalesPage() {
             description: "Los datos de ventas han sido actualizados."
         })
     };
+    
+    const handleViewDetails = (sale: Sale) => {
+        setSelectedSale(sale);
+        setIsDetailModalOpen(true);
+    }
     
     const formatDate = (date: any) => {
         if (!date) return 'Fecha no disponible';
@@ -217,6 +243,7 @@ export default function InvoicedSalesPage() {
     };
 
     return (
+        <>
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
 
@@ -328,17 +355,17 @@ export default function InvoicedSalesPage() {
                                                 <TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell>
                                             </TableRow>
                                         ))
-                                    ) : sales.map((sale) => (
+                                    ) : populatedSales.map((sale) => (
                                         <TableRow key={sale.id}>
                                             <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
-                                            <TableCell>{clientMap.get(sale.cliente_id)?.nombre || 'Desconocido'}</TableCell>
+                                            <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
                                             <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
                                             <TableCell>0.00%</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="outline" size="sm">
+                                                    <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
                                                         <Eye className="mr-2 h-4 w-4" /> Ver
                                                     </Button>
                                                     <DropdownMenu>
@@ -356,12 +383,12 @@ export default function InvoicedSalesPage() {
                                         </TableRow>
                                     ))}
                                 </TableBody>
-                                {!salesLoading && sales.length > 0 && (
+                                {!salesLoading && populatedSales.length > 0 && (
                                      <TableFooter>
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-right font-bold">Total</TableCell>
                                             <TableCell className="font-bold">
-                                                ${sales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
+                                                ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
                                             </TableCell>
                                             <TableCell colSpan={2}></TableCell>
                                         </TableRow>
@@ -374,5 +401,14 @@ export default function InvoicedSalesPage() {
             </Card>
 
         </div>
+        
+        {selectedSale && (
+            <SaleDetailModal
+                isOpen={isDetailModalOpen}
+                onOpenChange={setIsDetailModalOpen}
+                sale={selectedSale}
+            />
+        )}
+        </>
     );
 }

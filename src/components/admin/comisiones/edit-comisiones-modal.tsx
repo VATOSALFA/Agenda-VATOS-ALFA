@@ -50,12 +50,14 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
   const { control, handleSubmit, reset } = useForm({
     defaultValues: getDefaultValues(professional, services),
   });
+  
+  const sortedServices = [...services].sort((a, b) => a.name.localeCompare(b.name));
 
   useEffect(() => {
     if (isOpen) {
-        reset(getDefaultValues(professional, services));
+        reset(getDefaultValues(professional, sortedServices));
     }
-  }, [professional, services, isOpen, reset]);
+  }, [professional, sortedServices, isOpen, reset]);
 
 
   const onSubmit = async (data: any) => {
@@ -86,7 +88,7 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Editando comisiones para {professional.name}</DialogTitle>
           <DialogDescription>
@@ -95,11 +97,11 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="py-4 max-h-[60vh] overflow-y-auto px-1">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {services.map((service) => (
-                <div key={service.id}>
+            <div className="space-y-4">
+              {sortedServices.map((service) => (
+                <div key={service.id} className="grid grid-cols-2 gap-4 items-center">
                   <Label htmlFor={`value-${service.name}`}>{service.name}</Label>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2">
                     <Controller
                       name={`${service.name}.value`}
                       control={control}

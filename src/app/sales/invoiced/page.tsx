@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -170,7 +171,7 @@ export default function InvoicedSalesPage() {
         return constraints;
     }, [activeFilters]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(`ventas-${queryKey}`, salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
@@ -234,6 +235,7 @@ export default function InvoicedSalesPage() {
             local: localFilter,
             paymentMethod: paymentMethodFilter
         });
+        setQueryKey(prev => prev + 1);
         toast({
             title: "Filtros aplicados",
             description: "Los datos de ventas han sido actualizados."
@@ -479,3 +481,4 @@ export default function InvoicedSalesPage() {
         </>
     );
 }
+

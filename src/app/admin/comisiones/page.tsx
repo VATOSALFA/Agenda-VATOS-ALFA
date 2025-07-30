@@ -33,7 +33,7 @@ export interface Service {
 
 export interface Product {
   id: string;
-  name: string;
+  nombre: string;
   defaultCommission: Commission;
 }
 
@@ -49,7 +49,7 @@ export default function ComisionesPage() {
 
   const sortedProfessionals = useMemo(() => [...professionals].sort((a, b) => a.name.localeCompare(b.name)), [professionals]);
   const sortedServices = useMemo(() => [...services].sort((a, b) => a.name.localeCompare(b.name)), [services]);
-  const sortedProducts = useMemo(() => [...products].sort((a, b) => a.name.localeCompare(b.name)), [products]);
+  const sortedProducts = useMemo(() => [...products].sort((a, b) => a.nombre.localeCompare(b.nombre)), [products]);
 
   const handleDataUpdated = () => {
     setQueryKey(prev => prev + 1);
@@ -123,7 +123,7 @@ export default function ComisionesPage() {
                 sortedProducts.map((prod) => (
                   <Card key={prod.id} className="flex items-center justify-between p-4">
                     <div>
-                      <p className="font-bold">{prod.name}</p>
+                      <p className="font-bold">{prod.nombre}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingProduct(prod)}>Editar</Button>

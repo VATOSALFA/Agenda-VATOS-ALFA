@@ -33,13 +33,24 @@ interface Sale {
 
 const DonutChartCard = ({ title, data, total }: { title: string, data: any[], total: number }) => {
     const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
+    
+    // Ensure all expected payment methods are present for the table view
+    const allPaymentMethods = ['efectivo', 'tarjeta', 'transferencia'];
+    const tableData = allPaymentMethods.map(method => {
+        const found = data.find(d => d.name.toLowerCase() === method);
+        return {
+            name: method,
+            value: found ? found.value : 0,
+        };
+    });
+
     return (
         <Card>
             <CardHeader>
                 <CardTitle className="text-xl font-medium">{title}</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-5 gap-4 items-center">
-                <div className="h-[320px] relative col-span-3">
+            <CardContent className="grid grid-cols-2 gap-6 items-center">
+                <div className="h-[320px] relative">
                     <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                             <Pie
@@ -70,18 +81,26 @@ const DonutChartCard = ({ title, data, total }: { title: string, data: any[], to
                         <span className="text-2xl font-bold">${total.toLocaleString('es-CL')}</span>
                     </div>
                 </div>
-                <div className="text-sm col-span-2">
-                    <ul>
-                        {data.map((item, index) => (
-                            <li key={index} className="flex justify-between items-center py-1 border-b">
-                                <div className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                                    <span className="capitalize">{item.name}</span>
-                                </div>
-                                <span>${item.value.toLocaleString('es-CL')}</span>
-                            </li>
-                        ))}
-                    </ul>
+                <div className="text-sm">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead className="text-right">Monto</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {tableData.map((item, index) => (
+                                <TableRow key={index}>
+                                    <TableCell className="capitalize font-medium flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                                        {item.name}
+                                    </TableCell>
+                                    <TableCell className="text-right">${item.value.toLocaleString('es-CL')}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
                 </div>
             </CardContent>
         </Card>
@@ -152,7 +171,7 @@ export default function InvoicedSalesPage() {
         }, {} as Record<string, number>);
 
         const salesByPaymentMethod = sales.reduce((acc, sale) => {
-            const method = sale.metodo_pago || 'Otro';
+            const method = sale.metodo_pago || 'otro';
             acc[method] = (acc[method] || 0) + (sale.total || 0);
             return acc;
         }, {} as Record<string, number>);

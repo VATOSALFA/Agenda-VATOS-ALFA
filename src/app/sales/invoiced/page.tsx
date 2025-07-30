@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,10 +17,22 @@ import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where } from "firebase/firestore";
+import { where, doc, deleteDoc } from "firebase/firestore";
 import type { Client, Local, Profesional, Service } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { db } from "@/lib/firebase";
+
 
 interface Sale {
     id: string;
@@ -129,6 +141,9 @@ export default function InvoicedSalesPage() {
     const { toast } = useToast();
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
+
+    const [queryKey, setQueryKey] = useState(0);
 
     useEffect(() => {
         const today = new Date();
@@ -155,7 +170,7 @@ export default function InvoicedSalesPage() {
         return constraints;
     }, [activeFilters]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(`ventas-${queryKey}`, salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
@@ -203,10 +218,12 @@ export default function InvoicedSalesPage() {
             totalSales: {
                 data: Object.entries(salesByType).map(([name, value]) => ({ name, value })),
                 total: totalSales,
+                dataLabels: ['Servicios', 'Productos'],
             },
             paymentMethods: {
                 data: Object.entries(salesByPaymentMethod).map(([name, value]) => ({ name, value })),
                 total: totalSales,
+                dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia']
             },
         };
     }, [populatedSales, salesLoading]);
@@ -240,6 +257,27 @@ export default function InvoicedSalesPage() {
         }
         if (isNaN(dateObj.getTime())) return 'Fecha inválida';
         return format(dateObj, 'PP p', { locale: es });
+    };
+
+    const handleDeleteSale = async () => {
+        if (!saleToDelete) return;
+        try {
+            await deleteDoc(doc(db, 'ventas', saleToDelete.id));
+            toast({
+                title: "Venta Eliminada",
+                description: "La venta ha sido eliminada permanentemente.",
+            });
+            setQueryKey(prevKey => prevKey + 1);
+        } catch (error) {
+            console.error("Error deleting sale: ", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo eliminar la venta.",
+            });
+        } finally {
+            setSaleToDelete(null);
+        }
     };
 
     return (
@@ -307,13 +345,13 @@ export default function InvoicedSalesPage() {
                             title="Ventas Facturadas Totales" 
                             data={salesData.totalSales.data} 
                             total={salesData.totalSales.total} 
-                            dataLabels={['Servicios', 'Productos']}
+                            dataLabels={salesData.totalSales.dataLabels}
                         />
                         <DonutChartCard 
                             title="Medios de Pago" 
                             data={salesData.paymentMethods.data} 
                             total={salesData.paymentMethods.total}
-                            dataLabels={['Efectivo', 'Tarjeta', 'Transferencia']}
+                            dataLabels={salesData.paymentMethods.dataLabels}
                         />
                     </>
                 )}
@@ -375,7 +413,18 @@ export default function InvoicedSalesPage() {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem>Anular Venta</DropdownMenuItem>
+                                                            <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada", description: "El envío de comprobantes estará disponible próximamente." })}>
+                                                                <Send className="mr-2 h-4 w-4 text-blue-500" />
+                                                                <span className="text-blue-500">Enviar Comprobante</span>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onSelect={() => window.print()}>
+                                                                <Printer className="mr-2 h-4 w-4 text-yellow-500" />
+                                                                <span className="text-yellow-500">Imprimir</span>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onSelect={() => setSaleToDelete(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                Eliminar
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>
@@ -409,6 +458,24 @@ export default function InvoicedSalesPage() {
                 sale={selectedSale}
             />
         )}
+        {saleToDelete && (
+         <AlertDialog open={!!saleToDelete} onOpenChange={(open) => !open && setSaleToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás absolutamente seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setSaleToDelete(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteSale} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar venta
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
         </>
     );
 }

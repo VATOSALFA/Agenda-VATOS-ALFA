@@ -47,6 +47,7 @@ interface Sale {
     items?: { 
         nombre: string;
         barbero_id: string;
+        precio: number;
     }[];
     client?: Client;
     professionalNames?: string;
@@ -65,6 +66,8 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
         };
     });
 
+    const chartData = data.length > 0 ? data : [{ name: 'Sin datos', value: 1 }];
+
     return (
         <Card>
             <CardHeader>
@@ -75,27 +78,27 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                     <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                             <Pie
-                                data={data}
+                                data={chartData}
                                 cx="50%"
                                 cy="50%"
                                 innerRadius={85}
                                 outerRadius={145}
                                 fill="#8884d8"
-                                paddingAngle={2}
+                                paddingAngle={data.length > 0 ? 2 : 0}
                                 dataKey="value"
                                 labelLine={false}
                             >
-                                {data.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                {chartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={data.length > 0 ? COLORS[index % COLORS.length] : '#e5e7eb'} />
                                 ))}
                             </Pie>
-                            <Tooltip
+                            {data.length > 0 && <Tooltip
                                 contentStyle={{
                                     backgroundColor: 'hsl(var(--background))',
                                     border: '1px solid hsl(var(--border))'
                                 }}
                                 formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
-                            />
+                            />}
                         </RechartsPieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
@@ -198,7 +201,12 @@ export default function InvoicedSalesPage() {
     }, [sales, clientMap, professionalMap]);
 
     const salesData = useMemo(() => {
-        if (salesLoading || !populatedSales || populatedSales.length === 0) return null;
+        if (salesLoading || !populatedSales) {
+            return {
+                totalSales: { data: [], total: 0, dataLabels: ['Servicios', 'Productos'] },
+                paymentMethods: { data: [], total: 0, dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia'] }
+            };
+        }
 
         const salesByType = populatedSales.reduce((acc, sale) => {
             if (sale.items && Array.isArray(sale.items)) {
@@ -340,7 +348,7 @@ export default function InvoicedSalesPage() {
             </Card>
 
             <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-                {salesLoading || !salesData ? (
+                {salesLoading ? (
                     <>
                         <Card><CardContent className="p-6"><Skeleton className="h-[380px] w-full" /></CardContent></Card>
                         <Card><CardContent className="p-6"><Skeleton className="h-[380px] w-full" /></CardContent></Card>
@@ -399,7 +407,8 @@ export default function InvoicedSalesPage() {
                                                 <TableCell colSpan={7}><Skeleton className="h-6 w-full" /></TableCell>
                                             </TableRow>
                                         ))
-                                    ) : populatedSales.map((sale) => (
+                                    ) : populatedSales.length > 0 ? (
+                                        populatedSales.map((sale) => (
                                         <TableRow key={sale.id}>
                                             <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
                                             <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
@@ -436,7 +445,14 @@ export default function InvoicedSalesPage() {
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                                                No hay ventas para el período seleccionado.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                 </TableBody>
                                 {!salesLoading && populatedSales.length > 0 && (
                                      <TableFooter>

@@ -31,15 +31,15 @@ interface Sale {
     items?: { nombre: string }[];
 }
 
-const DonutChartCard = ({ title, data, total }: { title: string, data: any[], total: number }) => {
+const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, data: any[], total: number, dataLabels?: string[] }) => {
     const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
     
-    // Ensure all expected payment methods are present for the table view
-    const allPaymentMethods = ['efectivo', 'tarjeta', 'transferencia'];
-    const tableData = allPaymentMethods.map(method => {
-        const found = data.find(d => d.name.toLowerCase() === method);
+    const allLabels = dataLabels || ['efectivo', 'tarjeta', 'transferencia'];
+    
+    const tableData = allLabels.map(label => {
+        const found = data.find(d => d.name.toLowerCase() === label.toLowerCase());
         return {
-            name: method,
+            name: label,
             value: found ? found.value : 0,
         };
     });
@@ -262,8 +262,17 @@ export default function InvoicedSalesPage() {
                     </>
                 ) : (
                     <>
-                        <DonutChartCard title="Ventas Facturadas Totales" data={salesData.totalSales.data} total={salesData.totalSales.total} />
-                        <DonutChartCard title="Medios de Pago" data={salesData.paymentMethods.data} total={salesData.paymentMethods.total} />
+                        <DonutChartCard 
+                            title="Ventas Facturadas Totales" 
+                            data={salesData.totalSales.data} 
+                            total={salesData.totalSales.total} 
+                            dataLabels={['Servicios', 'Productos']}
+                        />
+                        <DonutChartCard 
+                            title="Medios de Pago" 
+                            data={salesData.paymentMethods.data} 
+                            total={salesData.paymentMethods.total} 
+                        />
                     </>
                 )}
             </div>

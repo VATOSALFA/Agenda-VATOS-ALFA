@@ -91,9 +91,6 @@ export default function ComisionesPage() {
                   <Card key={prof.id} className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-bold">{prof.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Comisión por defecto: {prof.defaultCommission?.value}{prof.defaultCommission?.type}
-                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingProfessional(prof)}>Editar</Button>
@@ -113,9 +110,6 @@ export default function ComisionesPage() {
                   <Card key={serv.id} className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-bold">{serv.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Comisión por Defecto: {serv.defaultCommission?.value}{serv.defaultCommission?.type}
-                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingService(serv)}>Editar</Button>
@@ -135,9 +129,6 @@ export default function ComisionesPage() {
                   <Card key={prod.id} className="flex items-center justify-between p-4">
                     <div>
                       <p className="font-bold">{prod.name}</p>
-                       <p className="text-sm text-muted-foreground">
-                        Comisión por Defecto: {prod.defaultCommission?.value}{prod.defaultCommission?.type}
-                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingProduct(prod)}>Editar</Button>

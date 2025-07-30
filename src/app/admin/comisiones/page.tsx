@@ -46,9 +46,7 @@ export default function ComisionesPage() {
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
 
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
-  const [editingDefault, setEditingDefault] = useState<Professional | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [editingDefaultService, setEditingDefaultService] = useState<Service | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const sortedProfessionals = useMemo(() => [...professionals].sort((a, b) => a.name.localeCompare(b.name)), [professionals]);
@@ -61,9 +59,7 @@ export default function ComisionesPage() {
   
   const handleCloseModals = () => {
     setEditingProfessional(null);
-    setEditingDefault(null);
     setEditingService(null);
-    setEditingDefaultService(null);
     setEditingProduct(null);
   };
   
@@ -152,14 +148,6 @@ export default function ComisionesPage() {
           services={sortedServices}
         />
       )}
-       {editingDefault && (
-        <EditDefaultComisionModal
-          isOpen={!!editingDefault}
-          onClose={handleCloseModals}
-          professional={editingDefault}
-          onDataSaved={handleDataUpdated}
-        />
-      )}
 
       {/* Service Modals */}
        {editingService && (
@@ -169,14 +157,6 @@ export default function ComisionesPage() {
           service={editingService}
           onDataSaved={handleDataUpdated}
           professionals={sortedProfessionals}
-        />
-      )}
-      {editingDefaultService && (
-        <EditDefaultServiceComisionModal
-            isOpen={!!editingDefaultService}
-            onClose={handleCloseModals}
-            service={editingDefaultService}
-            onDataSaved={handleDataUpdated}
         />
       )}
 

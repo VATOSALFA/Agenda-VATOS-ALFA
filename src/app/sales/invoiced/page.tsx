@@ -48,6 +48,7 @@ interface Sale {
         nombre: string;
         barbero_id: string;
         precio: number;
+        servicio: string;
     }[];
     client?: Client;
     professionalNames?: string;
@@ -101,9 +102,9 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                             />}
                         </RechartsPieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                    {data.length > 0 && <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                         <span className="text-2xl font-bold">${total.toLocaleString('es-CL')}</span>
-                    </div>
+                    </div>}
                 </div>
                  <div className="text-sm">
                     <Table>
@@ -168,19 +169,21 @@ export default function InvoicedSalesPage() {
         if (activeFilters.dateRange?.to) {
             constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
-        if (activeFilters.local !== 'todos') {
-            constraints.push(where('local_id', '==', activeFilters.local));
-        }
-        if (activeFilters.paymentMethod !== 'todos') {
-            constraints.push(where('metodo_pago', '==', activeFilters.paymentMethod));
-        }
         return constraints;
-    }, [activeFilters]);
+    }, [activeFilters.dateRange]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
+    const { data: salesDataFromHook, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+
+    const sales = useMemo(() => {
+        return salesDataFromHook.filter(sale => {
+            const localMatch = activeFilters.local === 'todos' || sale.local_id === activeFilters.local;
+            const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || sale.metodo_pago === activeFilters.paymentMethod;
+            return localMatch && paymentMethodMatch;
+        });
+    }, [salesDataFromHook, activeFilters.local, activeFilters.paymentMethod]);
 
     const clientMap = useMemo(() => {
         if (!clients) return new Map();

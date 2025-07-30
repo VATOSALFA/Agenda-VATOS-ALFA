@@ -26,6 +26,7 @@ import { Loader2 } from 'lucide-react';
 import type { Professional, Service, Commission } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Separator } from '@/components/ui/separator';
 
 interface EditComisionesModalProps {
   professional: Professional;
@@ -46,8 +47,10 @@ const getDefaultValues = (professional: Professional, services: Service[]) => {
 export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved, services }: EditComisionesModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [masterValue, setMasterValue] = useState<number | ''>('');
+  const [masterType, setMasterType] = useState<'%' | '$'>('%');
   
-  const { control, handleSubmit, reset } = useForm({
+  const { control, handleSubmit, reset, setValue } = useForm({
     defaultValues: getDefaultValues(professional, services),
   });
 
@@ -84,6 +87,25 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
     }
   };
 
+  const applyToAll = () => {
+    if (masterValue === '') {
+      toast({
+        variant: 'destructive',
+        title: 'Valor no especificado',
+        description: 'Por favor, introduce un valor de comisión para aplicar a todos.',
+      });
+      return;
+    }
+    services.forEach(service => {
+      setValue(`${service.name}.value`, masterValue, { shouldDirty: true });
+      setValue(`${service.name}.type`, masterType, { shouldDirty: true });
+    });
+    toast({
+      title: 'Valores aplicados',
+      description: 'Se ha establecido la comisión para todos los servicios.',
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
@@ -94,10 +116,35 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="py-4 max-h-[60vh] overflow-y-auto px-1">
-            <div className="grid grid-cols-1 gap-6">
+          <div className="py-4 space-y-4">
+            <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
+              <Label className="font-semibold">Aplicar a todos</Label>
+               <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Valor"
+                    value={masterValue}
+                    onChange={e => setMasterValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="flex-grow"
+                  />
+                  <Select value={masterType} onValueChange={(v: '%' | '$') => setMasterType(v)}>
+                    <SelectTrigger className="w-[80px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="%">%</SelectItem>
+                      <SelectItem value="$">$</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" onClick={applyToAll}>Aplicar</Button>
+               </div>
+            </div>
+
+            <Separator />
+            
+            <div className="max-h-[40vh] overflow-y-auto px-1 space-y-4">
               {services.map((service) => (
-                <div key={service.id} className="grid grid-cols-2 gap-4 items-center">
+                <div key={service.id} className="space-y-1">
                   <Label htmlFor={`value-${service.name}`}>{service.name}</Label>
                   <div className="flex items-center gap-2">
                     <Controller

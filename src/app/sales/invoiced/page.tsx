@@ -11,7 +11,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -367,7 +366,7 @@ export default function InvoicedSalesPage() {
                       </SelectContent>
                     </Select>
                     <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Todos los métodos de pago" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="todos">Todos los métodos de pago</SelectItem>
                             <SelectItem value="efectivo">Efectivo</SelectItem>

@@ -97,8 +97,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [clientQueryKey, setClientQueryKey] = useState(0);
   
-  const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
+  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
@@ -441,78 +442,78 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
           </SheetDescription>
         </SheetHeader>
         
-        {step === 1 && (
-            <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
-                {/* Item Selection */}
-                <div className="col-span-2 flex flex-col">
-                     <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                        <FormItem className="mb-4">
-                            <div className="flex justify-between items-center">
-                               <FormLabel>Cliente</FormLabel>
-                               <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                               </Button>
-                            </div>
-                            <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                                <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                    )}/>
-                    <div className="relative mb-4">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar por nombre..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        <Form {...form}>
+            {step === 1 && (
+                <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
+                    {/* Item Selection */}
+                    <div className="col-span-2 flex flex-col">
+                        <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                            <FormItem className="mb-4">
+                                <div className="flex justify-between items-center">
+                                <FormLabel>Cliente</FormLabel>
+                                <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                        <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                </Button>
+                                </div>
+                                <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                    <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                                    <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}/>
+                        <div className="relative mb-4">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Buscar por nombre..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        </div>
+                        <Tabs defaultValue="servicios" className="flex-grow flex flex-col">
+                            <TabsList>
+                                <TabsTrigger value="servicios">Servicios</TabsTrigger>
+                                <TabsTrigger value="productos">Productos</TabsTrigger>
+                            </TabsList>
+                            <ScrollArea className="flex-grow mt-4 pr-4">
+                                <TabsContent value="servicios" className="mt-0">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {(servicesLoading ? Array.from({length: 6}) : filteredServices).map((service, idx) => (
+                                        service ? (
+                                        <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
+                                            <CardContent className="p-4">
+                                                <p className="font-semibold">{service.name}</p>
+                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-CL')}</p>
+                                            </CardContent>
+                                        </Card>
+                                        ) : (
+                                            <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
+                                        )
+                                    ))}
+                                    </div>
+                                </TabsContent>
+                                <TabsContent value="productos" className="mt-0">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {(productsLoading ? Array.from({length: 6}) : filteredProducts).map((product, idx) => (
+                                        product ? (
+                                        <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
+                                            <CardContent className="p-4">
+                                                <p className="font-semibold">{product.nombre}</p>
+                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-CL')}</p>
+                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                            </CardContent>
+                                        </Card>
+                                        ) : (
+                                            <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
+                                        )
+                                    ))}
+                                    </div>
+                                </TabsContent>
+                            </ScrollArea>
+                        </Tabs>
                     </div>
-                    <Tabs defaultValue="servicios" className="flex-grow flex flex-col">
-                        <TabsList>
-                            <TabsTrigger value="servicios">Servicios</TabsTrigger>
-                            <TabsTrigger value="productos">Productos</TabsTrigger>
-                        </TabsList>
-                        <ScrollArea className="flex-grow mt-4 pr-4">
-                            <TabsContent value="servicios" className="mt-0">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                {(servicesLoading ? Array.from({length: 6}) : filteredServices).map((service, idx) => (
-                                     service ? (
-                                    <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
-                                        <CardContent className="p-4">
-                                            <p className="font-semibold">{service.name}</p>
-                                            <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-CL')}</p>
-                                        </CardContent>
-                                    </Card>
-                                     ) : (
-                                        <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
-                                    )
-                                ))}
-                                </div>
-                            </TabsContent>
-                            <TabsContent value="productos" className="mt-0">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                {(productsLoading ? Array.from({length: 6}) : filteredProducts).map((product, idx) => (
-                                     product ? (
-                                    <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
-                                        <CardContent className="p-4">
-                                            <p className="font-semibold">{product.nombre}</p>
-                                            <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-CL')}</p>
-                                            <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
-                                        </CardContent>
-                                    </Card>
-                                    ) : (
-                                        <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
-                                    )
-                                ))}
-                                </div>
-                            </TabsContent>
-                        </ScrollArea>
-                    </Tabs>
+                    {/* Cart */}
+                    <ResumenCarrito />
                 </div>
-                {/* Cart */}
-                <ResumenCarrito />
-            </div>
-        )}
+            )}
 
-        {step === 2 && (
-            <Form {...form}>
+            {step === 2 && (
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 overflow-y-auto">
                     {/* Sale Details Form */}
@@ -642,8 +643,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </Button>
                 </SheetFooter>
             </form>
-            </Form>
-        )}
+            )}
+        </Form>
         
         {step === 1 && (
             <SheetFooter className="p-6 bg-background border-t">

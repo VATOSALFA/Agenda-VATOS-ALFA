@@ -178,7 +178,7 @@ export default function InvoicedSalesPage() {
             <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
 
             <Card>
-                <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button variant={"outline"} className="justify-start text-left font-normal">
@@ -208,7 +208,6 @@ export default function InvoicedSalesPage() {
                             <SelectItem value="transferencia">Transferencia</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Select><SelectTrigger><SelectValue placeholder="Todos los comprobantes" /></SelectTrigger><SelectContent /></Select>
                     <Button onClick={handleSearch}>
                         <Search className="mr-2 h-4 w-4" />
                         Buscar
@@ -306,3 +305,5 @@ export default function InvoicedSalesPage() {
     );
 }
 
+
+    

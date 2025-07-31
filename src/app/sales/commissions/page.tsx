@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Search, Download, Briefcase, FileText, ShoppingBag, DollarSign, Loader2 } from "lucide-react";
+import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where } from "firebase/firestore";
@@ -24,7 +24,6 @@ interface CommissionData {
     professionalName: string;
     totalSales: number;
     totalCommission: number;
-    internalSales: number; // Placeholder for now
     serviceSales: number;
     productSales: number;
     serviceCommission: number;
@@ -43,7 +42,8 @@ export default function CommissionsPage() {
 
     useEffect(() => {
         setIsClientMounted(true);
-        setDateRange({ from: startOfDay(new Date()), to: endOfDay(new Date()) });
+        const today = new Date();
+        setDateRange({ from: startOfDay(today), to: endOfDay(today) });
     }, []);
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
@@ -71,8 +71,6 @@ export default function CommissionsPage() {
             setIsLoading(true);
 
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
-            const serviceMap = new Map(services.map(s => [s.id, s]));
-            const productMap = new Map(products.map(p => [p.id, p]));
             
             let filteredSales = sales;
             if (localFilter !== 'todos') {
@@ -88,7 +86,6 @@ export default function CommissionsPage() {
                         professionalName: prof.name,
                         totalSales: 0,
                         totalCommission: 0,
-                        internalSales: 0,
                         serviceSales: 0,
                         productSales: 0,
                         serviceCommission: 0,
@@ -119,7 +116,7 @@ export default function CommissionsPage() {
                         }
 
                     } else if (item.tipo === 'producto') {
-                        const product = productMap.get(item.id);
+                        const product = products.find(p => p.id === item.id);
                         if (!product) return;
                         
                         data.productSales += item.precio || 0;
@@ -230,7 +227,7 @@ export default function CommissionsPage() {
             </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Ventas de servicios</CardTitle>
@@ -241,16 +238,6 @@ export default function CommissionsPage() {
                     <p className="text-xs text-muted-foreground">Comisión: ${summary.serviceCommission.toLocaleString('es-CL')}</p>
                 </CardContent>
             </Card>
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Ventas de planes</CardTitle>
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">$0</div>
-                    <p className="text-xs text-muted-foreground">Comisión: $0</p>
-                </CardContent>
-            </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Ventas de productos</CardTitle>
@@ -259,16 +246,6 @@ export default function CommissionsPage() {
                 <CardContent>
                     <div className="text-2xl font-bold">${summary.productSales.toLocaleString('es-CL')}</div>
                     <p className="text-xs text-muted-foreground">Comisión: ${summary.productCommission.toLocaleString('es-CL')}</p>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Cobros por ventas internas</CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">$0</div>
-                     <p className="text-xs text-muted-foreground">&nbsp;</p>
                 </CardContent>
             </Card>
         </div>
@@ -288,20 +265,18 @@ export default function CommissionsPage() {
                             <TableHead>Profesional / Staff</TableHead>
                             <TableHead className="text-right">Ventas totales</TableHead>
                             <TableHead className="text-right">Monto comisión</TableHead>
-                            <TableHead className="text-right">Ventas internas</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
-                            <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                         ) : commissionData.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={3} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
                         ) : commissionData.map((commission) => (
                             <TableRow key={commission.professionalId}>
                                 <TableCell className="font-medium">{commission.professionalName}</TableCell>
                                 <TableCell className="text-right">${commission.totalSales.toLocaleString('es-CL')}</TableCell>
                                 <TableCell className="text-right text-primary font-semibold">${commission.totalCommission.toLocaleString('es-CL')}</TableCell>
-                                <TableCell className="text-right">${commission.internalSales.toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -310,7 +285,6 @@ export default function CommissionsPage() {
                             <TableHead className="text-right font-bold">Totales</TableHead>
                             <TableHead className="text-right font-bold">${summary.totalSales.toLocaleString('es-CL')}</TableHead>
                             <TableHead className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-CL')}</TableHead>
-                            <TableHead></TableHead>
                         </TableRow>
                     </TableFooter>
                 </Table>

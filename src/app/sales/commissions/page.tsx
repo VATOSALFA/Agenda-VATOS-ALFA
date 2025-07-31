@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2 } from "lucide-react";
+import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp } from "firebase/firestore";
@@ -248,7 +248,7 @@ export default function CommissionsPage() {
             </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Ventas de servicios</CardTitle>
@@ -267,6 +267,16 @@ export default function CommissionsPage() {
                 <CardContent>
                     <div className="text-2xl font-bold">${summary.productSales.toLocaleString('es-CL')}</div>
                     <p className="text-xs text-muted-foreground">Comisión: ${summary.productCommission.toLocaleString('es-CL')}</p>
+                </CardContent>
+            </Card>
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Comisiones totales</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">${summary.totalCommission.toLocaleString('es-CL')}</div>
+                    <p className="text-xs text-muted-foreground">Sobre un total de ${summary.totalSales.toLocaleString('es-CL')} en ventas</p>
                 </CardContent>
             </Card>
         </div>
@@ -319,4 +329,5 @@ export default function CommissionsPage() {
     </div>
   );
 }
+
 

@@ -55,14 +55,13 @@ export default function CommissionsPage() {
         setActiveFilters({ dateRange: initialDateRange, local: 'todos', professional: 'todos' });
     }, []);
 
-
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     
     const salesQueryConstraints = useMemo(() => {
-        if (!activeFilters.dateRange?.from) return undefined;
+        if (!activeFilters.dateRange?.from) return [];
         
         const constraints = [];
         constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
@@ -82,18 +81,14 @@ export default function CommissionsPage() {
         const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
         setIsLoading(anyLoading);
         
-        if (anyLoading) {
-            return;
-        }
-
-        if (!sales || !professionals || !services || !products) {
+        if (anyLoading || !sales || !professionals || !services || !products) {
              setCommissionData([]);
              return;
         }
 
         const professionalMap = new Map(professionals.map(p => [p.id, p]));
-        const serviceMap = new Map(services.map(s => [s.name, s]));
-        const productMap = new Map(products.map(p => [p.nombre, p]));
+        const serviceMap = new Map(services.map(s => [s.id, s]));
+        const productMap = new Map(products.map(p => [p.id, p]));
 
         let filteredSales = sales;
         if (activeFilters.local !== 'todos') {
@@ -131,14 +126,14 @@ export default function CommissionsPage() {
                 let commissionConfig = null;
 
                 if(item.tipo === 'servicio') {
-                    const service = serviceMap.get(item.servicio);
+                    const service = serviceMap.get(item.id);
                     if (!service) return;
                     
                     data.serviceSales += itemPrice;
                     commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
 
                 } else if (item.tipo === 'producto') {
-                    const product = productMap.get(item.nombre);
+                    const product = productMap.get(item.id);
                     if (!product) return;
                     
                     data.productSales += itemPrice;

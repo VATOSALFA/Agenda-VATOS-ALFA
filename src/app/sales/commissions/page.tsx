@@ -38,30 +38,48 @@ export default function CommissionsPage() {
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
     const [isClientMounted, setIsClientMounted] = useState(false);
 
-    const [queryKey, setQueryKey] = useState(0);
-
+    const [activeFilters, setActiveFilters] = useState<{
+        dateRange: DateRange | undefined;
+        local: string;
+        professional: string;
+    }>({
+        dateRange: undefined,
+        local: 'todos',
+        professional: 'todos',
+    });
+    
     useEffect(() => {
         setIsClientMounted(true);
         const today = new Date();
-        setDateRange({ from: startOfDay(today), to: endOfDay(today) });
+        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+        setDateRange(initialDateRange);
+        setActiveFilters({ dateRange: initialDateRange, local: 'todos', professional: 'todos' });
     }, []);
 
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
-    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
-    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
-        if (dateRange?.from) constraints.push(where('fecha_hora_venta', '>=', startOfDay(dateRange.from)));
-        if (dateRange?.to) constraints.push(where('fecha_hora_venta', '<=', endOfDay(dateRange.to)));
+        if (activeFilters.dateRange?.from) {
+            constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
+        }
+        if (activeFilters.dateRange?.to) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
+        }
         return constraints;
-    }, [dateRange]);
+    }, [activeFilters.dateRange]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
     
     const handleSearch = () => {
-        setQueryKey(prev => prev + 1);
+        setActiveFilters({
+            dateRange: dateRange,
+            local: localFilter,
+            professional: professionalFilter
+        })
     };
 
     useEffect(() => {
@@ -73,14 +91,14 @@ export default function CommissionsPage() {
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
             
             let filteredSales = sales;
-            if (localFilter !== 'todos') {
-                filteredSales = filteredSales.filter(s => s.local_id === localFilter);
+            if (activeFilters.local !== 'todos') {
+                filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
             }
             
             const commissionMap = new Map<string, CommissionData>();
 
             professionals.forEach(prof => {
-                if (professionalFilter === 'todos' || professionalFilter === prof.id) {
+                if (activeFilters.professional === 'todos' || activeFilters.professional === prof.id) {
                     commissionMap.set(prof.id, {
                         professionalId: prof.id,
                         professionalName: prof.name,
@@ -103,7 +121,7 @@ export default function CommissionsPage() {
                     const professional = professionalMap.get(professionalId);
                     
                     if(item.tipo === 'servicio') {
-                        const service = services.find(s => s.name === item.servicio);
+                        const service = services.find(s => s.name === (item.servicio || item.nombre));
                         if (!service) return;
 
                         data.serviceSales += item.precio || 0;
@@ -143,7 +161,7 @@ export default function CommissionsPage() {
 
         calculateCommissions();
 
-    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, localFilter, professionalFilter]);
+    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
 
     const summary = useMemo(() => {
         return commissionData.reduce((acc, current) => {
@@ -268,7 +286,7 @@ export default function CommissionsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {isLoading ? (
+                        {(isLoading || salesLoading) ? (
                             <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                         ) : commissionData.length === 0 ? (
                             <TableRow><TableCell colSpan={3} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>

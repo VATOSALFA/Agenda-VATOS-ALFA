@@ -102,6 +102,7 @@ export default function CashBoxPage() {
     const today = new Date();
     const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
     setDateRange(initialDateRange);
+    setActiveFilters(prev => ({ ...prev, dateRange: initialDateRange }));
   }, []);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -112,28 +113,34 @@ export default function CashBoxPage() {
     if (locales.length > 0 && !selectedLocalId) {
       const defaultLocalId = locales[0].id;
       setSelectedLocalId(defaultLocalId);
-      setActiveFilters(prev => ({ ...prev, localId: defaultLocalId, dateRange: dateRange }));
+       setActiveFilters(prev => ({ ...prev, localId: defaultLocalId }));
     }
-  }, [locales, selectedLocalId, dateRange]);
+  }, [locales, selectedLocalId]);
 
 
   const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
+    if (!activeFilters.dateRange?.from) return undefined;
     
     const constraints = [];
-    constraints.push(where('local_id', '==', activeFilters.localId));
     constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
     return constraints;
-  }, [activeFilters]);
+  }, [activeFilters.dateRange]);
 
-  const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+  const { data: salesFromHook, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
+    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters.dateRange)}` : undefined,
     ...(salesQueryConstraints || [])
   );
+
+  const sales = useMemo(() => {
+      if (!activeFilters.localId || activeFilters.localId === 'todos') {
+          return salesFromHook;
+      }
+      return salesFromHook.filter(sale => sale.local_id === activeFilters.localId);
+  }, [salesFromHook, activeFilters.localId]);
   
   const clientMap = useMemo(() => {
       if (clientsLoading) return new Map();

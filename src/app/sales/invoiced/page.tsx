@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -34,6 +34,7 @@ import { db } from "@/lib/firebase";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import * as XLSX from 'xlsx';
+import { Alert, AlertTitle } from "@/components/ui/alert";
 
 
 interface Sale {
@@ -350,22 +351,6 @@ export default function InvoicedSalesPage() {
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
 
-             <Card>
-                <CardHeader>
-                    <CardTitle>Conteo Total de Ventas (Temporal)</CardTitle>
-                    <CardDescription>
-                        Este es un contador temporal para verificar el número total de ventas en la base de datos.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {allSalesLoading ? (
-                        <Skeleton className="h-8 w-24" />
-                    ) : (
-                        <p className="text-3xl font-bold">{allSales.length} Ventas</p>
-                    )}
-                </CardContent>
-            </Card>
-
             <Card>
                 <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Popover>
@@ -437,6 +422,19 @@ export default function InvoicedSalesPage() {
                     </>
                 )}
             </div>
+
+            <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Conteo Total de Ventas (Temporal)</AlertTitle>
+                <CardContent className="pt-2">
+                     {allSalesLoading ? (
+                        <Skeleton className="h-8 w-24" />
+                    ) : (
+                        <p className="text-xl font-bold">{allSales.length} Ventas en la base de datos.</p>
+                    )}
+                </CardContent>
+            </Alert>
+
 
             <Card>
                 <CardHeader className="flex-row items-center justify-between">

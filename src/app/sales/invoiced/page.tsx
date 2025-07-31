@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -153,6 +152,8 @@ export default function InvoicedSalesPage() {
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
     const [queryKey, setQueryKey] = useState(0);
+
+    const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
 
     useEffect(() => {
         const today = new Date();
@@ -348,6 +349,22 @@ export default function InvoicedSalesPage() {
         <>
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle>Conteo Total de Ventas (Temporal)</CardTitle>
+                    <CardDescription>
+                        Este es un contador temporal para verificar el número total de ventas en la base de datos.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {allSalesLoading ? (
+                        <Skeleton className="h-8 w-24" />
+                    ) : (
+                        <p className="text-3xl font-bold">{allSales.length} Ventas</p>
+                    )}
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

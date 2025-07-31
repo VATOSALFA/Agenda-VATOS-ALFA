@@ -34,6 +34,8 @@ export interface Profesional {
     services: string[];
     schedule?: Schedule;
     order: number;
+    comisionesPorServicio?: { [key: string]: { value: number, type: '%' | '$' } };
+    comisionesPorProducto?: { [key: string]: { value: number, type: '%' | '$' } };
 }
 
 export interface Reservation {
@@ -87,6 +89,7 @@ export interface Product {
         value: number;
         type: '%' | '$';
     }
+    comisionesPorProducto?: { [key: string]: { value: number, type: '%' | '$' } };
     includes_vat?: boolean;
     description?: string;
     stock_alarm_threshold?: number;
@@ -135,4 +138,25 @@ export interface CartItem {
     precio: number;
     cantidad: number;
     tipo: 'producto' | 'servicio';
+}
+
+export interface Sale {
+  id: string;
+  cliente_id: string;
+  fecha_hora_venta: any;
+  items: SaleItem[];
+  local_id: string;
+  metodo_pago: string;
+  total: number;
+}
+
+export interface SaleItem {
+  barbero_id: string;
+  cantidad: number;
+  id: string;
+  nombre: string;
+  precio: number;
+  subtotal: number;
+  tipo: 'servicio' | 'producto';
+  servicio?: string;
 }

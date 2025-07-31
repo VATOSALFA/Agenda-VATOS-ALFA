@@ -123,7 +123,7 @@ export default function CommissionsPage() {
                         if (!product) return;
                         
                         data.productSales += item.precio || 0;
-                        const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.defaultCommission;
+                        const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission;
                          if (commissionConfig) {
                             const commissionAmount = commissionConfig.type === '%'
                                 ? (item.precio || 0) * (commissionConfig.value / 100)

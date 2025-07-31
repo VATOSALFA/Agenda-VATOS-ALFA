@@ -190,74 +190,77 @@ export default function CashBoxPage() {
           </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6 flex flex-wrap items-end gap-4 justify-between">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="space-y-2 flex-grow min-w-[200px]">
-              <label className="text-sm font-medium">Local</label>
-              <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
-                <SelectTrigger>
-                  <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {locales.map(local => (
-                    <SelectItem key={local.id} value={local.id}>
-                      {local.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 flex-grow min-w-[200px]">
-              <label className="text-sm font-medium">Desde / Hasta</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                      id="date"
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Filters */}
+        <Card className="lg:col-span-3">
+            <CardContent className="pt-6 flex flex-wrap items-end gap-4">
+                <div className="space-y-2 flex-grow min-w-[200px]">
+                <label className="text-sm font-medium">Local</label>
+                <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
+                    <SelectTrigger>
+                    <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {locales.map(local => (
+                        <SelectItem key={local.id} value={local.id}>
+                        {local.name}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+                </div>
+                <div className="space-y-2 flex-grow min-w-[200px]">
+                <label className="text-sm font-medium">Desde / Hasta</label>
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !dateRange && "text-muted-foreground"
+                        )}
+                        >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                            dateRange.to ? (
+                            <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+                            ) : (
+                            format(dateRange.from, "LLL dd, y", { locale: es })
+                            )
                         ) : (
-                          format(dateRange.from, "LLL dd, y", { locale: es })
-                        )
-                      ) : (
-                        <span>Seleccionar rango</span>
-                      )}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                    locale={es}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
-              Buscar
-            </Button>
-             <div className="flex flex-col items-center justify-center h-full pl-4">
+                            <span>Seleccionar rango</span>
+                        )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                    <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                        locale={es}
+                    />
+                    </PopoverContent>
+                </Popover>
+                </div>
+                <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
+                Buscar
+                </Button>
+            </CardContent>
+        </Card>
+        
+        <Card>
+            <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
                 <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+        </Card>
 
+      </div>
       
       {/* Detailed Summary */}
       <div className='bg-card p-4 rounded-lg border'>

@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Card,
@@ -46,66 +46,16 @@ import {
   Plus,
   Minus,
   ArrowRightLeft,
-  DollarSign,
   Download,
-  MoreHorizontal,
-  Eye,
   ChevronDown,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { Sale, Local, Client } from '@/lib/types';
+import { where, Timestamp } from 'firebase/firestore';
 
-const mockSalesFlow = [
-  {
-    id: '44407-296',
-    fecha_pago: '2025-07-15 20:19',
-    local: 'VATOS ALFA Barber Shop',
-    comprobante: '27885640',
-    cliente: 'Carlos Zarco',
-    detalle: 'Corte clásico y moderno',
-    monto: 110,
-    flujo: 110,
-  },
-  {
-    id: '44406-829',
-    fecha_pago: '2025-07-15 19:56',
-    local: 'VATOS ALFA Barber Shop',
-    comprobante: '8388bb9a95ec495fb86e',
-    cliente: 'Mark Campos',
-    detalle: 'Corte clásico y moderno',
-    monto: 140,
-    flujo: 140,
-  },
-  {
-    id: '44406-051',
-    fecha_pago: '2025-07-15 19:38',
-    local: 'VATOS ALFA Barber Shop',
-    comprobante: '3732243d2f448679acc',
-    cliente: 'Gerardo Lopez Rueda',
-    detalle: 'Corte clásico y moderno',
-    monto: 140,
-    flujo: 140,
-  },
-  {
-    id: '44405-014',
-    fecha_pago: '2025-07-15 19:27',
-    local: 'VATOS ALFA Barber Shop',
-    comprobante: 'dbfb653c7c054c7dbb02',
-    cliente: 'Adrian Arzava',
-    detalle: 'Renovación Alfa',
-    monto: 310,
-    flujo: 310,
-  },
-  {
-    id: '44405-132',
-    fecha_pago: '2025-07-15 19:04',
-    local: 'VATOS ALFA Barber Shop',
-    comprobante: 'ed152431a5454c6ab627',
-    cliente: 'Sandra Sanchez',
-    detalle: 'Corte clásico y moderno',
-    monto: 180,
-    flujo: 180,
-  },
-];
 
 const SummaryCard = ({
   title,
@@ -136,7 +86,76 @@ const SummaryCard = ({
 );
 
 export default function CashBoxPage() {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
+  
+  const [activeFilters, setActiveFilters] = useState<{
+    dateRange: DateRange | undefined;
+    localId: string | null;
+  }>({
+    dateRange: undefined,
+    localId: null
+  });
+
+  // Set default filters on mount
+  useEffect(() => {
+    const today = new Date();
+    const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+    setDateRange(initialDateRange);
+  }, []);
+
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+
+  // Set default local on mount
+  useEffect(() => {
+    if (locales.length > 0 && !selectedLocalId) {
+      const defaultLocalId = locales[0].id;
+      setSelectedLocalId(defaultLocalId);
+      setActiveFilters(prev => ({ ...prev, localId: defaultLocalId, dateRange: dateRange }));
+    }
+  }, [locales, selectedLocalId, dateRange]);
+
+
+  const salesQueryConstraints = useMemo(() => {
+    if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
+    
+    const constraints = [];
+    constraints.push(where('local_id', '==', activeFilters.localId));
+    constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    if (activeFilters.dateRange.to) {
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    }
+    return constraints;
+  }, [activeFilters]);
+
+  const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+    'ventas',
+    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
+    ...(salesQueryConstraints || [])
+  );
+  
+  const clientMap = useMemo(() => {
+      if (clientsLoading) return new Map();
+      return new Map(clients.map(c => [c.id, c]));
+  }, [clients, clientsLoading]);
+
+  const salesWithClientData = useMemo(() => {
+    if (salesLoading || clientsLoading) return [];
+    return sales.map(sale => ({
+        ...sale,
+        cliente: clientMap.get(sale.cliente_id)
+    }))
+  }, [sales, clientMap, salesLoading, clientsLoading]);
+  
+  const handleSearch = () => {
+    setActiveFilters({ dateRange, localId: selectedLocalId });
+  };
+  
+  const isLoading = localesLoading || salesLoading || clientsLoading;
+
+  const totalVentasFacturadas = useMemo(() => sales.reduce((sum, sale) => sum + sale.total, 0), [sales]);
+  const efectivoEnCaja = useMemo(() => sales.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [sales]);
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -147,14 +166,16 @@ export default function CashBoxPage() {
         <CardContent className="pt-6 flex flex-wrap items-end gap-4">
           <div className="space-y-2 flex-grow min-w-[200px]">
             <label className="text-sm font-medium">Local</label>
-            <Select defaultValue="vatos-alfa">
+            <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
               <SelectTrigger>
-                <SelectValue placeholder="Seleccionar local" />
+                <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="vatos-alfa">
-                  VATOS ALFA Barber Shop
-                </SelectItem>
+                {locales.map(local => (
+                  <SelectItem key={local.id} value={local.id}>
+                    {local.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -162,38 +183,53 @@ export default function CashBoxPage() {
             <label className="text-sm font-medium">Desde / Hasta</label>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant={'outline'} className="w-full justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? (
-                    format(date, 'PPP', { locale: es })
-                  ) : (
-                    <span>Seleccionar fecha</span>
-                  )}
-                </Button>
+                 <Button
+                    id="date"
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y", { locale: es })
+                      )
+                    ) : (
+                      <span>Seleccionar rango</span>
+                    )}
+                  </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
                 <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
                   initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  locale={es}
                 />
               </PopoverContent>
             </Popover>
           </div>
-          <Button className="w-full sm:w-auto">
-            <Search className="mr-2 h-4 w-4" /> Buscar
+          <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
+            Buscar
           </Button>
         </CardContent>
       </Card>
 
       {/* Main Summary */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-        <h3 className="text-xl font-bold">VATOS ALFA Barber Shop</h3>
+        <h3 className="text-xl font-bold">{locales.find(l => l.id === selectedLocalId)?.name || 'Cargando...'}</h3>
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-sm font-medium text-muted-foreground">Efectivo en caja</p>
-            <p className="text-4xl font-extrabold text-primary">$1,750</p>
+            <p className="text-4xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline">
@@ -211,13 +247,11 @@ export default function CashBoxPage() {
       
       {/* Detailed Summary */}
       <div className='bg-card p-4 rounded-lg border'>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <SummaryCard title="Ventas Facturadas" amount={83439} action="plus" />
-            <SummaryCard title="Abonos" amount={0} />
-            <SummaryCard title="Ventas Internas" amount={0} />
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" />
             <SummaryCard title="Otros Ingresos" amount={0} action="plus" />
             <SummaryCard title="Egresos" amount={0} action="minus" />
-            <SummaryCard title="Resultado de Flujo del Periodo" amount={83439} />
+            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
           </div>
           <div className="flex justify-end mt-4">
              <Button variant="ghost" size="sm">
@@ -240,7 +274,6 @@ export default function CashBoxPage() {
                 <TableHead>ID</TableHead>
                 <TableHead>Fecha De Pago</TableHead>
                 <TableHead>Local</TableHead>
-                <TableHead>Comprobante</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Detalle</TableHead>
                 <TableHead className="text-right">Monto Facturado</TableHead>
@@ -249,34 +282,45 @@ export default function CashBoxPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockSalesFlow.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell className="font-mono text-xs">{sale.id}</TableCell>
-                  <TableCell>{format(new Date(sale.fecha_pago), 'dd-MM-yyyy HH:mm')}</TableCell>
-                  <TableCell>{sale.local}</TableCell>
-                  <TableCell className="font-mono text-xs">{sale.comprobante}</TableCell>
-                  <TableCell>{sale.cliente}</TableCell>
-                  <TableCell>{sale.detalle}</TableCell>
-                  <TableCell className="text-right font-medium">${sale.monto.toLocaleString('es-CL')}</TableCell>
-                  <TableCell className="text-right font-medium text-primary">${sale.flujo.toLocaleString('es-CL')}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="mr-2 h-4 w-4" />
-                          Ver Detalle
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>Anular</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {isLoading ? (
+                  Array.from({length: 3}).map((_, i) => (
+                      <TableRow key={i}>
+                          <TableCell colSpan={8}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
+                      </TableRow>
+                  ))
+              ) : salesWithClientData.length === 0 ? (
+                  <TableRow>
+                      <TableCell colSpan={8} className="text-center h-24">No hay ventas para el período seleccionado.</TableCell>
+                  </TableRow>
+              ) : (
+                salesWithClientData.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
+                    <TableCell>{format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm')}</TableCell>
+                    <TableCell>{locales.find(l => l.id === sale.local_id)?.name}</TableCell>
+                    <TableCell>{sale.cliente?.nombre} {sale.cliente?.apellido}</TableCell>
+                    <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
+                    <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
+                    <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-CL')}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Ver Detalle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>Anular</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

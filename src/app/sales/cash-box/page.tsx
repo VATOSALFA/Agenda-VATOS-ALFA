@@ -162,6 +162,7 @@ export default function CashBoxPage() {
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
   const efectivoEnCaja = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
 
+
   return (
     <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -178,7 +179,6 @@ export default function CashBoxPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
-        {/* Filters */}
         <Card>
             <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
                 <div className="space-y-2 flex-grow min-w-[200px]">

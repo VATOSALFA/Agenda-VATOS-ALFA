@@ -34,7 +34,7 @@ export default function CommissionsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -62,110 +62,109 @@ export default function CommissionsPage() {
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     
     const salesQueryConstraints = useMemo(() => {
+        if (!activeFilters.dateRange?.from) return undefined; // Do not query if date range is not set
+        
         const constraints = [];
-        if (activeFilters.dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
-        }
-        if (activeFilters.dateRange?.to) {
+        constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
+        if (activeFilters.dateRange.to) {
             constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
         return constraints;
     }, [activeFilters.dateRange]);
     
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+        'ventas',
+        activeFilters.dateRange?.from ? 'sales-' + format(activeFilters.dateRange.from, 'yyyy-MM-dd') : 'sales',
+        ...(salesQueryConstraints || [])
+    );
     
      useEffect(() => {
-        const calculateCommissions = () => {
-            if (salesLoading || professionalsLoading || servicesLoading || productsLoading) {
-                setIsLoading(true);
-                return;
-            }
-             if (!sales || !professionals || !services || !products) {
-                 setCommissionData([]);
-                 setIsLoading(false);
-                 return;
-            }
+        const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
+        setIsLoading(anyLoading);
+        
+        if (anyLoading) {
+            return;
+        }
 
-            setIsLoading(true);
+        if (!sales || !professionals || !services || !products) {
+             setCommissionData([]);
+             return;
+        }
 
-            const professionalMap = new Map(professionals.map(p => [p.id, p]));
-            const serviceMap = new Map(services.map(s => [s.name, s]));
-            const productMap = new Map(products.map(p => [p.nombre, p]));
+        const professionalMap = new Map(professionals.map(p => [p.id, p]));
+        const serviceMap = new Map(services.map(s => [s.name, s]));
+        const productMap = new Map(products.map(p => [p.nombre, p]));
 
-            let filteredSales = sales.filter(s => {
-                if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return false;
-                return true;
+        let filteredSales = sales;
+        if (activeFilters.local !== 'todos') {
+            filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
+        }
+
+        const commissionMap = new Map<string, CommissionData>();
+
+        professionals.forEach(prof => {
+            commissionMap.set(prof.id, {
+                professionalId: prof.id,
+                professionalName: prof.name,
+                totalSales: 0,
+                totalCommission: 0,
+                serviceSales: 0,
+                productSales: 0,
+                serviceCommission: 0,
+                productCommission: 0,
             });
+        });
 
-            const commissionMap = new Map<string, CommissionData>();
+        filteredSales.forEach(sale => {
+            sale.items?.forEach(item => {
+                if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
+                    return;
+                }
 
-            professionals.forEach(prof => {
-                commissionMap.set(prof.id, {
-                    professionalId: prof.id,
-                    professionalName: prof.name,
-                    totalSales: 0,
-                    totalCommission: 0,
-                    serviceSales: 0,
-                    productSales: 0,
-                    serviceCommission: 0,
-                    productCommission: 0,
-                });
-            });
+                const professional = professionalMap.get(item.barbero_id);
+                if (!professional) return;
+                
+                const data = commissionMap.get(item.barbero_id);
+                if (!data) return;
 
-            filteredSales.forEach(sale => {
-                sale.items?.forEach(item => {
-                    if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
-                        return;
+                const itemPrice = item.precio || 0;
+
+                if(item.tipo === 'servicio') {
+                    const service = serviceMap.get(item.servicio);
+                    if (!service) return;
+
+                    data.serviceSales += itemPrice;
+                    const commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
+                    if (commissionConfig) {
+                        const commissionAmount = commissionConfig.type === '%'
+                            ? itemPrice * (commissionConfig.value / 100)
+                            : commissionConfig.value;
+                        data.serviceCommission += commissionAmount;
                     }
 
-                    const professional = professionalMap.get(item.barbero_id);
-                    if (!professional) return;
+                } else if (item.tipo === 'producto') {
+                    const product = productMap.get(item.nombre);
+                    if (!product) return;
                     
-                    const data = commissionMap.get(item.barbero_id);
-                    if (!data) return;
-
-                    const itemPrice = item.precio || 0;
-
-                    if(item.tipo === 'servicio') {
-                        const service = serviceMap.get(item.servicio);
-                        if (!service) return;
-
-                        data.serviceSales += itemPrice;
-                        const commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
-                        if (commissionConfig) {
-                            const commissionAmount = commissionConfig.type === '%'
-                                ? itemPrice * (commissionConfig.value / 100)
-                                : commissionConfig.value;
-                            data.serviceCommission += commissionAmount;
-                        }
-
-                    } else if (item.tipo === 'producto') {
-                        const product = productMap.get(item.nombre);
-                        if (!product) return;
-                        
-                        data.productSales += itemPrice;
-                        const commissionConfig = product?.comisionesPorProducto?.[professional.id] || product.commission;
-                         if (commissionConfig) {
-                            const commissionAmount = commissionConfig.type === '%'
-                                ? itemPrice * (commissionConfig.value / 100)
-                                : commissionConfig.value;
-                            data.productCommission += commissionAmount;
-                        }
+                    data.productSales += itemPrice;
+                    const commissionConfig = professional?.comisionesPorProducto?.[professional.id] || product.commission;
+                     if (commissionConfig) {
+                        const commissionAmount = commissionConfig.type === '%'
+                            ? itemPrice * (commissionConfig.value / 100)
+                            : commissionConfig.value;
+                        data.productCommission += commissionAmount;
                     }
-                });
+                }
             });
-            
-            const finalData = Array.from(commissionMap.values()).map(data => ({
-                ...data,
-                totalSales: data.serviceSales + data.productSales,
-                totalCommission: data.serviceCommission + data.productCommission,
-            })).filter(d => d.totalSales > 0);
+        });
+        
+        const finalData = Array.from(commissionMap.values()).map(data => ({
+            ...data,
+            totalSales: data.serviceSales + data.productSales,
+            totalCommission: data.serviceCommission + data.productCommission,
+        })).filter(d => d.totalSales > 0);
 
-            setCommissionData(finalData);
-            setIsLoading(false);
-        };
-
-        calculateCommissions();
+        setCommissionData(finalData);
 
     }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
 

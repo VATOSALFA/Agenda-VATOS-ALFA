@@ -56,8 +56,7 @@ interface AddIngresoModalProps {
 }
 
 const conceptosPredefinidos = [
-    { id: 'aporte_socio', label: 'Aporte Socio' },
-    { id: 'venta_manual', label: 'Venta Manual' },
+    { id: 'ingreso_alejandro', label: 'Ingreso de Alejandro' },
     { id: 'otro', label: 'Otro (especificar)' },
 ];
 

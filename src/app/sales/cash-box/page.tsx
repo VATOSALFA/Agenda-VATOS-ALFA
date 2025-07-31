@@ -103,17 +103,17 @@ export default function CashBoxPage() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
   useEffect(() => {
-    if (!activeFilters.dateRange && !activeFilters.localId && locales.length > 0) {
-        const today = new Date();
-        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-        const defaultLocalId = locales[0].id;
-        
-        setDateRange(initialDateRange);
-        setSelectedLocalId(defaultLocalId);
+    // Set initial filters once locales are loaded
+    if (locales.length > 0 && !selectedLocalId) {
+      const today = new Date();
+      const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+      const defaultLocalId = locales[0].id;
 
-        setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
+      setDateRange(initialDateRange);
+      setSelectedLocalId(defaultLocalId);
+      setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
     }
-  }, [locales, activeFilters]);
+  }, [locales, selectedLocalId]);
 
 
   const salesQueryConstraints = useMemo(() => {
@@ -363,3 +363,4 @@ export default function CashBoxPage() {
     </>
   );
 }
+

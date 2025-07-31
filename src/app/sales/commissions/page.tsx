@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -38,56 +37,13 @@ export default function CommissionsPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
 
-    const [activeFilters, setActiveFilters] = useState<{
-        dateRange: DateRange | undefined;
-        local: string;
-        professional: string;
-    }>({
-        dateRange: undefined,
-        local: 'todos',
-        professional: 'todos',
-    });
-    
-    useEffect(() => {
-        const today = new Date();
-        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-        setDateRange(initialDateRange);
-        setActiveFilters({ dateRange: initialDateRange, local: 'todos', professional: 'todos' });
-    }, []);
-
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
 
-    const salesQueryConstraints = useMemo(() => {
-        const constraints = [];
-        if (activeFilters.dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
-        }
-        if (activeFilters.dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
-        }
-        return constraints;
-    }, [activeFilters.dateRange]);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas');
     
-    const salesQueryKey = `sales-${JSON.stringify(activeFilters.dateRange)}`;
-
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
-        'ventas',
-        salesQueryKey, 
-        ...salesQueryConstraints
-    );
-    
-    const handleSearch = () => {
-        setIsLoading(true);
-        setActiveFilters({
-            dateRange: dateRange,
-            local: localFilter,
-            professional: professionalFilter
-        })
-    };
-
     useEffect(() => {
         if (salesLoading || professionalsLoading || servicesLoading || productsLoading) {
           setIsLoading(true);
@@ -105,17 +61,17 @@ export default function CommissionsPage() {
             
             let filteredSales = sales;
 
-            if (activeFilters.local !== 'todos') {
-                filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
+            if (localFilter !== 'todos') {
+                filteredSales = filteredSales.filter(s => s.local_id === localFilter);
             }
-             if (activeFilters.professional !== 'todos') {
-                filteredSales = filteredSales.filter(s => s.items.some(item => item.barbero_id === activeFilters.professional));
+             if (professionalFilter !== 'todos') {
+                filteredSales = filteredSales.filter(s => s.items.some(item => item.barbero_id === professionalFilter));
             }
 
             const commissionMap = new Map<string, CommissionData>();
 
             professionals.forEach(prof => {
-                 if (activeFilters.professional === 'todos' || activeFilters.professional === prof.id) {
+                 if (professionalFilter === 'todos' || professionalFilter === prof.id) {
                     commissionMap.set(prof.id, {
                         professionalId: prof.id,
                         professionalName: prof.name,
@@ -161,7 +117,7 @@ export default function CommissionsPage() {
                         if (!product) return;
                         
                         data.productSales += itemPrice;
-                        const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission;
+                        const commissionConfig = product.comisionesPorProfesional?.[professional.id] || product.commission;
                          if (commissionConfig) {
                             const commissionAmount = commissionConfig.type === '%'
                                 ? itemPrice * (commissionConfig.value / 100)
@@ -184,7 +140,7 @@ export default function CommissionsPage() {
 
         calculateCommissions();
 
-    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
+    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, localFilter, professionalFilter]);
 
     const summary = useMemo(() => {
         return commissionData.reduce((acc, current) => {
@@ -261,7 +217,7 @@ export default function CommissionsPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <Button className="w-full lg:w-auto" onClick={handleSearch} disabled={isLoading}>
+                    <Button className="w-full lg:w-auto" disabled={isLoading}>
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                     </Button>
                 </div>

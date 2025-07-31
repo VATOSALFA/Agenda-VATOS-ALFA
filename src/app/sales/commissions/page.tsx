@@ -20,23 +20,21 @@ import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp } from "firebase/firestore";
 import type { Local, Profesional, Service, Product, Sale, SaleItem } from "@/lib/types";
 
-interface CommissionData {
+interface CommissionRowData {
     professionalId: string;
     professionalName: string;
-    totalSales: number;
-    totalCommission: number;
-    serviceSales: number;
-    productSales: number;
-    serviceCommission: number;
-    productCommission: number;
-    avgCommissionPercentage: number;
+    itemName: string;
+    itemType: 'servicio' | 'producto';
+    saleAmount: number;
+    commissionAmount: number;
+    commissionPercentage: number;
 }
 
 export default function CommissionsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
-    const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
+    const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
@@ -51,10 +49,10 @@ export default function CommissionsPage() {
         professional: 'todos'
     });
 
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', 'locales');
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', 'profesionales');
-    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', 'servicios');
-    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', 'productos');
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     
     const salesQueryConstraints = useMemo(() => {
         if (!activeFilters.dateRange?.from) return undefined;
@@ -74,8 +72,8 @@ export default function CommissionsPage() {
     );
     
      useEffect(() => {
-        setIsClient(true);
-        if(!dateRange) {
+        if(!isClient) {
+          setIsClient(true);
           const today = new Date();
           const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
           setDateRange(initialDateRange);
@@ -85,7 +83,7 @@ export default function CommissionsPage() {
               professional: 'todos'
           });
         }
-     }, []);
+     }, [isClient]);
     
      useEffect(() => {
         const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
@@ -104,49 +102,35 @@ export default function CommissionsPage() {
         if (activeFilters.local !== 'todos') {
             filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
         }
+        if (activeFilters.professional !== 'todos') {
+            filteredSales = filteredSales.flatMap(sale => 
+                sale.items
+                    ?.filter(item => item.barbero_id === activeFilters.professional)
+                    .map(item => ({ ...sale, items: [item] })) || []
+            );
+        }
 
-        const commissionMap = new Map<string, Omit<CommissionData, 'avgCommissionPercentage'>>();
-
-        professionals.forEach(prof => {
-            commissionMap.set(prof.id, {
-                professionalId: prof.id,
-                professionalName: prof.name,
-                totalSales: 0,
-                totalCommission: 0,
-                serviceSales: 0,
-                productSales: 0,
-                serviceCommission: 0,
-                productCommission: 0,
-            });
-        });
+        const commissionRows: CommissionRowData[] = [];
 
         filteredSales.forEach(sale => {
             sale.items?.forEach(item => {
-                if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
-                    return;
-                }
-
                 const professional = professionalMap.get(item.barbero_id);
                 if (!professional) return;
                 
-                const data = commissionMap.get(item.barbero_id);
-                if (!data) return;
-
                 const itemPrice = item.subtotal || item.precio || 0;
                 let commissionConfig = null;
+                let itemName = item.nombre;
 
                 if(item.tipo === 'servicio') {
                     const service = serviceMap.get(item.id);
                     if (!service) return;
-                    
-                    data.serviceSales += itemPrice;
+                    itemName = service.name;
                     commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
 
                 } else if (item.tipo === 'producto') {
                     const product = productMap.get(item.id);
                     if (!product) return;
-                    
-                    data.productSales += itemPrice;
+                    itemName = product.nombre;
                     commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.defaultCommission || professional.defaultCommission;
                 }
                 
@@ -154,28 +138,21 @@ export default function CommissionsPage() {
                     const commissionAmount = commissionConfig.type === '%'
                         ? itemPrice * (commissionConfig.value / 100)
                         : commissionConfig.value;
-                    
-                    if(item.tipo === 'servicio') {
-                        data.serviceCommission += commissionAmount;
-                    } else {
-                        data.productCommission += commissionAmount;
-                    }
+
+                    commissionRows.push({
+                        professionalId: professional.id,
+                        professionalName: professional.name,
+                        itemName: itemName,
+                        itemType: item.tipo,
+                        saleAmount: itemPrice,
+                        commissionAmount: commissionAmount,
+                        commissionPercentage: commissionConfig.type === '%' ? commissionConfig.value : (itemPrice > 0 ? (commissionAmount / itemPrice) * 100 : 0)
+                    });
                 }
             });
         });
         
-        const finalData = Array.from(commissionMap.values()).map(data => {
-            const totalSales = data.serviceSales + data.productSales;
-            const totalCommission = data.serviceCommission + data.productCommission;
-            return {
-                ...data,
-                totalSales,
-                totalCommission,
-                avgCommissionPercentage: totalSales > 0 ? (totalCommission / totalSales) * 100 : 0,
-            }
-        }).filter(d => d.totalSales > 0);
-
-        setCommissionData(finalData);
+        setCommissionData(commissionRows);
 
     }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
 
@@ -189,12 +166,15 @@ export default function CommissionsPage() {
 
     const summary = useMemo(() => {
         return commissionData.reduce((acc, current) => {
-            acc.totalSales += current.totalSales;
-            acc.totalCommission += current.totalCommission;
-            acc.serviceSales += current.serviceSales;
-            acc.serviceCommission += current.serviceCommission;
-            acc.productSales += current.productSales;
-            acc.productCommission += current.productCommission;
+            acc.totalSales += current.saleAmount;
+            acc.totalCommission += current.commissionAmount;
+            if (current.itemType === 'servicio') {
+                acc.serviceSales += current.saleAmount;
+                acc.serviceCommission += current.commissionAmount;
+            } else {
+                acc.productSales += current.saleAmount;
+                acc.productCommission += current.commissionAmount;
+            }
             return acc;
         }, { totalSales: 0, totalCommission: 0, serviceSales: 0, serviceCommission: 0, productSales: 0, productCommission: 0 });
     }, [commissionData]);
@@ -307,28 +287,30 @@ export default function CommissionsPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Profesional / Staff</TableHead>
-                            <TableHead className="text-right">Ventas totales</TableHead>
+                            <TableHead>Concepto</TableHead>
+                            <TableHead className="text-right">Venta total</TableHead>
                             <TableHead className="text-right">% de comisión</TableHead>
                             <TableHead className="text-right">Monto comisión</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
-                            <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                         ) : commissionData.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
-                        ) : commissionData.map((commission) => (
-                            <TableRow key={commission.professionalId}>
-                                <TableCell className="font-medium">{commission.professionalName}</TableCell>
-                                <TableCell className="text-right">${commission.totalSales.toLocaleString('es-CL')}</TableCell>
-                                <TableCell className="text-right">{commission.avgCommissionPercentage.toFixed(2)}%</TableCell>
-                                <TableCell className="text-right text-primary font-semibold">${commission.totalCommission.toLocaleString('es-CL')}</TableCell>
+                            <TableRow><TableCell colSpan={5} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
+                        ) : commissionData.map((row, index) => (
+                            <TableRow key={index}>
+                                <TableCell className="font-medium">{row.professionalName}</TableCell>
+                                <TableCell>{row.itemName}</TableCell>
+                                <TableCell className="text-right">${row.saleAmount.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right">{row.commissionPercentage.toFixed(2)}%</TableCell>
+                                <TableCell className="text-right text-primary font-semibold">${row.commissionAmount.toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                     <TableFooter>
                         <TableRow className="bg-muted/50">
-                            <TableHead className="text-right font-bold">Totales</TableHead>
+                            <TableHead colSpan={2} className="text-right font-bold">Totales</TableHead>
                             <TableHead className="text-right font-bold">${summary.totalSales.toLocaleString('es-CL')}</TableHead>
                             <TableHead className="text-right font-bold">{overallAvgCommission.toFixed(2)}%</TableHead>
                             <TableHead className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-CL')}</TableHead>

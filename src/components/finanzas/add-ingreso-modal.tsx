@@ -24,7 +24,7 @@ import {
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, Calendar as CalendarIcon, DollarSign, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { Alert, AlertDescription } from '../ui/alert';
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),

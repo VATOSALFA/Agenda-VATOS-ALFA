@@ -53,8 +53,8 @@ export default function CommissionsPage() {
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
-        if (dateRange?.from) constraints.push(where('fecha_hora_venta', '>=', dateRange.from));
-        if (dateRange?.to) constraints.push(where('fecha_hora_venta', '<=', dateRange.to));
+        if (dateRange?.from) constraints.push(where('fecha_hora_venta', '>=', startOfDay(dateRange.from)));
+        if (dateRange?.to) constraints.push(where('fecha_hora_venta', '<=', endOfDay(dateRange.to)));
         return constraints;
     }, [dateRange]);
 

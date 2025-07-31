@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -13,6 +13,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Form,
   FormControl,
@@ -25,13 +33,25 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { Profesional } from '@/lib/types';
+
 
 const egresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   monto: z.number({ coerce: true }).min(1, 'El monto debe ser mayor a 0.'),
-  concepto: z.string().min(3, 'El concepto es requerido.'),
-  aQuien: z.string().min(3, 'El destinatario es requerido.'),
+  concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
+  concepto_otro: z.string().optional(),
+  aQuien: z.string().min(1, 'Debes seleccionar un profesional.'),
   comentarios: z.string().optional(),
+}).refine(data => {
+    if (data.concepto === 'Otro') {
+        return data.concepto_otro && data.concepto_otro.trim().length > 0;
+    }
+    return true;
+}, {
+    message: 'Por favor, especifica el concepto.',
+    path: ['concepto_otro'],
 });
 
 type EgresoFormData = z.infer<typeof egresoSchema>;
@@ -42,9 +62,18 @@ interface AddEgresoModalProps {
   onFormSubmit: () => void;
 }
 
+const conceptosPredefinidos = [
+    { id: 'comision_servicios', label: 'Comisión Servicios' },
+    { id: 'comision_producto', label: 'Comisión Venta de producto' },
+    { id: 'propina_terminal', label: 'Propina en terminal' },
+    { id: 'otro', label: 'Otro' },
+];
+
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgresoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
   const form = useForm<EgresoFormData>({
     resolver: zodResolver(egresoSchema),
@@ -56,9 +85,29 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
     },
   });
 
+  const conceptoSeleccionado = form.watch('concepto');
+
+  useEffect(() => {
+    if (!isOpen) {
+        form.reset({
+            fecha: new Date(),
+            monto: 0,
+            concepto: '',
+            aQuien: '',
+            comentarios: '',
+            concepto_otro: '',
+        });
+    }
+  }, [isOpen, form]);
+
+
   async function onSubmit(data: EgresoFormData) {
     setIsSubmitting(true);
-    console.log("Guardando egreso manual:", data);
+    const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
+    const professionalName = professionals.find(p => p.id === data.aQuien)?.name || data.aQuien;
+
+    console.log("Guardando egreso manual:", {...data, concepto: finalConcepto, aQuien: professionalName });
+    
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -66,7 +115,6 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
         title: 'Egreso guardado',
         description: 'El nuevo egreso ha sido registrado con éxito.',
       });
-      form.reset();
       onFormSubmit();
     } catch (error) {
       toast({
@@ -123,24 +171,67 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
                   </FormItem>
                 )}
               />
-              <FormField
+               <FormField
                 control={form.control}
                 name="concepto"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Edit className="mr-2 h-4 w-4" /> Concepto</FormLabel>
-                    <FormControl><Input placeholder="Ej: Pago de renta, Insumos" {...field} /></FormControl>
+                  <FormItem className="space-y-3">
+                    <FormLabel className="flex items-center"><Edit className="mr-2 h-4 w-4" />Concepto</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        {conceptosPredefinidos.map(c => (
+                            <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">
+                                <FormControl>
+                                    <RadioGroupItem value={c.label} />
+                                </FormControl>
+                                <FormLabel className="font-normal">
+                                    {c.label}
+                                </FormLabel>
+                            </FormItem>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+             {conceptoSeleccionado === 'Otro' && (
+                 <FormField
+                    control={form.control}
+                    name="concepto_otro"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input placeholder="Escribe el concepto aquí..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+             )}
                <FormField
                 control={form.control}
                 name="aQuien"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>
-                    <FormControl><Input placeholder="Ej: Arrendador, Proveedor X" {...field} /></FormControl>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {professionals.map(prof => (
+                            <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

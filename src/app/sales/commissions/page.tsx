@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -16,7 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where } from "firebase/firestore";
+import { where, Timestamp } from "firebase/firestore";
 import type { Local, Profesional, Service, Product, Sale, SaleItem } from "@/lib/types";
 
 interface CommissionData {
@@ -35,47 +36,40 @@ export default function CommissionsPage() {
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
-    const [activeFilters, setActiveFilters] = useState<{
-        dateRange: DateRange | undefined;
-        local: string;
-        professional: string;
-    }>({
-        dateRange: undefined,
-        local: 'todos',
-        professional: 'todos'
-    });
-    const [isClient, setIsClient] = useState(false);
+    
     const [isLoading, setIsLoading] = useState(true);
+    const [isClient, setIsClient] = useState(false);
+    const [queryKey, setQueryKey] = useState(0);
 
-    useEffect(() => {
-        setIsClient(true);
-        const today = new Date();
-        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-        setDateRange(initialDateRange);
-        setActiveFilters({ dateRange: initialDateRange, local: 'todos', professional: 'todos' });
-    }, []);
-
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
-    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
-    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', 'locales');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', 'profesionales');
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', 'servicios');
+    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', 'productos');
     
     const salesQueryConstraints = useMemo(() => {
-        if (!activeFilters.dateRange?.from) return [];
+        if (!dateRange?.from) return undefined;
         
         const constraints = [];
-        constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
-        if (activeFilters.dateRange.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
+        constraints.push(where('fecha_hora_venta', '>=', startOfDay(dateRange.from)));
+        if (dateRange.to) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(dateRange.to)));
         }
         return constraints;
-    }, [activeFilters.dateRange]);
+    }, [dateRange]);
     
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
         'ventas',
-        activeFilters.dateRange?.from ? 'sales-' + format(activeFilters.dateRange.from, 'yyyy-MM-dd') : 'sales',
+        `sales-${queryKey}`,
         ...(salesQueryConstraints || [])
     );
+    
+     useEffect(() => {
+        setIsClient(true);
+        if(!dateRange) {
+          const today = new Date();
+          setDateRange({ from: startOfDay(today), to: endOfDay(today) });
+        }
+     }, []);
     
      useEffect(() => {
         const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
@@ -91,8 +85,8 @@ export default function CommissionsPage() {
         const productMap = new Map(products.map(p => [p.id, p]));
 
         let filteredSales = sales;
-        if (activeFilters.local !== 'todos') {
-            filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
+        if (localFilter !== 'todos') {
+            filteredSales = filteredSales.filter(s => s.local_id === localFilter);
         }
 
         const commissionMap = new Map<string, CommissionData>();
@@ -112,7 +106,7 @@ export default function CommissionsPage() {
 
         filteredSales.forEach(sale => {
             sale.items?.forEach(item => {
-                if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
+                if (professionalFilter !== 'todos' && item.barbero_id !== professionalFilter) {
                     return;
                 }
 
@@ -122,7 +116,7 @@ export default function CommissionsPage() {
                 const data = commissionMap.get(item.barbero_id);
                 if (!data) return;
 
-                const itemPrice = item.precio || 0;
+                const itemPrice = item.subtotal || item.precio || 0;
                 let commissionConfig = null;
 
                 if(item.tipo === 'servicio') {
@@ -130,14 +124,14 @@ export default function CommissionsPage() {
                     if (!service) return;
                     
                     data.serviceSales += itemPrice;
-                    commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
+                    commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
 
                 } else if (item.tipo === 'producto') {
                     const product = productMap.get(item.id);
                     if (!product) return;
                     
                     data.productSales += itemPrice;
-                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission;
+                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                 }
                 
                 if (commissionConfig) {
@@ -162,15 +156,10 @@ export default function CommissionsPage() {
 
         setCommissionData(finalData);
 
-    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
+    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, localFilter, professionalFilter]);
 
     const handleSearch = () => {
-        setIsLoading(true);
-        setActiveFilters({
-            dateRange,
-            local: localFilter,
-            professional: professionalFilter
-        });
+        setQueryKey(prev => prev + 1);
     }
 
     const summary = useMemo(() => {

@@ -34,6 +34,7 @@ export interface Profesional {
     services: string[];
     schedule?: Schedule;
     order: number;
+    defaultCommission?: { value: number; type: '%' | '$' };
     comisionesPorServicio?: { [key: string]: { value: number, type: '%' | '$' } };
     comisionesPorProducto?: { [key: string]: { value: number, type: '%' | '$' } };
 }
@@ -89,7 +90,7 @@ export interface Product {
         value: number;
         type: '%' | '$';
     }
-    comisionesPorProducto?: { [key: string]: { value: number, type: '%' | '$' } };
+    comisionesPorProfesional?: { [key: string]: { value: number, type: '%' | '$' } };
     includes_vat?: boolean;
     description?: string;
     stock_alarm_threshold?: number;
@@ -129,7 +130,8 @@ export interface Service {
     defaultCommission?: {
         value: number;
         type: '%' | '$';
-    }
+    };
+    comisionesPorProfesional?: { [profesionalId: string]: { value: number, type: '%' | '$' } };
 }
 
 export interface CartItem {

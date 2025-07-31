@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -73,6 +74,7 @@ export interface Service {
   category: string;
   active: boolean;
   order: number;
+  defaultCommission?: { value: number, type: '%' | '$' };
 }
 
 export interface ServiceCategory {

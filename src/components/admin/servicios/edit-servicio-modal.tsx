@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -63,8 +64,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   
   useEffect(() => {
     if (service) {
-        const commission_percentage = service.defaultCommission?.type === '%' ? service.defaultCommission.value : 0;
-        reset({ ...service, commission_percentage });
+        reset({ ...service, commission_value: service.defaultCommission?.value, commission_type: service.defaultCommission?.type || '%' });
     } else {
         reset({
             name: '',
@@ -74,7 +74,8 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
             active: true,
             professionals: [],
             payment_type: 'online-deposit',
-            commission_percentage: 0,
+            commission_value: 0,
+            commission_type: '%'
         });
     }
   }, [service, reset]);
@@ -102,12 +103,13 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
             price: Number(data.price),
             duration: Number(data.duration),
             defaultCommission: {
-                value: Number(data.commission_percentage) || 0,
-                type: '%'
+                value: Number(data.commission_value) || 0,
+                type: data.commission_type || '%'
             }
         };
 
-        delete dataToSave.commission_percentage; 
+        delete dataToSave.commission_value;
+        delete dataToSave.commission_type;
 
         if (service) {
             const serviceRef = doc(db, 'servicios', service.id);
@@ -180,10 +182,21 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                         <Label htmlFor="include-vat" className="font-normal">Precio incluye IVA</Label>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="commission">Comisión (%)</Label>
-                         <Controller name="commission_percentage" control={control} render={({ field }) => (
-                            <Input id="commission" type="number" placeholder="Porcentaje de comisión para el profesional" {...field} />
-                         )} />
+                        <Label htmlFor="commission">Comisión</Label>
+                        <div className="flex items-center gap-2">
+                            <Controller name="commission_value" control={control} render={({ field }) => (
+                                <Input type="number" placeholder="Porcentaje" className="flex-grow" {...field} />
+                            )} />
+                            <Controller name="commission_type" control={control} render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value || '%'}>
+                                    <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="%">%</SelectItem>
+                                        <SelectItem value="$">$</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )} />
+                        </div>
                     </div>
                 </div>
                 <div className="space-y-2">

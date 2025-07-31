@@ -132,9 +132,12 @@ export default function CommissionsPage() {
                     const professional = professionalMap.get(professionalId);
                     
                     if(!professional) return;
+                    
+                    const itemName = item.nombre || item.servicio;
+                    if(!itemName) return;
 
                     if(item.tipo === 'servicio') {
-                        const service = services.find(s => s.name === (item.servicio || item.nombre));
+                        const service = services.find(s => s.name === itemName);
                         if (!service) return;
 
                         data.serviceSales += item.precio || 0;
@@ -147,7 +150,7 @@ export default function CommissionsPage() {
                         }
 
                     } else if (item.tipo === 'producto') {
-                        const product = productMap.get(item.id);
+                        const product = products.find(p => p.nombre === itemName);
                         if (!product) return;
                         
                         data.productSales += item.precio || 0;

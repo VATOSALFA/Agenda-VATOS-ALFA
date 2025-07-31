@@ -103,6 +103,7 @@ export default function CashBoxPage() {
 
   const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
+  const [queryKey, setQueryKey] = useState(0);
 
   // Set default date filter on mount
   useEffect(() => {
@@ -117,18 +118,12 @@ export default function CashBoxPage() {
 
   // Set default local filter once locales are loaded
   useEffect(() => {
-    if (locales.length > 0 && !selectedLocalId) {
-      const defaultLocalId = locales[0].id;
-      setSelectedLocalId(defaultLocalId);
+    if (locales.length > 0 && !activeFilters.localId) {
+        const defaultLocalId = locales[0].id;
+        setSelectedLocalId(defaultLocalId);
+        setActiveFilters(prev => ({...prev, localId: defaultLocalId}));
     }
-  }, [locales, selectedLocalId]);
-
-  useEffect(() => {
-    if (selectedLocalId) {
-        handleSearch();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLocalId])
+  }, [locales, activeFilters.localId]);
 
 
   const salesQueryConstraints = useMemo(() => {
@@ -144,7 +139,7 @@ export default function CashBoxPage() {
 
   const { data: salesFromHook, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters.dateRange)}` : undefined,
+    `sales-${JSON.stringify(activeFilters)}`, // Key depends on filters now
     ...(salesQueryConstraints || [])
   );
 
@@ -170,6 +165,7 @@ export default function CashBoxPage() {
   
   const handleSearch = () => {
     setActiveFilters({ dateRange, localId: selectedLocalId });
+    setQueryKey(prev => prev + 1);
   };
   
   const isLoading = localesLoading || salesLoading || clientsLoading;

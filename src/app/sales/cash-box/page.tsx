@@ -177,9 +177,9 @@ export default function CashBoxPage() {
           </div>
       </div>
 
-      <div className="flex items-start gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
         {/* Filters */}
-        <Card className="flex-1">
+        <Card>
             <CardContent className="pt-6 flex flex-wrap items-end gap-4">
                 <div className="space-y-2 flex-grow min-w-[200px]">
                 <label className="text-sm font-medium">Local</label>
@@ -240,7 +240,7 @@ export default function CashBoxPage() {
             </CardContent>
         </Card>
         
-        <Card>
+        <Card className="flex-shrink-0 w-full md:w-56">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
                 <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>

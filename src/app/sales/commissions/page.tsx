@@ -37,7 +37,6 @@ export default function CommissionsPage() {
     const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
-    const [isClient, setIsClient] = useState(false);
     
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -49,11 +48,24 @@ export default function CommissionsPage() {
         professional: 'todos'
     });
 
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
-    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
-    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+    const [queryKey, setQueryKey] = useState(0);
+
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
+    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
     
+    useEffect(() => {
+        const today = new Date();
+        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+        setDateRange(initialDateRange);
+        setActiveFilters({
+            dateRange: initialDateRange,
+            local: 'todos',
+            professional: 'todos'
+        });
+    }, []);
+
     const salesQueryConstraints = useMemo(() => {
         if (!activeFilters.dateRange?.from) return undefined;
         
@@ -67,23 +79,9 @@ export default function CommissionsPage() {
     
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
         'ventas',
-        `sales-${JSON.stringify(activeFilters)}`,
+        salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
         ...(salesQueryConstraints || [])
     );
-    
-     useEffect(() => {
-        if(!isClient) {
-          setIsClient(true);
-          const today = new Date();
-          const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-          setDateRange(initialDateRange);
-          setActiveFilters({
-              dateRange: initialDateRange,
-              local: 'todos',
-              professional: 'todos'
-          });
-        }
-     }, [isClient]);
     
      useEffect(() => {
         const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
@@ -102,18 +100,16 @@ export default function CommissionsPage() {
         if (activeFilters.local !== 'todos') {
             filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
         }
-        if (activeFilters.professional !== 'todos') {
-            filteredSales = filteredSales.flatMap(sale => 
-                sale.items
-                    ?.filter(item => item.barbero_id === activeFilters.professional)
-                    .map(item => ({ ...sale, items: [item] })) || []
-            );
-        }
-
+        
         const commissionRows: CommissionRowData[] = [];
 
         filteredSales.forEach(sale => {
             sale.items?.forEach(item => {
+                // If professional filter is active, only process items from that professional
+                if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
+                    return; // Skip this item if it doesn't match the professional filter
+                }
+
                 const professional = professionalMap.get(item.barbero_id);
                 if (!professional) return;
                 
@@ -131,7 +127,8 @@ export default function CommissionsPage() {
                     const product = productMap.get(item.id);
                     if (!product) return;
                     itemName = product.nombre;
-                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.defaultCommission || professional.defaultCommission;
+                    // Corrected Logic: Professional's specific commission -> Product's default -> Professional's default
+                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                 }
                 
                 if (commissionConfig) {
@@ -200,7 +197,7 @@ export default function CommissionsPage() {
                             <PopoverTrigger asChild>
                                 <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {isClient && dateRange?.from ? (
+                                    {dateRange?.from ? (
                                         dateRange.to ? (
                                             <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
                                         ) : (
@@ -322,3 +319,4 @@ export default function CommissionsPage() {
     </div>
   );
 }
+

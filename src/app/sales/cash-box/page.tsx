@@ -103,27 +103,24 @@ export default function CashBoxPage() {
 
   const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
-  const [queryKey, setQueryKey] = useState(0);
+  
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
-  // Set default date filter on mount
+  // Set default filters on mount
   useEffect(() => {
     const today = new Date();
     const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
     setDateRange(initialDateRange);
-    setActiveFilters(prev => ({ ...prev, dateRange: initialDateRange }));
-  }, []);
-
-  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-
-  // Set default local filter once locales are loaded
-  useEffect(() => {
+    
     if (locales.length > 0 && !activeFilters.localId) {
         const defaultLocalId = locales[0].id;
         setSelectedLocalId(defaultLocalId);
-        setActiveFilters(prev => ({...prev, localId: defaultLocalId}));
+        setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
+    } else if (locales.length > 0) {
+        setActiveFilters(prev => ({ ...prev, dateRange: initialDateRange }));
     }
-  }, [locales, activeFilters.localId]);
+  }, [locales]);
 
 
   const salesQueryConstraints = useMemo(() => {
@@ -139,7 +136,7 @@ export default function CashBoxPage() {
 
   const { data: salesFromHook, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    `sales-${JSON.stringify(activeFilters)}`, // Key depends on filters now
+    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
     ...(salesQueryConstraints || [])
   );
 
@@ -165,7 +162,6 @@ export default function CashBoxPage() {
   
   const handleSearch = () => {
     setActiveFilters({ dateRange, localId: selectedLocalId });
-    setQueryKey(prev => prev + 1);
   };
   
   const isLoading = localesLoading || salesLoading || clientsLoading;

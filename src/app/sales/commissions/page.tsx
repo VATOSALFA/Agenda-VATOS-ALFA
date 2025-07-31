@@ -29,6 +29,7 @@ interface CommissionData {
     productSales: number;
     serviceCommission: number;
     productCommission: number;
+    avgCommissionPercentage: number;
 }
 
 export default function CommissionsPage() {
@@ -39,7 +40,16 @@ export default function CommissionsPage() {
     
     const [isLoading, setIsLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
-    const [queryKey, setQueryKey] = useState(0);
+    
+    const [activeFilters, setActiveFilters] = useState<{
+        dateRange: DateRange | undefined;
+        local: string;
+        professional: string;
+    }>({
+        dateRange: undefined,
+        local: 'todos',
+        professional: 'todos'
+    });
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', 'locales');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', 'profesionales');
@@ -47,19 +57,19 @@ export default function CommissionsPage() {
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', 'productos');
     
     const salesQueryConstraints = useMemo(() => {
-        if (!dateRange?.from) return undefined;
+        if (!activeFilters.dateRange?.from) return undefined;
         
         const constraints = [];
-        constraints.push(where('fecha_hora_venta', '>=', startOfDay(dateRange.from)));
-        if (dateRange.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(dateRange.to)));
+        constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
+        if (activeFilters.dateRange.to) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
         return constraints;
-    }, [dateRange]);
+    }, [activeFilters.dateRange]);
     
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
         'ventas',
-        `sales-${queryKey}`,
+        `sales-${JSON.stringify(activeFilters)}`,
         ...(salesQueryConstraints || [])
     );
     
@@ -67,7 +77,13 @@ export default function CommissionsPage() {
         setIsClient(true);
         if(!dateRange) {
           const today = new Date();
-          setDateRange({ from: startOfDay(today), to: endOfDay(today) });
+          const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+          setDateRange(initialDateRange);
+          setActiveFilters({
+              dateRange: initialDateRange,
+              local: 'todos',
+              professional: 'todos'
+          });
         }
      }, []);
     
@@ -85,11 +101,11 @@ export default function CommissionsPage() {
         const productMap = new Map(products.map(p => [p.id, p]));
 
         let filteredSales = sales;
-        if (localFilter !== 'todos') {
-            filteredSales = filteredSales.filter(s => s.local_id === localFilter);
+        if (activeFilters.local !== 'todos') {
+            filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
         }
 
-        const commissionMap = new Map<string, CommissionData>();
+        const commissionMap = new Map<string, Omit<CommissionData, 'avgCommissionPercentage'>>();
 
         professionals.forEach(prof => {
             commissionMap.set(prof.id, {
@@ -106,7 +122,7 @@ export default function CommissionsPage() {
 
         filteredSales.forEach(sale => {
             sale.items?.forEach(item => {
-                if (professionalFilter !== 'todos' && item.barbero_id !== professionalFilter) {
+                if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
                     return;
                 }
 
@@ -131,7 +147,7 @@ export default function CommissionsPage() {
                     if (!product) return;
                     
                     data.productSales += itemPrice;
-                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.defaultCommission || professional.defaultCommission;
                 }
                 
                 if (commissionConfig) {
@@ -148,18 +164,27 @@ export default function CommissionsPage() {
             });
         });
         
-        const finalData = Array.from(commissionMap.values()).map(data => ({
-            ...data,
-            totalSales: data.serviceSales + data.productSales,
-            totalCommission: data.serviceCommission + data.productCommission,
-        })).filter(d => d.totalSales > 0);
+        const finalData = Array.from(commissionMap.values()).map(data => {
+            const totalSales = data.serviceSales + data.productSales;
+            const totalCommission = data.serviceCommission + data.productCommission;
+            return {
+                ...data,
+                totalSales,
+                totalCommission,
+                avgCommissionPercentage: totalSales > 0 ? (totalCommission / totalSales) * 100 : 0,
+            }
+        }).filter(d => d.totalSales > 0);
 
         setCommissionData(finalData);
 
-    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, localFilter, professionalFilter]);
+    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
 
     const handleSearch = () => {
-        setQueryKey(prev => prev + 1);
+        setActiveFilters({
+            dateRange,
+            local: localFilter,
+            professional: professionalFilter
+        });
     }
 
     const summary = useMemo(() => {
@@ -173,6 +198,8 @@ export default function CommissionsPage() {
             return acc;
         }, { totalSales: 0, totalCommission: 0, serviceSales: 0, serviceCommission: 0, productSales: 0, productCommission: 0 });
     }, [commissionData]);
+
+    const overallAvgCommission = summary.totalSales > 0 ? (summary.totalCommission / summary.totalSales) * 100 : 0;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -281,18 +308,20 @@ export default function CommissionsPage() {
                         <TableRow>
                             <TableHead>Profesional / Staff</TableHead>
                             <TableHead className="text-right">Ventas totales</TableHead>
+                            <TableHead className="text-right">% de comisión</TableHead>
                             <TableHead className="text-right">Monto comisión</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
-                            <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                         ) : commissionData.length === 0 ? (
-                            <TableRow><TableCell colSpan={3} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
                         ) : commissionData.map((commission) => (
                             <TableRow key={commission.professionalId}>
                                 <TableCell className="font-medium">{commission.professionalName}</TableCell>
                                 <TableCell className="text-right">${commission.totalSales.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right">{commission.avgCommissionPercentage.toFixed(2)}%</TableCell>
                                 <TableCell className="text-right text-primary font-semibold">${commission.totalCommission.toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
@@ -301,6 +330,7 @@ export default function CommissionsPage() {
                         <TableRow className="bg-muted/50">
                             <TableHead className="text-right font-bold">Totales</TableHead>
                             <TableHead className="text-right font-bold">${summary.totalSales.toLocaleString('es-CL')}</TableHead>
+                            <TableHead className="text-right font-bold">{overallAvgCommission.toFixed(2)}%</TableHead>
                             <TableHead className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-CL')}</TableHead>
                         </TableRow>
                     </TableFooter>

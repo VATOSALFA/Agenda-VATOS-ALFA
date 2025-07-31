@@ -104,16 +104,16 @@ export default function CashBoxPage() {
 
   useEffect(() => {
     // Set initial filters once locales are loaded
-    if (locales.length > 0 && !selectedLocalId) {
+    if (locales.length > 0 && activeFilters.localId === null) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
       const defaultLocalId = locales[0].id;
-
+      
       setDateRange(initialDateRange);
       setSelectedLocalId(defaultLocalId);
       setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
     }
-  }, [locales, selectedLocalId]);
+  }, [locales, activeFilters.localId]);
 
 
   const salesQueryConstraints = useMemo(() => {
@@ -124,21 +124,17 @@ export default function CashBoxPage() {
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
+    if (activeFilters.localId !== 'todos') {
+        constraints.push(where('local_id', '==', activeFilters.localId));
+    }
     return constraints;
   }, [activeFilters]);
 
-  const { data: salesFromHook, loading: salesLoading } = useFirestoreQuery<Sale>(
+  const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined, 
     ...(salesQueryConstraints || [])
   );
-
-  const sales = useMemo(() => {
-      if (!activeFilters.localId || activeFilters.localId === 'todos') {
-          return salesFromHook;
-      }
-      return salesFromHook.filter(sale => sale.local_id === activeFilters.localId);
-  }, [salesFromHook, activeFilters.localId]);
   
   const clientMap = useMemo(() => {
       if (clientsLoading) return new Map();
@@ -363,4 +359,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-

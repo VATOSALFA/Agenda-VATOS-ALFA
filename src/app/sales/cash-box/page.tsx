@@ -49,9 +49,6 @@ import {
 import {
   Calendar as CalendarIcon,
   Search,
-  Plus,
-  Minus,
-  ArrowRightLeft,
   Download,
   ChevronDown,
   Eye,
@@ -64,7 +61,6 @@ import { where, Timestamp } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 
-
 const SummaryCard = ({
   title,
   amount,
@@ -75,7 +71,7 @@ const SummaryCard = ({
   className?: string;
 }) => (
   <Card className={cn("text-center", className)}>
-    <CardContent className="p-4 flex flex-col items-center justify-center">
+    <CardContent className="p-4 flex flex-col items-center justify-center h-full">
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="text-2xl font-bold text-primary">
         ${amount.toLocaleString('es-CL')}
@@ -101,38 +97,43 @@ export default function CashBoxPage() {
   
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+  const [queryKey, setQueryKey] = useState(0);
 
   useEffect(() => {
     // Set initial filters once locales are loaded
-    if (locales.length > 0 && !selectedLocalId) {
+    if (locales.length > 0 && selectedLocalId === null) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
       const defaultLocalId = locales[0].id;
       
       setDateRange(initialDateRange);
       setSelectedLocalId(defaultLocalId);
-      setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
+      handleSearch(initialDateRange, defaultLocalId);
     }
   }, [locales, selectedLocalId]);
 
 
   const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
+    if (!activeFilters.dateRange?.from) return undefined;
     
-    const constraints = [];
-    constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
+    const constraints = [
+      where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from)))
+    ];
+    
     if (activeFilters.dateRange.to) {
-        constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
-    if (activeFilters.localId !== 'todos') {
+
+    if (activeFilters.localId && activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
+
     return constraints;
   }, [activeFilters]);
 
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined, 
+    queryKey,
     ...(salesQueryConstraints || [])
   );
   
@@ -149,8 +150,9 @@ export default function CashBoxPage() {
     }))
   }, [sales, clientMap, salesLoading, clientsLoading]);
   
-  const handleSearch = () => {
-    setActiveFilters({ dateRange, localId: selectedLocalId });
+  const handleSearch = (currentDateRange = dateRange, currentLocalId = selectedLocalId) => {
+    setActiveFilters({ dateRange: currentDateRange, localId: currentLocalId });
+    setQueryKey(prev => prev + 1);
   };
   
   const isLoading = localesLoading || salesLoading || clientsLoading;
@@ -164,14 +166,6 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
-          <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" /> Ingresos
-              </Button>
-              <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
-                  <Minus className="mr-2 h-4 w-4" /> Egresos
-              </Button>
-          </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -184,6 +178,7 @@ export default function CashBoxPage() {
                     <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
                     </SelectTrigger>
                     <SelectContent>
+                    <SelectItem value="todos">Todos los locales</SelectItem>
                     {locales.map(local => (
                         <SelectItem key={local.id} value={local.id}>
                         {local.name}
@@ -229,7 +224,7 @@ export default function CashBoxPage() {
                     </PopoverContent>
                 </Popover>
                 </div>
-                <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
+                <Button className="w-full sm:w-auto" onClick={() => handleSearch()} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
                 Buscar
                 </Button>
@@ -359,3 +354,4 @@ export default function CashBoxPage() {
     </>
   );
 }
+

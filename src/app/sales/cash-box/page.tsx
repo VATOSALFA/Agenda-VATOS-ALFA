@@ -55,16 +55,20 @@ import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
+import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
+import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 
 
 const SummaryCard = ({
   title,
   amount,
   action,
+  onClick
 }: {
   title: string;
   amount: number;
   action?: 'plus' | 'minus';
+  onClick?: () => void;
 }) => (
   <Card className="text-center bg-card/70">
     <CardContent className="p-4">
@@ -73,7 +77,7 @@ const SummaryCard = ({
         ${amount.toLocaleString('es-CL')}
       </p>
       {action && (
-        <Button size="icon" variant="outline" className="mt-2 h-6 w-6 rounded-full">
+        <Button size="icon" variant="outline" className="mt-2 h-6 w-6 rounded-full" onClick={onClick}>
           {action === 'plus' ? (
             <Plus className="h-4 w-4" />
           ) : (
@@ -97,6 +101,9 @@ export default function CashBoxPage() {
     localId: null
   });
 
+  const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
+  const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
+
   // Set default date filter on mount
   useEffect(() => {
     const today = new Date();
@@ -113,9 +120,15 @@ export default function CashBoxPage() {
     if (locales.length > 0 && !selectedLocalId) {
       const defaultLocalId = locales[0].id;
       setSelectedLocalId(defaultLocalId);
-      setActiveFilters(prev => ({ ...prev, localId: defaultLocalId }));
     }
   }, [locales, selectedLocalId]);
+
+  useEffect(() => {
+    if (selectedLocalId) {
+        handleSearch();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLocalId])
 
 
   const salesQueryConstraints = useMemo(() => {
@@ -165,6 +178,7 @@ export default function CashBoxPage() {
   const efectivoEnCaja = useMemo(() => sales.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [sales]);
 
   return (
+    <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
 
@@ -239,10 +253,10 @@ export default function CashBoxPage() {
             <p className="text-4xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>
               <Plus className="mr-2 h-4 w-4" /> Ingresos
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
               <Minus className="mr-2 h-4 w-4" /> Egresos
             </Button>
             <Button variant="outline">
@@ -255,9 +269,9 @@ export default function CashBoxPage() {
       {/* Detailed Summary */}
       <div className='bg-card p-4 rounded-lg border'>
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" />
-            <SummaryCard title="Otros Ingresos" amount={0} action="plus" />
-            <SummaryCard title="Egresos" amount={0} action="minus" />
+            <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
+            <SummaryCard title="Otros Ingresos" amount={0} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
+            <SummaryCard title="Egresos" amount={0} action="minus" onClick={() => setIsEgresoModalOpen(true)}/>
             <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
           </div>
           <div className="flex justify-end mt-4">
@@ -333,5 +347,17 @@ export default function CashBoxPage() {
         </CardContent>
       </Card>
     </div>
+    
+    <AddIngresoModal 
+        isOpen={isIngresoModalOpen}
+        onOpenChange={setIsIngresoModalOpen}
+        onFormSubmit={() => setIsIngresoModalOpen(false)}
+    />
+    <AddEgresoModal
+        isOpen={isEgresoModalOpen}
+        onOpenChange={setIsEgresoModalOpen}
+        onFormSubmit={() => setIsEgresoModalOpen(false)}
+    />
+    </>
   );
 }

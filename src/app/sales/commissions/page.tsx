@@ -32,13 +32,19 @@ interface CommissionData {
 }
 
 export default function CommissionsPage() {
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfDay(new Date()), to: endOfDay(new Date()) });
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
     const [isLoading, setIsLoading] = useState(false);
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
+    const [isClientMounted, setIsClientMounted] = useState(false);
 
     const [queryKey, setQueryKey] = useState(0);
+
+    useEffect(() => {
+        setIsClientMounted(true);
+        setDateRange({ from: startOfDay(new Date()), to: endOfDay(new Date()) });
+    }, []);
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
@@ -173,7 +179,7 @@ export default function CommissionsPage() {
                             <PopoverTrigger asChild>
                                 <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {dateRange?.from ? (
+                                    {isClientMounted && dateRange?.from ? (
                                         dateRange.to ? (
                                             <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
                                         ) : (

@@ -53,9 +53,9 @@ import {
   ChevronDown,
   Eye,
   Loader2,
+  Plus,
   Minus,
-  Equal,
-  Plus
+  Equal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -116,8 +116,8 @@ export default function CashBoxPage() {
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
       
       setDateRange(initialDateRange);
-      setSelectedLocalId(locales[0].id);
-      setActiveFilters({ dateRange: initialDateRange, localId: locales[0].id });
+      setSelectedLocalId('todos');
+      setActiveFilters({ dateRange: initialDateRange, localId: 'todos' });
     }
   }, [locales, activeFilters.dateRange]);
 
@@ -139,7 +139,7 @@ export default function CashBoxPage() {
     }
 
     return constraints;
-}, [activeFilters.dateRange, activeFilters.localId]);
+}, [activeFilters]);
   
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
@@ -169,6 +169,7 @@ export default function CashBoxPage() {
 
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
   const efectivoEnCaja = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
+  const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
 
 
   return (
@@ -306,7 +307,7 @@ export default function CashBoxPage() {
                           <TableRow key={sale.id}>
                             <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
                             <TableCell>{format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm')}</TableCell>
-                            <TableCell>{locales.find(l => l.id === sale.local_id)?.name}</TableCell>
+                            <TableCell>{localMap.get(sale.local_id) || sale.local_id}</TableCell>
                             <TableCell>{sale.cliente?.nombre} {sale.cliente?.apellido}</TableCell>
                             <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
                             <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
@@ -369,4 +370,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-

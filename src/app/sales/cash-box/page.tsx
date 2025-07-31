@@ -75,7 +75,7 @@ const SummaryCard = ({
   className?: string;
 }) => (
   <Card className={cn("text-center", className)}>
-    <CardContent className="p-3 flex flex-col items-center justify-center">
+    <CardContent className="p-4 flex flex-col items-center justify-center">
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="text-2xl font-bold text-primary">
         ${amount.toLocaleString('es-CL')}
@@ -104,7 +104,7 @@ export default function CashBoxPage() {
 
   useEffect(() => {
     // Set initial filters once locales are loaded
-    if (locales.length > 0 && activeFilters.localId === null) {
+    if (locales.length > 0 && !selectedLocalId) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
       const defaultLocalId = locales[0].id;
@@ -113,16 +113,16 @@ export default function CashBoxPage() {
       setSelectedLocalId(defaultLocalId);
       setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
     }
-  }, [locales, activeFilters.localId]);
+  }, [locales, selectedLocalId]);
 
 
   const salesQueryConstraints = useMemo(() => {
     if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
     
     const constraints = [];
-    constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
     if (activeFilters.dateRange.to) {
-        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+        constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
     }
     if (activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));

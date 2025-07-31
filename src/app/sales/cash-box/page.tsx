@@ -69,17 +69,19 @@ const SummaryCard = ({
   title,
   amount,
   action,
-  onClick
+  onClick,
+  className
 }: {
   title: string;
   amount: number;
   action?: 'plus' | 'minus';
   onClick?: () => void;
+  className?: string;
 }) => (
-  <Card className="text-center bg-card/70">
-    <CardContent className="p-4">
+  <Card className={cn("text-center", className)}>
+    <CardContent className="p-4 flex flex-col items-center justify-center h-full">
       <p className="text-sm text-muted-foreground">{title}</p>
-      <p className="text-xl font-bold text-primary">
+      <p className="text-2xl font-bold text-primary">
         ${amount.toLocaleString('es-CL')}
       </p>
       {action && (
@@ -114,21 +116,16 @@ export default function CashBoxPage() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
   useEffect(() => {
-    if (locales.length > 0 && !selectedLocalId) {
-      const defaultLocalId = locales[0].id;
-      setSelectedLocalId(defaultLocalId);
-    }
-  }, [locales, selectedLocalId]);
-
-  useEffect(() => {
+    // Set initial date range and local id once locales are loaded
     if (!activeFilters.dateRange && !activeFilters.localId && locales.length > 0) {
         const today = new Date();
         const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-        setDateRange(initialDateRange);
-        
         const defaultLocalId = locales[0].id;
+        
+        setDateRange(initialDateRange);
         setSelectedLocalId(defaultLocalId);
 
+        // Set active filters to trigger initial data fetch
         setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
     }
   }, [locales, activeFilters]);
@@ -152,7 +149,7 @@ export default function CashBoxPage() {
   );
 
   const sales = useMemo(() => {
-      // Client-side filtering for local_id
+      // Client-side filtering for local_id because Firestore requires a composite index for it
       if (!activeFilters.localId || activeFilters.localId === 'todos') {
           return salesFromHook;
       }
@@ -258,17 +255,19 @@ export default function CashBoxPage() {
               Buscar
             </Button>
           </div>
-          <div className="text-right">
-              <p className="text-sm font-medium text-muted-foreground">Efectivo en caja</p>
-              <p className="text-4xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
-          </div>
         </CardContent>
       </Card>
 
       
       {/* Detailed Summary */}
       <div className='bg-card p-4 rounded-lg border'>
-          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <Card className="text-center col-span-2 md:col-span-1">
+                <CardContent className="p-4 flex flex-col items-center justify-center h-full">
+                    <p className="text-sm text-muted-foreground">Efectivo en caja</p>
+                    <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
+                </CardContent>
+            </Card>
             <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
             <SummaryCard title="Otros Ingresos" amount={0} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
             <SummaryCard title="Egresos" amount={0} action="minus" onClick={() => setIsEgresoModalOpen(true)}/>

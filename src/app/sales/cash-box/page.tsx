@@ -185,91 +185,86 @@ export default function CashBoxPage() {
   return (
     <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
+      <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
+          <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" /> Ingresos
+              </Button>
+              <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
+                  <Minus className="mr-2 h-4 w-4" /> Egresos
+              </Button>
+          </div>
+      </div>
 
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6 flex flex-wrap items-end gap-4">
-          <div className="space-y-2 flex-grow min-w-[200px]">
-            <label className="text-sm font-medium">Local</label>
-            <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
-              <SelectTrigger>
-                <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
-              </SelectTrigger>
-              <SelectContent>
-                {locales.map(local => (
-                  <SelectItem key={local.id} value={local.id}>
-                    {local.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 flex-grow min-w-[200px]">
-            <label className="text-sm font-medium">Desde / Hasta</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                 <Button
-                    id="date"
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateRange && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+        <CardContent className="pt-6 flex flex-wrap items-end gap-4 justify-between">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-2 flex-grow min-w-[200px]">
+              <label className="text-sm font-medium">Local</label>
+              <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
+                <SelectTrigger>
+                  <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {locales.map(local => (
+                    <SelectItem key={local.id} value={local.id}>
+                      {local.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 flex-grow min-w-[200px]">
+              <label className="text-sm font-medium">Desde / Hasta</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                      id="date"
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+                        ) : (
+                          format(dateRange.from, "LLL dd, y", { locale: es })
+                        )
                       ) : (
-                        format(dateRange.from, "LLL dd, y", { locale: es })
-                      )
-                    ) : (
-                      <span>Seleccionar rango</span>
-                    )}
-                  </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  locale={es}
-                />
-              </PopoverContent>
-            </Popover>
+                        <span>Seleccionar rango</span>
+                      )}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    locale={es}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
+              Buscar
+            </Button>
           </div>
-          <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
-            Buscar
-          </Button>
+          <div className="text-right">
+              <p className="text-sm font-medium text-muted-foreground">Efectivo en caja</p>
+              <p className="text-4xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Main Summary */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-        <h3 className="text-xl font-bold">{locales.find(l => l.id === selectedLocalId)?.name || 'Cargando...'}</h3>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-sm font-medium text-muted-foreground">Efectivo en caja</p>
-            <p className="text-4xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Ingresos
-            </Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
-              <Minus className="mr-2 h-4 w-4" /> Egresos
-            </Button>
-            <Button variant="outline">
-              <ArrowRightLeft className="mr-2 h-4 w-4" /> Traspaso
-            </Button>
-          </div>
-        </div>
-      </div>
       
       {/* Detailed Summary */}
       <div className='bg-card p-4 rounded-lg border'>
@@ -381,4 +376,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-

@@ -54,7 +54,8 @@ import {
   Eye,
   Loader2,
   Minus,
-  Equal
+  Equal,
+  Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -91,7 +92,7 @@ const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
 
 export default function CashBoxPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [selectedLocalId, setSelectedLocalId] = useState<string | null>('todos');
+  const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
   
   const [activeFilters, setActiveFilters] = useState<{
     dateRange: DateRange | undefined;
@@ -121,24 +122,25 @@ export default function CashBoxPage() {
   }, [locales, activeFilters.dateRange]);
 
 
-  const salesQueryConstraints = useMemo(() => {
+ const salesQueryConstraints = useMemo(() => {
     if (!activeFilters.dateRange?.from) return undefined;
-    
-    const constraints: (where | null)[] = [
-      where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from)))
-    ];
+
+    const constraints = [];
+
+    constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
     
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
-
+    
+    // Only add local filter if a specific local is selected
     if (activeFilters.localId && activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
 
-    return constraints.filter(c => c !== null);
-  }, [activeFilters]);
-
+    return constraints;
+}, [activeFilters.dateRange, activeFilters.localId]);
+  
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     queryKey,
@@ -177,11 +179,11 @@ export default function CashBoxPage() {
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
-        <Card>
+        <Card className="h-full">
             <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
                 <div className="space-y-2 flex-grow min-w-[200px]">
                 <label className="text-sm font-medium">Local</label>
-                <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={localesLoading}>
+                <Select value={selectedLocalId || 'todos'} onValueChange={setSelectedLocalId} disabled={localesLoading}>
                     <SelectTrigger>
                     <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
                     </SelectTrigger>
@@ -239,15 +241,15 @@ export default function CashBoxPage() {
             </CardContent>
         </Card>
         
-        <Card className="flex-shrink-0 w-full md:w-64 h-full">
+        <Card className="flex-shrink-0 w-full md:w-auto h-full">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
                 <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
             </CardContent>
         </Card>
       </div>
-
-       <div className="flex justify-end">
+      
+      <div className="flex justify-end">
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte

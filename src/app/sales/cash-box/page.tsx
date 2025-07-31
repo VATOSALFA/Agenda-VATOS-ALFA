@@ -107,40 +107,45 @@ export default function CashBoxPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
-  // Set default filters on mount
+  // Set default filters on mount, but don't trigger query yet
   useEffect(() => {
     const today = new Date();
     const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
     setDateRange(initialDateRange);
     
-    if (locales.length > 0 && !activeFilters.localId) {
+    if (locales.length > 0 && !selectedLocalId) {
         const defaultLocalId = locales[0].id;
         setSelectedLocalId(defaultLocalId);
+        // Set active filters only after both date and local are ready
         setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
-    } else if (locales.length > 0) {
-        setActiveFilters(prev => ({ ...prev, dateRange: initialDateRange }));
     }
-  }, [locales]);
+  }, [locales, selectedLocalId]);
 
 
   const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return undefined;
+    // Only create a query if active filters are properly set
+    if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
     
     const constraints = [];
     constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
+    // Firestore doesn't support multiple inequalities, so we filter local on client side
+    // if(activeFilters.localId !== 'todos') {
+    //    constraints.push(where('local_id', '==', activeFilters.localId));
+    // }
     return constraints;
-  }, [activeFilters.dateRange]);
+  }, [activeFilters]);
 
   const { data: salesFromHook, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
+    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined, // Unique key for query
     ...(salesQueryConstraints || [])
   );
 
   const sales = useMemo(() => {
+      // Client-side filtering for local_id
       if (!activeFilters.localId || activeFilters.localId === 'todos') {
           return salesFromHook;
       }
@@ -161,6 +166,7 @@ export default function CashBoxPage() {
   }, [sales, clientMap, salesLoading, clientsLoading]);
   
   const handleSearch = () => {
+    // This is now the single source of truth for triggering a new query
     setActiveFilters({ dateRange, localId: selectedLocalId });
   };
   
@@ -353,3 +359,5 @@ export default function CashBoxPage() {
     </>
   );
 }
+
+    

@@ -116,7 +116,6 @@ export default function CashBoxPage() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
   useEffect(() => {
-    // Set initial date range and local id once locales are loaded
     if (!activeFilters.dateRange && !activeFilters.localId && locales.length > 0) {
         const today = new Date();
         const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
@@ -125,7 +124,6 @@ export default function CashBoxPage() {
         setDateRange(initialDateRange);
         setSelectedLocalId(defaultLocalId);
 
-        // Set active filters to trigger initial data fetch
         setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
     }
   }, [locales, activeFilters]);
@@ -144,12 +142,11 @@ export default function CashBoxPage() {
 
   const { data: salesFromHook, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined, // Unique key for query
+    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined, 
     ...(salesQueryConstraints || [])
   );
 
   const sales = useMemo(() => {
-      // Client-side filtering for local_id because Firestore requires a composite index for it
       if (!activeFilters.localId || activeFilters.localId === 'todos') {
           return salesFromHook;
       }
@@ -170,7 +167,6 @@ export default function CashBoxPage() {
   }, [sales, clientMap, salesLoading, clientsLoading]);
   
   const handleSearch = () => {
-    // This is now the single source of truth for triggering a new query
     setActiveFilters({ dateRange, localId: selectedLocalId });
   };
   
@@ -254,6 +250,10 @@ export default function CashBoxPage() {
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
               Buscar
             </Button>
+             <div className="flex flex-col items-center justify-center h-full pl-4">
+                <p className="text-sm text-muted-foreground">Efectivo en caja</p>
+                <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -261,13 +261,7 @@ export default function CashBoxPage() {
       
       {/* Detailed Summary */}
       <div className='bg-card p-4 rounded-lg border'>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <Card className="text-center col-span-2 md:col-span-1">
-                <CardContent className="p-4 flex flex-col items-center justify-center h-full">
-                    <p className="text-sm text-muted-foreground">Efectivo en caja</p>
-                    <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
-                </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
             <SummaryCard title="Otros Ingresos" amount={0} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
             <SummaryCard title="Egresos" amount={0} action="minus" onClick={() => setIsEgresoModalOpen(true)}/>

@@ -70,7 +70,7 @@ export default function CommissionsPage() {
         return constraints;
     }, [activeFilters.dateRange]);
     
-    const salesQueryKey = useMemo(() => `sales-${JSON.stringify(activeFilters.dateRange)}`, [activeFilters.dateRange]);
+    const salesQueryKey = `sales-${JSON.stringify(activeFilters.dateRange)}`;
 
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
         'ventas',
@@ -95,6 +95,7 @@ export default function CommissionsPage() {
         
         const calculateCommissions = () => {
             if (!sales || !professionals || !services || !products) {
+                 setCommissionData([]);
                  setIsLoading(false);
                  return;
             }
@@ -102,6 +103,7 @@ export default function CommissionsPage() {
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
             
             let filteredSales = sales;
+
             if (activeFilters.local !== 'todos') {
                 filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
             }
@@ -139,7 +141,7 @@ export default function CommissionsPage() {
                     const itemName = item.nombre || item.servicio;
                     if(!itemName) return;
                     const itemPrice = item.precio || 0;
-
+                    
                     if(item.tipo === 'servicio') {
                         const service = services.find(s => s.name === itemName);
                         if (!service) return;

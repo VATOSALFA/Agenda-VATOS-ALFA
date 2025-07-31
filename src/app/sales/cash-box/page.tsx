@@ -53,6 +53,8 @@ import {
   ChevronDown,
   Eye,
   Loader2,
+  Minus,
+  Equal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -70,8 +72,8 @@ const SummaryCard = ({
   amount: number;
   className?: string;
 }) => (
-  <Card className={cn("text-center", className)}>
-    <CardContent className="p-4 flex flex-col items-center justify-center h-full">
+  <Card className={cn("flex flex-col justify-center", className)}>
+    <CardContent className="p-4 text-center">
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="text-2xl font-bold text-primary">
         ${amount.toLocaleString('es-CL')}
@@ -80,9 +82,16 @@ const SummaryCard = ({
   </Card>
 );
 
+const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
+    <div className="flex items-center justify-center">
+        <Icon className="h-6 w-6 text-muted-foreground" />
+    </div>
+);
+
+
 export default function CashBoxPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
+  const [selectedLocalId, setSelectedLocalId] = useState<string | null>('todos');
   
   const [activeFilters, setActiveFilters] = useState<{
     dateRange: DateRange | undefined;
@@ -101,22 +110,21 @@ export default function CashBoxPage() {
 
   useEffect(() => {
     // Set initial filters once locales are loaded
-    if (locales.length > 0 && selectedLocalId === null) {
+    if (!activeFilters.dateRange && locales.length > 0) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-      const defaultLocalId = locales[0].id;
       
       setDateRange(initialDateRange);
-      setSelectedLocalId(defaultLocalId);
-      handleSearch(initialDateRange, defaultLocalId);
+      setSelectedLocalId(locales[0].id);
+      setActiveFilters({ dateRange: initialDateRange, localId: locales[0].id });
     }
-  }, [locales, selectedLocalId]);
+  }, [locales, activeFilters.dateRange]);
 
 
   const salesQueryConstraints = useMemo(() => {
     if (!activeFilters.dateRange?.from) return undefined;
     
-    const constraints = [
+    const constraints: (where | null)[] = [
       where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from)))
     ];
     
@@ -128,7 +136,7 @@ export default function CashBoxPage() {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
 
-    return constraints;
+    return constraints.filter(c => c !== null);
   }, [activeFilters]);
 
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
@@ -150,8 +158,8 @@ export default function CashBoxPage() {
     }))
   }, [sales, clientMap, salesLoading, clientsLoading]);
   
-  const handleSearch = (currentDateRange = dateRange, currentLocalId = selectedLocalId) => {
-    setActiveFilters({ dateRange: currentDateRange, localId: currentLocalId });
+  const handleSearch = () => {
+    setActiveFilters({ dateRange, localId: selectedLocalId });
     setQueryKey(prev => prev + 1);
   };
   
@@ -168,7 +176,7 @@ export default function CashBoxPage() {
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
+       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
         <Card>
             <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
                 <div className="space-y-2 flex-grow min-w-[200px]">
@@ -231,14 +239,14 @@ export default function CashBoxPage() {
             </CardContent>
         </Card>
         
-        <Card className="flex-shrink-0 w-full md:w-64">
+        <Card className="flex-shrink-0 w-full md:w-64 h-full">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
                 <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
             </CardContent>
         </Card>
-
       </div>
+
        <div className="flex justify-end">
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
@@ -247,12 +255,15 @@ export default function CashBoxPage() {
       </div>
       
       {/* Detailed Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
-        <SummaryCard title="Otros Ingresos" amount={0} />
-        <SummaryCard title="Egresos" amount={0} />
-        <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
-      </div>
+       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-4 items-center">
+            <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
+            <IconSeparator icon={Plus} />
+            <SummaryCard title="Otros Ingresos" amount={0} />
+            <IconSeparator icon={Minus} />
+            <SummaryCard title="Egresos" amount={0} />
+            <IconSeparator icon={Equal} />
+            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
+        </div>
 
       {/* Main Table */}
       <Card>
@@ -323,11 +334,13 @@ export default function CashBoxPage() {
                 <TabsContent value="otros-ingresos" className="mt-4">
                     <div className="text-center text-muted-foreground p-12">
                         <p>No hay otros ingresos registrados para este período.</p>
+                        <Button variant="outline" size="sm" className="mt-4" onClick={() => setIsIngresoModalOpen(true)}>Agregar Ingreso</Button>
                     </div>
                 </TabsContent>
                 <TabsContent value="egresos" className="mt-4">
                      <div className="text-center text-muted-foreground p-12">
                         <p>No hay egresos registrados para este período.</p>
+                        <Button variant="outline" size="sm" className="mt-4" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
                     </div>
                 </TabsContent>
             </Tabs>

@@ -84,12 +84,14 @@ export default function CommissionsPage() {
 
     useEffect(() => {
         const calculateCommissions = () => {
-            if (salesLoading || professionalsLoading || servicesLoading || productsLoading) return;
+            if (salesLoading || professionalsLoading || servicesLoading || productsLoading || !sales || !professionals || !services || !products) return;
             
             setIsLoading(true);
 
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
-            
+            const serviceMap = new Map(services.map(s => [s.name, s]));
+            const productMap = new Map(products.map(p => [p.id, p]));
+
             let filteredSales = sales;
             if (activeFilters.local !== 'todos') {
                 filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
@@ -121,7 +123,8 @@ export default function CommissionsPage() {
                     const professional = professionalMap.get(professionalId);
                     
                     if(item.tipo === 'servicio') {
-                        const service = services.find(s => s.name === (item.servicio || item.nombre));
+                        const serviceName = item.servicio || item.nombre;
+                        const service = serviceMap.get(serviceName);
                         if (!service) return;
 
                         data.serviceSales += item.precio || 0;
@@ -134,7 +137,7 @@ export default function CommissionsPage() {
                         }
 
                     } else if (item.tipo === 'producto') {
-                        const product = products.find(p => p.id === item.id);
+                        const product = productMap.get(item.id);
                         if (!product) return;
                         
                         data.productSales += item.precio || 0;
@@ -153,7 +156,7 @@ export default function CommissionsPage() {
                 ...data,
                 totalSales: data.serviceSales + data.productSales,
                 totalCommission: data.serviceCommission + data.productCommission,
-            }));
+            })).filter(d => d.totalSales > 0);
 
             setCommissionData(finalData);
             setIsLoading(false);

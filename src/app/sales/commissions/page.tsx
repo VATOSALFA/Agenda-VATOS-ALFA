@@ -71,10 +71,17 @@ export default function CommissionsPage() {
         }
         return constraints;
     }, [activeFilters.dateRange]);
+    
+    const salesQueryKey = `sales-${JSON.stringify(activeFilters.dateRange)}`;
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+        'ventas',
+        salesQueryKey, 
+        ...(salesQueryConstraints)
+    );
     
     const handleSearch = () => {
+        setIsLoading(true);
         setActiveFilters({
             dateRange: dateRange,
             local: localFilter,
@@ -83,13 +90,15 @@ export default function CommissionsPage() {
     };
 
     useEffect(() => {
-        const calculateCommissions = () => {
-            if (salesLoading || professionalsLoading || servicesLoading || productsLoading || !sales || !professionals || !services || !products) return;
-            
-            setIsLoading(true);
+        if (salesLoading || professionalsLoading || servicesLoading || productsLoading) {
+          return;
+        }
 
+        const calculateCommissions = () => {
+            if (!sales || !professionals || !services || !products) return;
+            
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
-            const serviceMap = new Map(services.map(s => [s.name, s]));
+            const serviceMap = new Map(services.map(s => [s.id, s]));
             const productMap = new Map(products.map(p => [p.id, p]));
 
             let filteredSales = sales;
@@ -122,9 +131,10 @@ export default function CommissionsPage() {
                     const data = commissionMap.get(professionalId)!;
                     const professional = professionalMap.get(professionalId);
                     
+                    if(!professional) return;
+
                     if(item.tipo === 'servicio') {
-                        const serviceName = item.servicio || item.nombre;
-                        const service = serviceMap.get(serviceName);
+                        const service = services.find(s => s.name === (item.servicio || item.nombre));
                         if (!service) return;
 
                         data.serviceSales += item.precio || 0;
@@ -241,8 +251,8 @@ export default function CommissionsPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <Button className="w-full lg:w-auto" onClick={handleSearch} disabled={isLoading}>
-                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
+                    <Button className="w-full lg:w-auto" onClick={handleSearch} disabled={isLoading || salesLoading}>
+                        {(isLoading || salesLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                     </Button>
                 </div>
             </CardContent>

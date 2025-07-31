@@ -68,31 +68,18 @@ import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 const SummaryCard = ({
   title,
   amount,
-  action,
-  onClick,
   className
 }: {
   title: string;
   amount: number;
-  action?: 'plus' | 'minus';
-  onClick?: () => void;
   className?: string;
 }) => (
   <Card className={cn("text-center", className)}>
-    <CardContent className="p-4 flex flex-col items-center justify-center h-full">
+    <CardContent className="p-3 flex flex-col items-center justify-center">
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="text-2xl font-bold text-primary">
         ${amount.toLocaleString('es-CL')}
       </p>
-      {action && (
-        <Button size="icon" variant="outline" className="mt-2 h-6 w-6 rounded-full" onClick={onClick}>
-          {action === 'plus' ? (
-            <Plus className="h-4 w-4" />
-          ) : (
-            <Minus className="h-4 w-4" />
-          )}
-        </Button>
-      )}
     </CardContent>
   </Card>
 );
@@ -190,9 +177,9 @@ export default function CashBoxPage() {
           </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="flex items-start gap-4">
         {/* Filters */}
-        <Card className="lg:col-span-3">
+        <Card className="flex-1">
             <CardContent className="pt-6 flex flex-wrap items-end gap-4">
                 <div className="space-y-2 flex-grow min-w-[200px]">
                 <label className="text-sm font-medium">Local</label>
@@ -261,8 +248,7 @@ export default function CashBoxPage() {
         </Card>
 
       </div>
-
-      <div className="flex justify-end">
+       <div className="flex justify-end">
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
@@ -271,9 +257,9 @@ export default function CashBoxPage() {
       
       {/* Detailed Summary */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
-        <SummaryCard title="Otros Ingresos" amount={0} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
-        <SummaryCard title="Egresos" amount={0} action="minus" onClick={() => setIsEgresoModalOpen(true)}/>
+        <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
+        <SummaryCard title="Otros Ingresos" amount={0} />
+        <SummaryCard title="Egresos" amount={0} />
         <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
       </div>
 
@@ -361,12 +347,18 @@ export default function CashBoxPage() {
     <AddIngresoModal 
         isOpen={isIngresoModalOpen}
         onOpenChange={setIsIngresoModalOpen}
-        onFormSubmit={() => setIsIngresoModalOpen(false)}
+        onFormSubmit={() => {
+            setIsIngresoModalOpen(false)
+            handleSearch()
+        }}
     />
     <AddEgresoModal
         isOpen={isEgresoModalOpen}
         onOpenChange={setIsEgresoModalOpen}
-        onFormSubmit={() => setIsEgresoModalOpen(false)}
+        onFormSubmit={() => {
+            setIsEgresoModalOpen(false)
+            handleSearch()
+        }}
     />
     </>
   );

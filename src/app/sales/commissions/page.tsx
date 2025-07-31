@@ -31,20 +31,48 @@ interface CommissionData {
 }
 
 export default function CommissionsPage() {
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({
-      from: startOfDay(new Date()),
-      to: endOfDay(new Date()),
-    });
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
     const [isLoading, setIsLoading] = useState(false);
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
+    const [activeFilters, setActiveFilters] = useState<{
+        dateRange: DateRange | undefined;
+        local: string;
+        professional: string;
+    }>({
+        dateRange: undefined,
+        local: 'todos',
+        professional: 'todos'
+    });
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+        const today = new Date();
+        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+        setDateRange(initialDateRange);
+        setActiveFilters({ dateRange: initialDateRange, local: 'todos', professional: 'todos' });
+    }, []);
+
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas');
+    
+    const salesQueryConstraints = useMemo(() => {
+        const constraints = [];
+        if (activeFilters.dateRange?.from) {
+            constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
+        }
+        if (activeFilters.dateRange?.to) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
+        }
+        return constraints;
+    }, [activeFilters.dateRange]);
+    
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints);
     
      useEffect(() => {
         const calculateCommissions = () => {
@@ -65,13 +93,7 @@ export default function CommissionsPage() {
             const productMap = new Map(products.map(p => [p.nombre, p]));
 
             let filteredSales = sales.filter(s => {
-                const saleDate = s.fecha_hora_venta.toDate();
-                const from = dateRange?.from ? startOfDay(dateRange.from) : null;
-                const to = dateRange?.to ? endOfDay(dateRange.to) : null;
-
-                if (from && saleDate < from) return false;
-                if (to && saleDate > to) return false;
-                if (localFilter !== 'todos' && s.local_id !== localFilter) return false;
+                if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return false;
                 return true;
             });
 
@@ -92,7 +114,7 @@ export default function CommissionsPage() {
 
             filteredSales.forEach(sale => {
                 sale.items?.forEach(item => {
-                    if (professionalFilter !== 'todos' && item.barbero_id !== professionalFilter) {
+                    if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
                         return;
                     }
 
@@ -105,7 +127,7 @@ export default function CommissionsPage() {
                     const itemPrice = item.precio || 0;
 
                     if(item.tipo === 'servicio') {
-                        const service = serviceMap.get(item.nombre || item.servicio);
+                        const service = serviceMap.get(item.servicio);
                         if (!service) return;
 
                         data.serviceSales += itemPrice;
@@ -122,7 +144,7 @@ export default function CommissionsPage() {
                         if (!product) return;
                         
                         data.productSales += itemPrice;
-                        const commissionConfig = professional?.comisionesPorProducto?.[professional.id] || product.commission;
+                        const commissionConfig = product?.comisionesPorProducto?.[professional.id] || product.commission;
                          if (commissionConfig) {
                             const commissionAmount = commissionConfig.type === '%'
                                 ? itemPrice * (commissionConfig.value / 100)
@@ -145,8 +167,15 @@ export default function CommissionsPage() {
 
         calculateCommissions();
 
-    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, dateRange, localFilter, professionalFilter]);
+    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
 
+    const handleSearch = () => {
+        setActiveFilters({
+            dateRange,
+            local: localFilter,
+            professional: professionalFilter
+        });
+    }
 
     const summary = useMemo(() => {
         return commissionData.reduce((acc, current) => {
@@ -179,7 +208,7 @@ export default function CommissionsPage() {
                             <PopoverTrigger asChild>
                                 <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {dateRange?.from ? (
+                                    {isClient && dateRange?.from ? (
                                         dateRange.to ? (
                                             <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
                                         ) : (
@@ -223,7 +252,7 @@ export default function CommissionsPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <Button className="w-full lg:w-auto" disabled={isLoading}>
+                    <Button className="w-full lg:w-auto" onClick={handleSearch} disabled={isLoading}>
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                     </Button>
                 </div>

@@ -34,7 +34,6 @@ export default function CommissionsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
-    const [isLoading, setIsLoading] = useState(true);
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -46,6 +45,7 @@ export default function CommissionsPage() {
         professional: 'todos'
     });
     const [isClient, setIsClient] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         setIsClient(true);
@@ -62,7 +62,7 @@ export default function CommissionsPage() {
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     
     const salesQueryConstraints = useMemo(() => {
-        if (!activeFilters.dateRange?.from) return undefined; // Do not query if date range is not set
+        if (!activeFilters.dateRange?.from) return undefined;
         
         const constraints = [];
         constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
@@ -128,30 +128,31 @@ export default function CommissionsPage() {
                 if (!data) return;
 
                 const itemPrice = item.precio || 0;
+                let commissionConfig = null;
 
                 if(item.tipo === 'servicio') {
                     const service = serviceMap.get(item.servicio);
                     if (!service) return;
-
+                    
                     data.serviceSales += itemPrice;
-                    const commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
-                    if (commissionConfig) {
-                        const commissionAmount = commissionConfig.type === '%'
-                            ? itemPrice * (commissionConfig.value / 100)
-                            : commissionConfig.value;
-                        data.serviceCommission += commissionAmount;
-                    }
+                    commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
 
                 } else if (item.tipo === 'producto') {
                     const product = productMap.get(item.nombre);
                     if (!product) return;
                     
                     data.productSales += itemPrice;
-                    const commissionConfig = professional?.comisionesPorProducto?.[professional.id] || product.commission;
-                     if (commissionConfig) {
-                        const commissionAmount = commissionConfig.type === '%'
-                            ? itemPrice * (commissionConfig.value / 100)
-                            : commissionConfig.value;
+                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission;
+                }
+                
+                if (commissionConfig) {
+                    const commissionAmount = commissionConfig.type === '%'
+                        ? itemPrice * (commissionConfig.value / 100)
+                        : commissionConfig.value;
+                    
+                    if(item.tipo === 'servicio') {
+                        data.serviceCommission += commissionAmount;
+                    } else {
                         data.productCommission += commissionAmount;
                     }
                 }
@@ -169,6 +170,7 @@ export default function CommissionsPage() {
     }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
 
     const handleSearch = () => {
+        setIsLoading(true);
         setActiveFilters({
             dateRange,
             local: localFilter,

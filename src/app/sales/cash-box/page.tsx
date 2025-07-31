@@ -41,6 +41,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Calendar as CalendarIcon,
   Search,
   Plus,
@@ -107,23 +113,28 @@ export default function CashBoxPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
-  // Set default filters on mount, but don't trigger query yet
   useEffect(() => {
-    const today = new Date();
-    const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-    setDateRange(initialDateRange);
-    
     if (locales.length > 0 && !selectedLocalId) {
-        const defaultLocalId = locales[0].id;
-        setSelectedLocalId(defaultLocalId);
-        // Set active filters only after both date and local are ready
-        setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
+      const defaultLocalId = locales[0].id;
+      setSelectedLocalId(defaultLocalId);
     }
   }, [locales, selectedLocalId]);
 
+  useEffect(() => {
+    if (!activeFilters.dateRange && !activeFilters.localId && locales.length > 0) {
+        const today = new Date();
+        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+        setDateRange(initialDateRange);
+        
+        const defaultLocalId = locales[0].id;
+        setSelectedLocalId(defaultLocalId);
+
+        setActiveFilters({ dateRange: initialDateRange, localId: defaultLocalId });
+    }
+  }, [locales, activeFilters]);
+
 
   const salesQueryConstraints = useMemo(() => {
-    // Only create a query if active filters are properly set
     if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
     
     const constraints = [];
@@ -131,10 +142,6 @@ export default function CashBoxPage() {
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
-    // Firestore doesn't support multiple inequalities, so we filter local on client side
-    // if(activeFilters.localId !== 'todos') {
-    //    constraints.push(where('local_id', '==', activeFilters.localId));
-    // }
     return constraints;
   }, [activeFilters]);
 
@@ -280,68 +287,83 @@ export default function CashBoxPage() {
           </div>
       </div>
 
-
       {/* Main Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Flujo De Ventas Facturadas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Fecha De Pago</TableHead>
-                <TableHead>Local</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Detalle</TableHead>
-                <TableHead className="text-right">Monto Facturado</TableHead>
-                <TableHead className="text-right">Flujo Del Periodo</TableHead>
-                <TableHead className="text-right">Opciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                  Array.from({length: 3}).map((_, i) => (
-                      <TableRow key={i}>
-                          <TableCell colSpan={8}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
+        <CardContent className="pt-6">
+            <Tabs defaultValue="ventas-facturadas">
+                <TabsList>
+                    <TabsTrigger value="ventas-facturadas">Flujo de Ventas Facturadas</TabsTrigger>
+                    <TabsTrigger value="otros-ingresos">Otros Ingresos</TabsTrigger>
+                    <TabsTrigger value="egresos">Egresos</TabsTrigger>
+                </TabsList>
+                <TabsContent value="ventas-facturadas" className="mt-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Fecha De Pago</TableHead>
+                        <TableHead>Local</TableHead>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Detalle</TableHead>
+                        <TableHead className="text-right">Monto Facturado</TableHead>
+                        <TableHead className="text-right">Flujo Del Periodo</TableHead>
+                        <TableHead className="text-right">Opciones</TableHead>
                       </TableRow>
-                  ))
-              ) : salesWithClientData.length === 0 ? (
-                  <TableRow>
-                      <TableCell colSpan={8} className="text-center h-24">No hay ventas para el período seleccionado.</TableCell>
-                  </TableRow>
-              ) : (
-                salesWithClientData.map((sale) => (
-                  <TableRow key={sale.id}>
-                    <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
-                    <TableCell>{format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm')}</TableCell>
-                    <TableCell>{locales.find(l => l.id === sale.local_id)?.name}</TableCell>
-                    <TableCell>{sale.cliente?.nombre} {sale.cliente?.apellido}</TableCell>
-                    <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
-                    <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
-                    <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-CL')}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Ver Detalle
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>Anular</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {isLoading ? (
+                          Array.from({length: 3}).map((_, i) => (
+                              <TableRow key={i}>
+                                  <TableCell colSpan={8}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
+                              </TableRow>
+                          ))
+                      ) : salesWithClientData.length === 0 ? (
+                          <TableRow>
+                              <TableCell colSpan={8} className="text-center h-24">No hay ventas para el período seleccionado.</TableCell>
+                          </TableRow>
+                      ) : (
+                        salesWithClientData.map((sale) => (
+                          <TableRow key={sale.id}>
+                            <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
+                            <TableCell>{format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm')}</TableCell>
+                            <TableCell>{locales.find(l => l.id === sale.local_id)?.name}</TableCell>
+                            <TableCell>{sale.cliente?.nombre} {sale.cliente?.apellido}</TableCell>
+                            <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
+                            <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
+                            <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-CL')}</TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Ver Detalle
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>Anular</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+                <TabsContent value="otros-ingresos" className="mt-4">
+                    <div className="text-center text-muted-foreground p-12">
+                        <p>No hay otros ingresos registrados para este período.</p>
+                    </div>
+                </TabsContent>
+                <TabsContent value="egresos" className="mt-4">
+                     <div className="text-center text-muted-foreground p-12">
+                        <p>No hay egresos registrados para este período.</p>
+                    </div>
+                </TabsContent>
+            </Tabs>
         </CardContent>
       </Card>
     </div>
@@ -360,4 +382,3 @@ export default function CashBoxPage() {
   );
 }
 
-    

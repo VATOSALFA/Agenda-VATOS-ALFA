@@ -172,7 +172,7 @@ export default function CashBoxPage() {
   
   const isLoading = localesLoading || salesLoading || clientsLoading;
 
-  const totalVentasFacturadas = useMemo(() => sales.reduce((sum, sale) => sum + sale.total, 0), [sales]);
+  const totalVentasFacturadas = useMemo(() => sales.reduce((sum, sale) => sum + (sale.total || 0), 0), [sales]);
   const efectivoEnCaja = useMemo(() => sales.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [sales]);
 
   return (

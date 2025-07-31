@@ -17,7 +17,7 @@ import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, Dol
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where } from "firebase/firestore";
-import type { Local, Profesional, Service, Product, Sale } from "@/lib/types";
+import type { Local, Profesional, Service, Product, Sale, SaleItem } from "@/lib/types";
 
 interface CommissionData {
     professionalId: string;
@@ -36,7 +36,6 @@ export default function CommissionsPage() {
     const [professionalFilter, setProfessionalFilter] = useState('todos');
     const [isLoading, setIsLoading] = useState(false);
     const [commissionData, setCommissionData] = useState<CommissionData[]>([]);
-    const [isClientMounted, setIsClientMounted] = useState(false);
 
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -49,7 +48,6 @@ export default function CommissionsPage() {
     });
     
     useEffect(() => {
-        setIsClientMounted(true);
         const today = new Date();
         const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
         setDateRange(initialDateRange);
@@ -72,12 +70,12 @@ export default function CommissionsPage() {
         return constraints;
     }, [activeFilters.dateRange]);
     
-    const salesQueryKey = `sales-${JSON.stringify(activeFilters.dateRange)}`;
+    const salesQueryKey = useMemo(() => `sales-${JSON.stringify(activeFilters.dateRange)}`, [activeFilters.dateRange]);
 
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
         'ventas',
         salesQueryKey, 
-        ...(salesQueryConstraints)
+        ...salesQueryConstraints
     );
     
     const handleSearch = () => {
@@ -91,25 +89,30 @@ export default function CommissionsPage() {
 
     useEffect(() => {
         if (salesLoading || professionalsLoading || servicesLoading || productsLoading) {
+          setIsLoading(true);
           return;
         }
-
+        
         const calculateCommissions = () => {
-            if (!sales || !professionals || !services || !products) return;
+            if (!sales || !professionals || !services || !products) {
+                 setIsLoading(false);
+                 return;
+            }
             
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
-            const serviceMap = new Map(services.map(s => [s.id, s]));
-            const productMap = new Map(products.map(p => [p.id, p]));
-
+            
             let filteredSales = sales;
             if (activeFilters.local !== 'todos') {
                 filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
             }
-            
+             if (activeFilters.professional !== 'todos') {
+                filteredSales = filteredSales.filter(s => s.items.some(item => item.barbero_id === activeFilters.professional));
+            }
+
             const commissionMap = new Map<string, CommissionData>();
 
             professionals.forEach(prof => {
-                if (activeFilters.professional === 'todos' || activeFilters.professional === prof.id) {
+                 if (activeFilters.professional === 'todos' || activeFilters.professional === prof.id) {
                     commissionMap.set(prof.id, {
                         professionalId: prof.id,
                         professionalName: prof.name,
@@ -135,16 +138,17 @@ export default function CommissionsPage() {
                     
                     const itemName = item.nombre || item.servicio;
                     if(!itemName) return;
+                    const itemPrice = item.precio || 0;
 
                     if(item.tipo === 'servicio') {
                         const service = services.find(s => s.name === itemName);
                         if (!service) return;
 
-                        data.serviceSales += item.precio || 0;
-                        const commissionConfig = professional?.comisionesPorServicio?.[service.name] || service.defaultCommission;
+                        data.serviceSales += itemPrice;
+                        const commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission;
                         if (commissionConfig) {
                             const commissionAmount = commissionConfig.type === '%'
-                                ? (item.precio || 0) * (commissionConfig.value / 100)
+                                ? itemPrice * (commissionConfig.value / 100)
                                 : commissionConfig.value;
                             data.serviceCommission += commissionAmount;
                         }
@@ -153,11 +157,11 @@ export default function CommissionsPage() {
                         const product = products.find(p => p.nombre === itemName);
                         if (!product) return;
                         
-                        data.productSales += item.precio || 0;
+                        data.productSales += itemPrice;
                         const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission;
                          if (commissionConfig) {
                             const commissionAmount = commissionConfig.type === '%'
-                                ? (item.precio || 0) * (commissionConfig.value / 100)
+                                ? itemPrice * (commissionConfig.value / 100)
                                 : commissionConfig.value;
                             data.productCommission += commissionAmount;
                         }
@@ -210,7 +214,7 @@ export default function CommissionsPage() {
                             <PopoverTrigger asChild>
                                 <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {isClientMounted && dateRange?.from ? (
+                                    {dateRange?.from ? (
                                         dateRange.to ? (
                                             <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
                                         ) : (
@@ -254,8 +258,8 @@ export default function CommissionsPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <Button className="w-full lg:w-auto" onClick={handleSearch} disabled={isLoading || salesLoading}>
-                        {(isLoading || salesLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
+                    <Button className="w-full lg:w-auto" onClick={handleSearch} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                     </Button>
                 </div>
             </CardContent>
@@ -302,7 +306,7 @@ export default function CommissionsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {(isLoading || salesLoading) ? (
+                        {isLoading ? (
                             <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                         ) : commissionData.length === 0 ? (
                             <TableRow><TableCell colSpan={3} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>

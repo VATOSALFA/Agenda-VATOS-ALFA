@@ -172,8 +172,8 @@ export default function CashBoxPage() {
   
   const isLoading = localesLoading || salesLoading || clientsLoading;
 
-  const totalVentasFacturadas = useMemo(() => sales.reduce((sum, sale) => sum + (sale.total || 0), 0), [sales]);
-  const efectivoEnCaja = useMemo(() => sales.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [sales]);
+  const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
+  const efectivoEnCaja = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
 
   return (
     <>
@@ -261,21 +261,20 @@ export default function CashBoxPage() {
         </Card>
 
       </div>
+
+      <div className="flex justify-end">
+          <Button variant="ghost" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Descargar reporte
+          </Button>
+      </div>
       
       {/* Detailed Summary */}
-      <div className='bg-card p-4 rounded-lg border'>
-          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
-            <SummaryCard title="Otros Ingresos" amount={0} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
-            <SummaryCard title="Egresos" amount={0} action="minus" onClick={() => setIsEgresoModalOpen(true)}/>
-            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
-          </div>
-          <div className="flex justify-end mt-4">
-             <Button variant="ghost" size="sm">
-                <Download className="mr-2 h-4 w-4" />
-                Descargar reporte
-            </Button>
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
+        <SummaryCard title="Otros Ingresos" amount={0} action="plus" onClick={() => setIsIngresoModalOpen(true)} />
+        <SummaryCard title="Egresos" amount={0} action="minus" onClick={() => setIsEgresoModalOpen(true)}/>
+        <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
       </div>
 
       {/* Main Table */}

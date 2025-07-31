@@ -22,18 +22,30 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Calendar as CalendarIcon, DollarSign, Info } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, DollarSign, Info, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '../ui/alert';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  efectivo: z.number({ coerce: true }).min(0, 'El monto debe ser positivo.').optional().default(0),
-  deposito: z.number({ coerce: true }).min(0, 'El monto debe ser positivo.').optional().default(0),
+  efectivo: z.coerce.number().min(0, 'El monto debe ser positivo.').optional().default(0),
+  deposito: z.coerce.number().min(0, 'El monto debe ser positivo.').optional().default(0),
+  concepto: z.string().min(1, 'Debes seleccionar o ingresar un concepto.'),
+  concepto_otro: z.string().optional(),
 }).refine(data => data.efectivo > 0 || data.deposito > 0, {
     message: 'Debes ingresar un monto en efectivo o depósito.',
     path: ['efectivo'],
+}).refine(data => {
+    if (data.concepto === 'otro') {
+        return data.concepto_otro && data.concepto_otro.trim().length > 0;
+    }
+    return true;
+}, {
+    message: 'Por favor, especifica el concepto.',
+    path: ['concepto_otro'],
 });
+
 
 type IngresoFormData = z.infer<typeof ingresoSchema>;
 
@@ -42,6 +54,12 @@ interface AddIngresoModalProps {
   onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
 }
+
+const conceptosPredefinidos = [
+    { id: 'aporte_socio', label: 'Aporte Socio' },
+    { id: 'venta_manual', label: 'Venta Manual' },
+    { id: 'otro', label: 'Otro (especificar)' },
+];
 
 export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngresoModalProps) {
   const { toast } = useToast();
@@ -53,12 +71,17 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
       fecha: new Date(),
       efectivo: 0,
       deposito: 0,
+      concepto: '',
+      concepto_otro: '',
     },
   });
 
+  const conceptoSeleccionado = form.watch('concepto');
+
   async function onSubmit(data: IngresoFormData) {
     setIsSubmitting(true);
-    console.log("Guardando ingreso manual:", data);
+    const finalConcepto = data.concepto === 'otro' ? data.concepto_otro : data.concepto;
+    console.log("Guardando ingreso manual:", { ...data, concepto: finalConcepto });
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -88,7 +111,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
               <DialogTitle>Agregar Ingreso Manual</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 px-1">
+            <div className="space-y-4 px-1 max-h-[70vh] overflow-y-auto">
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
@@ -118,6 +141,51 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="concepto"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel className="flex items-center"><Edit className="mr-2 h-4 w-4" />Concepto</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        {conceptosPredefinidos.map(c => (
+                            <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">
+                                <FormControl>
+                                    <RadioGroupItem value={c.label} />
+                                </FormControl>
+                                <FormLabel className="font-normal">
+                                    {c.label}
+                                </FormLabel>
+                            </FormItem>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+             {conceptoSeleccionado === 'Otro (especificar)' && (
+                 <FormField
+                    control={form.control}
+                    name="concepto_otro"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input placeholder="Escribe el concepto aquí..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+             )}
+
+
               <FormField
                 control={form.control}
                 name="efectivo"

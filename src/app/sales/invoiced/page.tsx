@@ -423,19 +423,6 @@ export default function InvoicedSalesPage() {
                 )}
             </div>
 
-            <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>Conteo Total de Ventas (Temporal)</AlertTitle>
-                <CardContent className="pt-2">
-                     {allSalesLoading ? (
-                        <Skeleton className="h-8 w-24" />
-                    ) : (
-                        <p className="text-xl font-bold">{allSales.length} Ventas en la base de datos.</p>
-                    )}
-                </CardContent>
-            </Alert>
-
-
             <Card>
                 <CardHeader className="flex-row items-center justify-between">
                     <div>

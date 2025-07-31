@@ -97,7 +97,7 @@ export default function CashBoxPage() {
     localId: null
   });
 
-  // Set default filters on mount
+  // Set default date filter on mount
   useEffect(() => {
     const today = new Date();
     const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
@@ -108,12 +108,12 @@ export default function CashBoxPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
-  // Set default local on mount
+  // Set default local filter once locales are loaded
   useEffect(() => {
     if (locales.length > 0 && !selectedLocalId) {
       const defaultLocalId = locales[0].id;
       setSelectedLocalId(defaultLocalId);
-       setActiveFilters(prev => ({ ...prev, localId: defaultLocalId }));
+      setActiveFilters(prev => ({ ...prev, localId: defaultLocalId }));
     }
   }, [locales, selectedLocalId]);
 

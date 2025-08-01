@@ -59,14 +59,31 @@ import {
   Equal,
   Pencil,
   Trash2,
+  Send,
+  Printer,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client, Egreso, Profesional } from '@/lib/types';
-import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
+import { where, Timestamp, QueryConstraint, doc, deleteDoc } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { db } from '@/lib/firebase';
 
 
 const SummaryCard = ({
@@ -113,6 +130,9 @@ export default function CashBoxPage() {
 
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const { toast } = useToast();
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -128,16 +148,15 @@ export default function CashBoxPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
-
+  
   const salesQueryConstraints = useMemo(() => {
+    if (!activeFilters.dateRange?.from) return [];
+    
     const constraints: QueryConstraint[] = [];
-    if (activeFilters.dateRange?.from) {
-      constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    if (activeFilters.dateRange.to) {
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
-    if (activeFilters.dateRange?.to) {
-      constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-    }
-    // Only apply localId filter if it's not 'todos'
     if (activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
@@ -145,16 +164,15 @@ export default function CashBoxPage() {
   }, [activeFilters]);
 
   const egresosQueryConstraints = useMemo(() => {
+    if (!activeFilters.dateRange?.from) return [];
     const constraints: QueryConstraint[] = [];
-    if (activeFilters.dateRange?.from) {
-      constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-    }
-    if (activeFilters.dateRange?.to) {
-      constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    if (activeFilters.dateRange.to) {
+        constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
     return constraints;
   }, [activeFilters.dateRange]);
-
+  
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     `sales-${queryKey}`,
@@ -209,6 +227,28 @@ export default function CashBoxPage() {
     setSelectedSale(sale);
     setIsDetailModalOpen(true);
   };
+
+   const handleDeleteSale = async () => {
+    if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR') return;
+    try {
+        await deleteDoc(doc(db, 'ventas', saleToDelete.id));
+        toast({
+            title: "Venta Eliminada",
+            description: "La venta ha sido eliminada permanentemente.",
+        });
+        setQueryKey(prevKey => prevKey + 1);
+    } catch (error) {
+        console.error("Error deleting sale: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo eliminar la venta.",
+        });
+    } finally {
+        setSaleToDelete(null);
+        setDeleteConfirmationText('');
+    }
+  };
   
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
@@ -225,10 +265,6 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
-           <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
-          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -302,11 +338,15 @@ export default function CashBoxPage() {
         </Card>
       </div>
       
-      <div className="flex justify-end items-center">
+      <div className="flex justify-between items-center">
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
           </Button>
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
+          </div>
       </div>
       
       {/* Detailed Summary */}
@@ -376,7 +416,17 @@ export default function CashBoxPage() {
                                     </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>Anular</DropdownMenuItem>
+                                      <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
+                                        <Send className="mr-2 h-4 w-4 text-blue-500" />
+                                        <span className="text-blue-500">Enviar Comprobante</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onSelect={() => window.print()}>
+                                        <Printer className="mr-2 h-4 w-4 text-yellow-500" />
+                                        <span className="text-yellow-500">Imprimir</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onSelect={() => setSaleToDelete(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                      </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                                </div>
@@ -466,7 +516,42 @@ export default function CashBoxPage() {
             sale={selectedSale}
         />
     )}
+     {saleToDelete && (
+         <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
+             if(!open) {
+                setSaleToDelete(null);
+                setDeleteConfirmationText('');
+            }
+         }}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás absolutamente seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                 <div className="space-y-2 py-2">
+                    <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                    <Input 
+                        id="delete-confirm"
+                        value={deleteConfirmationText}
+                        onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                        placeholder="ELIMINAR"
+                    />
+                </div>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={handleDeleteSale} 
+                        disabled={deleteConfirmationText !== 'ELIMINAR'}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        Sí, eliminar venta
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }
-

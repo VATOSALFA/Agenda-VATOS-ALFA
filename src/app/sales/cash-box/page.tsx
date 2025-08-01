@@ -57,6 +57,8 @@ import {
   Plus,
   Minus,
   Equal,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -367,22 +369,34 @@ export default function CashBoxPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Fecha</TableHead>
+                                    <TableHead>Local</TableHead>
                                     <TableHead>Concepto</TableHead>
                                     <TableHead>A quién se entrega</TableHead>
-                                    <TableHead>Local</TableHead>
                                     <TableHead>Comentarios</TableHead>
                                     <TableHead className="text-right">Monto</TableHead>
+                                    <TableHead className="text-right">Opciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {egresosWithData.map((egreso) => (
                                     <TableRow key={egreso.id}>
                                         <TableCell>{format(egreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
+                                        <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
                                         <TableCell>{egreso.concepto}</TableCell>
                                         <TableCell>{egreso.aQuienNombre}</TableCell>
-                                        <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
                                         <TableCell>{egreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="sm">Acciones <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

@@ -63,7 +63,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client, Egreso, Profesional } from '@/lib/types';
-import { where, Timestamp } from 'firebase/firestore';
+import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 
@@ -109,7 +109,6 @@ export default function CashBoxPage() {
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
   
   const [isClientMounted, setIsClientMounted] = useState(false);
-  
   const [queryKey, setQueryKey] = useState(0);
 
   useEffect(() => {
@@ -127,14 +126,26 @@ export default function CashBoxPage() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
+  const salesQueryConstraints = useMemo(() => {
+    const constraints: QueryConstraint[] = [];
+    if (activeFilters.localId !== 'todos') {
+      constraints.push(where('local_id', '==', activeFilters.localId));
+    }
+    if (activeFilters.dateRange?.from) {
+      constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    }
+    if (activeFilters.dateRange?.to) {
+      constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    }
+    return constraints;
+  }, [activeFilters]);
+
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     queryKey,
-    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined,
-    activeFilters.dateRange?.from ? where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
-    activeFilters.dateRange?.to ? where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined
+    ...salesQueryConstraints
   );
-  
+
   const { data: allEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
     'egresos',
     `egresos-${queryKey}`,
@@ -195,10 +206,6 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
-           <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Egresos</Button>
-          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -272,7 +279,10 @@ export default function CashBoxPage() {
         </Card>
       </div>
       
-      <div className="flex justify-end items-center">
+      <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+          </div>
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte

@@ -111,31 +111,32 @@ export default function CashBoxPage() {
 
   // Set initial filters once locales are loaded
   useEffect(() => {
-    if (!localesLoading && locales.length > 0 && activeFilters.localId === null) {
+    if (activeFilters.dateRange === undefined) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-      
       setDateRange(initialDateRange);
-      setSelectedLocalId('todos');
       setActiveFilters({ dateRange: initialDateRange, localId: 'todos' });
     }
-  }, [locales, localesLoading, activeFilters.localId]);
+    if (locales.length > 0 && selectedLocalId === null) {
+      setSelectedLocalId('todos');
+    }
+  }, [locales, activeFilters.dateRange, selectedLocalId]);
 
 
   const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return [];
+    if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
 
     const constraints = [];
-
+    
+    // The order of where clauses must match the index definition in Firestore
+    if (activeFilters.localId !== 'todos') {
+        constraints.push(where('local_id', '==', activeFilters.localId));
+    }
+    
     constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
     
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-    }
-    
-    // Only add local filter if a specific local is selected and it's not 'todos'
-    if (activeFilters.localId && activeFilters.localId !== 'todos') {
-        constraints.push(where('local_id', '==', activeFilters.localId));
     }
 
     return constraints;
@@ -143,8 +144,8 @@ export default function CashBoxPage() {
   
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    queryKey,
-    ...salesQueryConstraints
+    salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
+    ...(salesQueryConstraints || [])
   );
   
   const clientMap = useMemo(() => {

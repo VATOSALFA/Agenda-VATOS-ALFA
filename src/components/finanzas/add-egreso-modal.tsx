@@ -38,6 +38,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Profesional, Local } from '@/lib/types';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useLocal } from '@/contexts/local-context';
 
 
 const egresoSchema = z.object({
@@ -76,6 +77,7 @@ const conceptosPredefinidos = [
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgresoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { selectedLocalId } = useLocal();
   
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -102,12 +104,14 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
             aQuien: '',
             comentarios: '',
             concepto_otro: '',
-            local_id: locales.length > 0 ? locales[0].id : '',
+            local_id: selectedLocalId || (locales.length > 0 ? locales[0].id : ''),
         });
+    } else if (selectedLocalId) {
+        form.setValue('local_id', selectedLocalId);
     } else if (locales.length > 0) {
         form.setValue('local_id', locales[0].id);
     }
-  }, [isOpen, form, locales]);
+  }, [isOpen, form, locales, selectedLocalId]);
 
 
   async function onSubmit(data: EgresoFormData) {

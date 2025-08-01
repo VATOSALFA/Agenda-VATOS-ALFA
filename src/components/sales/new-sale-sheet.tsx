@@ -56,6 +56,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useLocal } from '@/contexts/local-context';
 
 
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; }
@@ -99,6 +100,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [clientQueryKey, setClientQueryKey] = useState(0);
+  const { selectedLocalId } = useLocal();
   
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
@@ -121,10 +123,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [selectedClientId, clients]);
 
   useEffect(() => {
-    if (locales.length > 0) {
+    if (selectedLocalId) {
+      form.setValue('local_id', selectedLocalId);
+    } else if (locales.length > 0) {
       form.setValue('local_id', locales[0].id);
     }
-  }, [locales, form]);
+  }, [locales, form, selectedLocalId]);
 
 
   const filteredServices = useMemo(() => {

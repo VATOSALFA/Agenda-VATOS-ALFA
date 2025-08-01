@@ -52,6 +52,7 @@ import type { Profesional, Client, Service, ScheduleDay, Reservation, Local } fr
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
+import { useLocal } from '@/contexts/local-context';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
@@ -120,8 +121,8 @@ export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
-  const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
   const [selectedProfessionalFilter, setSelectedProfessionalFilter] = useState('todos');
+  const { selectedLocalId, setSelectedLocalId } = useLocal();
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -160,7 +161,7 @@ export default function AgendaView() {
     if (!selectedLocalId && locales.length > 0) {
       setSelectedLocalId(locales[0].id);
     }
-  }, [locales, selectedLocalId]);
+  }, [locales, selectedLocalId, setSelectedLocalId]);
 
   const selectedLocal = useMemo(() => {
     if (!selectedLocalId || locales.length === 0) return null;

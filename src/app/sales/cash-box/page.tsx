@@ -122,7 +122,7 @@ export default function CashBoxPage() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   
  const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return undefined;
+    if (!activeFilters.dateRange?.from) return [];
     
     const constraints: any[] = [];
         

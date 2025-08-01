@@ -128,17 +128,17 @@ export default function CashBoxPage() {
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     queryKey,
+    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined,
     activeFilters.dateRange?.from ? where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
-    activeFilters.dateRange?.to ? where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined,
-    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined
+    activeFilters.dateRange?.to ? where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined
   );
   
   const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
     'egresos',
     queryKey,
+    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined,
     activeFilters.dateRange?.from ? where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
-    activeFilters.dateRange?.to ? where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined,
-    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined
+    activeFilters.dateRange?.to ? where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined
   );
   
   const clientMap = useMemo(() => {
@@ -353,7 +353,6 @@ export default function CashBoxPage() {
                 <TabsContent value="otros-ingresos" className="mt-4">
                     <div className="text-center text-muted-foreground p-12">
                         <p>No hay otros ingresos registrados para este período.</p>
-                        <Button variant="outline" size="sm" className="mt-4" onClick={() => setIsIngresoModalOpen(true)}>Agregar Ingreso</Button>
                     </div>
                 </TabsContent>
                 <TabsContent value="egresos" className="mt-4">
@@ -362,7 +361,6 @@ export default function CashBoxPage() {
                     ) : egresosWithData.length === 0 ? (
                         <div className="text-center text-muted-foreground p-12">
                             <p>No hay egresos registrados para este período.</p>
-                            <Button variant="outline" size="sm" className="mt-4" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
                         </div>
                     ) : (
                         <Table>

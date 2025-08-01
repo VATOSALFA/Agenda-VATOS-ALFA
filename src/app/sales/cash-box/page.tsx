@@ -55,7 +55,7 @@ import {
   Loader2,
   Plus,
   Minus,
-  Equal
+  Equal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -109,9 +109,9 @@ export default function CashBoxPage() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const [queryKey, setQueryKey] = useState(0);
 
+  // Set initial filters once locales are loaded
   useEffect(() => {
-    // Set initial filters once locales are loaded
-    if (!activeFilters.dateRange && locales.length > 0) {
+    if (!localesLoading && locales.length > 0 && activeFilters.localId === null) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
       
@@ -119,11 +119,11 @@ export default function CashBoxPage() {
       setSelectedLocalId('todos');
       setActiveFilters({ dateRange: initialDateRange, localId: 'todos' });
     }
-  }, [locales, activeFilters.dateRange]);
+  }, [locales, localesLoading, activeFilters.localId]);
 
 
- const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return undefined;
+  const salesQueryConstraints = useMemo(() => {
+    if (!activeFilters.dateRange?.from) return [];
 
     const constraints = [];
 
@@ -133,7 +133,7 @@ export default function CashBoxPage() {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
     
-    // Only add local filter if a specific local is selected
+    // Only add local filter if a specific local is selected and it's not 'todos'
     if (activeFilters.localId && activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
@@ -144,7 +144,7 @@ export default function CashBoxPage() {
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     queryKey,
-    ...(salesQueryConstraints || [])
+    ...salesQueryConstraints
   );
   
   const clientMap = useMemo(() => {

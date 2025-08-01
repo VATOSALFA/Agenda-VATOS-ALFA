@@ -133,6 +133,7 @@ export default function CashBoxPage() {
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
+  const [egresoDeleteConfirmationText, setEgresoDeleteConfirmationText] = useState('');
   const { toast } = useToast();
 
    useEffect(() => {
@@ -249,7 +250,7 @@ export default function CashBoxPage() {
   };
 
   const handleDeleteEgreso = async () => {
-    if (!egresoToDelete) return;
+    if (!egresoToDelete || egresoDeleteConfirmationText !== 'ELIMINAR') return;
     try {
         await deleteDoc(doc(db, 'egresos', egresoToDelete.id));
         toast({
@@ -266,6 +267,7 @@ export default function CashBoxPage() {
         });
     } finally {
         setEgresoToDelete(null);
+        setEgresoDeleteConfirmationText('');
     }
   };
   
@@ -581,17 +583,35 @@ export default function CashBoxPage() {
       )}
 
       {egresoToDelete && (
-        <AlertDialog open={!!egresoToDelete} onOpenChange={(open) => !open && setEgresoToDelete(null)}>
+        <AlertDialog open={!!egresoToDelete} onOpenChange={(open) => {
+            if (!open) {
+                setEgresoToDelete(null);
+                setEgresoDeleteConfirmationText('');
+            }
+        }}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
                        Esta acción no se puede deshacer. Se eliminará permanentemente el egreso seleccionado.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                <div className="space-y-2 py-2">
+                    <Label htmlFor="egreso-delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                    <Input 
+                        id="egreso-delete-confirm"
+                        value={egresoDeleteConfirmationText}
+                        onChange={(e) => setEgresoDeleteConfirmationText(e.target.value)}
+                        placeholder="ELIMINAR"
+                    />
+                </div>
                 <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteEgreso} className="bg-destructive hover:bg-destructive/90">
+                    <AlertDialogCancel onClick={() => { setEgresoToDelete(null); setEgresoDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={handleDeleteEgreso} 
+                        disabled={egresoDeleteConfirmationText !== 'ELIMINAR'}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
                         Sí, eliminar
                     </AlertDialogAction>
                 </AlertDialogFooter>
@@ -601,4 +621,5 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 

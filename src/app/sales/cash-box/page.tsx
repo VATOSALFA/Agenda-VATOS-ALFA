@@ -195,6 +195,10 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
+           <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Egresos</Button>
+          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -268,11 +272,7 @@ export default function CashBoxPage() {
         </Card>
       </div>
       
-      <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Egresos</Button>
-          </div>
+      <div className="flex justify-end items-center">
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte

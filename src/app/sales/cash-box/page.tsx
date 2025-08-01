@@ -66,6 +66,8 @@ import type { Sale, Local, Client, Egreso, Profesional } from '@/lib/types';
 import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
+import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
+
 
 const SummaryCard = ({
   title,
@@ -96,7 +98,6 @@ const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
 export default function CashBoxPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedLocalId, setSelectedLocalId] = useState<string>('todos');
-  
   const [activeFilters, setActiveFilters] = useState<{
     dateRange: DateRange | undefined;
     localId: string;
@@ -104,12 +105,14 @@ export default function CashBoxPage() {
     dateRange: undefined,
     localId: 'todos'
   });
-
+  
   const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
-  
   const [isClientMounted, setIsClientMounted] = useState(false);
   const [queryKey, setQueryKey] = useState(0);
+
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -128,29 +131,40 @@ export default function CashBoxPage() {
 
   const salesQueryConstraints = useMemo(() => {
     const constraints: QueryConstraint[] = [];
-    if (activeFilters.localId !== 'todos') {
-      constraints.push(where('local_id', '==', activeFilters.localId));
-    }
     if (activeFilters.dateRange?.from) {
       constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
     }
     if (activeFilters.dateRange?.to) {
       constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
+    // Only apply localId filter if it's not 'todos'
+    if (activeFilters.localId !== 'todos') {
+        constraints.push(where('local_id', '==', activeFilters.localId));
+    }
     return constraints;
   }, [activeFilters]);
 
+  const egresosQueryConstraints = useMemo(() => {
+    const constraints: QueryConstraint[] = [];
+    if (activeFilters.dateRange?.from) {
+      constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    }
+    if (activeFilters.dateRange?.to) {
+      constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    }
+    return constraints;
+  }, [activeFilters.dateRange]);
+
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    queryKey,
+    `sales-${queryKey}`,
     ...salesQueryConstraints
   );
 
   const { data: allEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
     'egresos',
     `egresos-${queryKey}`,
-    activeFilters.dateRange?.from ? where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
-    activeFilters.dateRange?.to ? where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined
+    ...egresosQueryConstraints
   );
   
   const egresos = useMemo(() => {
@@ -190,6 +204,11 @@ export default function CashBoxPage() {
     setActiveFilters({ dateRange, localId: selectedLocalId });
     setQueryKey(prev => prev + 1);
   };
+
+  const handleViewDetails = (sale: Sale) => {
+    setSelectedSale(sale);
+    setIsDetailModalOpen(true);
+  };
   
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
@@ -206,6 +225,10 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
+           <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
+          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -279,10 +302,7 @@ export default function CashBoxPage() {
         </Card>
       </div>
       
-      <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-          </div>
+      <div className="flex justify-end items-center">
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
@@ -345,20 +365,21 @@ export default function CashBoxPage() {
                             <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
                             <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-CL')}</TableCell>
                             <TableCell className="text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem>
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    Ver Detalle
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem>Anular</DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                               <div className="flex items-center justify-end gap-2">
+                                <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
+                                    <Eye className="mr-2 h-4 w-4" /> Ver
+                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuItem>Anular</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                               </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -438,6 +459,13 @@ export default function CashBoxPage() {
             handleSearch()
         }}
     />
+    {selectedSale && (
+        <SaleDetailModal
+            isOpen={isDetailModalOpen}
+            onOpenChange={setIsDetailModalOpen}
+            sale={selectedSale}
+        />
+    )}
     </>
   );
 }

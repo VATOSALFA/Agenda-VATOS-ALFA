@@ -10,10 +10,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Mail, Printer, X, Pencil } from 'lucide-react';
+import { Mail, Printer, X, Pencil, Store } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Client } from '@/lib/types';
+import type { Client, Local } from '@/lib/types';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { useMemo } from 'react';
 
 
 interface Sale {
@@ -27,6 +29,7 @@ interface Sale {
         nombre: string;
         barbero_id: string;
         precio: number;
+        precio_unitario?: number;
     }[];
     client?: Client;
     professionalNames?: string;
@@ -38,14 +41,22 @@ interface SaleDetailModalProps {
   sale: Sale | null;
 }
 
-const InfoItem = ({ label, value, editable }: { label: string, value: string | number, editable?: boolean }) => (
+const InfoItem = ({ label, value }: { label: string, value: string | number | undefined }) => (
     <div>
-        <div className="text-xs text-muted-foreground flex items-center">{label} {editable && <Pencil className="h-3 w-3 ml-1" />}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
         <div className="font-medium">{value}</div>
     </div>
 );
 
 export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalProps) {
+    const { data: locales } = useFirestoreQuery<Local>('locales');
+
+    const localName = useMemo(() => {
+        if (!sale || !sale.local_id || !locales) return 'N/A';
+        return locales.find(l => l.id === sale.local_id)?.name || 'Desconocido';
+    }, [sale, locales]);
+
+
     if (!sale) return null;
 
     const formatDate = (date: any) => {
@@ -64,7 +75,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0">
+      <DialogContent className="max-w-2xl p-0">
         <DialogHeader className="p-4 border-b flex-row items-center justify-between">
             <DialogTitle>Comprobante de pago ID: {sale.id.slice(0, 8)}</DialogTitle>
             <div className="flex items-center gap-2">
@@ -77,50 +88,31 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             <div className="p-4 border rounded-lg">
                 <h3 className="font-semibold mb-4">Resumen de pago</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
-                    <InfoItem label="Fecha" value={formatDate(sale.fecha_hora_venta)} editable />
+                    <InfoItem label="Fecha" value={formatDate(sale.fecha_hora_venta)} />
                     <InfoItem label="Cajero" value="Sin información" />
-                    <InfoItem label="Nombre del cliente" value={`${sale.client?.nombre} ${sale.client?.apellido}`} />
+                    <InfoItem label="Cliente" value={`${sale.client?.nombre} ${sale.client?.apellido}`} />
+                    <InfoItem label="Local" value={localName} />
+                    <InfoItem label="Método de pago" value={sale.metodo_pago} />
                     <InfoItem label="Monto total" value={`$${sale.total.toLocaleString('es-CL')}`} />
-                    <InfoItem label="Monto facturado" value={`$${sale.total.toLocaleString('es-CL')}`} />
-                    <InfoItem label="Monto no facturado" value="$0" />
-                    <InfoItem label="Vuelto" value="$0" />
                 </div>
             </div>
 
             <div className="p-4 border rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-semibold">Abono N°{sale.id.slice(0, 8)} <Pencil className="h-3 w-3 ml-1 inline-block" /> | {formatDate(sale.fecha_hora_venta).split(' ')[0]} | ${sale.total.toLocaleString('es-CL')}</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <InfoItem label="Medio de Pago" value={sale.metodo_pago} />
-                    <InfoItem label="Monto" value={`$${sale.total.toLocaleString('es-CL')}`} />
-                </div>
-            </div>
-
-            <div className="p-4 border rounded-lg">
-                <h3 className="font-semibold mb-2">Boleta N° {sale.id.slice(9,16)} <Pencil className="h-3 w-3 ml-1 inline-block" /></h3>
-                <div className="text-sm">
-                     <div className="text-xs text-muted-foreground">Comentarios:</div>
-                     <div className="font-medium">-</div>
-                </div>
-            </div>
-
-            <div className="p-4 border rounded-lg">
-                <h3 className="font-semibold mb-4">Servicio sin reservas</h3>
+                <h3 className="font-semibold mb-4">Detalle de la venta</h3>
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Nombre</TableHead>
-                            <TableHead>Precio</TableHead>
                             <TableHead>Vendedor</TableHead>
+                            <TableHead className="text-right">Precio</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {sale.items?.map((item, index) => (
                             <TableRow key={index}>
                                 <TableCell>{item.nombre}</TableCell>
-                                <TableCell>${(item.precio || 0).toLocaleString('es-CL')}</TableCell>
                                 <TableCell>{sale.professionalNames}</TableCell>
+                                <TableCell className="text-right">${(item.precio || item.precio_unitario || 0).toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

@@ -114,6 +114,13 @@ export default function CashBoxPage() {
 
   useEffect(() => {
     setIsClientMounted(true);
+    const today = new Date();
+    const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+    setDateRange(initialDateRange);
+    setActiveFilters({
+      dateRange: initialDateRange,
+      localId: 'todos'
+    });
   }, []);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -181,18 +188,6 @@ export default function CashBoxPage() {
   const efectivoEnCaja = ingresosEfectivo - totalEgresos;
   
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
-
-  useEffect(() => {
-    if (isClientMounted && !dateRange) {
-        const today = new Date();
-        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-        setDateRange(initialDateRange);
-        setActiveFilters({
-          dateRange: initialDateRange,
-          localId: 'todos'
-        });
-    }
-  }, [isClientMounted, dateRange])
 
 
   return (
@@ -436,3 +431,4 @@ export default function CashBoxPage() {
     </>
   );
 }
+

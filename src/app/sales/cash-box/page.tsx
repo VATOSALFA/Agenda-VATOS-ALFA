@@ -66,7 +66,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client, Egreso, Profesional } from '@/lib/types';
-import { where, Timestamp, QueryConstraint, doc, deleteDoc } from 'firebase/firestore';
+import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
@@ -134,15 +134,12 @@ export default function CashBoxPage() {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const { toast } = useToast();
 
-  useEffect(() => {
+   useEffect(() => {
     setIsClientMounted(true);
     const today = new Date();
     const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
     setDateRange(initialDateRange);
-    setActiveFilters({
-      dateRange: initialDateRange,
-      localId: 'todos'
-    });
+    setActiveFilters({ dateRange: initialDateRange, localId: 'todos' });
   }, []);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -150,18 +147,18 @@ export default function CashBoxPage() {
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   
   const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return [];
-    
     const constraints: QueryConstraint[] = [];
-    constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-    if (activeFilters.dateRange.to) {
+    if (activeFilters.dateRange?.from) {
+        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    }
+    if (activeFilters.dateRange?.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
     }
     if (activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
     return constraints;
-  }, [activeFilters]);
+}, [activeFilters]);
 
   const egresosQueryConstraints = useMemo(() => {
     if (!activeFilters.dateRange?.from) return [];
@@ -265,6 +262,10 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
+           <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
+          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -343,10 +344,6 @@ export default function CashBoxPage() {
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
           </Button>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
-          </div>
       </div>
       
       {/* Detailed Summary */}
@@ -472,15 +469,23 @@ export default function CashBoxPage() {
                                         <TableCell>{egreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
                                         <TableCell className="text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="sm">Acciones <ChevronDown className="ml-2 h-4 w-4" /></Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                           <div className="flex items-center justify-end gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => toast({ title: "Funcionalidad no implementada" })}>
+                                                    <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="sm">
+                                                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                    </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                      <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                      </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -555,3 +560,4 @@ export default function CashBoxPage() {
     </>
   );
 }
+

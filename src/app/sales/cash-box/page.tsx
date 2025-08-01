@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -59,7 +60,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Local, Client } from '@/lib/types';
+import type { Sale, Local, Client, Egreso, Profesional } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
@@ -122,35 +123,33 @@ export default function CashBoxPage() {
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-  
-  const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return [];
-    
-    const constraints: any[] = [];
-        
-    constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-    
-    if (activeFilters.dateRange.to) {
-        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-    }
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
-    if (activeFilters.localId !== 'todos') {
-      constraints.push(where('local_id', '==', activeFilters.localId));
-    }
-
-    return constraints;
-}, [activeFilters]);
-  
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    queryKey, // Use a key that changes on search
-    ...salesQueryConstraints
+    queryKey,
+    activeFilters.dateRange?.from ? where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
+    activeFilters.dateRange?.to ? where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined,
+    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined
+  );
+  
+  const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
+    'egresos',
+    queryKey,
+    activeFilters.dateRange?.from ? where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
+    activeFilters.dateRange?.to ? where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined,
+    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined
   );
   
   const clientMap = useMemo(() => {
       if (clientsLoading) return new Map();
       return new Map(clients.map(c => [c.id, c]));
   }, [clients, clientsLoading]);
+  
+  const professionalMap = useMemo(() => {
+      if (professionalsLoading) return new Map();
+      return new Map(professionals.map(p => [p.id, p.name]));
+  }, [professionals, professionalsLoading]);
 
   const salesWithClientData = useMemo(() => {
     if (salesLoading || clientsLoading) return [];
@@ -159,16 +158,29 @@ export default function CashBoxPage() {
         cliente: clientMap.get(sale.cliente_id)
     }))
   }, [sales, clientMap, salesLoading, clientsLoading]);
+
+  const egresosWithData = useMemo(() => {
+    if (egresosLoading || professionalsLoading) return [];
+    return egresos.map(egreso => ({
+        ...egreso,
+        aQuienNombre: professionalMap.get(egreso.aQuien) || egreso.aQuien
+    }))
+  }, [egresos, professionalMap, egresosLoading, professionalsLoading]);
   
   const handleSearch = () => {
     setActiveFilters({ dateRange, localId: selectedLocalId });
     setQueryKey(prev => prev + 1);
   };
   
-  const isLoading = localesLoading || salesLoading || clientsLoading;
+  const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
-  const efectivoEnCaja = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
+  const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
+  const efectivoEnCaja = useMemo(() => {
+    const ingresosEfectivo = salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0);
+    return ingresosEfectivo - totalEgresos;
+  }, [salesWithClientData, totalEgresos]);
+  
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
 
 
@@ -267,9 +279,9 @@ export default function CashBoxPage() {
             <IconSeparator icon={Plus} />
             <SummaryCard title="Otros Ingresos" amount={0} />
             <IconSeparator icon={Minus} />
-            <SummaryCard title="Egresos" amount={0} />
+            <SummaryCard title="Egresos" amount={totalEgresos} />
             <IconSeparator icon={Equal} />
-            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas} />
+            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas - totalEgresos} />
         </div>
 
       {/* Main Table */}
@@ -345,10 +357,39 @@ export default function CashBoxPage() {
                     </div>
                 </TabsContent>
                 <TabsContent value="egresos" className="mt-4">
-                     <div className="text-center text-muted-foreground p-12">
-                        <p>No hay egresos registrados para este período.</p>
-                        <Button variant="outline" size="sm" className="mt-4" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
-                    </div>
+                    {isLoading ? (
+                         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                    ) : egresosWithData.length === 0 ? (
+                        <div className="text-center text-muted-foreground p-12">
+                            <p>No hay egresos registrados para este período.</p>
+                            <Button variant="outline" size="sm" className="mt-4" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead>Concepto</TableHead>
+                                    <TableHead>A quién se entrega</TableHead>
+                                    <TableHead>Local</TableHead>
+                                    <TableHead>Comentarios</TableHead>
+                                    <TableHead className="text-right">Monto</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {egresosWithData.map((egreso) => (
+                                    <TableRow key={egreso.id}>
+                                        <TableCell>{format(egreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
+                                        <TableCell>{egreso.concepto}</TableCell>
+                                        <TableCell>{egreso.aQuienNombre}</TableCell>
+                                        <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
+                                        <TableCell>{egreso.comentarios}</TableCell>
+                                        <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
                 </TabsContent>
             </Tabs>
         </CardContent>

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -34,7 +35,9 @@ import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquar
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Profesional } from '@/lib/types';
+import type { Profesional, Local } from '@/lib/types';
+import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 
 const egresoSchema = z.object({
@@ -43,6 +46,7 @@ const egresoSchema = z.object({
   concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
   concepto_otro: z.string().optional(),
   aQuien: z.string().min(1, 'Debes seleccionar un profesional.'),
+  local_id: z.string().min(1, 'Debes seleccionar un local.'),
   comentarios: z.string().optional(),
 }).refine(data => {
     if (data.concepto === 'Otro') {
@@ -74,6 +78,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
   const form = useForm<EgresoFormData>({
     resolver: zodResolver(egresoSchema),
@@ -81,6 +86,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
       fecha: new Date(),
       concepto: '',
       aQuien: '',
+      local_id: '',
       comentarios: '',
     },
   });
@@ -96,27 +102,35 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
             aQuien: '',
             comentarios: '',
             concepto_otro: '',
+            local_id: locales.length > 0 ? locales[0].id : '',
         });
+    } else if (locales.length > 0) {
+        form.setValue('local_id', locales[0].id);
     }
-  }, [isOpen, form]);
+  }, [isOpen, form, locales]);
 
 
   async function onSubmit(data: EgresoFormData) {
     setIsSubmitting(true);
     const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
-    const professionalName = professionals.find(p => p.id === data.aQuien)?.name || data.aQuien;
-
-    console.log("Guardando egreso manual:", {...data, concepto: finalConcepto, aQuien: professionalName });
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await addDoc(collection(db, 'egresos'), {
+        fecha: Timestamp.fromDate(data.fecha),
+        monto: data.monto,
+        concepto: finalConcepto,
+        aQuien: data.aQuien,
+        local_id: data.local_id,
+        comentarios: data.comentarios,
+      });
+
       toast({
         title: 'Egreso guardado',
         description: 'El nuevo egreso ha sido registrado con éxito.',
       });
       onFormSubmit();
     } catch (error) {
+      console.error('Error al registrar egreso:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -229,6 +243,28 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
                       <SelectContent>
                         {professionals.map(prof => (
                             <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="local_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Local</FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={localesLoading ? 'Cargando...' : 'Selecciona un local'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {locales.map(local => (
+                            <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

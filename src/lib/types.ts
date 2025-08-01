@@ -162,3 +162,14 @@ export interface SaleItem {
   tipo: 'servicio' | 'producto';
   servicio?: string;
 }
+
+export interface Egreso {
+  id: string;
+  fecha: any; // Firestore Timestamp
+  monto: number;
+  concepto: string;
+  aQuien: string; // professional ID
+  aQuienNombre?: string; // transient
+  comentarios?: string;
+  local_id?: string;
+}

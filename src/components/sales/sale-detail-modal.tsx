@@ -127,8 +127,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 </Table>
             </div>
         </div>
-        <DialogFooter className="p-4 border-t flex justify-between">
-            <Button variant="destructive">Eliminar</Button>
+        <DialogFooter className="p-4 border-t flex justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
         </DialogFooter>
       </DialogContent>

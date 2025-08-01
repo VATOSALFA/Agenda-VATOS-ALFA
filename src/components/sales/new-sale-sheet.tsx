@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import type { Client, Product, Service as ServiceType, Profesional } from '@/lib/types';
+import type { Client, Product, Service as ServiceType, Profesional, Local } from '@/lib/types';
 
 
 import { Button } from '@/components/ui/button';
@@ -62,6 +62,7 @@ interface CartItem { id: string; nombre: string; precio: number; cantidad: numbe
 
 const saleSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
+  local_id: z.string().min(1, 'Debes seleccionar un local.'),
   metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
   pago_efectivo: z.coerce.number().optional().default(0),
   pago_tarjeta: z.coerce.number().optional().default(0),
@@ -103,6 +104,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: barbers, loading: barbersLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   
   const form = useForm<SaleFormData>({
     resolver: zodResolver(saleSchema),
@@ -117,6 +119,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId)
   }, [selectedClientId, clients]);
+
+  useEffect(() => {
+    if (locales.length > 0) {
+      form.setValue('local_id', locales[0].id);
+    }
+  }, [locales, form]);
 
 
   const filteredServices = useMemo(() => {
@@ -560,6 +568,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             )}/>
                         )}
 
+                         <FormField
+                            control={form.control}
+                            name="local_id"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Local</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona un local" />
+                                    </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                    {locales.map(l => (
+                                        <SelectItem key={l.id} value={l.id}>
+                                        {l.name}
+                                        </SelectItem>
+                                    ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         
                         <FormField
                           control={form.control}

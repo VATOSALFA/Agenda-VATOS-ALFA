@@ -114,13 +114,6 @@ export default function CashBoxPage() {
 
   useEffect(() => {
     setIsClientMounted(true);
-    const today = new Date();
-    const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-    setDateRange(initialDateRange);
-    setActiveFilters({
-      dateRange: initialDateRange,
-      localId: 'todos'
-    });
   }, []);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -135,14 +128,20 @@ export default function CashBoxPage() {
     activeFilters.dateRange?.to ? where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined
   );
   
-  const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
+  const { data: allEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
     'egresos',
-    queryKey,
-    activeFilters.localId !== 'todos' ? where('local_id', '==', activeFilters.localId) : undefined,
+    `egresos-${queryKey}`,
     activeFilters.dateRange?.from ? where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))) : undefined,
     activeFilters.dateRange?.to ? where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))) : undefined
   );
   
+  const egresos = useMemo(() => {
+    if (activeFilters.localId === 'todos') {
+        return allEgresos;
+    }
+    return allEgresos.filter(e => e.local_id === activeFilters.localId);
+  }, [allEgresos, activeFilters.localId]);
+
   const clientMap = useMemo(() => {
       if (clientsLoading) return new Map();
       return new Map(clients.map(c => [c.id, c]));
@@ -176,14 +175,24 @@ export default function CashBoxPage() {
   
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
+  const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
   const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-  const efectivoEnCaja = useMemo(() => {
-    const ingresosEfectivo = salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0);
-    return ingresosEfectivo - totalEgresos;
-  }, [salesWithClientData, totalEgresos]);
+  const efectivoEnCaja = ingresosEfectivo - totalEgresos;
   
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
+
+  useEffect(() => {
+    if (isClientMounted && !dateRange) {
+        const today = new Date();
+        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+        setDateRange(initialDateRange);
+        setActiveFilters({
+          dateRange: initialDateRange,
+          localId: 'todos'
+        });
+    }
+  }, [isClientMounted, dateRange])
 
 
   return (
@@ -191,10 +200,6 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
-           <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Egresos</Button>
-          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
@@ -229,7 +234,7 @@ export default function CashBoxPage() {
                         )}
                         >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {isClientMounted && dateRange?.from ? (
+                        {dateRange?.from ? (
                             dateRange.to ? (
                             <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
                             ) : (
@@ -268,7 +273,11 @@ export default function CashBoxPage() {
         </Card>
       </div>
       
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Egresos</Button>
+          </div>
           <Button variant="ghost" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte

@@ -106,6 +106,8 @@ export default function CashBoxPage() {
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
   
   const [isClientMounted, setIsClientMounted] = useState(false);
+  
+  const [queryKey, setQueryKey] = useState(0);
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -121,7 +123,7 @@ export default function CashBoxPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   
- const salesQueryConstraints = useMemo(() => {
+  const salesQueryConstraints = useMemo(() => {
     if (!activeFilters.dateRange?.from) return [];
     
     const constraints: any[] = [];
@@ -141,7 +143,8 @@ export default function CashBoxPage() {
   
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
-    salesQueryConstraints,
+    queryKey, // Use a key that changes on search
+    ...salesQueryConstraints
   );
   
   const clientMap = useMemo(() => {
@@ -159,6 +162,7 @@ export default function CashBoxPage() {
   
   const handleSearch = () => {
     setActiveFilters({ dateRange, localId: selectedLocalId });
+    setQueryKey(prev => prev + 1);
   };
   
   const isLoading = localesLoading || salesLoading || clientsLoading;

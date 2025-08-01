@@ -91,20 +91,33 @@ const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
 
 
 export default function CashBoxPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfDay(new Date()), to: endOfDay(new Date()) });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedLocalId, setSelectedLocalId] = useState<string>('todos');
   
   const [activeFilters, setActiveFilters] = useState<{
     dateRange: DateRange | undefined;
     localId: string;
   }>({
-    dateRange: { from: startOfDay(new Date()), to: endOfDay(new Date()) },
+    dateRange: undefined,
     localId: 'todos'
   });
 
   const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
   
+  const [isClientMounted, setIsClientMounted] = useState(false);
+
+  useEffect(() => {
+    setIsClientMounted(true);
+    const today = new Date();
+    const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+    setDateRange(initialDateRange);
+    setActiveFilters({
+      dateRange: initialDateRange,
+      localId: 'todos'
+    });
+  }, []);
+
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   
@@ -112,15 +125,15 @@ export default function CashBoxPage() {
     if (!activeFilters.dateRange?.from) return undefined;
     
     const constraints: any[] = [];
-    
-    if (activeFilters.localId !== 'todos') {
-      constraints.push(where('local_id', '==', activeFilters.localId));
-    }
-    
+        
     constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
     
     if (activeFilters.dateRange.to) {
         constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    }
+
+    if (activeFilters.localId !== 'todos') {
+      constraints.push(where('local_id', '==', activeFilters.localId));
     }
 
     return constraints;
@@ -198,7 +211,7 @@ export default function CashBoxPage() {
                         )}
                         >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.from ? (
+                        {isClientMounted && dateRange?.from ? (
                             dateRange.to ? (
                             <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
                             ) : (

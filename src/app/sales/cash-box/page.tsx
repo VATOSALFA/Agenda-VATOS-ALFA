@@ -110,26 +110,27 @@ export default function CashBoxPage() {
   const [queryKey, setQueryKey] = useState(0);
 
   // Set initial filters once locales are loaded
-  useEffect(() => {
+ useEffect(() => {
     if (activeFilters.dateRange === undefined) {
       const today = new Date();
       const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
       setDateRange(initialDateRange);
-      setActiveFilters({ dateRange: initialDateRange, localId: 'todos' });
     }
     if (locales.length > 0 && selectedLocalId === null) {
-      setSelectedLocalId('todos');
+      const firstLocalId = locales[0]?.id || 'todos';
+      setSelectedLocalId(firstLocalId);
+      setActiveFilters({ dateRange: dateRange || { from: new Date(), to: new Date() }, localId: firstLocalId });
     }
-  }, [locales, activeFilters.dateRange, selectedLocalId]);
+  }, [locales, activeFilters.dateRange, selectedLocalId, dateRange]);
 
 
-  const salesQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from || !activeFilters.localId) return undefined;
+ const salesQueryConstraints = useMemo(() => {
+    if (!activeFilters.dateRange?.from) return undefined;
 
     const constraints = [];
     
     // The order of where clauses must match the index definition in Firestore
-    if (activeFilters.localId !== 'todos') {
+    if (activeFilters.localId && activeFilters.localId !== 'todos') {
         constraints.push(where('local_id', '==', activeFilters.localId));
     }
     
@@ -178,6 +179,10 @@ export default function CashBoxPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
+           <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
+            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Egresos</Button>
+          </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">

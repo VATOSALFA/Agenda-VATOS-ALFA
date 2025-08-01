@@ -132,6 +132,7 @@ export default function CashBoxPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
   const { toast } = useToast();
 
    useEffect(() => {
@@ -244,6 +245,27 @@ export default function CashBoxPage() {
     } finally {
         setSaleToDelete(null);
         setDeleteConfirmationText('');
+    }
+  };
+
+  const handleDeleteEgreso = async () => {
+    if (!egresoToDelete) return;
+    try {
+        await deleteDoc(doc(db, 'egresos', egresoToDelete.id));
+        toast({
+            title: "Egreso Eliminado",
+            description: "El egreso ha sido eliminado permanentemente.",
+        });
+        setQueryKey(prevKey => prevKey + 1);
+    } catch (error) {
+        console.error("Error deleting egreso: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo eliminar el egreso.",
+        });
+    } finally {
+        setEgresoToDelete(null);
     }
   };
   
@@ -480,7 +502,7 @@ export default function CashBoxPage() {
                                                     </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                      <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                      <DropdownMenuItem onSelect={() => setEgresoToDelete(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                         <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                                       </DropdownMenuItem>
                                                     </DropdownMenuContent>
@@ -552,6 +574,25 @@ export default function CashBoxPage() {
                         className="bg-destructive hover:bg-destructive/90"
                     >
                         Sí, eliminar venta
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {egresoToDelete && (
+        <AlertDialog open={!!egresoToDelete} onOpenChange={(open) => !open && setEgresoToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                       Esta acción no se puede deshacer. Se eliminará permanentemente el egreso seleccionado.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteEgreso} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

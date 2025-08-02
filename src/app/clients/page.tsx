@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Profesional, Service, Reservation, Product, Sale } from "@/lib/types";
@@ -127,6 +127,7 @@ const FiltersSidebar = ({
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
@@ -220,7 +221,8 @@ export default function ClientsPage() {
         activeFilters.local !== 'todos' || 
         activeFilters.professional !== 'todos' || 
         activeFilters.service !== 'todos' || 
-        activeFilters.product !== 'todos';
+        activeFilters.product !== 'todos' ||
+        activeFilters.dateRange !== undefined;
 
     if (hasAdvancedFilters) {
         let clientIdsFromHistory = new Set<string>();
@@ -265,7 +267,17 @@ export default function ClientsPage() {
     setSelectedClient(client);
     setIsDetailModalOpen(true);
   };
+
+  const handleOpenEditModal = (client: Client) => {
+    setEditingClient(client);
+    setIsClientModalOpen(true);
+  };
   
+  const handleOpenNewModal = () => {
+    setEditingClient(null);
+    setIsClientModalOpen(true);
+  }
+
   const handleDeleteClient = async () => {
     if (!clientToDelete || deleteConfirmationText !== 'ELIMINAR') return;
     try {
@@ -299,7 +311,7 @@ export default function ClientsPage() {
           <h2 className="text-3xl font-bold tracking-tight">Base de Clientes</h2>
            <div className="flex items-center space-x-2">
             <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Cargar clientes</Button>
-            <Button onClick={() => setIsClientModalOpen(true)}>
+            <Button onClick={handleOpenNewModal}>
               <PlusCircle className="mr-2 h-4 w-4" /> Nuevo cliente
             </Button>
           </div>
@@ -387,6 +399,9 @@ export default function ClientsPage() {
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>
                                     <User className="h-4 w-4" />
                                 </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditModal(client)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setClientToDelete(client)}>
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -410,15 +425,20 @@ export default function ClientsPage() {
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-lg">
            <DialogHeader>
-              <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+              <DialogTitle>{editingClient ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
               <DialogDescription>
-                Completa la información para registrar un nuevo cliente en el sistema.
+                {editingClient
+                  ? "Actualiza la información del cliente."
+                  : "Completa la información para registrar un nuevo cliente en el sistema."}
               </DialogDescription>
             </DialogHeader>
-            <NewClientForm onFormSubmit={() => {
+            <NewClientForm
+              client={editingClient}
+              onFormSubmit={() => {
                 setIsClientModalOpen(false);
                 handleDataUpdated();
-            }} />
+              }}
+            />
         </DialogContent>
       </Dialog>
       

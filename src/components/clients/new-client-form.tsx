@@ -4,11 +4,12 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
-import { format } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { format, parseISO } from 'date-fns';
+import type { Client } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,12 +41,14 @@ const clientSchema = z.object({
 type ClientFormData = z.infer<typeof clientSchema>;
 
 interface NewClientFormProps {
-  onFormSubmit: (newClientId: string) => void;
+  onFormSubmit: (clientId: string) => void;
+  client?: Client | null;
 }
 
-export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
+export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isEditMode = !!client;
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -58,27 +61,67 @@ export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
     },
   });
 
+  useEffect(() => {
+    if (isEditMode && client) {
+      let birthDate = undefined;
+      if (client.fecha_nacimiento) {
+        if (typeof client.fecha_nacimiento === 'string') {
+          birthDate = parseISO(client.fecha_nacimiento);
+        } else if (client.fecha_nacimiento.seconds) {
+          birthDate = new Date(client.fecha_nacimiento.seconds * 1000);
+        }
+      }
+      form.reset({
+        ...client,
+        fecha_nacimiento: birthDate
+      });
+    } else {
+      form.reset({
+        nombre: '',
+        apellido: '',
+        telefono: '',
+        correo: '',
+        notas: '',
+        fecha_nacimiento: undefined,
+      });
+    }
+  }, [client, isEditMode, form]);
+
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
     try {
-      const docRef = await addDoc(collection(db, 'clientes'), {
+      const dataToSave = {
         ...data,
         fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
-        creado_en: Timestamp.now(),
-      });
+      };
 
-      toast({
-        title: '¡Cliente Creado!',
-        description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,
-      });
+      if (isEditMode && client) {
+        const clientRef = doc(db, 'clientes', client.id);
+        await updateDoc(clientRef, dataToSave);
+        toast({
+          title: '¡Cliente Actualizado!',
+          description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
+        });
+        onFormSubmit(client.id);
+      } else {
+        const docRef = await addDoc(collection(db, 'clientes'), {
+          ...dataToSave,
+          creado_en: Timestamp.now(),
+        });
+        toast({
+          title: '¡Cliente Creado!',
+          description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,
+        });
+        onFormSubmit(docRef.id);
+      }
       form.reset();
-      onFormSubmit(docRef.id);
+
     } catch (error) {
-      console.error('Error creating client: ', error);
+      console.error('Error saving client: ', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo crear el cliente. Inténtalo de nuevo.',
+        description: 'No se pudo guardar el cliente. Inténtalo de nuevo.',
       });
     } finally {
       setIsSubmitting(false);
@@ -199,7 +242,7 @@ export function NewClientForm({ onFormSubmit }: NewClientFormProps) {
 
         <DialogFooter>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Cliente'}
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Cliente')}
           </Button>
         </DialogFooter>
       </form>

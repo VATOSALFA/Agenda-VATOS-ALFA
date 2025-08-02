@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Client, Local, Profesional, Service, Reservation } from "@/lib/types";
+import type { Client, Local, Profesional, Service, Reservation, Product } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
@@ -42,7 +42,8 @@ const FiltersSidebar = ({
     localFilter, setLocalFilter,
     professionalFilter, setProfessionalFilter,
     serviceFilter, setServiceFilter,
-    locales, professionals, services,
+    productFilter, setProductFilter,
+    locales, professionals, services, products,
     isLoading
   }: any) => {
 
@@ -77,6 +78,16 @@ const FiltersSidebar = ({
                      <SelectContent>
                         <SelectItem value="todos">Todos los servicios</SelectItem>
                         {services.map((s: Service) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Productos</Label>
+                  <Select value={productFilter} onValueChange={setProductFilter} disabled={isLoading}>
+                    <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="todos">Todos los productos</SelectItem>
+                        {products.map((p: Product) => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -143,7 +154,8 @@ export default function ClientsPage() {
   const [localFilter, setLocalFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [serviceFilter, setServiceFilter] = useState('todos');
-  const [activeFilters, setActiveFilters] = useState({ local: 'todos', professional: 'todos', service: 'todos' });
+  const [productFilter, setProductFilter] = useState('todos');
+  const [activeFilters, setActiveFilters] = useState({ local: 'todos', professional: 'todos', service: 'todos', product: 'todos' });
 
   const [queryKey, setQueryKey] = useState(0);
 
@@ -151,15 +163,18 @@ export default function ClientsPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
+  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', queryKey);
+  const { data: sales, loading: salesLoading } = useFirestoreQuery<any>('ventas', queryKey);
   
-  const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading;
+  const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading || productsLoading || salesLoading;
 
   const handleApplyFilters = () => {
     setActiveFilters({
       local: localFilter,
       professional: professionalFilter,
       service: serviceFilter,
+      product: productFilter,
     });
     toast({ title: "Filtros aplicados" });
   };
@@ -168,23 +183,24 @@ export default function ClientsPage() {
     setLocalFilter('todos');
     setProfessionalFilter('todos');
     setServiceFilter('todos');
-    setActiveFilters({ local: 'todos', professional: 'todos', service: 'todos' });
+    setProductFilter('todos');
+    setActiveFilters({ local: 'todos', professional: 'todos', service: 'todos', product: 'todos' });
     toast({ title: "Filtros restablecidos" });
   };
 
   const filteredClients = useMemo(() => {
     let filtered = [...clients];
+    let clientIdsFromReservations = new Set<string>();
+    let clientIdsFromSales = new Set<string>();
+
+    let reservationFiltersApplied = activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.service !== 'todos';
+    let salesFiltersApplied = activeFilters.product !== 'todos';
     
     // Advanced filters based on reservations
-    if (activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.service !== 'todos') {
+    if (reservationFiltersApplied) {
         let filteredReservations = [...reservations];
         
         if (activeFilters.local !== 'todos') {
-            const saleLocalIds = new Set(
-              (reservations.filter(r => (r as any).local_id === activeFilters.local)).map(r => r.id)
-            );
-            // This is a simplification. A real implementation would need to join sales/reservations with locales.
-            // For now, let's assume reservations have a local_id.
             filteredReservations = filteredReservations.filter(r => (r as any).local_id === activeFilters.local)
         }
         
@@ -196,10 +212,27 @@ export default function ClientsPage() {
             filteredReservations = filteredReservations.filter(r => r.items?.some(i => (i as any).id === activeFilters.service));
         }
         
-        const clientIdsFromReservations = new Set(filteredReservations.map(r => r.cliente_id));
-        filtered = filtered.filter(client => clientIdsFromReservations.has(client.id));
+        clientIdsFromReservations = new Set(filteredReservations.map(r => r.cliente_id));
     }
     
+    // Advanced filters based on sales (products)
+    if (salesFiltersApplied) {
+        let filteredSales = [...sales];
+        if (activeFilters.product !== 'todos') {
+            filteredSales = filteredSales.filter(sale => sale.items?.some((item: any) => item.id === activeFilters.product));
+        }
+        clientIdsFromSales = new Set(filteredSales.map(sale => sale.cliente_id));
+    }
+
+    if (reservationFiltersApplied && salesFiltersApplied) {
+      const intersection = new Set([...clientIdsFromReservations].filter(x => clientIdsFromSales.has(x)));
+      filtered = filtered.filter(client => intersection.has(client.id));
+    } else if (reservationFiltersApplied) {
+      filtered = filtered.filter(client => clientIdsFromReservations.has(client.id));
+    } else if (salesFiltersApplied) {
+      filtered = filtered.filter(client => clientIdsFromSales.has(client.id));
+    }
+
     // Search term filter
     if (searchTerm) {
         filtered = filtered.filter(client =>
@@ -210,7 +243,7 @@ export default function ClientsPage() {
     }
     
     return filtered;
-  }, [clients, reservations, searchTerm, activeFilters]);
+  }, [clients, reservations, sales, searchTerm, activeFilters]);
 
   const handleViewDetails = (client: Client) => {
     setSelectedClient(client);
@@ -264,7 +297,8 @@ export default function ClientsPage() {
                 localFilter={localFilter} setLocalFilter={setLocalFilter}
                 professionalFilter={professionalFilter} setProfessionalFilter={setProfessionalFilter}
                 serviceFilter={serviceFilter} setServiceFilter={setServiceFilter}
-                locales={locales} professionals={professionals} services={services}
+                productFilter={productFilter} setProductFilter={setProductFilter}
+                locales={locales} professionals={professionals} services={services} products={products}
                 isLoading={isLoading}
             />
           </aside>

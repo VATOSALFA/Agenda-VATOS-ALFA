@@ -16,6 +16,7 @@ import { ScrollArea } from '../ui/scroll-area';
 interface CommissionRowData {
     professionalId: string;
     professionalName: string;
+    clientName: string;
     itemName: string;
     itemType: 'servicio' | 'producto';
     saleAmount: number;
@@ -42,7 +43,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary }: Commiss
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Detalle de Comisiones: {summary.professionalName}</DialogTitle>
           <DialogDescription>
@@ -55,6 +56,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary }: Commiss
                     <TableHeader className="sticky top-0 bg-background">
                         <TableRow>
                             <TableHead>Concepto</TableHead>
+                            <TableHead>Cliente</TableHead>
                             <TableHead>Tipo</TableHead>
                             <TableHead className="text-right">Venta</TableHead>
                             <TableHead className="text-right">% Comisión</TableHead>
@@ -65,6 +67,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary }: Commiss
                         {summary.details.map((detail, index) => (
                         <TableRow key={index}>
                             <TableCell className="font-medium">{detail.itemName}</TableCell>
+                            <TableCell>{detail.clientName}</TableCell>
                             <TableCell className="capitalize">{detail.itemType}</TableCell>
                             <TableCell className="text-right">${detail.saleAmount.toLocaleString('es-CL')}</TableCell>
                             <TableCell className="text-right">{detail.commissionPercentage.toFixed(2)}%</TableCell>
@@ -74,7 +77,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary }: Commiss
                     </TableBody>
                     <TableFooter>
                         <TableRow>
-                            <TableCell colSpan={2} className="text-right font-bold">Total</TableCell>
+                            <TableCell colSpan={3} className="text-right font-bold">Total</TableCell>
                             <TableCell className="text-right font-bold">${summary.totalSales.toLocaleString('es-CL')}</TableCell>
                             <TableCell colSpan={1}></TableCell>
                             <TableCell className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-CL')}</TableCell>
@@ -90,4 +93,3 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary }: Commiss
     </Dialog>
   );
 }
-

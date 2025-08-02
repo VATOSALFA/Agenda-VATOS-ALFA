@@ -17,12 +17,13 @@ import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, Dol
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp } from "firebase/firestore";
-import type { Local, Profesional, Service, Product, Sale, SaleItem } from "@/lib/types";
+import type { Local, Profesional, Service, Product, Sale, SaleItem, Client } from "@/lib/types";
 import { CommissionDetailModal } from "@/components/sales/commission-detail-modal";
 
 interface CommissionRowData {
     professionalId: string;
     professionalName: string;
+    clientName: string;
     itemName: string;
     itemType: 'servicio' | 'producto';
     saleAmount: number;
@@ -65,6 +66,7 @@ export default function CommissionsPage() {
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
+    const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
     
     useEffect(() => {
         const today = new Date();
@@ -95,10 +97,10 @@ export default function CommissionsPage() {
     );
     
      useEffect(() => {
-        const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
+        const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading || clientsLoading;
         setIsLoading(anyLoading);
         
-        if (anyLoading || !sales || !professionals || !services || !products) {
+        if (anyLoading || !sales || !professionals || !services || !products || !clients) {
              setCommissionData([]);
              return;
         }
@@ -106,6 +108,7 @@ export default function CommissionsPage() {
         const professionalMap = new Map(professionals.map(p => [p.id, p]));
         const serviceMap = new Map(services.map(s => [s.id, s]));
         const productMap = new Map(products.map(p => [p.id, p]));
+        const clientMap = new Map(clients.map(c => [c.id, c]));
 
         let filteredSales = sales;
         if (activeFilters.local !== 'todos') {
@@ -115,6 +118,9 @@ export default function CommissionsPage() {
         const commissionRows: CommissionRowData[] = [];
 
         filteredSales.forEach(sale => {
+            const client = clientMap.get(sale.cliente_id);
+            const clientName = client ? `${client.nombre} ${client.apellido}` : 'Cliente desconocido';
+
             sale.items?.forEach(item => {
                 // If professional filter is active, only process items from that professional
                 if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
@@ -150,6 +156,7 @@ export default function CommissionsPage() {
                     commissionRows.push({
                         professionalId: professional.id,
                         professionalName: professional.name,
+                        clientName: clientName,
                         itemName: itemName,
                         itemType: item.tipo,
                         saleAmount: itemPrice,
@@ -162,7 +169,7 @@ export default function CommissionsPage() {
         
         setCommissionData(commissionRows);
 
-    }, [sales, professionals, services, products, salesLoading, professionalsLoading, servicesLoading, productsLoading, activeFilters]);
+    }, [sales, professionals, services, products, clients, salesLoading, professionalsLoading, servicesLoading, productsLoading, clientsLoading, activeFilters]);
 
     const handleSearch = () => {
         setActiveFilters({

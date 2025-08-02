@@ -125,7 +125,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Cargar Clientes desde Excel</DialogTitle>
+          <DialogTitle>Cargar Clientes desde Excel o CSV</DialogTitle>
           <DialogDescription>
             Sube un archivo .xlsx, .xls o .csv para importar tus clientes de forma masiva.
           </DialogDescription>

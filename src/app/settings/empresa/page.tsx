@@ -22,6 +22,7 @@ interface EmpresaSettings {
     description: string;
     website_slug: string;
     logo_url: string;
+    receipt_logo_url?: string;
 }
 
 export default function EmpresaPage() {
@@ -112,7 +113,8 @@ export default function EmpresaPage() {
 
         <Card>
             <CardHeader>
-                <CardTitle>Tu logo</CardTitle>
+                <CardTitle>Logo de plataforma</CardTitle>
+                <CardDescription>Este logo aparecerá en el encabezado principal de la aplicación.</CardDescription>
             </CardHeader>
             <CardContent>
                <Controller
@@ -124,7 +126,33 @@ export default function EmpresaPage() {
                           currentImageUrl={field.value}
                           onUpload={(url) => {
                             field.onChange(url);
-                            // Also trigger form submission to save the new logo immediately
+                            form.handleSubmit(onSubmit)();
+                          }}
+                          onRemove={() => {
+                            field.onChange('');
+                            form.handleSubmit(onSubmit)();
+                          }}
+                      />
+                  )}
+               />
+            </CardContent>
+        </Card>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle>Logo para comprobantes de pago</CardTitle>
+                <CardDescription>Este logo aparecerá en la parte superior de los recibos y comprobantes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+               <Controller
+                  name="receipt_logo_url"
+                  control={form.control}
+                  render={({ field }) => (
+                      <ImageUploader
+                          folder="receipt_logos"
+                          currentImageUrl={field.value}
+                          onUpload={(url) => {
+                            field.onChange(url);
                             form.handleSubmit(onSubmit)();
                           }}
                           onRemove={() => {

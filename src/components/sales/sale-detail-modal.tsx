@@ -16,7 +16,12 @@ import { es } from 'date-fns/locale';
 import type { Client, Local } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useMemo } from 'react';
+import Image from 'next/image';
 
+interface EmpresaSettings {
+    receipt_logo_url?: string;
+    name?: string;
+}
 
 interface Sale {
     id: string;
@@ -50,6 +55,8 @@ const InfoItem = ({ label, value }: { label: string, value: string | number | un
 
 export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalProps) {
     const { data: locales } = useFirestoreQuery<Local>('locales');
+    const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
+    const empresa = empresaData?.[0];
 
     const localName = useMemo(() => {
         if (!sale || !sale.local_id || !locales) return 'N/A';
@@ -85,6 +92,13 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             </div>
         </DialogHeader>
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-center items-center mb-6">
+                {empresa?.receipt_logo_url ? (
+                    <Image src={empresa.receipt_logo_url} alt="Logo" width={150} height={75} className="h-auto" />
+                ) : (
+                    <h2 className="text-2xl font-bold">{empresa?.name || "Vatos Alfa"}</h2>
+                )}
+            </div>
             <div className="p-4 border rounded-lg">
                 <h3 className="font-semibold mb-4">Resumen de pago</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">

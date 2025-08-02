@@ -168,8 +168,19 @@ export default function ClientsPage() {
     return constraints;
   }, [activeFilters.dateRange]);
   
+  const reservationsQueryConstraints = useMemo(() => {
+    const constraints = [];
+    if (activeFilters.dateRange?.from) {
+        constraints.push(where('fecha', '>=', format(startOfDay(activeFilters.dateRange.from), 'yyyy-MM-dd')));
+    }
+    if (activeFilters.dateRange?.to) {
+        constraints.push(where('fecha', '<=', format(endOfDay(activeFilters.dateRange.to), 'yyyy-MM-dd')));
+    }
+    return constraints;
+  }, [activeFilters.dateRange]);
+  
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${queryKey}`, ...historyQueryConstraints);
-  const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', `reservations-${queryKey}`, ...historyQueryConstraints.map(c => where(c.A.field.segments.join('.'), c.A.op, c.A.value)));
+  const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', `reservations-${queryKey}`, ...reservationsQueryConstraints);
 
   const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading || productsLoading || salesLoading;
 

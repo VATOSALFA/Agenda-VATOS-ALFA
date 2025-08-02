@@ -89,7 +89,6 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon"><Mail className="h-4 w-4" /></Button>
                 <Button variant="ghost" size="icon"><Printer className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}><X className="h-4 w-4" /></Button>
             </div>
         </DialogHeader>
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">

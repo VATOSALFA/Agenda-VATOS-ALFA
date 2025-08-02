@@ -1,30 +1,78 @@
 
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Filter, Gift, DollarSign } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarIcon, Download, Filter, Gift, DollarSign, Search, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import type { Local, Profesional } from "@/lib/types";
 
-const mockTips = [
-    { id: '#3883', saleId: 'V001', date: '2025-07-15 07:03 pm', location: 'VATOS ALFA Barber Shop', client: 'Sandra Sanchez', professional: 'El Patrón', tip: 1000 },
-    { id: '#3879', saleId: 'V002', date: '2025-07-15 05:14 pm', location: 'VATOS ALFA Barber Shop', client: 'Luis Angel Martinez', professional: 'El Sicario', tip: 1400 },
-    { id: '#3876', saleId: 'V003', date: '2025-07-15 03:27 pm', location: 'VATOS ALFA Barber Shop', client: 'Aldo Faraz', professional: 'El Sicario', tip: 1400 },
-    { id: '#3873', saleId: 'V004', date: '2025-07-15 01:43 pm', location: 'VATOS ALFA Barber Shop', client: 'Pablo Fiores', professional: 'El Padrino', tip: 1700 },
-    { id: '#3872', saleId: 'V005', date: '2025-07-15 01:10 pm', location: 'VATOS ALFA Barber Shop', client: 'David Flores', professional: 'El Padrino', tip: 3290 },
-    { id: '#3871', saleId: 'V006', date: '2025-07-15 11:53 am', location: 'VATOS ALFA Barber Shop', client: 'Dariel Siva', professional: 'El Patrón', tip: 2100 },
-    { id: '#3864', saleId: 'V007', date: '2025-07-14 05:25 pm', location: 'VATOS ALFA Barber Shop', client: 'Antonio Castellano', professional: 'Barbero Extra', tip: 2800 },
+// Mock Data - In a real app this would come from a 'propinas' collection
+const mockTipsData = [
+    { id: '#3883', saleId: 'V001', date: '2025-07-15T19:03:00', localId: 'local1', clientId: 'client1', clientName: 'Sandra Sanchez', professionalId: 'prof1', professionalName: 'El Patrón', tip: 1000 },
+    { id: '#3879', saleId: 'V002', date: '2025-07-15T17:14:00', localId: 'local1', clientId: 'client2', clientName: 'Luis Angel Martinez', professionalId: 'prof2', professionalName: 'El Sicario', tip: 1400 },
+    { id: '#3876', saleId: 'V003', date: '2025-07-15T15:27:00', localId: 'local1', clientId: 'client3', clientName: 'Aldo Faraz', professionalId: 'prof2', professionalName: 'El Sicario', tip: 1400 },
+    { id: '#3873', saleId: 'V004', date: '2025-07-15T13:43:00', localId: 'local1', clientId: 'client4', clientName: 'Pablo Fiores', professionalId: 'prof3', professionalName: 'El Padrino', tip: 1700 },
+    { id: '#3872', saleId: 'V005', date: '2025-07-15T13:10:00', localId: 'local1', clientId: 'client5', clientName: 'David Flores', professionalId: 'prof3', professionalName: 'El Padrino', tip: 3290 },
+    { id: '#3871', saleId: 'V006', date: '2025-07-15T11:53:00', localId: 'local1', clientId: 'client6', clientName: 'Dariel Siva', professionalId: 'prof1', professionalName: 'El Patrón', tip: 2100 },
+    { id: '#3864', saleId: 'V007', date: '2025-07-14T17:25:00', localId: 'local1', clientId: 'client7', clientName: 'Antonio Castellano', professionalId: 'prof4', professionalName: 'Barbero Extra', tip: 2800 },
 ];
 
-const totalTips = mockTips.reduce((acc, item) => acc + item.tip, 0);
 
 export default function TipsPage() {
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [localFilter, setLocalFilter] = useState('todos');
+  const [professionalFilter, setProfessionalFilter] = useState('todos');
+  const [isLoading, setIsLoading] = useState(false);
+  const [queryKey, setQueryKey] = useState(0);
+
+  // In a real scenario, you'd fetch tips. For now, we simulate fetching and filtering.
+  // const { data: tips, loading: tipsLoading } = useFirestoreQuery('propinas');
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+
+  const filteredTips = useMemo(() => {
+    return mockTipsData.filter(tip => {
+        const tipDate = new Date(tip.date);
+        const dateMatch = !dateRange || (
+            (!dateRange.from || tipDate >= startOfDay(dateRange.from)) &&
+            (!dateRange.to || tipDate <= endOfDay(dateRange.to))
+        );
+        const localMatch = localFilter === 'todos' || tip.localId === localFilter;
+        const professionalMatch = professionalFilter === 'todos' || tip.professionalId === professionalFilter;
+
+        return dateMatch && localMatch && professionalMatch;
+    });
+  }, [dateRange, localFilter, professionalFilter]);
+
+  const totalTips = useMemo(() => {
+    return filteredTips.reduce((acc, item) => acc + item.tip, 0);
+  }, [filteredTips]);
+
+  const handleSearch = () => {
+      setIsLoading(true);
+      // Simulate API call delay
+      setTimeout(() => {
+          setQueryKey(prev => prev + 1); // This would trigger a refetch in a real scenario
+          setIsLoading(false);
+      }, 500);
+  }
+
+  useEffect(() => {
+      const today = new Date();
+      const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+      setDateRange({ from, to: today });
+  }, []);
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -41,20 +89,49 @@ export default function TipsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Periodo</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Últimos 7 días" /></SelectTrigger><SelectContent /></Select>
+                         <Popover>
+                            <PopoverTrigger asChild>
+                                <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateRange?.from ? (
+                                        dateRange.to ? (
+                                            <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
+                                        ) : (
+                                            format(dateRange.from, "LLL dd, y", {locale: es})
+                                        )
+                                    ) : (
+                                        <span>Seleccionar rango</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                            </PopoverContent>
+                        </Popover>
                     </div>
                     <div className="space-y-2">
                          <label className="text-sm font-medium">Local</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent /></Select>
+                        <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos</SelectItem>
+                                {locales.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Profesional</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger><SelectContent /></Select>
+                         <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={professionalsLoading}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos</SelectItem>
+                                 {professionals.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Venta</label>
-                        <Select><SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger><SelectContent /></Select>
-                    </div>
+                    <Button onClick={handleSearch} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
+                    </Button>
                 </div>
             </CardContent>
         </Card>
@@ -81,14 +158,18 @@ export default function TipsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {mockTips.map((tip) => (
+                         {isLoading ? (
+                            <TableRow><TableCell colSpan={7} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                        ) : filteredTips.length === 0 ? (
+                            <TableRow><TableCell colSpan={7} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
+                        ) : filteredTips.map((tip) => (
                             <TableRow key={tip.id}>
                                 <TableCell className="font-mono text-xs">{tip.id}</TableCell>
                                 <TableCell className="font-mono text-xs">{tip.saleId}</TableCell>
-                                <TableCell>{tip.date}</TableCell>
-                                <TableCell>{tip.location}</TableCell>
-                                <TableCell>{tip.client}</TableCell>
-                                <TableCell>{tip.professional}</TableCell>
+                                <TableCell>{format(new Date(tip.date), 'dd-MM-yyyy hh:mm a')}</TableCell>
+                                <TableCell>{tip.localId === 'local1' ? 'VATOS ALFA Barber Shop' : tip.localId}</TableCell>
+                                <TableCell>{tip.clientName}</TableCell>
+                                <TableCell>{tip.professionalName}</TableCell>
                                 <TableCell className="text-right font-semibold">${tip.tip.toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}

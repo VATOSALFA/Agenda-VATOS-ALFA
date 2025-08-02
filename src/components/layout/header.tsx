@@ -73,7 +73,6 @@ const salesNavLinks = [
     { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign },
     { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote },
     { href: '/sales/tips', label: 'Propinas', icon: Gift },
-    { href: '/sales/payments', label: 'Pagos y Transferencias', icon: ArrowRightLeft },
 ]
 
 const productsNavLinks = [

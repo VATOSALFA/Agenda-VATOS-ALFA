@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -14,11 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Percent } from "lucide-react";
+import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp } from "firebase/firestore";
 import type { Local, Profesional, Service, Product, Sale, SaleItem } from "@/lib/types";
+import { CommissionDetailModal } from "@/components/sales/commission-detail-modal";
 
 interface CommissionRowData {
     professionalId: string;
@@ -30,6 +30,15 @@ interface CommissionRowData {
     commissionPercentage: number;
 }
 
+interface ProfessionalCommissionSummary {
+    professionalId: string;
+    professionalName: string;
+    totalSales: number;
+    totalCommission: number;
+    details: CommissionRowData[];
+}
+
+
 export default function CommissionsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
@@ -37,6 +46,8 @@ export default function CommissionsPage() {
     const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [selectedProfessionalSummary, setSelectedProfessionalSummary] = useState<ProfessionalCommissionSummary | null>(null);
     
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -161,24 +172,59 @@ export default function CommissionsPage() {
         });
     }
 
-    const summary = useMemo(() => {
-        return commissionData.reduce((acc, current) => {
-            acc.totalSales += current.saleAmount;
-            acc.totalCommission += current.commissionAmount;
-            if (current.itemType === 'servicio') {
-                acc.serviceSales += current.saleAmount;
-                acc.serviceCommission += current.commissionAmount;
-            } else {
-                acc.productSales += current.saleAmount;
-                acc.productCommission += current.commissionAmount;
+    const summaryByProfessional = useMemo(() => {
+        const grouped = commissionData.reduce((acc, current) => {
+            if (!acc[current.professionalId]) {
+                acc[current.professionalId] = {
+                    professionalId: current.professionalId,
+                    professionalName: current.professionalName,
+                    totalSales: 0,
+                    totalCommission: 0,
+                    details: []
+                };
             }
+            acc[current.professionalId].totalSales += current.saleAmount;
+            acc[current.professionalId].totalCommission += current.commissionAmount;
+            acc[current.professionalId].details.push(current);
             return acc;
-        }, { totalSales: 0, totalCommission: 0, serviceSales: 0, serviceCommission: 0, productSales: 0, productCommission: 0 });
+        }, {} as Record<string, ProfessionalCommissionSummary>);
+
+        return Object.values(grouped);
     }, [commissionData]);
 
-    const overallAvgCommission = summary.totalSales > 0 ? (summary.totalCommission / summary.totalSales) * 100 : 0;
+    const overallSummary = useMemo(() => {
+        return summaryByProfessional.reduce((acc, current) => {
+            acc.totalSales += current.totalSales;
+            acc.totalCommission += current.totalCommission;
+            return acc;
+        }, { totalSales: 0, totalCommission: 0 });
+    }, [summaryByProfessional]);
+
+    const serviceSummary = useMemo(() => {
+        const serviceData = commissionData.filter(d => d.itemType === 'servicio');
+        return serviceData.reduce((acc, current) => {
+            acc.serviceSales += current.saleAmount;
+            acc.serviceCommission += current.commissionAmount;
+            return acc;
+        }, { serviceSales: 0, serviceCommission: 0 });
+    }, [commissionData]);
+
+     const productSummary = useMemo(() => {
+        const productData = commissionData.filter(d => d.itemType === 'producto');
+        return productData.reduce((acc, current) => {
+            acc.productSales += current.saleAmount;
+            acc.productCommission += current.commissionAmount;
+            return acc;
+        }, { productSales: 0, productCommission: 0 });
+    }, [commissionData]);
+
+    const handleViewDetails = (summary: ProfessionalCommissionSummary) => {
+        setSelectedProfessionalSummary(summary);
+        setIsDetailModalOpen(true);
+    }
 
   return (
+    <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
             <h2 className="text-3xl font-bold tracking-tight">Reporte de Comisiones</h2>
@@ -255,8 +301,8 @@ export default function CommissionsPage() {
                     <Briefcase className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${summary.serviceSales.toLocaleString('es-CL')}</div>
-                    <p className="text-xs text-muted-foreground">Comisión: ${summary.serviceCommission.toLocaleString('es-CL')}</p>
+                    <div className="text-2xl font-bold">${serviceSummary.serviceSales.toLocaleString('es-CL')}</div>
+                    <p className="text-xs text-muted-foreground">Comisión: ${serviceSummary.serviceCommission.toLocaleString('es-CL')}</p>
                 </CardContent>
             </Card>
             <Card>
@@ -265,8 +311,8 @@ export default function CommissionsPage() {
                     <ShoppingBag className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${summary.productSales.toLocaleString('es-CL')}</div>
-                    <p className="text-xs text-muted-foreground">Comisión: ${summary.productCommission.toLocaleString('es-CL')}</p>
+                    <div className="text-2xl font-bold">${productSummary.productSales.toLocaleString('es-CL')}</div>
+                    <p className="text-xs text-muted-foreground">Comisión: ${productSummary.productCommission.toLocaleString('es-CL')}</p>
                 </CardContent>
             </Card>
              <Card>
@@ -275,8 +321,8 @@ export default function CommissionsPage() {
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${summary.totalCommission.toLocaleString('es-CL')}</div>
-                    <p className="text-xs text-muted-foreground">Sobre un total de ${summary.totalSales.toLocaleString('es-CL')} en ventas</p>
+                    <div className="text-2xl font-bold">${overallSummary.totalCommission.toLocaleString('es-CL')}</div>
+                    <p className="text-xs text-muted-foreground">Sobre un total de ${overallSummary.totalSales.toLocaleString('es-CL')} en ventas</p>
                 </CardContent>
             </Card>
         </div>
@@ -285,7 +331,7 @@ export default function CommissionsPage() {
              <CardHeader className="flex-row items-center justify-between">
                 <div>
                     <CardTitle>Comisiones por Profesional</CardTitle>
-                    <CardDescription>Detalle de las comisiones generadas en el período seleccionado.</CardDescription>
+                    <CardDescription>Resumen de comisiones generadas en el período seleccionado.</CardDescription>
                 </div>
                 <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
             </CardHeader>
@@ -294,40 +340,49 @@ export default function CommissionsPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Profesional / Staff</TableHead>
-                            <TableHead>Concepto</TableHead>
                             <TableHead className="text-right">Venta total</TableHead>
-                            <TableHead className="text-right">% de comisión</TableHead>
                             <TableHead className="text-right">Monto comisión</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
-                            <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                        ) : commissionData.length === 0 ? (
-                            <TableRow><TableCell colSpan={5} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
-                        ) : commissionData.map((row, index) => (
-                            <TableRow key={index}>
+                            <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                        ) : summaryByProfessional.length === 0 ? (
+                            <TableRow><TableCell colSpan={4} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
+                        ) : summaryByProfessional.map((row) => (
+                            <TableRow key={row.professionalId}>
                                 <TableCell className="font-medium">{row.professionalName}</TableCell>
-                                <TableCell>{row.itemName}</TableCell>
-                                <TableCell className="text-right">${row.saleAmount.toLocaleString('es-CL')}</TableCell>
-                                <TableCell className="text-right">{row.commissionPercentage.toFixed(2)}%</TableCell>
-                                <TableCell className="text-right text-primary font-semibold">${row.commissionAmount.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right">${row.totalSales.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right text-primary font-semibold">${row.totalCommission.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="outline" size="sm" onClick={() => handleViewDetails(row)}>
+                                        <Eye className="mr-2 h-4 w-4" /> Ver detalles
+                                    </Button>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                     <TableFooter>
                         <TableRow className="bg-muted/50">
-                            <TableHead colSpan={2} className="text-right font-bold">Totales</TableHead>
-                            <TableHead className="text-right font-bold">${summary.totalSales.toLocaleString('es-CL')}</TableHead>
-                            <TableHead className="text-right font-bold">{overallAvgCommission.toFixed(2)}%</TableHead>
-                            <TableHead className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-CL')}</TableHead>
+                            <TableHead className="text-right font-bold">Totales</TableHead>
+                            <TableHead className="text-right font-bold">${overallSummary.totalSales.toLocaleString('es-CL')}</TableHead>
+                            <TableHead className="text-right font-bold text-primary">${overallSummary.totalCommission.toLocaleString('es-CL')}</TableHead>
+                            <TableHead></TableHead>
                         </TableRow>
                     </TableFooter>
                 </Table>
             </CardContent>
         </Card>
     </div>
+
+    {selectedProfessionalSummary && (
+        <CommissionDetailModal
+            isOpen={isDetailModalOpen}
+            onOpenChange={setIsDetailModalOpen}
+            summary={selectedProfessionalSummary}
+        />
+    )}
+    </>
   );
 }
-
-

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -94,7 +95,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-center items-center mb-6">
                 {empresa?.receipt_logo_url ? (
-                    <Image src={empresa.receipt_logo_url} alt="Logo" width={150} height={75} className="h-auto" />
+                    <Image src={empresa.receipt_logo_url} alt="Logo" width={200} height={100} className="h-auto" />
                 ) : (
                     <h2 className="text-2xl font-bold">{empresa?.name || "Vatos Alfa"}</h2>
                 )}

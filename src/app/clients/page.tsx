@@ -36,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 
 const FiltersSidebar = ({
     onApply,
@@ -131,6 +132,7 @@ export default function ClientsPage() {
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
@@ -310,7 +312,9 @@ export default function ClientsPage() {
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Base de Clientes</h2>
            <div className="flex items-center space-x-2">
-            <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Cargar clientes</Button>
+            <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Cargar clientes
+            </Button>
             <Button onClick={handleOpenNewModal}>
               <PlusCircle className="mr-2 h-4 w-4" /> Nuevo cliente
             </Button>
@@ -473,6 +477,12 @@ export default function ClientsPage() {
             </DialogContent>
         </Dialog>
       )}
+      
+      <UploadClientsModal
+        isOpen={isUploadModalOpen}
+        onOpenChange={setIsUploadModalOpen}
+        onUploadComplete={handleDataUpdated}
+      />
 
       {isCombineModalOpen && (
           <CombineClientsModal

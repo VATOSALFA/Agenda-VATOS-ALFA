@@ -9,15 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Client, Local, Profesional, Service, Reservation, Product } from "@/lib/types";
+import type { Client, Local, Profesional, Service, Reservation, Product, Sale } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 import { NewReservationForm } from "@/components/reservations/new-reservation-form";
 import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from 'date-fns/locale';
+import { DateRange } from 'react-day-picker';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { deleteDoc, doc } from "firebase/firestore";
+import { deleteDoc, doc, where, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,6 +40,7 @@ import { Calendar } from "@/components/ui/calendar";
 const FiltersSidebar = ({
     onApply,
     onReset,
+    dateRange, setDateRange,
     localFilter, setLocalFilter,
     professionalFilter, setProfessionalFilter,
     serviceFilter, setServiceFilter,
@@ -51,6 +53,28 @@ const FiltersSidebar = ({
         <div className="space-y-4">
             <h3 className="text-xl font-bold">Filtros avanzados</h3>
             <div className="space-y-3">
+                 <div className="space-y-1">
+                    <Label>Periodo de consumo</Label>
+                     <Popover>
+                        <PopoverTrigger asChild>
+                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                                dateRange.to ? (
+                                    <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
+                                ) : (
+                                    format(dateRange.from, "LLL dd, y", {locale: es})
+                                )
+                            ) : (
+                                <span>Desde / hasta</span>
+                            )}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                        </PopoverContent>
+                    </Popover>
+                </div>
                  <div className="space-y-1">
                   <Label>Local/sede</Label>
                   <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLoading}>
@@ -91,46 +115,6 @@ const FiltersSidebar = ({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center justify-between">
-                    <Label>Estado de la reserva</Label>
-                    <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
-                </div>
-                <div className="flex items-center justify-between">
-                    <Label>Género</Label>
-                    <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
-                </div>
-                 <div className="space-y-1">
-                    <Label>Cumpleaños</Label>
-                     <Popover>
-                        <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            <span>Desde / hasta</span>
-                        </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0"><Calendar mode="range" numberOfMonths={1} /></PopoverContent>
-                    </Popover>
-                </div>
-                 <div className="space-y-1">
-                    <Label>Cliente creado en el periodo</Label>
-                     <Popover>
-                        <PopoverTrigger asChild>
-                        <Button variant={"outline"} className="w-full justify-start text-left font-normal">
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            <span>Desde / hasta</span>
-                        </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0"><Calendar mode="range" numberOfMonths={1} /></PopoverContent>
-                    </Popover>
-                </div>
-                 <div className="flex items-center justify-between">
-                    <Label>¿Ha reservado?</Label>
-                    <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
-                </div>
-                 <div className="flex items-center justify-between">
-                    <Label>Personalizados</Label>
-                    <Button variant="ghost" size="sm"><Plus className="h-4 w-4" /></Button>
-                </div>
             </div>
             <div className="space-y-2 pt-4 border-t">
                 <Button className="w-full" onClick={onApply}>Buscar</Button>
@@ -151,11 +135,19 @@ export default function ClientsPage() {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const { toast } = useToast();
 
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [localFilter, setLocalFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [serviceFilter, setServiceFilter] = useState('todos');
   const [productFilter, setProductFilter] = useState('todos');
-  const [activeFilters, setActiveFilters] = useState({ local: 'todos', professional: 'todos', service: 'todos', product: 'todos' });
+  
+  const [activeFilters, setActiveFilters] = useState({
+      dateRange: dateRange,
+      local: 'todos',
+      professional: 'todos',
+      service: 'todos',
+      product: 'todos'
+  });
 
   const [queryKey, setQueryKey] = useState(0);
 
@@ -164,76 +156,89 @@ export default function ClientsPage() {
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
-  const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', queryKey);
-  const { data: sales, loading: salesLoading } = useFirestoreQuery<any>('ventas', queryKey);
   
+  const historyQueryConstraints = useMemo(() => {
+    const constraints = [];
+    if (activeFilters.dateRange?.from) {
+        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    }
+    if (activeFilters.dateRange?.to) {
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    }
+    return constraints;
+  }, [activeFilters.dateRange]);
+  
+  const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${queryKey}`, ...historyQueryConstraints);
+  const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', `reservations-${queryKey}`, ...historyQueryConstraints.map(c => where(c.A.field.segments.join('.'), c.A.op, c.A.value)));
+
   const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading || productsLoading || salesLoading;
 
   const handleApplyFilters = () => {
     setActiveFilters({
+      dateRange,
       local: localFilter,
       professional: professionalFilter,
       service: serviceFilter,
       product: productFilter,
     });
+    setQueryKey(prev => prev + 1);
     toast({ title: "Filtros aplicados" });
   };
   
   const handleResetFilters = () => {
+    setDateRange(undefined);
     setLocalFilter('todos');
     setProfessionalFilter('todos');
     setServiceFilter('todos');
     setProductFilter('todos');
-    setActiveFilters({ local: 'todos', professional: 'todos', service: 'todos', product: 'todos' });
+    setActiveFilters({
+        dateRange: undefined,
+        local: 'todos',
+        professional: 'todos',
+        service: 'todos',
+        product: 'todos'
+    });
+    setQueryKey(prev => prev + 1);
     toast({ title: "Filtros restablecidos" });
   };
 
   const filteredClients = useMemo(() => {
     let filtered = [...clients];
-    let clientIdsFromReservations = new Set<string>();
-    let clientIdsFromSales = new Set<string>();
 
-    let reservationFiltersApplied = activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.service !== 'todos';
-    let salesFiltersApplied = activeFilters.product !== 'todos';
-    
-    // Advanced filters based on reservations
-    if (reservationFiltersApplied) {
-        let filteredReservations = [...reservations];
-        
-        if (activeFilters.local !== 'todos') {
-            filteredReservations = filteredReservations.filter(r => (r as any).local_id === activeFilters.local)
+    const hasAdvancedFilters = 
+        activeFilters.local !== 'todos' || 
+        activeFilters.professional !== 'todos' || 
+        activeFilters.service !== 'todos' || 
+        activeFilters.product !== 'todos';
+
+    if (hasAdvancedFilters) {
+        let clientIdsFromHistory = new Set<string>();
+
+        // Filter based on reservations (for service/professional)
+        if (activeFilters.professional !== 'todos' || activeFilters.service !== 'todos') {
+            const filteredReservations = reservations.filter(r => {
+                const profMatch = activeFilters.professional === 'todos' || r.items?.some(i => i.barbero_id === activeFilters.professional);
+                const serviceMatch = activeFilters.service === 'todos' || r.items?.some(i => i.id === activeFilters.service);
+                return profMatch && serviceMatch;
+            });
+            filteredReservations.forEach(r => clientIdsFromHistory.add(r.cliente_id));
+        }
+
+        // Filter based on sales (for product/local)
+        if (activeFilters.product !== 'todos' || activeFilters.local !== 'todos') {
+            const filteredSales = sales.filter(s => {
+                const localMatch = activeFilters.local === 'todos' || s.local_id === activeFilters.local;
+                const productMatch = activeFilters.product === 'todos' || s.items?.some(i => i.id === activeFilters.product);
+                return localMatch && productMatch;
+            });
+            filteredSales.forEach(s => clientIdsFromHistory.add(s.cliente_id));
         }
         
-        if (activeFilters.professional !== 'todos') {
-            filteredReservations = filteredReservations.filter(r => r.items?.some(i => i.barbero_id === activeFilters.professional));
-        }
-
-        if (activeFilters.service !== 'todos') {
-            filteredReservations = filteredReservations.filter(r => r.items?.some(i => (i as any).id === activeFilters.service));
-        }
-        
-        clientIdsFromReservations = new Set(filteredReservations.map(r => r.cliente_id));
-    }
-    
-    // Advanced filters based on sales (products)
-    if (salesFiltersApplied) {
-        let filteredSales = [...sales];
-        if (activeFilters.product !== 'todos') {
-            filteredSales = filteredSales.filter(sale => sale.items?.some((item: any) => item.id === activeFilters.product));
-        }
-        clientIdsFromSales = new Set(filteredSales.map(sale => sale.cliente_id));
+        filtered = filtered.filter(client => clientIdsFromHistory.has(client.id));
     }
 
-    if (reservationFiltersApplied && salesFiltersApplied) {
-      const intersection = new Set([...clientIdsFromReservations].filter(x => clientIdsFromSales.has(x)));
-      filtered = filtered.filter(client => intersection.has(client.id));
-    } else if (reservationFiltersApplied) {
-      filtered = filtered.filter(client => clientIdsFromReservations.has(client.id));
-    } else if (salesFiltersApplied) {
-      filtered = filtered.filter(client => clientIdsFromSales.has(client.id));
-    }
 
-    // Search term filter
+    // Search term filter (applied on top of advanced filters)
     if (searchTerm) {
         filtered = filtered.filter(client =>
           (client.nombre?.toLowerCase() + ' ' + client.apellido?.toLowerCase()).includes(searchTerm.toLowerCase()) ||
@@ -294,6 +299,7 @@ export default function ClientsPage() {
             <FiltersSidebar 
                 onApply={handleApplyFilters}
                 onReset={handleResetFilters}
+                dateRange={dateRange} setDateRange={setDateRange}
                 localFilter={localFilter} setLocalFilter={setLocalFilter}
                 professionalFilter={professionalFilter} setProfessionalFilter={setProfessionalFilter}
                 serviceFilter={serviceFilter} setServiceFilter={setServiceFilter}
@@ -347,7 +353,7 @@ export default function ClientsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {clientsLoading ? (
+                    {isLoading ? (
                       Array.from({ length: 10 }).map((_, i) => (
                         <TableRow key={i}>
                           <TableCell><Skeleton className="h-5 w-24" /></TableCell>
@@ -379,7 +385,7 @@ export default function ClientsPage() {
                     ))}
                   </TableBody>
                 </Table>
-                 { !clientsLoading && filteredClients.length === 0 && (
+                 { !isLoading && filteredClients.length === 0 && (
                     <p className="text-center py-10 text-muted-foreground">
                         {searchTerm ? "No se encontraron clientes." : "No hay clientes registrados."}
                     </p>

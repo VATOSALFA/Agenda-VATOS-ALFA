@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -185,6 +186,10 @@ export default function ClientsPage() {
   
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${queryKey}`, ...historyQueryConstraints);
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', `reservations-${queryKey}`, ...reservationsQueryConstraints);
+  
+  // Hooks to fetch the entire history for download, regardless of filters
+  const { data: allReservations, loading: allReservationsLoading } = useFirestoreQuery<Reservation>('reservas');
+  const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
 
   const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading || productsLoading || salesLoading;
 
@@ -332,21 +337,40 @@ export default function ClientsPage() {
       });
       return;
     }
+    
+    if (allReservationsLoading || allSalesLoading) {
+      toast({
+        title: "Cargando datos...",
+        description: "El historial completo se está cargando, por favor inténtalo de nuevo en unos momentos.",
+      });
+      return;
+    }
   
-    const dataForExcel = filteredClients.map(client => ({
-      'Número de cliente': client.numero_cliente || '',
-      'Nombre': client.nombre || '',
-      'Apellido': client.apellido || '',
-      'Correo': client.correo || '',
-      'Teléfono': client.telefono || '',
-      'Fecha de Nacimiento': client.fecha_nacimiento ? formatDate(client.fecha_nacimiento) : 'N/A',
-      'Cliente desde': client.creado_en ? formatDate(client.creado_en) : 'N/A',
-      'Citas totales': client.citas_totales || 0,
-      'Citas asistidas': client.citas_asistidas || 0,
-      'Citas no asistidas': client.citas_no_asistidas || 0,
-      'Citas canceladas': client.citas_canceladas || 0,
-      'Gasto total': client.gasto_total || 0,
-    }));
+    const dataForExcel = filteredClients.map(client => {
+      const clientReservations = allReservations.filter(r => r.cliente_id === client.id);
+      const clientSales = allSales.filter(s => s.cliente_id === client.id);
+
+      const totalAppointments = clientReservations.length;
+      const attendedAppointments = clientReservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
+      const unattendedAppointments = clientReservations.filter(r => r.estado === 'No asiste').length;
+      const cancelledAppointments = clientReservations.filter(r => r.estado === 'Cancelado').length;
+      const totalSpent = clientSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+      
+      return {
+        'Nombre': client.nombre || '',
+        'Apellido': client.apellido || '',
+        'Correo': client.correo || '',
+        'Teléfono': client.telefono || '',
+        'Fecha de Nacimiento': client.fecha_nacimiento ? formatDate(client.fecha_nacimiento) : 'N/A',
+        'Cliente desde': client.creado_en ? formatDate(client.creado_en) : 'N/A',
+        'Número de cliente': client.numero_cliente || '',
+        'Citas totales': client.citas_totales ?? totalAppointments,
+        'Citas asistidas': client.citas_asistidas ?? attendedAppointments,
+        'Citas no asistidas': client.citas_no_asistidas ?? unattendedAppointments,
+        'Citas canceladas': client.citas_canceladas ?? cancelledAppointments,
+        'Gasto total': client.gasto_total ?? totalSpent,
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
     const workbook = XLSX.utils.book_new();
@@ -587,4 +611,3 @@ export default function ClientsPage() {
     </>
   );
 }
-

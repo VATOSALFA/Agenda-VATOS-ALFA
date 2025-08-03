@@ -38,12 +38,12 @@ function Calendar({
         table: "w-full border-collapse space-y-1",
         head_row: "flex",
         head_cell:
-          "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]",
+          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
         row: "flex w-full mt-2",
-        cell: "h-8 w-8 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-8 w-8 p-0 font-normal aria-selected:opacity-100"
+          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
         ),
         day_range_end: "day-range-end",
         day_selected:
@@ -61,57 +61,55 @@ function Calendar({
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
         Dropdown: (props: DropdownProps) => {
-            const { fromYear, toYear, fromMonth, toMonth } = props;
+            const { fromYear, toYear, fromMonth, toMonth, fromDate, toDate } = props;
             const options: { label: string; value: number }[] = [];
+            let selectValue: string | undefined;
 
             if (props.name === 'months') {
-                const currentYear = new Date().getFullYear();
-                for (let i = 0; i < 12; i++) {
+                const currentYear = (props.value !== undefined ? new Date(new Date().setMonth(props.value as number)) : new Date()).getFullYear();
+                const startMonth = fromMonth?.getMonth() ?? 0;
+                const endMonth = toMonth?.getMonth() ?? 11;
+                for (let i = startMonth; i <= endMonth; i++) {
                     options.push({
                         value: i,
                         label: new Date(currentYear, i).toLocaleString('default', { month: 'long' })
                     });
                 }
+                selectValue = (props.value !== undefined) ? String(props.value) : undefined;
             } else if (props.name === 'years') {
-                const startYear = fromYear || new Date().getFullYear() - 100;
-                const endYear = toYear || new Date().getFullYear();
-                 for (let i = startYear; i <= endYear; i++) {
+                const startYear = fromYear || fromDate?.getFullYear() || new Date().getFullYear() - 100;
+                const endYear = toYear || toDate?.getFullYear() || new Date().getFullYear();
+                 for (let i = endYear; i >= startYear; i--) {
                     options.push({ value: i, label: i.toString() });
                 }
+                selectValue = (props.value !== undefined) ? String(props.value) : undefined;
             }
-            
+
             const handleValueChange = (newValue: string) => {
                 if (props.onChange) {
-                    const newDate = new Date();
+                    const newDate = new Date(props.value as number);
                     if (props.name === 'months') {
-                        // When changing month, we need to know the currently selected year
-                        const currentMonthDate = (props.value !== undefined) ? new Date().setMonth(props.value as number) : new Date();
-                        const currentYear = new Date(currentMonthDate).getFullYear();
-                        newDate.setFullYear(currentYear, parseInt(newValue, 10));
+                        newDate.setMonth(parseInt(newValue, 10));
                     } else if (props.name === 'years') {
-                        // When changing year, we need to know the currently selected month
-                        const currentMonth = (props.value !== undefined) ? new Date().setFullYear(props.value as number) : new Date();
-                        const month = new Date(currentMonth).getMonth();
-                        newDate.setFullYear(parseInt(newValue, 10), month);
+                        newDate.setFullYear(parseInt(newValue, 10));
                     }
-                    props.onChange(newDate);
+                    props.onChange(newDate as any);
                 }
             };
-            
-            const selectedValue = props.value?.toString();
-            
-            // Get the display name for the trigger
-            let triggerDisplayValue = selectedValue;
-            if (props.name === 'months' && selectedValue) {
-                triggerDisplayValue = new Date(new Date().getFullYear(), parseInt(selectedValue)).toLocaleString('default', {month: 'long'})
+
+            let triggerDisplayValue = props.caption;
+            if(props.name === 'months' && props.value !== undefined) {
+                triggerDisplayValue = new Date(new Date().getFullYear(), props.value as number).toLocaleString('default', { month: 'long' });
+            } else if (props.name === 'years' && props.value !== undefined) {
+                triggerDisplayValue = String(props.value);
             }
 
             return (
                  <Select
                     onValueChange={handleValueChange}
-                    value={selectedValue}
+                    value={selectValue}
                 >
-                    <SelectTrigger>{triggerDisplayValue}</SelectTrigger>
+                    <SelectTrigger className="w-[120px]">{triggerDisplayValue}</SelectTrigger>
                     <SelectContent>
                         <ScrollArea className="h-80">
                             {options.map((option) => (

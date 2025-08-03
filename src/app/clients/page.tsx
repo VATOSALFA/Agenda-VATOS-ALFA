@@ -444,7 +444,7 @@ export default function ClientsPage() {
       </div>
 
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
            <DialogHeader>
               <DialogTitle>{editingClient ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
               <DialogDescription>

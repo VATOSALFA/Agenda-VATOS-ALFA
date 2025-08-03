@@ -10,7 +10,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const StockAlertInputSchema = z.object({
+const StockAlertInputSchema = z.object({
     productName: z.string().describe("The name of the product that is low on stock."),
     currentStock: z.number().describe("The current stock quantity of the product."),
     recipientEmail: z.string().email().describe("The email address to send the alert to."),

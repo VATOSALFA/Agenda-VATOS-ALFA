@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -8,7 +9,7 @@ import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestor
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, getYear, getMonth, getDate, isValid } from 'date-fns';
 import type { Client } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ import { DialogFooter } from '@/components/ui/dialog';
 import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 
 const clientSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
@@ -44,6 +46,12 @@ interface NewClientFormProps {
   onFormSubmit: (clientId: string) => void;
   client?: Client | null;
 }
+
+const years = Array.from({ length: 100 }, (_, i) => getYear(new Date()) - i);
+const months = Array.from({ length: 12 }, (_, i) => ({
+  value: i,
+  label: format(new Date(2000, i, 1), 'LLLL', { locale: es }),
+}));
 
 export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProps) {
   const { toast } = useToast();
@@ -127,6 +135,23 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
       setIsSubmitting(false);
     }
   }
+  
+  const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string | number) => {
+    const currentDate = form.getValues('fecha_nacimiento') || new Date();
+    let newDay = getDate(currentDate);
+    let newMonth = getMonth(currentDate);
+    let newYear = getYear(currentDate);
+
+    if (part === 'day') newDay = parseInt(value as string, 10);
+    if (part === 'month') newMonth = value as number;
+    if (part === 'year') newYear = value as number;
+
+    const newDate = new Date(newYear, newMonth, newDay);
+    if(isValid(newDate)) {
+        form.setValue('fecha_nacimiento', newDate, { shouldValidate: true });
+    }
+  };
+
 
   return (
     <Form {...form}>
@@ -207,18 +232,44 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      locale={es}
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) => date > new Date()}
-                      initialFocus
-                      captionLayout="dropdown-buttons"
-                      fromYear={1950}
-                      toYear={new Date().getFullYear()}
-                    />
+                  <PopoverContent className="w-96 p-4 space-y-4" align="start">
+                    <p className="font-semibold text-center">{field.value ? format(field.value, 'PPP', { locale: es }) : 'Selecciona una fecha'}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input
+                            placeholder="Día"
+                            type="number"
+                            min="1"
+                            max="31"
+                            defaultValue={field.value ? getDate(field.value) : ''}
+                            onChange={(e) => handleDatePartChange('day', e.target.value)}
+                        />
+                         <Select
+                            onValueChange={(value) => handleDatePartChange('month', parseInt(value, 10))}
+                            defaultValue={field.value ? getMonth(field.value).toString() : undefined}
+                         >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Mes" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {months.map(month => (
+                                    <SelectItem key={month.value} value={month.value.toString()} className="capitalize">{month.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                         <Select
+                            onValueChange={(value) => handleDatePartChange('year', parseInt(value, 10))}
+                            defaultValue={field.value ? getYear(field.value).toString() : undefined}
+                         >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Año" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {years.map(year => (
+                                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                   </PopoverContent>
                 </Popover>
                 <FormMessage />

@@ -41,12 +41,14 @@ import { db } from '@/lib/firebase';
 import { useLocal } from '@/contexts/local-context';
 
 
+const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'];
+
 const egresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   monto: z.number({ coerce: true }).min(1, 'El monto debe ser mayor a 0.'),
   concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
   concepto_otro: z.string().optional(),
-  aQuien: z.string().min(1, 'Debes seleccionar un profesional o indicar un costo fijo.'),
+  aQuien: z.string(),
   local_id: z.string().min(1, 'Debes seleccionar un local.'),
   comentarios: z.string().optional(),
 }).refine(data => {
@@ -57,7 +59,16 @@ const egresoSchema = z.object({
 }, {
     message: 'Por favor, especifica el concepto.',
     path: ['concepto_otro'],
+}).refine(data => {
+    if (conceptosCostoFijo.includes(data.concepto)) {
+        return true; 
+    }
+    return data.aQuien && data.aQuien.trim().length > 0 && data.aQuien !== 'Costos fijos';
+}, {
+    message: 'Debes seleccionar un profesional.',
+    path: ['aQuien'],
 });
+
 
 type EgresoFormData = z.infer<typeof egresoSchema>;
 
@@ -79,7 +90,6 @@ const conceptosPredefinidos = [
     { id: 'otro', label: 'Otro' },
 ];
 
-const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'];
 
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgresoModalProps) {
   const { toast } = useToast();

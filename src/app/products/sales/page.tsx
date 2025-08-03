@@ -88,6 +88,8 @@ export default function ProductSalesPage() {
 
         const aggregated: Record<string, AggregatedProductSale> = {};
 
+        let totalRevenue = 0;
+
         filteredProductItems.forEach(item => {
             const product = productMap.get(item.id);
             if (!product) return;
@@ -103,24 +105,26 @@ export default function ProductSalesPage() {
                 };
             }
             
+            const itemRevenue = item.subtotal || (item.precio * item.cantidad);
+            totalRevenue += itemRevenue;
+
             aggregated[item.id].unitsSold += item.cantidad;
-            aggregated[item.id].revenue += item.subtotal;
+            aggregated[item.id].revenue += itemRevenue;
 
             if (item.barbero_id) {
                 const sellerName = professionalMap.get(item.barbero_id) || 'Desconocido';
-                aggregated[item.id].sellers[sellerName] = (aggregated[item.id].sellers[sellerName] || 0) + item.subtotal;
+                aggregated[item.id].sellers[sellerName] = (aggregated[item.id].sellers[sellerName] || 0) + itemRevenue;
             }
         });
 
         const aggregatedData = Object.values(aggregated).sort((a,b) => b.revenue - a.revenue);
-        const totalRevenue = aggregatedData.reduce((acc, item) => acc + item.revenue, 0);
         const totalUnitsSold = aggregatedData.reduce((acc, item) => acc + item.unitsSold, 0);
         
         let highestRevenueProduct = null;
         let lowestRevenueProduct = null;
         
         if(aggregatedData.length > 0) {
-            const getTopSeller = (sellers: { [key: string]: number; }) => Object.keys(sellers).reduce((a, b) => sellers[a] > sellers[b] ? a : b, '');
+            const getTopSeller = (sellers: { [key: string]: number; }) => Object.keys(sellers).length > 0 ? Object.keys(sellers).reduce((a, b) => sellers[a] > sellers[b] ? a : b, '') : 'N/A';
             
             const highest = aggregatedData[0];
             highestRevenueProduct = { name: highest.nombre, seller: getTopSeller(highest.sellers), amount: highest.revenue };

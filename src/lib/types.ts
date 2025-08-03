@@ -179,3 +179,16 @@ export interface Egreso {
   comentarios?: string;
   local_id?: string;
 }
+
+export interface StockMovement {
+    id: string;
+    date: any; // Firestore Timestamp
+    local_id: string;
+    product_id: string;
+    presentation_id: string;
+    from: number;
+    to: number;
+    cause: string;
+    staff_id: string;
+    comment: string;
+}

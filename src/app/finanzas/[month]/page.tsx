@@ -110,7 +110,7 @@ export default function FinanzasMensualesPage() {
     }, [sales]);
 
     const calculatedEgresos = useMemo(() => {
-        const commissions: Record<string, { professionalName: string; amount: number }> = {};
+        const commissionsByDayAndProf: Record<string, { professionalName: string; amount: number; date: Date }> = {};
 
         if (!salesLoading && !professionalsLoading && !servicesLoading && !productsLoading) {
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
@@ -118,7 +118,7 @@ export default function FinanzasMensualesPage() {
             const productMap = new Map(products.map(p => [p.id, p]));
 
             sales.forEach(sale => {
-                const saleDate = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
+                const saleDate = sale.fecha_hora_venta.toDate();
 
                 sale.items?.forEach(item => {
                     const professional = professionalMap.get(item.barbero_id);
@@ -142,27 +142,24 @@ export default function FinanzasMensualesPage() {
                             ? item.subtotal * (commissionConfig.value / 100)
                             : commissionConfig.value;
                         
-                        const key = `${saleDate}-${professional.id}`;
-                        if (!commissions[key]) {
-                            commissions[key] = { professionalName: professional.name, amount: 0 };
+                        const key = `${format(saleDate, 'yyyy-MM-dd')}-${professional.id}`;
+                        if (!commissionsByDayAndProf[key]) {
+                            commissionsByDayAndProf[key] = { professionalName: professional.name, amount: 0, date: saleDate };
                         }
-                        commissions[key].amount += commissionAmount;
+                        commissionsByDayAndProf[key].amount += commissionAmount;
                     }
                 });
             });
         }
         
-        const commissionEgresos = Object.entries(commissions).map(([key, data]) => {
-            const [fecha, profId] = key.split('-');
-            return {
-                id: `comm-${key}`,
-                fecha: parse(fecha, 'yyyy-MM-dd', new Date()),
-                concepto: `Comisión ${data.professionalName}`,
-                aQuien: data.professionalName,
-                monto: data.amount,
-                comentarios: `Comisión del día`,
-            };
-        });
+        const commissionEgresos = Object.values(commissionsByDayAndProf).map((data, index) => ({
+            id: `comm-${index}`,
+            fecha: data.date,
+            concepto: 'Comisión',
+            aQuien: data.professionalName,
+            monto: data.amount,
+            comentarios: '',
+        }));
 
         const manualEgresos = egresos.map(e => ({...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
         
@@ -363,4 +360,5 @@ export default function FinanzasMensualesPage() {
         />
         </>
     );
-}
+
+    

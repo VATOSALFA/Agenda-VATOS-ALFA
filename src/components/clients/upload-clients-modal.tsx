@@ -145,7 +145,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 <AlertTitle>Formato del archivo</AlertTitle>
                 <AlertDescription>
                     Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong>. 
-                    <a href="/plantilla-clientes.xlsx" download="plantilla-clientes.xlsx" className="font-bold text-primary hover:underline ml-2">Descargar plantilla</a>.
+                    <a href="/Base de datos clientes.csv" download="Base de datos clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
                 </AlertDescription>
              </Alert>
           </div>

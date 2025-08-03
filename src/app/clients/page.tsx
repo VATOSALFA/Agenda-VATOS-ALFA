@@ -312,7 +312,7 @@ export default function ClientsPage() {
     setQueryKey(prevKey => prevKey + 1);
   };
   
-  const formatDate = (date: any) => {
+  const formatDate = (date: any, formatString: string = 'PP') => {
     if (!date) return 'N/A';
     let dateObj: Date;
     if (date.seconds) { // Firestore Timestamp
@@ -325,7 +325,7 @@ export default function ClientsPage() {
     
     if (isNaN(dateObj.getTime())) return 'Fecha inválida';
     
-    return format(dateObj, 'PP', { locale: es });
+    return format(dateObj, formatString, { locale: es });
   };
   
   const handleDownloadExcel = () => {
@@ -361,8 +361,8 @@ export default function ClientsPage() {
         'Apellido': client.apellido || '',
         'Correo': client.correo || '',
         'Teléfono': client.telefono || '',
-        'Fecha de Nacimiento': client.fecha_nacimiento ? formatDate(client.fecha_nacimiento) : 'N/A',
-        'Cliente desde': client.creado_en ? formatDate(client.creado_en) : 'N/A',
+        'Fecha de Nacimiento': client.fecha_nacimiento ? formatDate(client.fecha_nacimiento, 'dd/MM/yy') : 'N/A',
+        'Cliente desde': client.creado_en ? formatDate(client.creado_en, 'dd/MM/yy') : 'N/A',
         'Número de cliente': client.numero_cliente || '',
         'Citas totales': client.citas_totales ?? totalAppointments,
         'Citas asistidas': client.citas_asistidas ?? attendedAppointments,

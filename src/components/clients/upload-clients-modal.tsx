@@ -6,7 +6,7 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { writeBatch, collection, Timestamp, doc } from 'firebase/firestore';
+import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Client } from '@/lib/types';
 
@@ -56,19 +56,36 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const emailIndex = headers.indexOf('correo');
           const phoneIndex = headers.indexOf('telefono');
           const birthDateIndex = headers.indexOf('fecha de nacimiento');
+          const dayIndex = headers.indexOf('día del nacimiento');
+          const monthIndex = headers.indexOf('mes del nacimiento');
+          const yearIndex = headers.indexOf('año de nacimiento.');
           
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
               toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
               return;
           }
 
-          const data: ParsedClient[] = json.slice(1).map(row => ({
-            nombre: row[nameIndex] || '',
-            apellido: row[lastnameIndex] || '',
-            correo: row[emailIndex] || '',
-            telefono: String(row[phoneIndex] || ''),
-            fecha_nacimiento: row[birthDateIndex] instanceof Date ? format(row[birthDateIndex], 'yyyy-MM-dd') : null,
-          })).filter(client => client.nombre && client.apellido && client.telefono); 
+          const data: ParsedClient[] = json.slice(1).map(row => {
+            let birthDate = null;
+            if (dayIndex > -1 && monthIndex > -1 && yearIndex > -1) {
+                const day = row[dayIndex];
+                const month = row[monthIndex];
+                const year = row[yearIndex];
+                if (day && month && year) {
+                    birthDate = format(new Date(year, month - 1, day), 'yyyy-MM-dd');
+                }
+            } else if (birthDateIndex > -1 && row[birthDateIndex] instanceof Date) {
+                birthDate = format(row[birthDateIndex], 'yyyy-MM-dd');
+            }
+
+            return {
+                nombre: row[nameIndex] || '',
+                apellido: row[lastnameIndex] || '',
+                correo: row[emailIndex] || '',
+                telefono: String(row[phoneIndex] || ''),
+                fecha_nacimiento: birthDate,
+            }
+          }).filter(client => client.nombre && client.apellido && client.telefono); 
 
           setParsedData(data);
 

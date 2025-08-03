@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
+import * as XLSX from 'xlsx';
 
 const FiltersSidebar = ({
     onApply,
@@ -321,6 +322,37 @@ export default function ClientsPage() {
     
     return format(dateObj, 'PP', { locale: es });
   };
+  
+  const handleDownloadExcel = () => {
+    if (filteredClients.length === 0) {
+      toast({
+        title: "No hay datos para exportar",
+        description: "No hay clientes en la lista actual.",
+        variant: "destructive"
+      });
+      return;
+    }
+  
+    const dataForExcel = filteredClients.map(client => ({
+      'Nombre': client.nombre,
+      'Apellido': client.apellido,
+      'Correo': client.correo,
+      'Teléfono': client.telefono,
+      'Cliente desde': formatDate(client.creado_en),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
+
+    // Trigger download
+    XLSX.writeFile(workbook, `clientes_VATOS_ALFA_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+    toast({
+      title: "Descarga iniciada",
+      description: "Tu archivo de Excel se está descargando.",
+    });
+  };
 
 
   return (
@@ -376,7 +408,7 @@ export default function ClientsPage() {
                         <Combine className="mr-2 h-4 w-4" />
                         <span>Combinar clientes</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast({ title: "Próximamente...", description: "Funcionalidad para descargar listado de clientes."})}>
+                      <DropdownMenuItem onClick={handleDownloadExcel}>
                         <Download className="mr-2 h-4 w-4" />
                         <span>Descargar este listado</span>
                       </DropdownMenuItem>

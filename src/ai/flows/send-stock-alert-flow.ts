@@ -15,7 +15,7 @@ const StockAlertInputSchema = z.object({
     currentStock: z.number().describe("The current stock quantity of the product."),
     recipientEmail: z.string().email().describe("The email address to send the alert to."),
 });
-export type StockAlertInput = z.infer<typeof StockAlertInputSchema>;
+type StockAlertInput = z.infer<typeof StockAlertInputSchema>;
 
 const stockAlertPrompt = ai.definePrompt({
     name: 'stockAlertPrompt',

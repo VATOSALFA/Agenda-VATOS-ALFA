@@ -151,7 +151,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               name="apellido"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Apellido</FormLabel>
+                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido</FormLabel>
                   <FormControl>
                     <Input placeholder="Pérez" {...field} />
                   </FormControl>

@@ -274,6 +274,7 @@ export default function ProductSalesPage() {
             const seller = professional?.name || 'N/A';
             const client = clientMap.get(item.cliente_id) || 'Desconocido';
             const salePrice = item.subtotal || (item.precio * item.cantidad);
+            const purchaseCost = product?.purchase_cost || 0;
             
             let commissionAmount = 0;
             if (product && professional) {
@@ -284,6 +285,8 @@ export default function ProductSalesPage() {
                         : commissionConfig.value;
                 }
             }
+            
+            const utility = salePrice - purchaseCost - commissionAmount;
 
 
             return {
@@ -294,10 +297,9 @@ export default function ProductSalesPage() {
                 'Vendedor': seller,
                 'Cliente': client,
                 'Precio de Venta': salePrice,
-                'Costo de Compra': product?.purchase_cost || 0,
+                'Costo de Compra': purchaseCost,
                 'Comisión': commissionAmount,
-                'Reinversión': 0, // Placeholder for now
-                'Utilidad': 0, // Placeholder for now
+                'Utilidad': utility,
             };
         });
 

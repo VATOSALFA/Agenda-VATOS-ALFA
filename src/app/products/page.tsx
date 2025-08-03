@@ -115,6 +115,20 @@ export default function InventoryPage() {
     }
   };
   
+  const handleToggleActive = async (product: Product) => {
+    try {
+        const productRef = doc(db, 'productos', product.id);
+        await updateDoc(productRef, { active: !product.active });
+        toast({
+            title: `Producto ${!product.active ? 'activado' : 'desactivado'}`,
+        });
+        handleDataUpdated();
+    } catch (error) {
+        console.error("Error toggling product status:", error);
+        toast({ variant: 'destructive', title: 'Error al actualizar el estado' });
+    }
+  };
+
   const handleStockChange = async (product: Product, amount: number) => {
       const newStock = (product.stock || 0) + amount;
       if (newStock < 0) {
@@ -304,7 +318,7 @@ export default function InventoryPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onSelect={() => openEditModal(product)}>Editar</DropdownMenuItem>
                         <DropdownMenuItem>Ver historial de movimientos</DropdownMenuItem>
-                        <DropdownMenuItem>Desactivar producto</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => handleToggleActive(product)}>{product.active ? 'Desactivar' : 'Activar'} producto</DropdownMenuItem>
                          <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => setProductToDelete(product)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10">
                             <Trash2 className="mr-2 h-4 w-4"/>

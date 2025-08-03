@@ -12,7 +12,7 @@ import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale } from '@/lib/types';
+import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -21,13 +21,6 @@ const monthNameToNumber: { [key: string]: number } = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
 };
-
-
-const mockEgresos = [
-    { fecha: '2024-07-01', concepto: 'Comisión Beatriz', aQuien: 'Beatriz Elizarraga', monto: 15000, comentarios: 'Comisión semana 26' },
-    { fecha: '2024-07-02', concepto: 'Insumos', aQuien: 'Proveedor de Cera', monto: 10000, comentarios: 'Cera para cabello' },
-    { fecha: '2024-07-03', concepto: 'Nómina', aQuien: 'Recepcionista', monto: 20000, comentarios: 'Pago semanal' },
-];
 
 const comisionesPorProfesional = [
     { name: 'Beatriz Elizarraga', commission: 8000, tips: 2500 },
@@ -57,6 +50,7 @@ export default function FinanzasMensualesPage() {
     const monthName = typeof params.month === 'string' ? params.month : 'enero';
     const monthNumber = monthNameToNumber[monthName.toLowerCase()];
     const currentYear = new Date().getFullYear();
+    const [queryKey, setQueryKey] = useState(0);
     
     const { startDate, endDate } = useMemo(() => {
         if (monthNumber === undefined) {
@@ -77,7 +71,19 @@ export default function FinanzasMensualesPage() {
         ];
     }, [startDate, endDate]);
     
+    const egresosQueryConstraints = useMemo(() => {
+        return [
+            where('fecha', '>=', Timestamp.fromDate(startDate)),
+            where('fecha', '<=', Timestamp.fromDate(endDate))
+        ]
+    }, [startDate, endDate]);
+
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}`, ...salesQueryConstraints);
+    const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-${monthName}-${queryKey}`, ...egresosQueryConstraints);
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+
 
     const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
@@ -103,10 +109,71 @@ export default function FinanzasMensualesPage() {
         return Object.values(groupedByDay).sort((a,b) => a.fecha.localeCompare(b.fecha));
     }, [sales]);
 
+    const calculatedEgresos = useMemo(() => {
+        const commissions: Record<string, { professionalName: string; amount: number }> = {};
+
+        if (!salesLoading && !professionalsLoading && !servicesLoading && !productsLoading) {
+            const professionalMap = new Map(professionals.map(p => [p.id, p]));
+            const serviceMap = new Map(services.map(s => [s.id, s]));
+            const productMap = new Map(products.map(p => [p.id, p]));
+
+            sales.forEach(sale => {
+                const saleDate = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
+
+                sale.items?.forEach(item => {
+                    const professional = professionalMap.get(item.barbero_id);
+                    if (!professional) return;
+
+                    let commissionConfig = null;
+                    if (item.tipo === 'servicio') {
+                        const service = serviceMap.get(item.id);
+                        if (service) {
+                            commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
+                        }
+                    } else if (item.tipo === 'producto') {
+                        const product = productMap.get(item.id);
+                        if (product) {
+                            commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                        }
+                    }
+
+                    if (commissionConfig) {
+                        const commissionAmount = commissionConfig.type === '%'
+                            ? item.subtotal * (commissionConfig.value / 100)
+                            : commissionConfig.value;
+                        
+                        const key = `${saleDate}-${professional.id}`;
+                        if (!commissions[key]) {
+                            commissions[key] = { professionalName: professional.name, amount: 0 };
+                        }
+                        commissions[key].amount += commissionAmount;
+                    }
+                });
+            });
+        }
+        
+        const commissionEgresos = Object.entries(commissions).map(([key, data]) => {
+            const [fecha, profId] = key.split('-');
+            return {
+                id: `comm-${key}`,
+                fecha: parse(fecha, 'yyyy-MM-dd', new Date()),
+                concepto: `Comisión ${data.professionalName}`,
+                aQuien: data.professionalName,
+                monto: data.amount,
+                comentarios: `Comisión del día`,
+            };
+        });
+
+        const manualEgresos = egresos.map(e => ({...e, fecha: e.fecha.toDate()}));
+        
+        return [...commissionEgresos, ...manualEgresos].sort((a,b) => a.fecha.getTime() - b.fecha.getTime());
+
+    }, [sales, professionals, services, products, egresos, salesLoading, professionalsLoading, servicesLoading, productsLoading]);
+
 
     // Calculation logic
     const ingresoTotal = salesLoading ? 0 : sales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const egresoTotal = 38721.44;  // Hardcoded from user request, can be replaced with real data
+    const egresoTotal = calculatedEgresos.reduce((sum, e) => sum + e.monto, 0);
     const subtotalUtilidad = ingresoTotal - egresoTotal;
     const comisionBeatriz = subtotalUtilidad * 0.20;
     const utilidadNeta = subtotalUtilidad - comisionBeatriz;
@@ -116,6 +183,8 @@ export default function FinanzasMensualesPage() {
     const reinversion = 25000;
     const comisionProfesionales = 8000;
     const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
+    
+    const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
 
     return (
         <>
@@ -129,7 +198,7 @@ export default function FinanzasMensualesPage() {
                         <CardTitle>Resumen General del Mes</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1 text-sm">
-                       {salesLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                       {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
                            <>
                             <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
                             <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
@@ -213,7 +282,7 @@ export default function FinanzasMensualesPage() {
                         <Table>
                             <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
                             <TableBody>
-                                {salesLoading ? (
+                                {isLoading ? (
                                      <TableRow>
                                         <TableCell colSpan={4} className="text-center h-24">
                                             <Loader2 className="mx-auto h-6 w-6 animate-spin" />
@@ -250,15 +319,21 @@ export default function FinanzasMensualesPage() {
                         <Table>
                             <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead></TableRow></TableHeader>
                             <TableBody>
-                               {mockEgresos.map((egreso, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell>{egreso.fecha}</TableCell>
-                                        <TableCell>{egreso.concepto}</TableCell>
-                                        <TableCell>{egreso.aQuien}</TableCell>
-                                        <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
-                                        <TableCell>{egreso.comentarios}</TableCell>
-                                    </TableRow>
-                                ))}
+                               {isLoading ? (
+                                     <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                ) : calculatedEgresos.length === 0 ? (
+                                    <TableRow><TableCell colSpan={5} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                ) : (
+                                    calculatedEgresos.map((egreso, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell>{format(egreso.fecha, 'yyyy-MM-dd')}</TableCell>
+                                            <TableCell>{egreso.concepto}</TableCell>
+                                            <TableCell>{egreso.aQuien}</TableCell>
+                                            <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>{egreso.comentarios}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>
@@ -269,12 +344,18 @@ export default function FinanzasMensualesPage() {
         <AddIngresoModal 
             isOpen={isIngresoModalOpen}
             onOpenChange={setIsIngresoModalOpen}
-            onFormSubmit={() => setIsIngresoModalOpen(false)}
+            onFormSubmit={() => {
+                setIsIngresoModalOpen(false)
+                setQueryKey(prev => prev + 1);
+            }}
         />
         <AddEgresoModal
             isOpen={isEgresoModalOpen}
             onOpenChange={setIsEgresoModalOpen}
-            onFormSubmit={() => setIsEgresoModalOpen(false)}
+            onFormSubmit={() => {
+                setIsEgresoModalOpen(false)
+                setQueryKey(prev => prev + 1);
+            }}
         />
         </>
     );

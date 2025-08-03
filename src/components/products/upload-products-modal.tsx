@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -54,7 +55,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
           }
 
           const headers: string[] = json[0].map((h: any) => String(h).toLowerCase().trim());
-          const requiredHeaders = ['nombre', 'marca', 'categoría', 'formato/presentación'];
+          const requiredHeaders = ['nombre', 'marca', 'categoria', 'formato/presentacion'];
           const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
 
           if (missingHeaders.length > 0) {
@@ -66,23 +67,23 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
           const data: ParsedProduct[] = json.slice(1).map((row: any[]) => ({
                 nombre: row[getIndex('nombre')] || '',
-                barcode: row[getIndex('código de barras')] ? String(row[getIndex('código de barras')]) : undefined,
+                barcode: row[getIndex('codigo de barras')] ? String(row[getIndex('codigo de barras')]) : undefined,
                 brand_id: row[getIndex('marca')] || '',
-                category_id: row[getIndex('categoría')] || '',
-                presentation_id: row[getIndex('formato/presentación')] || '',
-                public_price: Number(row[getIndex('precio de venta al público')]) || 0,
+                category_id: row[getIndex('categoria')] || '',
+                presentation_id: row[getIndex('formato/presentacion')] || '',
+                public_price: Number(row[getIndex('precio de venta al publico')]) || 0,
                 stock: Number(row[getIndex('cantidad en stock')]) || 0,
                 purchase_cost: Number(row[getIndex('costo de compra')]) || undefined,
                 internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
                 commission: {
-                    value: Number(row[getIndex('comisión de venta (valor)')]) || 0,
-                    type: row[getIndex('comisión de venta (tipo)')] === '$' ? '$' : '%'
+                    value: Number(row[getIndex('comision de venta (valor)')]) || 0,
+                    type: row[getIndex('comision de venta (tipo)')] === '$' ? '$' : '%'
                 },
                 includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
-                description: row[getIndex('descripción')] || undefined,
+                description: row[getIndex('descripcion')] || undefined,
                 stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,
                 notification_email: row[getIndex('email para notificaciones')] || undefined,
-                images: row[getIndex('imágenes')] ? String(row[getIndex('imágenes')]).split(',').map(s => s.trim()) : []
+                images: row[getIndex('imagenes')] ? String(row[getIndex('imagenes')]).split(',').map(s => s.trim()) : []
           })).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
 
           if (data.length === 0) {

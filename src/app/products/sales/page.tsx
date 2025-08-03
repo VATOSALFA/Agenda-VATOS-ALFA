@@ -86,7 +86,7 @@ export default function ProductSalesPage() {
     
     const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading;
     
-    const formatDate = (date: any) => {
+    const formatDate = (date: any, formatString: string = 'PP') => {
         if (!date) return 'N/A';
         let dateObj: Date;
         if (date.seconds) { // Firestore Timestamp
@@ -97,7 +97,7 @@ export default function ProductSalesPage() {
             return 'Fecha inválida';
         }
         if (isNaN(dateObj.getTime())) return 'Fecha inválida';
-        return format(dateObj, 'PP', { locale: es });
+        return format(dateObj, formatString, { locale: es });
     };
 
     const filteredProductItems = useMemo(() => {
@@ -264,23 +264,40 @@ export default function ProductSalesPage() {
 
         const productMap = new Map(products.map(p => [p.id, p]));
         const presentationMap = new Map(presentations.map(p => [p.id, p.name]));
-        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const professionalMap = new Map(professionals.map(p => [p.id, p]));
         const clientMap = new Map(clients.map(c => [c.id, `${c.nombre} ${c.apellido}`]));
 
         const dataForExcel = filteredProductItems.map(item => {
             const product = productMap.get(item.id);
             const presentation = product ? presentationMap.get(product.presentation_id) : 'N/A';
-            const seller = item.barbero_id ? professionalMap.get(item.barbero_id) : 'N/A';
+            const professional = item.barbero_id ? professionalMap.get(item.barbero_id) : null;
+            const seller = professional?.name || 'N/A';
             const client = clientMap.get(item.cliente_id) || 'Desconocido';
+            const salePrice = item.subtotal || (item.precio * item.cantidad);
+            
+            let commissionAmount = 0;
+            if (product && professional) {
+                const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                if(commissionConfig) {
+                    commissionAmount = commissionConfig.type === '%'
+                        ? salePrice * (commissionConfig.value / 100)
+                        : commissionConfig.value;
+                }
+            }
+
 
             return {
                 'Producto': item.nombre,
                 'Formato/Presentación': presentation,
                 'Unidades Vendidas': item.cantidad,
-                'Fecha de Venta': formatDate(item.fecha_hora_venta),
+                'Fecha de Venta': formatDate(item.fecha_hora_venta, 'd/M/yy'),
                 'Vendedor': seller,
                 'Cliente': client,
-                'Precio de Venta': item.subtotal || (item.precio * item.cantidad),
+                'Precio de Venta': salePrice,
+                'Costo de Compra': product?.purchase_cost || 0,
+                'Comisión': commissionAmount,
+                'Reinversión': 0, // Placeholder for now
+                'Utilidad': 0, // Placeholder for now
             };
         });
 

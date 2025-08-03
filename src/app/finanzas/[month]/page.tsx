@@ -2,21 +2,26 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User } from 'lucide-react';
+import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2 } from 'lucide-react';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { Sale } from '@/lib/types';
+import { where, Timestamp } from 'firebase/firestore';
+import { startOfMonth, endOfMonth, format, parse } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-// Mock Data
-const mockIngresos = [
-    { fecha: '2024-07-01', efectivo: 50000, deposito: 25000, total: 75000 },
-    { fecha: '2024-07-02', efectivo: 60000, deposito: 30000, total: 90000 },
-];
+const monthNameToNumber: { [key: string]: number } = {
+    enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+    julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
+};
+
 
 const mockEgresos = [
     { fecha: '2024-07-01', concepto: 'Comisión Beatriz', aQuien: 'Beatriz Elizarraga', monto: 15000, comentarios: 'Comisión semana 26' },
@@ -49,15 +54,59 @@ const ResumenGeneralItem = ({ label, amount, isBold, isPrimary, className }: { l
 
 export default function FinanzasMensualesPage() {
     const params = useParams();
-    const month = typeof params.month === 'string' ? params.month : 'Mes';
+    const monthName = typeof params.month === 'string' ? params.month : 'enero';
+    const monthNumber = monthNameToNumber[monthName.toLowerCase()];
+    const currentYear = new Date().getFullYear();
+    
+    const { startDate, endDate } = useMemo(() => {
+        if (monthNumber === undefined) {
+             const now = new Date();
+             return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
+        }
+        const date = new Date(currentYear, monthNumber, 1);
+        return {
+            startDate: startOfMonth(date),
+            endDate: endOfMonth(date),
+        };
+    }, [monthNumber, currentYear]);
+
+    const salesQueryConstraints = useMemo(() => {
+        return [
+            where('fecha_hora_venta', '>=', Timestamp.fromDate(startDate)),
+            where('fecha_hora_venta', '<=', Timestamp.fromDate(endDate))
+        ];
+    }, [startDate, endDate]);
+    
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}`, ...salesQueryConstraints);
+
     const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    
+    const dailyIncome = useMemo(() => {
+        if (!sales) return [];
+        const groupedByDay = sales.reduce((acc, sale) => {
+            const saleDate = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
+            if (!acc[saleDate]) {
+                acc[saleDate] = { fecha: saleDate, efectivo: 0, deposito: 0, total: 0 };
+            }
+            if (sale.metodo_pago === 'efectivo') {
+                acc[saleDate].efectivo += sale.total;
+            } else if (['tarjeta', 'transferencia'].includes(sale.metodo_pago)) {
+                acc[saleDate].deposito += sale.total;
+            }
+            acc[saleDate].total += sale.total;
+            return acc;
+        }, {} as Record<string, { fecha: string; efectivo: number; deposito: number; total: number }>);
+
+        return Object.values(groupedByDay).sort((a,b) => a.fecha.localeCompare(b.fecha));
+    }, [sales]);
+
 
     // Calculation logic
-    const ingresoTotal = 57341.80; // Hardcoded from user request
-    const egresoTotal = 38721.44;  // Hardcoded from user request
+    const ingresoTotal = salesLoading ? 0 : sales.reduce((sum, s) => sum + s.total, 0);
+    const egresoTotal = 38721.44;  // Hardcoded from user request, can be replaced with real data
     const subtotalUtilidad = ingresoTotal - egresoTotal;
     const comisionBeatriz = subtotalUtilidad * 0.20;
     const utilidadNeta = subtotalUtilidad - comisionBeatriz;
@@ -71,7 +120,7 @@ export default function FinanzasMensualesPage() {
     return (
         <>
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-            <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(month as string)}</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
 
             {/* KPI Cards */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -80,11 +129,15 @@ export default function FinanzasMensualesPage() {
                         <CardTitle>Resumen General del Mes</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1 text-sm">
-                        <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
-                        <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
-                        <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
-                        <ResumenGeneralItem label="Comisión de Beatriz" amount={comisionBeatriz} />
-                        <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
+                       {salesLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                           <>
+                            <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
+                            <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
+                            <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
+                            <ResumenGeneralItem label="Comisión de Beatriz" amount={comisionBeatriz} />
+                            <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
+                           </>
+                       )}
                     </CardContent>
                 </Card>
                  <Card>
@@ -160,14 +213,28 @@ export default function FinanzasMensualesPage() {
                         <Table>
                             <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
                             <TableBody>
-                                {mockIngresos.map((ingreso, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell>{ingreso.fecha}</TableCell>
-                                        <TableCell>${ingreso.efectivo.toLocaleString('es-CL')}</TableCell>
-                                        <TableCell>${ingreso.deposito.toLocaleString('es-CL')}</TableCell>
-                                        <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-CL')}</TableCell>
+                                {salesLoading ? (
+                                     <TableRow>
+                                        <TableCell colSpan={4} className="text-center h-24">
+                                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                        </TableCell>
                                     </TableRow>
-                                ))}
+                                ) : dailyIncome.length === 0 ? (
+                                     <TableRow>
+                                        <TableCell colSpan={4} className="text-center h-24">
+                                            No hay ingresos registrados para {capitalize(monthName)}.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    dailyIncome.map((ingreso, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell>{ingreso.fecha}</TableCell>
+                                            <TableCell>${ingreso.efectivo.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>${ingreso.deposito.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-CL')}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>
@@ -212,3 +279,4 @@ export default function FinanzasMensualesPage() {
         </>
     );
 }
+

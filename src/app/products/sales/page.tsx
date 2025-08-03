@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
@@ -13,38 +13,144 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye } from "lucide-react";
+import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import type { Sale, Product, Profesional, ProductPresentation, SaleItem } from "@/lib/types";
+import { where, Timestamp } from "firebase/firestore";
 
-const mockSalesData = [
-    { product: 'SERUM COCTEL MULTINUTRIENTES', presentation: '30 ml', unitsSold: 15, revenue: 268500 },
-    { product: 'SERUM CRECIMIENTO CAPILAR 7% MINOXIDIL', presentation: '50 ml', unitsSold: 12, revenue: 238800 },
-    { product: 'MASCARILLA CARBON ACTIVADO', presentation: '50 gr', unitsSold: 10, revenue: 165000 },
-    { product: 'SHAMPOO CRECIMIENTO ACELERADO', presentation: '500 ml', unitsSold: 8, revenue: 132000 },
-    { product: 'JABÓN LÍQUIDO PURIFICANTE Y EXFOLIANTE', presentation: '120 ml', unitsSold: 5, revenue: 82500 },
-];
-
-const totalRevenue = mockSalesData.reduce((acc, item) => acc + item.revenue, 0);
-const totalUnitsSold = mockSalesData.reduce((acc, item) => acc + item.unitsSold, 0);
-
-const highestRevenueProduct = { name: 'SERUM COCTEL MULTINUTRIENTES', seller: 'El Patrón', amount: 268500 };
-const lowestRevenueProduct = { name: 'JABÓN LÍQUIDO PURIFICANTE Y EXFOLIANTE', seller: 'Barbero Extra', amount: 82500 };
-
+interface AggregatedProductSale {
+    id: string;
+    nombre: string;
+    presentation: string;
+    unitsSold: number;
+    revenue: number;
+    sellers: { [key: string]: number };
+}
 
 export default function ProductSalesPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [productStatusFilter, setProductStatusFilter] = useState('active');
+    const [productFilter, setProductFilter] = useState('todos');
 
+    const [activeFilters, setActiveFilters] = useState({
+        dateRange,
+        productStatus: 'active',
+        product: 'todos'
+    });
+    
+    const [queryKey, setQueryKey] = useState(0);
+
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+      'ventas',
+      `sales-${queryKey}`,
+      ...(activeFilters.dateRange?.from ? [where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from)))] : []),
+      ...(activeFilters.dateRange?.to ? [where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to)))] : [])
+    );
+    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: presentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos');
+    
+    const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading;
+
+    const filteredProductItems = useMemo(() => {
+        if (isLoading) return [];
+        
+        const activeProductIds = new Set(products.filter(p => activeFilters.productStatus === 'todos' || p.active === (activeFilters.productStatus === 'active')).map(p => p.id));
+        
+        const allItems: (SaleItem & { saleId: string })[] = [];
+        sales.forEach(sale => {
+            sale.items?.forEach(item => {
+                if (item.tipo === 'producto' && activeProductIds.has(item.id)) {
+                    if (activeFilters.product === 'todos' || item.id === activeFilters.product) {
+                        allItems.push({ ...item, saleId: sale.id });
+                    }
+                }
+            });
+        });
+        return allItems;
+    }, [sales, products, activeFilters, isLoading]);
+    
+    const salesSummary = useMemo(() => {
+        if (filteredProductItems.length === 0) {
+            return {
+                aggregatedData: [],
+                totalRevenue: 0,
+                totalUnitsSold: 0,
+                highestRevenueProduct: null,
+                lowestRevenueProduct: null
+            };
+        }
+
+        const productMap = new Map(products.map(p => [p.id, p]));
+        const presentationMap = new Map(presentations.map(p => [p.id, p.name]));
+        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+
+        const aggregated: Record<string, AggregatedProductSale> = {};
+
+        filteredProductItems.forEach(item => {
+            const product = productMap.get(item.id);
+            if (!product) return;
+
+            if (!aggregated[item.id]) {
+                aggregated[item.id] = {
+                    id: item.id,
+                    nombre: product.nombre,
+                    presentation: presentationMap.get(product.presentation_id) || 'N/A',
+                    unitsSold: 0,
+                    revenue: 0,
+                    sellers: {}
+                };
+            }
+            
+            aggregated[item.id].unitsSold += item.cantidad;
+            aggregated[item.id].revenue += item.subtotal;
+
+            if (item.barbero_id) {
+                const sellerName = professionalMap.get(item.barbero_id) || 'Desconocido';
+                aggregated[item.id].sellers[sellerName] = (aggregated[item.id].sellers[sellerName] || 0) + item.subtotal;
+            }
+        });
+
+        const aggregatedData = Object.values(aggregated).sort((a,b) => b.revenue - a.revenue);
+        const totalRevenue = aggregatedData.reduce((acc, item) => acc + item.revenue, 0);
+        const totalUnitsSold = aggregatedData.reduce((acc, item) => acc + item.unitsSold, 0);
+        
+        let highestRevenueProduct = null;
+        let lowestRevenueProduct = null;
+        
+        if(aggregatedData.length > 0) {
+            const getTopSeller = (sellers: { [key: string]: number; }) => Object.keys(sellers).reduce((a, b) => sellers[a] > sellers[b] ? a : b, '');
+            
+            const highest = aggregatedData[0];
+            highestRevenueProduct = { name: highest.nombre, seller: getTopSeller(highest.sellers), amount: highest.revenue };
+            
+            const lowest = aggregatedData[aggregatedData.length - 1];
+            lowestRevenueProduct = { name: lowest.nombre, seller: getTopSeller(lowest.sellers), amount: lowest.revenue };
+        }
+
+        return { aggregatedData, totalRevenue, totalUnitsSold, highestRevenueProduct, lowestRevenueProduct };
+    }, [filteredProductItems, products, presentations, professionals]);
+
+    const handleSearch = () => {
+        setActiveFilters({
+            dateRange,
+            productStatus: productStatusFilter,
+            product: productFilter
+        })
+        setQueryKey(prev => prev + 1);
+    }
+    
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Venta de Productos</h2>
             
-            {/* Filters */}
             <Card>
                 <CardHeader>
                     <CardTitle>Filtros</CardTitle>
                     <CardDescription>Filtra las ventas por diferentes criterios.</CardDescription>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                      <Popover>
                         <PopoverTrigger asChild>
                             <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
@@ -64,12 +170,28 @@ export default function ProductSalesPage() {
                             <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
                         </PopoverContent>
                     </Popover>
-                    <Select><SelectTrigger><SelectValue placeholder="Estado del producto" /></SelectTrigger><SelectContent /></Select>
-                    <Select><SelectTrigger><SelectValue placeholder="Productos" /></SelectTrigger><SelectContent /></Select>
+                    <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
+                        <SelectTrigger><SelectValue placeholder="Estado del producto" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Todos los estados</SelectItem>
+                            <SelectItem value="active">Activo</SelectItem>
+                            <SelectItem value="inactive">Inactivo</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={productFilter} onValueChange={setProductFilter} disabled={productsLoading}>
+                        <SelectTrigger><SelectValue placeholder="Productos" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Todos los productos</SelectItem>
+                            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Button onClick={handleSearch} disabled={isLoading}>
+                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                      Buscar
+                    </Button>
                 </CardContent>
             </Card>
 
-            {/* Summary Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -77,7 +199,7 @@ export default function ProductSalesPage() {
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${totalRevenue.toLocaleString('es-CL')}</div>
+                        <div className="text-2xl font-bold">${salesSummary.totalRevenue.toLocaleString('es-CL')}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -86,7 +208,7 @@ export default function ProductSalesPage() {
                         <Package className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{totalUnitsSold}</div>
+                        <div className="text-2xl font-bold">{salesSummary.totalUnitsSold}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -95,9 +217,9 @@ export default function ProductSalesPage() {
                         <TrendingUp className="h-4 w-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-lg font-bold truncate">{highestRevenueProduct.name}</div>
-                        <p className="text-xs text-muted-foreground">Vendedor: {highestRevenueProduct.seller}</p>
-                        <p className="text-sm font-semibold text-primary">${highestRevenueProduct.amount.toLocaleString('es-CL')}</p>
+                        <div className="text-lg font-bold truncate">{salesSummary.highestRevenueProduct?.name || '-'}</div>
+                        <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.highestRevenueProduct?.seller || '-'}</p>
+                        <p className="text-sm font-semibold text-primary">${(salesSummary.highestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -106,22 +228,17 @@ export default function ProductSalesPage() {
                         <TrendingDown className="h-4 w-4 text-red-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-lg font-bold truncate">{lowestRevenueProduct.name}</div>
-                        <p className="text-xs text-muted-foreground">Vendedor: {lowestRevenueProduct.seller}</p>
-                         <p className="text-sm font-semibold text-primary">${lowestRevenueProduct.amount.toLocaleString('es-CL')}</p>
+                        <div className="text-lg font-bold truncate">{salesSummary.lowestRevenueProduct?.name || '-'}</div>
+                        <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.lowestRevenueProduct?.seller || '-'}</p>
+                         <p className="text-sm font-semibold text-primary">${(salesSummary.lowestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Main Table */}
             <Card>
                 <CardHeader className="flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Detalle de la venta</CardTitle>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar reporte</Button>
-                    </div>
+                    <div><CardTitle>Detalle de la venta</CardTitle></div>
+                    <div className="flex items-center gap-2"><Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar reporte</Button></div>
                 </CardHeader>
                 <CardContent>
                     <Tabs defaultValue="por-productos">
@@ -141,18 +258,17 @@ export default function ProductSalesPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {mockSalesData.map((sale) => (
-                                        <TableRow key={sale.product}>
-                                            <TableCell className="font-medium">{sale.product}</TableCell>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    ) : salesSummary.aggregatedData.length === 0 ? (
+                                        <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas de productos para los filtros seleccionados.</TableCell></TableRow>
+                                    ) : salesSummary.aggregatedData.map((sale) => (
+                                        <TableRow key={sale.id}>
+                                            <TableCell className="font-medium">{sale.nombre}</TableCell>
                                             <TableCell>{sale.presentation}</TableCell>
                                             <TableCell className="text-right">{sale.unitsSold}</TableCell>
                                             <TableCell className="text-right font-semibold text-primary">${sale.revenue.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="outline" size="sm">
-                                                    <Eye className="mr-2 h-4 w-4" />
-                                                    Ver detalles
-                                                </Button>
-                                            </TableCell>
+                                            <TableCell className="text-right"><Button variant="outline" size="sm"><Eye className="mr-2 h-4 w-4" />Ver detalles</Button></TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

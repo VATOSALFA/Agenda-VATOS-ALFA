@@ -292,8 +292,8 @@ export default function FinanzasMensualesPage() {
             </div>
 
             {/* Detailed Tables */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <Card className="lg:col-span-2">
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Ingresos del Mes</CardTitle>
                         <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>
@@ -330,7 +330,7 @@ export default function FinanzasMensualesPage() {
                         </Table>
                     </CardContent>
                 </Card>
-                 <Card>
+                 <Card className="lg:col-span-3">
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Egresos del Mes</CardTitle>
                         <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
@@ -384,4 +384,5 @@ export default function FinanzasMensualesPage() {
 
     
 
+    
     

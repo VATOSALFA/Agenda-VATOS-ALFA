@@ -22,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface UploadClientsModalProps {
   isOpen: boolean;
@@ -48,12 +49,12 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const worksheet = workbook.Sheets[sheetName];
           const json: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
           
-          // Assuming header is in the first row
           const headers: string[] = json[0].map((h: any) => String(h).toLowerCase().trim());
           const nameIndex = headers.indexOf('nombre');
           const lastnameIndex = headers.indexOf('apellido');
           const emailIndex = headers.indexOf('correo');
           const phoneIndex = headers.indexOf('telefono');
+          const birthDateIndex = headers.indexOf('fecha_nacimiento');
           
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
               toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
@@ -65,7 +66,8 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
             apellido: row[lastnameIndex] || '',
             correo: row[emailIndex] || '',
             telefono: String(row[phoneIndex] || ''),
-          })).filter(client => client.nombre && client.apellido && client.telefono); // Basic validation
+            fecha_nacimiento: row[birthDateIndex] instanceof Date ? format(row[birthDateIndex], 'yyyy-MM-dd') : null,
+          })).filter(client => client.nombre && client.apellido && client.telefono); 
 
           setParsedData(data);
 
@@ -144,8 +146,8 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 <FileSpreadsheet className="h-4 w-4" />
                 <AlertTitle>Formato del archivo</AlertTitle>
                 <AlertDescription>
-                    Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong>. 
-                    <a href="/Base de datos clientes.csv" download className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+                    Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong> y <strong>fecha_nacimiento</strong>. 
+                    <a href="/Base de datos clientes.csv" download="plantilla-clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
                 </AlertDescription>
              </Alert>
           </div>
@@ -160,6 +162,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                                 <TableHead>Apellido</TableHead>
                                 <TableHead>Correo</TableHead>
                                 <TableHead>Teléfono</TableHead>
+                                <TableHead>Fecha de Nacimiento</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -169,6 +172,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                                     <TableCell>{client.apellido}</TableCell>
                                     <TableCell>{client.correo || 'N/A'}</TableCell>
                                     <TableCell>{client.telefono}</TableCell>
+                                    <TableCell>{client.fecha_nacimiento || 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

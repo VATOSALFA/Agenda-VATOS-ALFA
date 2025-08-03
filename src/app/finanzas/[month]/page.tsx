@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2 } from 'lucide-react';
+import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2, Edit, Save } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -15,6 +15,7 @@ import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, format, parse, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Input } from '@/components/ui/input';
 
 const monthNameToNumber: { [key: string]: number } = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
@@ -30,9 +31,12 @@ const ResumenEgresoItem = ({ label, amount, isBold }: { label: string, amount: n
     </div>
 );
 
-const ResumenGeneralItem = ({ label, amount, isBold, isPrimary, className }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string }) => (
+const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
-        <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
+        <div className="flex items-center gap-2">
+            <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
+            {children}
+        </div>
         <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
     </div>
 );
@@ -44,6 +48,8 @@ export default function FinanzasMensualesPage() {
     const monthNumber = monthNameToNumber[monthName.toLowerCase()];
     const currentYear = new Date().getFullYear();
     const [queryKey, setQueryKey] = useState(0);
+    const [beatrizCommissionPercent, setBeatrizCommissionPercent] = useState(20);
+    const [isEditingCommission, setIsEditingCommission] = useState(false);
     
     const { startDate, endDate } = useMemo(() => {
         if (monthNumber === undefined) {
@@ -232,7 +238,7 @@ export default function FinanzasMensualesPage() {
     const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
 
     const subtotalUtilidad = ingresoTotal - egresoTotal - ventaProductos;
-    const comisionBeatriz = subtotalUtilidad * 0.20;
+    const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
     const utilidadNeta = subtotalUtilidad - comisionBeatriz;
 
 
@@ -294,7 +300,24 @@ export default function FinanzasMensualesPage() {
                             <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
                             <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
                             <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
-                            <ResumenGeneralItem label="Comisión de Beatriz" amount={comisionBeatriz} />
+                            <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatriz}>
+                                {isEditingCommission ? (
+                                    <div className="flex items-center gap-1">
+                                        <Input
+                                            type="number"
+                                            value={beatrizCommissionPercent}
+                                            onChange={(e) => setBeatrizCommissionPercent(Number(e.target.value))}
+                                            className="w-20 h-7 text-sm"
+                                            autoFocus
+                                        />
+                                        <Button size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(false)}><Save className="h-4 w-4" /></Button>
+                                    </div>
+                                ) : (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(true)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </ResumenGeneralItem>
                             <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
                            </>
                        )}
@@ -362,7 +385,7 @@ export default function FinanzasMensualesPage() {
             </div>
 
             {/* Detailed Tables */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-6">
                 <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Ingresos del Mes</CardTitle>

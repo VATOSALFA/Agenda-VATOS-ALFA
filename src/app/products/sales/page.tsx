@@ -33,6 +33,7 @@ interface AggregatedSellerSale {
     sellerName: string;
     unitsSold: number;
     revenue: number;
+    userType: string;
 }
 
 
@@ -101,7 +102,8 @@ export default function ProductSalesPage() {
         filteredProductItems.forEach(item => {
             const product = productMap.get(item.id);
             if (!product) return;
-
+            
+            const itemRevenue = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
             if (!aggregated[item.id]) {
                 aggregated[item.id] = {
                     id: item.id,
@@ -113,7 +115,6 @@ export default function ProductSalesPage() {
                 };
             }
             
-            const itemRevenue = item.subtotal || (item.precio * item.cantidad) || 0;
             totalRevenue += itemRevenue;
 
             aggregated[item.id].unitsSold += item.cantidad;
@@ -161,6 +162,7 @@ export default function ProductSalesPage() {
                     sellerName: professionalMap.get(item.barbero_id) || 'Desconocido',
                     unitsSold: 0,
                     revenue: 0,
+                    userType: 'Profesional' // Asumiendo que todos son profesionales por ahora
                 };
             }
             
@@ -320,20 +322,24 @@ export default function ProductSalesPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Vendedor</TableHead>
+                                        <TableHead>Tipo de usuario</TableHead>
                                         <TableHead className="text-right">Unidades vendidas</TableHead>
                                         <TableHead className="text-right">Recaudación</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
-                                        <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                     ) : sellerSummary.length === 0 ? (
-                                        <TableRow><TableCell colSpan={3} className="text-center h-24">No hay ventas para los filtros seleccionados.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas para los filtros seleccionados.</TableCell></TableRow>
                                     ) : sellerSummary.map((seller) => (
                                         <TableRow key={seller.sellerId}>
                                             <TableCell className="font-medium">{seller.sellerName}</TableCell>
+                                            <TableCell>{seller.userType}</TableCell>
                                             <TableCell className="text-right">{seller.unitsSold}</TableCell>
                                             <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell className="text-right"><Button variant="outline" size="sm"><Eye className="mr-2 h-4 w-4" />Ver detalles</Button></TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

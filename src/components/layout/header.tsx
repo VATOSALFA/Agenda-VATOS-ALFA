@@ -78,7 +78,6 @@ const salesNavLinks = [
 const productsNavLinks = [
   { href: '/products', label: 'Inventario', icon: Archive },
   { href: '/products/sales', label: 'Venta de productos', icon: ShoppingCart },
-  { href: '/products/stock-movement', label: 'Movimiento de stock', icon: History },
 ];
 
 const reportsNavLinks = [

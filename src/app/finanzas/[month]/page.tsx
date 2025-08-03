@@ -110,7 +110,7 @@ export default function FinanzasMensualesPage() {
     }, [sales]);
 
     const calculatedEgresos = useMemo(() => {
-        const commissionsByDayAndProf: Record<string, { professionalName: string; amount: number; date: Date }> = {};
+        const commissionsByDayAndProf: Record<string, { professionalName: string; serviceCommission: number, productCommission: number, date: Date }> = {};
 
         if (!salesLoading && !professionalsLoading && !servicesLoading && !productsLoading) {
             const professionalMap = new Map(professionals.map(p => [p.id, p]));
@@ -144,24 +144,45 @@ export default function FinanzasMensualesPage() {
                         
                         const key = `${format(saleDate, 'yyyy-MM-dd')}-${professional.id}`;
                         if (!commissionsByDayAndProf[key]) {
-                            commissionsByDayAndProf[key] = { professionalName: professional.name, amount: 0, date: saleDate };
+                            commissionsByDayAndProf[key] = { professionalName: professional.name, serviceCommission: 0, productCommission: 0, date: saleDate };
                         }
-                        commissionsByDayAndProf[key].amount += commissionAmount;
+                        
+                        if (item.tipo === 'servicio') {
+                           commissionsByDayAndProf[key].serviceCommission += commissionAmount;
+                        } else if (item.tipo === 'producto') {
+                           commissionsByDayAndProf[key].productCommission += commissionAmount;
+                        }
                     }
                 });
             });
         }
         
-        const commissionEgresos = Object.values(commissionsByDayAndProf).map((data, index) => ({
-            id: `comm-${index}`,
-            fecha: data.date,
-            concepto: 'Comisión',
-            aQuien: data.professionalName,
-            monto: data.amount,
-            comentarios: '',
-        }));
+        const commissionEgresos: Egreso[] = [];
+        Object.values(commissionsByDayAndProf).forEach((data, index) => {
+            if (data.serviceCommission > 0) {
+                commissionEgresos.push({
+                    id: `comm-serv-${index}`,
+                    fecha: data.date,
+                    concepto: 'Comisión Servicios',
+                    aQuien: data.professionalName,
+                    monto: data.serviceCommission,
+                    comentarios: '',
+                });
+            }
+            if (data.productCommission > 0) {
+                commissionEgresos.push({
+                    id: `comm-prod-${index}`,
+                    fecha: data.date,
+                    concepto: 'Comision Venta de productos',
+                    aQuien: data.professionalName,
+                    monto: data.productCommission,
+                    comentarios: '',
+                });
+            }
+        });
 
-        const manualEgresos = egresos.map(e => ({...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
+
+        const manualEgresos: Egreso[] = egresos.map(e => ({...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
         
         return [...commissionEgresos, ...manualEgresos].sort((a,b) => {
             const dateA = a.fecha instanceof Date ? a.fecha : new Date();
@@ -327,7 +348,7 @@ export default function FinanzasMensualesPage() {
                                 ) : (
                                     calculatedEgresos.map((egreso, i) => (
                                         <TableRow key={i}>
-                                            <TableCell>{(egreso.fecha && isValid(egreso.fecha)) ? format(egreso.fecha, 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
+                                            <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
                                             <TableCell>{egreso.concepto}</TableCell>
                                             <TableCell>{egreso.aQuien}</TableCell>
                                             <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
@@ -360,5 +381,7 @@ export default function FinanzasMensualesPage() {
         />
         </>
     );
+
+    
 
     

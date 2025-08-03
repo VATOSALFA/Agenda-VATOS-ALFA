@@ -63,6 +63,8 @@ export interface Reservation {
     precio?: number;
     notas?: string;
     nota_interna?: string;
+    creado_en: any; // Firestore Timestamp
+    canal_reserva?: string;
 }
 
 export interface Schedule {

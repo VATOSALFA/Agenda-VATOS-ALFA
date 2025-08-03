@@ -46,7 +46,7 @@ const egresoSchema = z.object({
   monto: z.number({ coerce: true }).min(1, 'El monto debe ser mayor a 0.'),
   concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
   concepto_otro: z.string().optional(),
-  aQuien: z.string().min(1, 'Debes seleccionar un profesional.'),
+  aQuien: z.string().min(1, 'Debes seleccionar un profesional o indicar un costo fijo.'),
   local_id: z.string().min(1, 'Debes seleccionar un local.'),
   comentarios: z.string().optional(),
 }).refine(data => {
@@ -79,6 +79,8 @@ const conceptosPredefinidos = [
     { id: 'otro', label: 'Otro' },
 ];
 
+const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'];
+
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgresoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,6 +101,12 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
   });
 
   const conceptoSeleccionado = form.watch('concepto');
+
+  useEffect(() => {
+    if (conceptosCostoFijo.includes(conceptoSeleccionado)) {
+        form.setValue('aQuien', 'Costos fijos');
+    }
+  }, [conceptoSeleccionado, form]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -149,6 +157,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
       setIsSubmitting(false);
     }
   }
+  
+  const esCostoFijo = conceptosCostoFijo.includes(conceptoSeleccionado);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -243,10 +253,10 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading}>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
+                          <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading ? 'Cargando...' : 'Selecciona un profesional')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

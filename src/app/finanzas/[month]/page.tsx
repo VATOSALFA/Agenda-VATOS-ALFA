@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
-import { startOfMonth, endOfMonth, format, parse } from 'date-fns';
+import { startOfMonth, endOfMonth, format, parse, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const monthNameToNumber: { [key: string]: number } = {
@@ -164,9 +164,13 @@ export default function FinanzasMensualesPage() {
             };
         });
 
-        const manualEgresos = egresos.map(e => ({...e, fecha: e.fecha.toDate()}));
+        const manualEgresos = egresos.map(e => ({...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
         
-        return [...commissionEgresos, ...manualEgresos].sort((a,b) => a.fecha.getTime() - b.fecha.getTime());
+        return [...commissionEgresos, ...manualEgresos].sort((a,b) => {
+            const dateA = a.fecha instanceof Date ? a.fecha : new Date();
+            const dateB = b.fecha instanceof Date ? b.fecha : new Date();
+            return dateA.getTime() - dateB.getTime();
+        });
 
     }, [sales, professionals, services, products, egresos, salesLoading, professionalsLoading, servicesLoading, productsLoading]);
 
@@ -326,7 +330,7 @@ export default function FinanzasMensualesPage() {
                                 ) : (
                                     calculatedEgresos.map((egreso, i) => (
                                         <TableRow key={i}>
-                                            <TableCell>{format(egreso.fecha, 'yyyy-MM-dd')}</TableCell>
+                                            <TableCell>{(egreso.fecha && isValid(egreso.fecha)) ? format(egreso.fecha, 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
                                             <TableCell>{egreso.concepto}</TableCell>
                                             <TableCell>{egreso.aQuien}</TableCell>
                                             <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>

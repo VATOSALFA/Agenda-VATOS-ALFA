@@ -19,15 +19,17 @@ import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client } from "@/lib/types";
 import { where, Timestamp } from "firebase/firestore";
 import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-detail-modal";
+import { ProductSaleDetailModal, type ProductSaleDetail } from "@/components/products/sales/product-sale-detail-modal";
 
 
-interface AggregatedProductSale {
+export interface AggregatedProductSale {
     id: string;
     nombre: string;
     presentation: string;
     unitsSold: number;
     revenue: number;
     sellers: { [key: string]: number };
+    details: ProductSaleDetail[];
 }
 
 export interface SellerSaleDetail {
@@ -53,8 +55,11 @@ export default function ProductSalesPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [productStatusFilter, setProductStatusFilter] = useState('active');
     const [productFilter, setProductFilter] = useState('todos');
-    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [isSellerDetailModalOpen, setIsSellerDetailModalOpen] = useState(false);
+    const [isProductDetailModalOpen, setIsProductDetailModalOpen] = useState(false);
     const [selectedSellerSummary, setSelectedSellerSummary] = useState<AggregatedSellerSale | null>(null);
+    const [selectedProductSummary, setSelectedProductSummary] = useState<AggregatedProductSale | null>(null);
+
 
     const [activeFilters, setActiveFilters] = useState({
         dateRange,
@@ -76,6 +81,20 @@ export default function ProductSalesPage() {
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     
     const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading;
+    
+    const formatDate = (date: any) => {
+        if (!date) return 'N/A';
+        let dateObj: Date;
+        if (date.seconds) { // Firestore Timestamp
+          dateObj = new Date(date.seconds * 1000);
+        } else if (typeof date === 'string') { // ISO String
+          dateObj = parseISO(date);
+        } else {
+            return 'Fecha inválida';
+        }
+        if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+        return format(dateObj, 'PP', { locale: es });
+    };
 
     const filteredProductItems = useMemo(() => {
         if (isLoading) return [];
@@ -109,6 +128,7 @@ export default function ProductSalesPage() {
         const productMap = new Map(products.map(p => [p.id, p]));
         const presentationMap = new Map(presentations.map(p => [p.id, p.name]));
         const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const clientMap = new Map(clients.map(c => [c.id, c.nombre + ' ' + c.apellido]));
 
         const aggregated: Record<string, AggregatedProductSale> = {};
 
@@ -126,7 +146,8 @@ export default function ProductSalesPage() {
                     presentation: presentationMap.get(product.presentation_id) || 'N/A',
                     unitsSold: 0,
                     revenue: 0,
-                    sellers: {}
+                    sellers: {},
+                    details: []
                 };
             }
             
@@ -134,9 +155,19 @@ export default function ProductSalesPage() {
 
             aggregated[item.id].unitsSold += item.cantidad;
             aggregated[item.id].revenue += itemRevenue;
+            
+            const sellerName = item.barbero_id ? (professionalMap.get(item.barbero_id) || 'Desconocido') : 'Desconocido';
+
+            aggregated[item.id].details.push({
+                saleId: item.saleId,
+                clientName: clientMap.get(item.cliente_id) || 'Desconocido',
+                sellerName,
+                unitsSold: item.cantidad,
+                revenue: itemRevenue,
+                date: formatDate(item.fecha_hora_venta)
+            });
 
             if (item.barbero_id) {
-                const sellerName = professionalMap.get(item.barbero_id) || 'Desconocido';
                 aggregated[item.id].sellers[sellerName] = (aggregated[item.id].sellers[sellerName] || 0) + itemRevenue;
             }
         });
@@ -158,21 +189,7 @@ export default function ProductSalesPage() {
         }
 
         return { aggregatedData, totalRevenue, totalUnitsSold, highestRevenueProduct, lowestRevenueProduct };
-    }, [filteredProductItems, products, presentations, professionals]);
-    
-    const formatDate = (date: any) => {
-        if (!date) return 'N/A';
-        let dateObj: Date;
-        if (date.seconds) { // Firestore Timestamp
-          dateObj = new Date(date.seconds * 1000);
-        } else if (typeof date === 'string') { // ISO String
-          dateObj = parseISO(date);
-        } else {
-            return 'Fecha inválida';
-        }
-        if (isNaN(dateObj.getTime())) return 'Fecha inválida';
-        return format(dateObj, 'PP', { locale: es });
-      };
+    }, [filteredProductItems, products, presentations, professionals, clients]);
 
     const sellerSummary = useMemo(() => {
         if (isLoading || filteredProductItems.length === 0) {
@@ -225,9 +242,14 @@ export default function ProductSalesPage() {
         setQueryKey(prev => prev + 1);
     }
 
-    const handleViewDetails = (summary: AggregatedSellerSale) => {
+    const handleViewSellerDetails = (summary: AggregatedSellerSale) => {
         setSelectedSellerSummary(summary);
-        setIsDetailModalOpen(true);
+        setIsSellerDetailModalOpen(true);
+    }
+
+    const handleViewProductDetails = (summary: AggregatedProductSale) => {
+        setSelectedProductSummary(summary);
+        setIsProductDetailModalOpen(true);
     }
     
     return (
@@ -358,7 +380,11 @@ export default function ProductSalesPage() {
                                             <TableCell>{sale.presentation}</TableCell>
                                             <TableCell className="text-right">{sale.unitsSold}</TableCell>
                                             <TableCell className="text-right font-semibold text-primary">${sale.revenue.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-right"><Button variant="outline" size="sm"><Eye className="mr-2 h-4 w-4" />Ver detalles</Button></TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="outline" size="sm" onClick={() => handleViewProductDetails(sale)}>
+                                                    <Eye className="mr-2 h-4 w-4" />Ver detalles
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -387,7 +413,7 @@ export default function ProductSalesPage() {
                                             <TableCell className="text-right">{seller.unitsSold}</TableCell>
                                             <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="outline" size="sm" onClick={() => handleViewDetails(seller)}>
+                                                <Button variant="outline" size="sm" onClick={() => handleViewSellerDetails(seller)}>
                                                     <Eye className="mr-2 h-4 w-4" />Ver detalles
                                                 </Button>
                                             </TableCell>
@@ -403,9 +429,15 @@ export default function ProductSalesPage() {
         </div>
 
         <SellerSaleDetailModal 
-            isOpen={isDetailModalOpen}
-            onOpenChange={setIsDetailModalOpen}
+            isOpen={isSellerDetailModalOpen}
+            onOpenChange={setIsSellerDetailModalOpen}
             summary={selectedSellerSummary}
+        />
+        
+        <ProductSaleDetailModal
+            isOpen={isProductDetailModalOpen}
+            onOpenChange={setIsProductDetailModalOpen}
+            summary={selectedProductSummary}
         />
         </>
     );

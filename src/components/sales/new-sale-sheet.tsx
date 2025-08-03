@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -12,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import type { Client, Product, Service as ServiceType, Profesional, Local } from '@/lib/types';
+import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 
 
 import { Button } from '@/components/ui/button';
@@ -273,18 +273,29 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
           productRefs.map(p => transaction.get(p.ref))
         );
 
-        productDocs.forEach((productDoc, index) => {
+        for(const [index, productDoc] of productDocs.entries()) {
             const { item, ref } = productRefs[index];
             if (!productDoc.exists()) {
               throw new Error(`Producto con ID ${item.id} no encontrado.`);
             }
-            const currentStock = productDoc.data().stock;
+            const productData = productDoc.data() as Product;
+            const currentStock = productData.stock;
             const newStock = currentStock - item.cantidad;
             if (newStock < 0) {
               throw new Error(`Stock insuficiente para ${item.nombre}.`);
             }
             transaction.update(ref, { stock: newStock });
             
+            // Check for stock alarm
+            if (productData.stock_alarm_threshold && newStock <= productData.stock_alarm_threshold && productData.notification_email) {
+                // This will run in the background, no need to await
+                sendStockAlert({
+                    productName: productData.nombre,
+                    currentStock: newStock,
+                    recipientEmail: productData.notification_email,
+                }).catch(console.error); // Catch errors to not block the main flow
+            }
+
             // Log stock movement
             const movementRef = doc(collection(db, "movimientos_stock"));
             transaction.set(movementRef, {
@@ -298,7 +309,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 staff_id: item.barbero_id,
                 comment: `Venta de ${item.cantidad} unidad(es).`
             });
-        });
+        }
         
         const ventaRef = doc(collection(db, "ventas"));
         const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo, barbero_id }) => ({

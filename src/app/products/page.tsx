@@ -32,6 +32,7 @@ import { doc, deleteDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import { sendStockAlert } from "@/ai/flows/send-stock-alert-flow";
 
 
 export default function InventoryPage() {
@@ -114,7 +115,8 @@ export default function InventoryPage() {
   };
   
   const handleStockChange = async (product: Product, amount: number) => {
-      if (product.stock + amount < 0) {
+      const newStock = (product.stock || 0) + amount;
+      if (newStock < 0) {
           toast({ variant: 'destructive', title: 'Stock insuficiente' });
           return;
       }
@@ -123,6 +125,16 @@ export default function InventoryPage() {
         await updateDoc(productRef, {
             stock: increment(amount)
         });
+
+        if (product.stock_alarm_threshold && newStock <= product.stock_alarm_threshold && product.notification_email) {
+            await sendStockAlert({
+                productName: product.nombre,
+                currentStock: newStock,
+                recipientEmail: product.notification_email,
+            });
+            toast({ title: "Alerta de stock enviada", description: `Se notificó que el stock de ${product.nombre} es bajo.`});
+        }
+
          toast({ title: `Stock actualizado para ${product.nombre}` });
          handleDataUpdated();
       } catch (error) {
@@ -382,4 +394,3 @@ export default function InventoryPage() {
     </>
   );
 }
-

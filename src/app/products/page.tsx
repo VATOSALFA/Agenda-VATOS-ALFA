@@ -277,7 +277,10 @@ export default function InventoryPage() {
                       </TableRow>
                   ))
               ) : filteredProducts.map((product) => (
-                <TableRow key={product.id} className={cn(!product.active ? 'text-muted-foreground' : product.stock === 0 && 'bg-red-500/10 hover:bg-red-500/20')}>
+                <TableRow key={product.id} className={cn(
+                    !product.active ? 'text-muted-foreground' : 
+                    (product.stock_alarm_threshold && product.stock <= product.stock_alarm_threshold) && 'bg-red-500/10 hover:bg-red-500/20'
+                )}>
                   <TableCell className="font-mono text-xs">{product.barcode || 'N/A'}</TableCell>
                   <TableCell className="font-medium">{product.nombre}</TableCell>
                   <TableCell>{getEntityName(product.category_id, categories)}</TableCell>

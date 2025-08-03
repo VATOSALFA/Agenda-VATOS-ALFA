@@ -122,9 +122,13 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
   useEffect(() => {
     if (isOpen) {
         if (isEditMode && egreso) {
+            const fechaEgreso = egreso.fecha instanceof Timestamp 
+                ? egreso.fecha.toDate() 
+                : (egreso.fecha instanceof Date ? egreso.fecha : new Date());
+
             form.reset({
                 ...egreso,
-                fecha: egreso.fecha.toDate(),
+                fecha: fechaEgreso,
             });
         } else {
             form.reset({

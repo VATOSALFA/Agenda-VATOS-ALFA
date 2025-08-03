@@ -16,7 +16,7 @@ import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 import { NewReservationForm } from "@/components/reservations/new-reservation-form";
 import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { es } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import {
@@ -305,6 +305,23 @@ export default function ClientsPage() {
   const handleDataUpdated = () => {
     setQueryKey(prevKey => prevKey + 1);
   };
+  
+  const formatDate = (date: any) => {
+    if (!date) return 'N/A';
+    let dateObj: Date;
+    if (date.seconds) { // Firestore Timestamp
+      dateObj = new Date(date.seconds * 1000);
+    } else if (typeof date === 'string') { // ISO String
+      dateObj = parseISO(date);
+    } else {
+        return 'Fecha inválida';
+    }
+    
+    if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+    
+    return format(dateObj, 'PP', { locale: es });
+  };
+
 
   return (
     <>
@@ -375,7 +392,7 @@ export default function ClientsPage() {
                       <TableHead>Apellido</TableHead>
                       <TableHead>Correo</TableHead>
                       <TableHead>Teléfono</TableHead>
-                      <TableHead>Identificación oficial</TableHead>
+                      <TableHead>Cliente desde</TableHead>
                       <TableHead className="text-right">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -397,7 +414,7 @@ export default function ClientsPage() {
                         <TableCell>{client.apellido}</TableCell>
                         <TableCell>{client.correo}</TableCell>
                         <TableCell>{client.telefono}</TableCell>
-                        <TableCell>N/A</TableCell>
+                        <TableCell>{formatDate(client.creado_en)}</TableCell>
                         <TableCell className="text-right">
                            <div className="flex items-center justify-end gap-2">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2 } from 'lucide-react';
-import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -85,7 +84,6 @@ export default function FinanzasMensualesPage() {
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
 
 
-    const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -294,11 +292,8 @@ export default function FinanzasMensualesPage() {
             {/* Detailed Tables */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <Card className="lg:col-span-2">
-                    <CardHeader className="flex-row items-center justify-between">
+                    <CardHeader>
                         <CardTitle>Ingresos del Mes</CardTitle>
-                        <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>
-                            <PlusCircle className="mr-2 h-4 w-4"/> Agregar Ingreso
-                        </Button>
                     </CardHeader>
                     <CardContent>
                         <Table>
@@ -363,14 +358,6 @@ export default function FinanzasMensualesPage() {
             </div>
         </div>
 
-        <AddIngresoModal 
-            isOpen={isIngresoModalOpen}
-            onOpenChange={setIsIngresoModalOpen}
-            onFormSubmit={() => {
-                setIsIngresoModalOpen(false)
-                setQueryKey(prev => prev + 1);
-            }}
-        />
         <AddEgresoModal
             isOpen={isEgresoModalOpen}
             onOpenChange={setIsEgresoModalOpen}

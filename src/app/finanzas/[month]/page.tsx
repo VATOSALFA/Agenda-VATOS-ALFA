@@ -105,7 +105,7 @@ export default function FinanzasMensualesPage() {
 
 
     // Calculation logic
-    const ingresoTotal = salesLoading ? 0 : sales.reduce((sum, s) => sum + s.total, 0);
+    const ingresoTotal = salesLoading ? 0 : sales.reduce((sum, s) => sum + (s.total || 0), 0);
     const egresoTotal = 38721.44;  // Hardcoded from user request, can be replaced with real data
     const subtotalUtilidad = ingresoTotal - egresoTotal;
     const comisionBeatriz = subtotalUtilidad * 0.20;
@@ -279,4 +279,3 @@ export default function FinanzasMensualesPage() {
         </>
     );
 }
-

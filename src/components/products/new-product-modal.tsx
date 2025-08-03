@@ -26,6 +26,7 @@ import { CategoryModal } from './category-modal';
 import { PresentationModal } from './presentation-modal';
 import { ImageUploader } from '../shared/image-uploader';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 
 const newProductSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
@@ -126,6 +127,16 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
         } else {
             await addDoc(collection(db, 'productos'), dataToSave);
             toast({ title: "Producto agregado con éxito" });
+        }
+
+        // Check stock alarm after manual update
+        if (data.stock_alarm_threshold && data.stock <= data.stock_alarm_threshold && data.notification_email) {
+            await sendStockAlert({
+                productName: data.nombre,
+                currentStock: data.stock,
+                recipientEmail: data.notification_email,
+            });
+            toast({ title: "Alerta de stock enviada", description: `Se notificó que el stock de ${data.nombre} es bajo.`});
         }
       
       onDataSaved();

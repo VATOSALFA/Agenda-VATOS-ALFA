@@ -2,7 +2,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -298,7 +298,11 @@ export default function FinanzasMensualesPage() {
     const totalResumenEgresos = totalComisiones + nominaTotal + costosFijosTotal;
 
     const handleOpenEditEgreso = (egreso: Egreso) => {
-        setEditingEgreso(egreso);
+        const editableEgreso = {
+          ...egreso,
+          fecha: egreso.fecha instanceof Timestamp ? egreso.fecha.toDate() : new Date(egreso.fecha)
+        }
+        setEditingEgreso(editableEgreso);
         setIsEgresoModalOpen(true);
     };
 
@@ -329,155 +333,161 @@ export default function FinanzasMensualesPage() {
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
 
-            {/* KPI Cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-[1fr_0.75fr_1.25fr]">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Resumen General del Mes</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 text-sm">
-                       {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
-                           <>
-                            <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
-                            <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
-                            <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
-                            <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatriz}>
-                                {isEditingCommission ? (
-                                    <div className="flex items-center gap-1">
-                                        <Input
-                                            type="number"
-                                            value={beatrizCommissionPercent}
-                                            onChange={(e) => setBeatrizCommissionPercent(Number(e.target.value))}
-                                            className="w-20 h-7 text-sm"
-                                            autoFocus
-                                        />
-                                        <Button size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(false)}><Save className="h-4 w-4" /></Button>
-                                    </div>
-                                ) : (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(true)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </ResumenGeneralItem>
-                            <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
-                           </>
-                       )}
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Resumen de Productos</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                         <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Venta de productos</span>
-                            <span className="font-semibold">${ventaProductos.toLocaleString('es-CL')}</span>
-                        </div>
-                         <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Reinversión</span>
-                            <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-CL')}</span>
-                        </div>
-                         <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Comisión de profesionales</span>
-                            <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-CL')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
-                            <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
-                            <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-CL')}</span>
-                        </div>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Resumen de Egresos por Categoría</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="comisiones" className="border-b">
-                                <AccordionTrigger className="flex justify-between items-center text-sm py-1.5 hover:no-underline font-normal">
-                                    <span className="text-muted-foreground">Comisiones</span>
-                                    <span className="font-medium mr-4">${totalComisiones.toLocaleString('es-CL')}</span>
-                                </AccordionTrigger>
-                                <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-b-md">
-                                    <div className="space-y-2">
-                                        <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
-                                            <span>Profesional</span>
-                                            <span className="text-right">Comisión</span>
-                                            <span className="text-right">Propinas Terminal</span>
-                                            <span className="text-right">Total</span>
+            {/* Main grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_0.75fr_1.25fr] gap-6">
+                
+                {/* First Column */}
+                <div className="flex flex-col gap-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Resumen General del Mes</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1 text-sm">
+                        {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                            <>
+                                <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
+                                <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
+                                <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
+                                <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatriz}>
+                                    {isEditingCommission ? (
+                                        <div className="flex items-center gap-1">
+                                            <Input
+                                                type="number"
+                                                value={beatrizCommissionPercent}
+                                                onChange={(e) => setBeatrizCommissionPercent(Number(e.target.value))}
+                                                className="w-20 h-7 text-sm"
+                                                autoFocus
+                                            />
+                                            <Button size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(false)}><Save className="h-4 w-4" /></Button>
                                         </div>
-                                        {commissionsSummary.map(({name, commission, tips}) => (
-                                            <div key={name} className="grid grid-cols-4 text-xs">
-                                                <span>{name}</span>
-                                                <span className="text-right font-mono">${commission.toLocaleString('es-CL')}</span>
-                                                <span className="text-right font-mono">${tips.toLocaleString('es-CL')}</span>
-                                                <span className="text-right font-bold">${(commission + tips).toLocaleString('es-CL')}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
-                        <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
-                        <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
-                        <ResumenEgresoItem label="Total" amount={totalResumenEgresos} isBold />
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Detailed Tables */}
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-6">
-                <Card>
-                    <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle>Ingresos del Mes</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center h-24">
-                                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                                        </TableCell>
-                                    </TableRow>
-                                ) : dailyIncome.length === 0 ? (
-                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center h-24">
-                                            No hay ingresos registrados para {capitalize(monthName)}.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    dailyIncome.map((ingreso, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell>{ingreso.fecha}</TableCell>
-                                            <TableCell>${ingreso.efectivo.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell>${ingreso.deposito.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-CL')}</TableCell>
+                                    ) : (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(true)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </ResumenGeneralItem>
+                                <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
+                            </>
+                        )}
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle>Ingresos del Mes</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center h-24">
+                                                <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                            </TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle>Egresos del Mes</CardTitle>
-                        <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
-                             <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
-                        </Button>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
-                            <TableBody>
-                               {isLoading ? (
-                                     <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    ) : dailyIncome.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center h-24">
+                                                No hay ingresos registrados para {capitalize(monthName)}.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        dailyIncome.map((ingreso, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell>{ingreso.fecha}</TableCell>
+                                                <TableCell>${ingreso.efectivo.toLocaleString('es-CL')}</TableCell>
+                                                <TableCell>${ingreso.deposito.toLocaleString('es-CL')}</TableCell>
+                                                <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-CL')}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Second Column (Combined) */}
+                <div className="flex flex-col gap-6 xl:col-span-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[0.75fr_1.25fr] gap-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Resumen de Productos</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                <div className="flex justify-between items-center text-base">
+                                    <span className="text-muted-foreground">Venta de productos</span>
+                                    <span className="font-semibold">${ventaProductos.toLocaleString('es-CL')}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-base">
+                                    <span className="text-muted-foreground">Reinversión</span>
+                                    <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-CL')}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-base">
+                                    <span className="text-muted-foreground">Comisión de profesionales</span>
+                                    <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-CL')}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
+                                    <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
+                                    <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-CL')}</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Resumen de Egresos por Categoría</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="comisiones" className="border-b">
+                                        <AccordionTrigger className="flex justify-between items-center text-sm py-1.5 hover:no-underline font-normal">
+                                            <span className="text-muted-foreground">Comisiones</span>
+                                            <span className="font-medium mr-4">${totalComisiones.toLocaleString('es-CL')}</span>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-b-md">
+                                            <div className="space-y-2">
+                                                <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
+                                                    <span>Profesional</span>
+                                                    <span className="text-right">Comisión</span>
+                                                    <span className="text-right">Propinas Terminal</span>
+                                                    <span className="text-right">Total</span>
+                                                </div>
+                                                {commissionsSummary.map(({name, commission, tips}) => (
+                                                    <div key={name} className="grid grid-cols-4 text-xs">
+                                                        <span>{name}</span>
+                                                        <span className="text-right font-mono">${commission.toLocaleString('es-CL')}</span>
+                                                        <span className="text-right font-mono">${tips.toLocaleString('es-CL')}</span>
+                                                        <span className="text-right font-bold">${(commission + tips).toLocaleString('es-CL')}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
+                                <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
+                                <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
+                                <ResumenEgresoItem label="Total" amount={totalResumenEgresos} isBold />
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle>Egresos del Mes</CardTitle>
+                            <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
+                                <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                {isLoading ? (
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                 ) : calculatedEgresos.length === 0 ? (
                                     <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
                                 ) : (
-                                    calculatedEgresos.map((egreso, i) => (
+                                    calculatedEgresos.map((egreso) => (
                                         <TableRow key={egreso.id}>
                                             <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
                                             <TableCell>{egreso.concepto}</TableCell>
@@ -495,10 +505,11 @@ export default function FinanzasMensualesPage() {
                                         </TableRow>
                                     ))
                                 )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
 

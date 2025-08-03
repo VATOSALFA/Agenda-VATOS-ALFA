@@ -224,6 +224,12 @@ export default function FinanzasMensualesPage() {
 
     const totalComisiones = commissionsSummary.reduce((acc, curr) => acc + curr.commission + curr.tips, 0);
     
+    const nominaTotal = useMemo(() => {
+        return calculatedEgresos
+            .filter(e => e.concepto === 'Nómina')
+            .reduce((sum, e) => sum + e.monto, 0);
+    }, [calculatedEgresos]);
+
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
 
     return (
@@ -303,7 +309,7 @@ export default function FinanzasMensualesPage() {
                                 </AccordionContent>
                             </AccordionItem>
                         </Accordion>
-                        <ResumenEgresoItem label="Nómina" amount={20000} />
+                        <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
                         <ResumenEgresoItem label="Costos fijos" amount={0} />
                         <ResumenEgresoItem label="Insumos" amount={10000} />
                     </CardContent>
@@ -389,15 +395,5 @@ export default function FinanzasMensualesPage() {
         />
         </>
     );
+}
 
-    
-
-    
-    
-
-
-
-
-    
-
-    

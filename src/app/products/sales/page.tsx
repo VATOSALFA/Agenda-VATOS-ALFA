@@ -257,40 +257,38 @@ export default function ProductSalesPage() {
     }
 
     const handleDownloadReport = () => {
-        let dataForExcel: any[] = [];
-        let sheetName: string = '';
-
-        if (activeTab === 'por-productos') {
-            if (salesSummary.aggregatedData.length === 0) {
-                toast({ title: "No hay datos para exportar", variant: "destructive" });
-                return;
-            }
-            dataForExcel = salesSummary.aggregatedData.map(item => ({
-                'Producto': item.nombre,
-                'Formato/Presentación': item.presentation,
-                'Unidades Vendidas': item.unitsSold,
-                'Recaudación': item.revenue,
-            }));
-            sheetName = 'Ventas por Producto';
-        } else { // por-vendedor
-            if (sellerSummary.length === 0) {
-                toast({ title: "No hay datos para exportar", variant: "destructive" });
-                return;
-            }
-            dataForExcel = sellerSummary.map(item => ({
-                'Vendedor': item.sellerName,
-                'Tipo de Usuario': item.userType,
-                'Unidades Vendidas': item.unitsSold,
-                'Recaudación': item.revenue,
-            }));
-            sheetName = 'Ventas por Vendedor';
+        if (filteredProductItems.length === 0) {
+            toast({ title: "No hay datos para exportar", variant: "destructive" });
+            return;
         }
+
+        const productMap = new Map(products.map(p => [p.id, p]));
+        const presentationMap = new Map(presentations.map(p => [p.id, p.name]));
+        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const clientMap = new Map(clients.map(c => [c.id, `${c.nombre} ${c.apellido}`]));
+
+        const dataForExcel = filteredProductItems.map(item => {
+            const product = productMap.get(item.id);
+            const presentation = product ? presentationMap.get(product.presentation_id) : 'N/A';
+            const seller = item.barbero_id ? professionalMap.get(item.barbero_id) : 'N/A';
+            const client = clientMap.get(item.cliente_id) || 'Desconocido';
+
+            return {
+                'Producto': item.nombre,
+                'Formato/Presentación': presentation,
+                'Unidades Vendidas': item.cantidad,
+                'Fecha de Venta': formatDate(item.fecha_hora_venta),
+                'Vendedor': seller,
+                'Cliente': client,
+                'Precio de Venta': item.subtotal || (item.precio * item.cantidad),
+            };
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Detalle de Ventas');
 
-        XLSX.writeFile(workbook, `Reporte_Venta_Productos_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+        XLSX.writeFile(workbook, `Reporte_Detallado_Ventas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 
         toast({
             title: "Descarga iniciada",

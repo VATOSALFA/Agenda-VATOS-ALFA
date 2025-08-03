@@ -105,7 +105,7 @@ export default function ProductSalesPage() {
                 };
             }
             
-            const itemRevenue = item.subtotal || (item.precio * item.cantidad);
+            const itemRevenue = item.subtotal || (item.precio * item.cantidad) || 0;
             totalRevenue += itemRevenue;
 
             aggregated[item.id].unitsSold += item.cantidad;

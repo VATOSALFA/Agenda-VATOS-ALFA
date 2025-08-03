@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -47,28 +46,50 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
           const workbook = XLSX.read(bstr, { type: 'binary', cellDates: true });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          const json: any[] = XLSX.utils.sheet_to_json(worksheet);
+          const json: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
           
-          const data: ParsedProduct[] = json.map(row => ({
-                nombre: row['Nombre'] || '',
-                barcode: row['Código de barras'] ? String(row['Código de barras']) : undefined,
-                brand_id: row['Marca'] || '',
-                category_id: row['Categoría'] || '',
-                presentation_id: row['Formato/Presentación'] || '',
-                public_price: Number(row['Precio de venta al público']) || 0,
-                stock: Number(row['Cantidad en stock']) || 0,
-                purchase_cost: Number(row['Costo de compra']) || undefined,
-                internal_price: Number(row['Precio de venta interna']) || undefined,
+          if (json.length < 2) {
+              toast({ variant: 'destructive', title: 'Archivo vacío', description: 'El archivo no contiene datos para importar.' });
+              return;
+          }
+
+          const headers: string[] = json[0].map((h: any) => String(h).toLowerCase().trim());
+          const requiredHeaders = ['nombre', 'marca', 'categoría', 'formato/presentación'];
+          const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+
+          if (missingHeaders.length > 0) {
+              toast({ variant: 'destructive', title: 'Faltan columnas requeridas', description: `Asegúrate de que el archivo contenga las columnas: ${missingHeaders.join(', ')}.` });
+              return;
+          }
+
+          const getIndex = (name: string) => headers.indexOf(name);
+
+          const data: ParsedProduct[] = json.slice(1).map((row: any[]) => ({
+                nombre: row[getIndex('nombre')] || '',
+                barcode: row[getIndex('código de barras')] ? String(row[getIndex('código de barras')]) : undefined,
+                brand_id: row[getIndex('marca')] || '',
+                category_id: row[getIndex('categoría')] || '',
+                presentation_id: row[getIndex('formato/presentación')] || '',
+                public_price: Number(row[getIndex('precio de venta al público')]) || 0,
+                stock: Number(row[getIndex('cantidad en stock')]) || 0,
+                purchase_cost: Number(row[getIndex('costo de compra')]) || undefined,
+                internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
                 commission: {
-                    value: Number(row['Comisión de venta (valor)']) || 0,
-                    type: row['Comisión de venta (tipo)'] === '$' ? '$' : '%'
+                    value: Number(row[getIndex('comisión de venta (valor)')]) || 0,
+                    type: row[getIndex('comisión de venta (tipo)')] === '$' ? '$' : '%'
                 },
-                includes_vat: String(row['Precio incluye IVA']).toLowerCase() === 'si',
-                description: row['Descripción'] || undefined,
-                stock_alarm_threshold: Number(row['Alarma de stock (umbral)']) || undefined,
-                notification_email: row['Email para notificaciones'] || undefined,
+                includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
+                description: row[getIndex('descripción')] || undefined,
+                stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,
+                notification_email: row[getIndex('email para notificaciones')] || undefined,
+                images: row[getIndex('imágenes')] ? String(row[getIndex('imágenes')]).split(',').map(s => s.trim()) : []
           })).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
 
+          if (data.length === 0) {
+            toast({ variant: 'destructive', title: 'No se encontraron datos válidos', description: 'Revisa el contenido del archivo y asegúrate de que los datos requeridos estén presentes.' });
+            return;
+          }
+          
           setParsedData(data);
 
         } catch (error) {

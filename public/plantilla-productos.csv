@@ -1,3 +1,4 @@
-Nombre,Código de barras,Marca,Categoría,Formato/Presentación,Precio de venta al público,Cantidad en stock,Costo de compra,Precio de venta interna,Comisión de venta (valor),Comisión de venta (tipo),Precio incluye IVA,Descripción,Alarma de stock (umbral),Email para notificaciones
-Cera para Cabello "Alpha",750100100101,Vatos Alfa,Ceras,"150 gr",250,50,120,200,10,%,si,Cera de fijación fuerte con acabado mate para un peinado perfecto.,10,almacen@vatosalfa.com
-Shampoo "Padrino",750100100102,El Padrino,Shampoos,500ml,180,30,90,150,5,$,no,Shampoo revitalizante con aroma a sándalo.,5,almacen@vatosalfa.com
+Nombre,Código de barras,Marca,Categoría,Formato/Presentación,Precio de venta al público,Cantidad en stock,Costo de compra,Precio de venta interna,Comisión de venta (valor),Comisión de venta (tipo),Precio incluye IVA,Descripción,Alarma de stock (umbral),Email para notificaciones,Imágenes
+Sérum Coctel Multi-acción,7503007504360,Barberology,Capilar,30ml,380,10,200,350,10,%,si,Un suero multi-acción para el cabello.,5,vatosalfa@gmail.com,https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.appspot.com/o/productos%2F1721342555779_serum.jpg?alt=media&token=8d374431-8e01-4475-b6d8-6385f02c638e
+Cera para peinar,7501036649514,American Crew,Capilar,85g,250,20,150,230,15,%,no,Cera de fijación media con acabado mate.,10,vatosalfa@gmail.com,
+Aceite para barba,815068020023,Proraso,Barba,30ml,280,15,180,,8,$,si,Aceite nutritivo para una barba suave y brillante.,5,vatosalfa@gmail.com,

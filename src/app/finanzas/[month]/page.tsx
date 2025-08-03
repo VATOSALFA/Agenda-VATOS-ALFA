@@ -186,8 +186,8 @@ export default function FinanzasMensualesPage() {
 
 
     // Calculation logic
-    const ingresoTotal = salesLoading ? 0 : sales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const egresoTotal = calculatedEgresos.reduce((sum, e) => sum + e.monto, 0);
+    const ingresoTotal = useMemo(() => salesLoading ? 0 : sales.reduce((sum, s) => sum + (s.total || 0), 0), [sales, salesLoading]);
+    const egresoTotal = useMemo(() => calculatedEgresos.reduce((sum, e) => sum + e.monto, 0), [calculatedEgresos]);
     const subtotalUtilidad = ingresoTotal - egresoTotal;
     const comisionBeatriz = subtotalUtilidad * 0.20;
     const utilidadNeta = subtotalUtilidad - comisionBeatriz;
@@ -198,13 +198,31 @@ export default function FinanzasMensualesPage() {
     const comisionProfesionales = 8000;
     const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
 
-    const commissionsSummary = {
-        'El Patrón': 12000,
-        'El Sicario': 9500,
-        'El Padrino': 15000,
-        'Extra': 5000,
-    };
-    const totalComisiones = Object.values(commissionsSummary).reduce((acc, curr) => acc + curr, 0);
+    const commissionsSummary = useMemo(() => {
+        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const summary: Record<string, { commission: number, tips: number }> = {};
+        
+        professionals.forEach(prof => {
+            summary[prof.name] = { commission: 0, tips: 0 };
+        });
+
+        calculatedEgresos.forEach(egreso => {
+            if (egreso.concepto.toLowerCase().includes('comisi')) {
+                const profName = egreso.aQuien; // aQuien is already the name
+                 if (summary[profName]) {
+                    summary[profName].commission += egreso.monto;
+                }
+            }
+        });
+        
+        return Object.entries(summary).map(([name, data]) => ({
+            name,
+            ...data
+        }));
+
+    }, [calculatedEgresos, professionals]);
+
+    const totalComisiones = commissionsSummary.reduce((acc, curr) => acc + curr.commission + curr.tips, 0);
     
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
 
@@ -267,14 +285,18 @@ export default function FinanzasMensualesPage() {
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-b-md">
                                     <div className="space-y-2">
-                                        <div className="grid grid-cols-2 text-xs font-semibold text-muted-foreground">
+                                        <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
                                             <span>Profesional</span>
-                                            <span className="text-right">Comisión Total</span>
+                                            <span className="text-right">Comisión</span>
+                                            <span className="text-right">Propinas</span>
+                                            <span className="text-right">Total</span>
                                         </div>
-                                        {Object.entries(commissionsSummary).map(([name, commission]) => (
-                                            <div key={name} className="grid grid-cols-2 text-xs">
+                                        {commissionsSummary.map(({name, commission, tips}) => (
+                                            <div key={name} className="grid grid-cols-4 text-xs">
                                                 <span>{name}</span>
                                                 <span className="text-right font-mono">${commission.toLocaleString('es-CL')}</span>
+                                                <span className="text-right font-mono">${tips.toLocaleString('es-CL')}</span>
+                                                <span className="text-right font-bold">${(commission + tips).toLocaleString('es-CL')}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -374,3 +396,6 @@ export default function FinanzasMensualesPage() {
     
 
 
+
+
+    

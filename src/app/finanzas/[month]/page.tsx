@@ -12,10 +12,22 @@ import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
-import { where, Timestamp } from 'firebase/firestore';
+import { where, Timestamp, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { startOfMonth, endOfMonth, format, parse, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const monthNameToNumber: { [key: string]: number } = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
@@ -50,6 +62,9 @@ export default function FinanzasMensualesPage() {
     const [queryKey, setQueryKey] = useState(0);
     const [beatrizCommissionPercent, setBeatrizCommissionPercent] = useState(20);
     const [isEditingCommission, setIsEditingCommission] = useState(false);
+    const { toast } = useToast();
+    const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
+    const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
     
     const { startDate, endDate } = useMemo(() => {
         if (monthNumber === undefined) {
@@ -193,7 +208,6 @@ export default function FinanzasMensualesPage() {
 
     // Calculation logic
     const ingresoTotal = useMemo(() => dailyIncome.reduce((sum, d) => sum + d.total, 0), [dailyIncome]);
-    const egresoTotal = useMemo(() => calculatedEgresos.reduce((sum, e) => sum + e.monto, 0), [calculatedEgresos]);
     
     const productSummary = useMemo(() => {
         if (salesLoading || productsLoading || professionalsLoading) {
@@ -237,11 +251,6 @@ export default function FinanzasMensualesPage() {
 
     const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
 
-    const subtotalUtilidad = ingresoTotal - egresoTotal - ventaProductos;
-    const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
-    const utilidadNeta = subtotalUtilidad - comisionBeatriz;
-
-
     const commissionsSummary = useMemo(() => {
         const summary: Record<string, { commission: number, tips: number }> = {};
         
@@ -279,8 +288,40 @@ export default function FinanzasMensualesPage() {
             .reduce((sum, e) => sum + e.monto, 0);
     }, [calculatedEgresos]);
 
+    const egresoTotal = totalComisiones + nominaTotal + costosFijosTotal;
+    const subtotalUtilidad = ingresoTotal - egresoTotal - ventaProductos;
+    const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
+    const utilidadNeta = subtotalUtilidad - comisionBeatriz;
+
+
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
     const totalResumenEgresos = totalComisiones + nominaTotal + costosFijosTotal;
+
+    const handleOpenEditEgreso = (egreso: Egreso) => {
+        setEditingEgreso(egreso);
+        setIsEgresoModalOpen(true);
+    };
+
+    const handleDeleteEgreso = async () => {
+        if (!egresoToDelete) return;
+        try {
+            await deleteDoc(doc(db, "egresos", egresoToDelete.id));
+            toast({
+                title: "Egreso Eliminado",
+                description: `El egreso ha sido eliminado permanentemente.`,
+            });
+            setQueryKey(prev => prev + 1); // Refetch data
+        } catch (error) {
+            console.error("Error deleting egreso: ", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo eliminar el egreso. Inténtalo de nuevo.",
+            });
+        } finally {
+            setEgresoToDelete(null);
+        }
+    };
 
 
     return (
@@ -423,7 +464,7 @@ export default function FinanzasMensualesPage() {
                  <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Egresos del Mes</CardTitle>
-                        <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
+                        <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
                              <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
                         </Button>
                     </CardHeader>
@@ -446,8 +487,8 @@ export default function FinanzasMensualesPage() {
                                             <TableCell className="text-right">
                                                 {!egreso.id.startsWith('comm-') && (
                                                     <div className="flex gap-1 justify-end">
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="h-4 w-4" /></Button>
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
                                                     </div>
                                                 )}
                                             </TableCell>
@@ -465,10 +506,31 @@ export default function FinanzasMensualesPage() {
             isOpen={isEgresoModalOpen}
             onOpenChange={setIsEgresoModalOpen}
             onFormSubmit={() => {
-                setIsEgresoModalOpen(false)
+                setIsEgresoModalOpen(false);
+                setEditingEgreso(null);
                 setQueryKey(prev => prev + 1);
             }}
+            egreso={editingEgreso}
         />
+        
+        {egresoToDelete && (
+            <AlertDialog open={!!egresoToDelete} onOpenChange={() => setEgresoToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Se eliminará permanentemente el egreso de <strong>{egresoToDelete.concepto}</strong> por <strong>${egresoToDelete.monto.toLocaleString('es-CL')}</strong>.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteEgreso} className="bg-destructive hover:bg-destructive/90">
+                            Sí, eliminar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        )}
         </>
     );
 }

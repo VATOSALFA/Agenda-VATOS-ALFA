@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -35,8 +34,8 @@ import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquar
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Profesional, Local } from '@/lib/types';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import type { Profesional, Local, Egreso } from '@/lib/types';
+import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLocal } from '@/contexts/local-context';
 
@@ -76,6 +75,7 @@ interface AddEgresoModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
+  egreso?: Egreso | null;
 }
 
 const conceptosPredefinidos = [
@@ -91,10 +91,11 @@ const conceptosPredefinidos = [
 ];
 
 
-export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgresoModalProps) {
+export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: AddEgresoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { selectedLocalId } = useLocal();
+  const isEditMode = !!egreso;
   
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -119,42 +120,50 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
   }, [conceptoSeleccionado, form]);
 
   useEffect(() => {
-    if (!isOpen) {
-        form.reset({
-            fecha: new Date(),
-            monto: 0,
-            concepto: '',
-            aQuien: '',
-            comentarios: '',
-            concepto_otro: '',
-            local_id: selectedLocalId || (locales.length > 0 ? locales[0].id : ''),
-        });
-    } else if (selectedLocalId) {
-        form.setValue('local_id', selectedLocalId);
-    } else if (locales.length > 0) {
-        form.setValue('local_id', locales[0].id);
+    if (isOpen) {
+        if (isEditMode && egreso) {
+            form.reset({
+                ...egreso,
+                fecha: egreso.fecha.toDate(),
+            });
+        } else {
+            form.reset({
+                fecha: new Date(),
+                monto: 0,
+                concepto: '',
+                aQuien: '',
+                comentarios: '',
+                concepto_otro: '',
+                local_id: selectedLocalId || (locales.length > 0 ? locales[0].id : ''),
+            });
+        }
     }
-  }, [isOpen, form, locales, selectedLocalId]);
+  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId]);
 
 
   async function onSubmit(data: EgresoFormData) {
     setIsSubmitting(true);
     const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
     
-    try {
-      await addDoc(collection(db, 'egresos'), {
+    const dataToSave = {
         fecha: Timestamp.fromDate(data.fecha),
         monto: data.monto,
         concepto: finalConcepto,
         aQuien: data.aQuien,
         local_id: data.local_id,
         comentarios: data.comentarios,
-      });
+    };
 
-      toast({
-        title: 'Egreso guardado',
-        description: 'El nuevo egreso ha sido registrado con éxito.',
-      });
+    try {
+      if(isEditMode && egreso) {
+          const egresoRef = doc(db, 'egresos', egreso.id);
+          await updateDoc(egresoRef, dataToSave);
+          toast({ title: 'Egreso actualizado' });
+      } else {
+          await addDoc(collection(db, 'egresos'), dataToSave);
+          toast({ title: 'Egreso guardado' });
+      }
+      
       onFormSubmit();
     } catch (error) {
       console.error('Error al registrar egreso:', error);
@@ -176,7 +185,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <DialogHeader>
-              <DialogTitle>Agregar Egreso Manual</DialogTitle>
+              <DialogTitle>{isEditMode ? "Editar Egreso" : "Agregar Egreso Manual"}</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4 px-1 max-h-[70vh] overflow-y-auto">

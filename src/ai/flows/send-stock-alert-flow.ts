@@ -4,7 +4,6 @@
  * @fileOverview A flow to send an email notification for low stock alerts.
  *
  * - sendStockAlert - A function that sends the email.
- * - StockAlertInput - The input type for the sendStockAlert function.
  */
 
 import { ai } from '@/ai/genkit';
@@ -36,14 +35,16 @@ const stockAlertPrompt = ai.definePrompt({
     `,
 });
 
-export async function sendStockAlert(input: StockAlertInput): Promise<void> {
+export async function sendStockAlert(input: StockAlertInput): Promise<string> {
     const emailContent = await stockAlertPrompt(input);
     
     // In a real application, you would integrate an email sending service here.
     // For example, using Nodemailer, SendGrid, etc.
-    // This is just a simulation.
+    // This is just a simulation that returns the generated email content.
     console.log("--- SIMULATING EMAIL ---");
-    console.log(`To: ${input.recipientEmail}`);
-    console.log(`Content: ${emailContent.text}`);
+    const fullEmailText = `To: ${input.recipientEmail}\n${emailContent.text}`;
+    console.log(fullEmailText);
     console.log("--- END OF SIMULATION ---");
+
+    return fullEmailText;
 }

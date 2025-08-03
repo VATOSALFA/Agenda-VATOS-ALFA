@@ -186,7 +186,7 @@ export default function FinanzasMensualesPage() {
 
 
     // Calculation logic
-    const ingresoTotal = useMemo(() => salesLoading ? 0 : sales.reduce((sum, s) => sum + (s.total || 0), 0), [sales, salesLoading]);
+    const ingresoTotal = useMemo(() => dailyIncome.reduce((sum, d) => sum + d.total, 0), [dailyIncome]);
     const egresoTotal = useMemo(() => calculatedEgresos.reduce((sum, e) => sum + e.monto, 0), [calculatedEgresos]);
     const subtotalUtilidad = ingresoTotal - egresoTotal;
     const comisionBeatriz = subtotalUtilidad * 0.20;
@@ -199,7 +199,6 @@ export default function FinanzasMensualesPage() {
     const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
 
     const commissionsSummary = useMemo(() => {
-        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
         const summary: Record<string, { commission: number, tips: number }> = {};
         
         professionals.forEach(prof => {
@@ -227,6 +226,12 @@ export default function FinanzasMensualesPage() {
     const nominaTotal = useMemo(() => {
         return calculatedEgresos
             .filter(e => e.concepto === 'Nómina')
+            .reduce((sum, e) => sum + e.monto, 0);
+    }, [calculatedEgresos]);
+
+    const costosFijosTotal = useMemo(() => {
+        return calculatedEgresos
+            .filter(e => e.aQuien === 'Costos fijos')
             .reduce((sum, e) => sum + e.monto, 0);
     }, [calculatedEgresos]);
 
@@ -310,7 +315,7 @@ export default function FinanzasMensualesPage() {
                             </AccordionItem>
                         </Accordion>
                         <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
-                        <ResumenEgresoItem label="Costos fijos" amount={0} />
+                        <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
                         <ResumenEgresoItem label="Insumos" amount={10000} />
                     </CardContent>
                 </Card>
@@ -396,4 +401,3 @@ export default function FinanzasMensualesPage() {
         </>
     );
 }
-

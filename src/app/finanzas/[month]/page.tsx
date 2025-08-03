@@ -21,13 +21,7 @@ const monthNameToNumber: { [key: string]: number } = {
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
 };
 
-const comisionesPorProfesional = [
-    { name: 'Beatriz Elizarraga', commission: 8000, tips: 2500 },
-    { name: 'Erick', commission: 4000, tips: 1500 },
-    { name: 'Lupita', commission: 3000, tips: 1000 },
-];
 
-const totalComisiones = comisionesPorProfesional.reduce((acc, prof) => acc + prof.commission, 0);
 
 const ResumenEgresoItem = ({ label, amount }: { label: string, amount: number }) => (
     <div className="flex justify-between items-center text-sm py-1.5 border-b last:border-0">
@@ -203,6 +197,17 @@ export default function FinanzasMensualesPage() {
     const reinversion = 25000;
     const comisionProfesionales = 8000;
     const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
+
+    const commissionsSummary = useMemo(() => {
+        return calculatedEgresos
+            .filter(e => e.concepto.startsWith('Comisión'))
+            .reduce((acc, curr) => {
+                acc[curr.aQuien] = (acc[curr.aQuien] || 0) + curr.monto;
+                return acc;
+            }, {} as Record<string, number>);
+    }, [calculatedEgresos]);
+
+    const totalComisiones = Object.values(commissionsSummary).reduce((acc, curr) => acc + curr, 0);
     
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
 
@@ -265,23 +270,20 @@ export default function FinanzasMensualesPage() {
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-b-md">
                                     <div className="space-y-2">
-                                        <div className="grid grid-cols-3 text-xs font-semibold text-muted-foreground">
+                                        <div className="grid grid-cols-2 text-xs font-semibold text-muted-foreground">
                                             <span>Profesional</span>
-                                            <span className="text-right">Comisión</span>
-                                            <span className="text-right">Propina</span>
+                                            <span className="text-right">Comisión Total</span>
                                         </div>
-                                        {comisionesPorProfesional.map((prof, index) => (
-                                            <div key={index} className="grid grid-cols-3 text-xs">
-                                                <span>{prof.name}</span>
-                                                <span className="text-right font-mono">${prof.commission.toLocaleString('es-CL')}</span>
-                                                <span className="text-right font-mono">${prof.tips.toLocaleString('es-CL')}</span>
+                                        {Object.entries(commissionsSummary).map(([name, commission]) => (
+                                            <div key={name} className="grid grid-cols-2 text-xs">
+                                                <span>{name}</span>
+                                                <span className="text-right font-mono">${commission.toLocaleString('es-CL')}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </AccordionContent>
                             </AccordionItem>
                         </Accordion>
-                        <ResumenEgresoItem label="Propinas" amount={5000} />
                         <ResumenEgresoItem label="Nómina" amount={20000} />
                         <ResumenEgresoItem label="Costos fijos" amount={0} />
                         <ResumenEgresoItem label="Insumos" amount={10000} />
@@ -373,3 +375,4 @@ export default function FinanzasMensualesPage() {
 
     
     
+

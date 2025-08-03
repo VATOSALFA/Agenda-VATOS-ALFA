@@ -25,7 +25,7 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Detalle de Ventas: {summary.sellerName}</DialogTitle>
           <DialogDescription>
@@ -37,6 +37,7 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
                 <Table>
                     <TableHeader className="sticky top-0 bg-background">
                         <TableRow>
+                            <TableHead>Fecha</TableHead>
                             <TableHead>Cliente</TableHead>
                             <TableHead>Producto vendido</TableHead>
                             <TableHead className="text-right">Unidades vendidas</TableHead>
@@ -46,6 +47,7 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
                     <TableBody>
                         {summary.details.map((detail, index) => (
                         <TableRow key={detail.saleId + index}>
+                            <TableCell>{detail.date}</TableCell>
                             <TableCell>{detail.clientName}</TableCell>
                             <TableCell className="font-medium">{detail.productName}</TableCell>
                             <TableCell className="text-right">{detail.unitsSold}</TableCell>
@@ -55,7 +57,7 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
                     </TableBody>
                     <TableFooter>
                         <TableRow>
-                            <TableCell colSpan={2} className="text-right font-bold">Total</TableCell>
+                            <TableCell colSpan={3} className="text-right font-bold">Total</TableCell>
                             <TableCell className="text-right font-bold">{summary.unitsSold}</TableCell>
                             <TableCell className="text-right font-bold text-primary">${summary.revenue.toLocaleString('es-CL')}</TableCell>
                         </TableRow>

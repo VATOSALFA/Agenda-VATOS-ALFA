@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ export interface SellerSaleDetail {
     productName: string;
     unitsSold: number;
     revenue: number;
+    date: string;
 }
 
 export interface AggregatedSellerSale {
@@ -81,12 +82,12 @@ export default function ProductSalesPage() {
         
         const activeProductIds = new Set(products.filter(p => activeFilters.productStatus === 'todos' || p.active === (activeFilters.productStatus === 'active')).map(p => p.id));
         
-        const allItems: (SaleItem & { saleId: string, cliente_id: string })[] = [];
+        const allItems: (SaleItem & { saleId: string; cliente_id: string; fecha_hora_venta: any })[] = [];
         sales.forEach(sale => {
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto' && activeProductIds.has(item.id)) {
                     if (activeFilters.product === 'todos' || item.id === activeFilters.product) {
-                        allItems.push({ ...item, saleId: sale.id, cliente_id: sale.cliente_id });
+                        allItems.push({ ...item, saleId: sale.id, cliente_id: sale.cliente_id, fecha_hora_venta: sale.fecha_hora_venta });
                     }
                 }
             });
@@ -159,6 +160,20 @@ export default function ProductSalesPage() {
         return { aggregatedData, totalRevenue, totalUnitsSold, highestRevenueProduct, lowestRevenueProduct };
     }, [filteredProductItems, products, presentations, professionals]);
     
+    const formatDate = (date: any) => {
+        if (!date) return 'N/A';
+        let dateObj: Date;
+        if (date.seconds) { // Firestore Timestamp
+          dateObj = new Date(date.seconds * 1000);
+        } else if (typeof date === 'string') { // ISO String
+          dateObj = parseISO(date);
+        } else {
+            return 'Fecha inválida';
+        }
+        if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+        return format(dateObj, 'PP', { locale: es });
+      };
+
     const sellerSummary = useMemo(() => {
         if (isLoading || filteredProductItems.length === 0) {
             return [];
@@ -194,6 +209,7 @@ export default function ProductSalesPage() {
                 productName: productMap.get(item.id) || 'Desconocido',
                 unitsSold: item.cantidad,
                 revenue: itemRevenue,
+                date: formatDate(item.fecha_hora_venta),
             });
         });
 

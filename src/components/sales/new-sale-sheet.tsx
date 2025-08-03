@@ -59,7 +59,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 
 
-interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; }
+interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; presentation_id?: string;}
 
 const saleSchema = z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
@@ -163,8 +163,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       
       const itemPrice = tipo === 'producto' ? (item as Product).public_price : (item as ServiceType).price;
       const itemName = tipo === 'producto' ? (item as Product).nombre : (item as ServiceType).name;
+      const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
 
-      return [...prev, { id: item.id, nombre: itemName, precio: itemPrice || 0, cantidad: 1, tipo }];
+      return [...prev, { id: item.id, nombre: itemName, precio: itemPrice || 0, cantidad: 1, tipo, presentation_id }];
     });
   };
 
@@ -215,12 +216,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             const tipo = 'duration' in item ? 'servicio' : 'producto';
             const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
             const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
+            const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
             return {
                 id: item.id,
                 nombre,
                 precio: precio || 0,
                 cantidad: 1,
-                tipo
+                tipo,
+                presentation_id
             };
         });
         setCart(initialCartItems);
@@ -275,11 +278,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             if (!productDoc.exists()) {
               throw new Error(`Producto con ID ${item.id} no encontrado.`);
             }
-            const newStock = productDoc.data().stock - item.cantidad;
+            const currentStock = productDoc.data().stock;
+            const newStock = currentStock - item.cantidad;
             if (newStock < 0) {
               throw new Error(`Stock insuficiente para ${item.nombre}.`);
             }
             transaction.update(ref, { stock: newStock });
+            
+            // Log stock movement
+            const movementRef = doc(collection(db, "movimientos_stock"));
+            transaction.set(movementRef, {
+                date: Timestamp.now(),
+                local_id: data.local_id,
+                product_id: item.id,
+                presentation_id: item.presentation_id || null,
+                from: currentStock,
+                to: newStock,
+                cause: 'Venta',
+                staff_id: item.barbero_id,
+                comment: `Venta de ${item.cantidad} unidad(es).`
+            });
         });
         
         const ventaRef = doc(collection(db, "ventas"));

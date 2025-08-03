@@ -23,10 +23,10 @@ const monthNameToNumber: { [key: string]: number } = {
 
 
 
-const ResumenEgresoItem = ({ label, amount }: { label: string, amount: number }) => (
+const ResumenEgresoItem = ({ label, amount, isBold }: { label: string, amount: number, isBold?: boolean }) => (
     <div className="flex justify-between items-center text-sm py-1.5 border-b last:border-0">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium">${amount.toLocaleString('es-CL')}</span>
+        <span className={cn("text-muted-foreground", isBold && "font-bold text-foreground")}>{label}</span>
+        <span className={cn("font-medium", isBold && "font-bold")}>${amount.toLocaleString('es-CL')}</span>
     </div>
 );
 
@@ -120,7 +120,7 @@ export default function FinanzasMensualesPage() {
                     if (item.tipo === 'servicio') {
                         const service = serviceMap.get(item.id);
                         if (service) {
-                            commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
+                            commissionConfig = professional.comisionesPorServicio?.[service.name] || service.defaultCommission || professional.defaultCommission;
                         }
                     } else if (item.tipo === 'producto') {
                         const product = productMap.get(item.id);
@@ -236,6 +236,8 @@ export default function FinanzasMensualesPage() {
     }, [calculatedEgresos]);
 
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
+    const totalResumenEgresos = totalComisiones + nominaTotal + costosFijosTotal;
+
 
     return (
         <>
@@ -316,7 +318,7 @@ export default function FinanzasMensualesPage() {
                         </Accordion>
                         <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
                         <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
-                        <ResumenEgresoItem label="Insumos" amount={10000} />
+                        <ResumenEgresoItem label="Total" amount={totalResumenEgresos} isBold />
                     </CardContent>
                 </Card>
             </div>
@@ -324,7 +326,7 @@ export default function FinanzasMensualesPage() {
             {/* Detailed Tables */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6">
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Ingresos del Mes</CardTitle>
                     </CardHeader>
                     <CardContent>

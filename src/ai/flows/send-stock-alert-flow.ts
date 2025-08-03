@@ -38,8 +38,12 @@ const stockAlertPrompt = ai.definePrompt({
 
 export async function sendStockAlert(input: StockAlertInput): Promise<void> {
     const emailContent = await stockAlertPrompt(input);
-    console.log(`Simulating sending email to ${input.recipientEmail}`);
-    console.log(emailContent.text);
+    
     // In a real application, you would integrate an email sending service here.
     // For example, using Nodemailer, SendGrid, etc.
+    // This is just a simulation.
+    console.log("--- SIMULATING EMAIL ---");
+    console.log(`To: ${input.recipientEmail}`);
+    console.log(`Content: ${emailContent.text}`);
+    console.log("--- END OF SIMULATION ---");
 }

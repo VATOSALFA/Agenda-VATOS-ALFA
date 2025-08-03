@@ -28,12 +28,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 import { doc, deleteDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { sendStockAlert } from "@/ai/flows/send-stock-alert-flow";
+import { UploadProductsModal } from "@/components/products/upload-products-modal";
 
 
 export default function InventoryPage() {
@@ -42,6 +43,7 @@ export default function InventoryPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -186,7 +188,9 @@ export default function InventoryPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar por nombre, marca..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Carga masiva</Button>
+            <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Carga masiva
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button>
@@ -254,11 +258,6 @@ export default function InventoryPage() {
         <CardHeader>
             <div className="flex items-center justify-between">
                 <CardTitle>VATOS ALFA Barber Shop</CardTitle>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
-                        <Download className="mr-2 h-4 w-4" /> Descargar inventario
-                    </Button>
-                </div>
             </div>
         </CardHeader>
         <CardContent>
@@ -367,6 +366,12 @@ export default function InventoryPage() {
             onDataSaved={(newId) => handleDataUpdated('presentation', newId)}
         />
     )}
+    
+    <UploadProductsModal
+        isOpen={isUploadModalOpen}
+        onOpenChange={setIsUploadModalOpen}
+        onUploadComplete={handleDataUpdated}
+      />
 
     {productToDelete && (
         <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>

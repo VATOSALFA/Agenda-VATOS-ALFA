@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search } from "lucide-react";
+import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Product, Profesional, ProductPresentation, SaleItem } from "@/lib/types";
@@ -27,6 +27,14 @@ interface AggregatedProductSale {
     revenue: number;
     sellers: { [key: string]: number };
 }
+
+interface AggregatedSellerSale {
+    sellerId: string;
+    sellerName: string;
+    unitsSold: number;
+    revenue: number;
+}
+
 
 export default function ProductSalesPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -135,6 +143,35 @@ export default function ProductSalesPage() {
 
         return { aggregatedData, totalRevenue, totalUnitsSold, highestRevenueProduct, lowestRevenueProduct };
     }, [filteredProductItems, products, presentations, professionals]);
+    
+    const sellerSummary = useMemo(() => {
+        if (isLoading || filteredProductItems.length === 0) {
+            return [];
+        }
+
+        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const aggregated: Record<string, AggregatedSellerSale> = {};
+
+        filteredProductItems.forEach(item => {
+            if (!item.barbero_id) return;
+
+            if (!aggregated[item.barbero_id]) {
+                aggregated[item.barbero_id] = {
+                    sellerId: item.barbero_id,
+                    sellerName: professionalMap.get(item.barbero_id) || 'Desconocido',
+                    unitsSold: 0,
+                    revenue: 0,
+                };
+            }
+            
+            const itemRevenue = item.subtotal || (item.precio * item.cantidad) || 0;
+            
+            aggregated[item.barbero_id].unitsSold += item.cantidad;
+            aggregated[item.barbero_id].revenue += itemRevenue;
+        });
+
+        return Object.values(aggregated).sort((a,b) => b.revenue - a.revenue);
+    }, [filteredProductItems, professionals, isLoading]);
 
     const handleSearch = () => {
         setActiveFilters({
@@ -279,7 +316,28 @@ export default function ProductSalesPage() {
                             </Table>
                         </TabsContent>
                          <TabsContent value="por-vendedor">
-                            <p className="text-muted-foreground text-center py-10">La tabla de ventas por vendedor estará disponible aquí.</p>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Vendedor</TableHead>
+                                        <TableHead className="text-right">Unidades vendidas</TableHead>
+                                        <TableHead className="text-right">Recaudación</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    ) : sellerSummary.length === 0 ? (
+                                        <TableRow><TableCell colSpan={3} className="text-center h-24">No hay ventas para los filtros seleccionados.</TableCell></TableRow>
+                                    ) : sellerSummary.map((seller) => (
+                                        <TableRow key={seller.sellerId}>
+                                            <TableCell className="font-medium">{seller.sellerName}</TableCell>
+                                            <TableCell className="text-right">{seller.unitsSold}</TableCell>
+                                            <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         </TabsContent>
                     </Tabs>
                 </CardContent>

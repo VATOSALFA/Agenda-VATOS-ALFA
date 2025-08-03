@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
 import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client 
 import { where, Timestamp } from "firebase/firestore";
 import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-detail-modal";
 import { ProductSaleDetailModal, type ProductSaleDetail } from "@/components/products/sales/product-sale-detail-modal";
+import { useToast } from "@/hooks/use-toast";
 
 
 export interface AggregatedProductSale {
@@ -59,6 +61,8 @@ export default function ProductSalesPage() {
     const [isProductDetailModalOpen, setIsProductDetailModalOpen] = useState(false);
     const [selectedSellerSummary, setSelectedSellerSummary] = useState<AggregatedSellerSale | null>(null);
     const [selectedProductSummary, setSelectedProductSummary] = useState<AggregatedProductSale | null>(null);
+    const [activeTab, setActiveTab] = useState('por-productos');
+    const { toast } = useToast();
 
 
     const [activeFilters, setActiveFilters] = useState({
@@ -251,6 +255,48 @@ export default function ProductSalesPage() {
         setSelectedProductSummary(summary);
         setIsProductDetailModalOpen(true);
     }
+
+    const handleDownloadReport = () => {
+        let dataForExcel: any[] = [];
+        let sheetName: string = '';
+
+        if (activeTab === 'por-productos') {
+            if (salesSummary.aggregatedData.length === 0) {
+                toast({ title: "No hay datos para exportar", variant: "destructive" });
+                return;
+            }
+            dataForExcel = salesSummary.aggregatedData.map(item => ({
+                'Producto': item.nombre,
+                'Formato/Presentación': item.presentation,
+                'Unidades Vendidas': item.unitsSold,
+                'Recaudación': item.revenue,
+            }));
+            sheetName = 'Ventas por Producto';
+        } else { // por-vendedor
+            if (sellerSummary.length === 0) {
+                toast({ title: "No hay datos para exportar", variant: "destructive" });
+                return;
+            }
+            dataForExcel = sellerSummary.map(item => ({
+                'Vendedor': item.sellerName,
+                'Tipo de Usuario': item.userType,
+                'Unidades Vendidas': item.unitsSold,
+                'Recaudación': item.revenue,
+            }));
+            sheetName = 'Ventas por Vendedor';
+        }
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+        XLSX.writeFile(workbook, `Reporte_Venta_Productos_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+        toast({
+            title: "Descarga iniciada",
+            description: "Tu archivo de Excel se está descargando.",
+        });
+    };
     
     return (
         <>
@@ -350,10 +396,10 @@ export default function ProductSalesPage() {
             <Card>
                 <CardHeader className="flex-row items-center justify-between">
                     <div><CardTitle>Detalle de la venta</CardTitle></div>
-                    <div className="flex items-center gap-2"><Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar reporte</Button></div>
+                    <div className="flex items-center gap-2"><Button variant="outline" onClick={handleDownloadReport}><Download className="mr-2 h-4 w-4" /> Descargar reporte</Button></div>
                 </CardHeader>
                 <CardContent>
-                    <Tabs defaultValue="por-productos">
+                    <Tabs defaultValue="por-productos" onValueChange={setActiveTab}>
                         <TabsList className="mb-4">
                             <TabsTrigger value="por-productos">Por productos</TabsTrigger>
                             <TabsTrigger value="por-vendedor">Por vendedor</TabsTrigger>

@@ -188,9 +188,6 @@ export default function FinanzasMensualesPage() {
     // Calculation logic
     const ingresoTotal = useMemo(() => dailyIncome.reduce((sum, d) => sum + d.total, 0), [dailyIncome]);
     const egresoTotal = useMemo(() => calculatedEgresos.reduce((sum, e) => sum + e.monto, 0), [calculatedEgresos]);
-    const subtotalUtilidad = ingresoTotal - egresoTotal;
-    const comisionBeatriz = subtotalUtilidad * 0.20;
-    const utilidadNeta = subtotalUtilidad - comisionBeatriz;
     
     const productSummary = useMemo(() => {
         if (salesLoading || productsLoading || professionalsLoading) {
@@ -233,6 +230,10 @@ export default function FinanzasMensualesPage() {
     }, [sales, products, professionals, salesLoading, productsLoading, professionalsLoading]);
 
     const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
+
+    const subtotalUtilidad = ingresoTotal - egresoTotal - ventaProductos;
+    const comisionBeatriz = subtotalUtilidad * 0.20;
+    const utilidadNeta = subtotalUtilidad - comisionBeatriz;
 
 
     const commissionsSummary = useMemo(() => {

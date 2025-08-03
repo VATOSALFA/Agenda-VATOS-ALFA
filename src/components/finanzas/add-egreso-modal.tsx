@@ -69,6 +69,7 @@ interface AddEgresoModalProps {
 
 const conceptosPredefinidos = [
     { id: 'nomina', label: 'Nómina' },
+    { id: 'pago_renta', label: 'Pago de renta' },
     { id: 'insumos', label: 'Insumos' },
     { id: 'publicidad', label: 'Publicidad' },
     { id: 'internet', label: 'Internet' },

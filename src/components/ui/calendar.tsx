@@ -61,33 +61,45 @@ function Calendar({
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
         Dropdown: (props: DropdownProps) => {
-            const { fromDate, fromMonth, fromYear, toDate, toMonth, toYear } = props;
-            const options = [];
+            const { fromDate, toDate, fromYear, toYear, fromMonth, toMonth } = props;
+            const options: { label: string; value: number }[] = [];
+
             if (props.name === 'months') {
-                for (let i = fromMonth!.getMonth(); i <= toMonth!.getMonth(); i++) {
-                    options.push({label: new Date(new Date().getFullYear(), i, 1).toLocaleString('default', { month: 'long' }), value: i});
+                const currentYear = new Date().getFullYear();
+                for (let i = 0; i < 12; i++) {
+                    options.push({
+                        value: i,
+                        label: new Date(currentYear, i).toLocaleString('default', { month: 'long' })
+                    });
                 }
             } else if (props.name === 'years') {
-                const year = fromYear || new Date().getFullYear();
-                for (let i = year; i <= toYear!; i++) {
-                    options.push({label: i.toString(), value: i});
+                const startYear = fromYear || new Date().getFullYear() - 100;
+                const endYear = toYear || new Date().getFullYear();
+                 for (let i = startYear; i <= endYear; i++) {
+                    options.push({ value: i, label: i.toString() });
                 }
             }
-
-            const capitalizedName = props.name?.toString().charAt(0).toUpperCase() + props.name?.toString().slice(1);
             
+            const handleValueChange = (newValue: string) => {
+                const date = new Date(props.value as Date);
+                if (props.name === 'months') {
+                    date.setMonth(parseInt(newValue));
+                } else if (props.name === 'years') {
+                    date.setFullYear(parseInt(newValue));
+                }
+                props.onChange?.(date);
+            };
+
+            const selectedValue = props.name === 'months' 
+                ? (props.value as Date)?.getMonth().toString()
+                : (props.value as Date)?.getFullYear().toString();
+
             return (
                  <Select
-                    onValueChange={(newValue) => {
-                        if (props.name === 'months') {
-                           props.onChange?.(new Date(new Date().getFullYear(), parseInt(newValue), 1) as any)
-                        } else if (props.name === 'years') {
-                            props.onChange?.(new Date(parseInt(newValue), new Date().getMonth(), 1) as any);
-                        }
-                    }}
-                    value={props.value?.toString()}
+                    onValueChange={handleValueChange}
+                    value={selectedValue}
                 >
-                    <SelectTrigger>{props.value}</SelectTrigger>
+                    <SelectTrigger>{selectedValue}</SelectTrigger>
                     <SelectContent>
                         <ScrollArea className="h-80">
                             {options.map((option) => (

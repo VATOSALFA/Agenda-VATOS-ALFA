@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -293,7 +294,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     productName: productData.nombre,
                     currentStock: newStock,
                     recipientEmail: productData.notification_email,
-                }).catch(console.error); // Catch errors to not block the main flow
+                }).then(() => {
+                  toast({
+                    variant: "destructive",
+                    title: "Alerta de stock bajo",
+                    description: `El producto ${productData.nombre} tiene solo ${newStock} unidades.`,
+                  });
+                }).catch(console.error);
             }
 
             // Log stock movement

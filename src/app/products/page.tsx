@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from "react";
@@ -132,7 +133,11 @@ export default function InventoryPage() {
                 currentStock: newStock,
                 recipientEmail: product.notification_email,
             });
-            toast({ title: "Alerta de stock enviada", description: `Se notificó que el stock de ${product.nombre} es bajo.`});
+            toast({
+              variant: "destructive",
+              title: "Alerta de stock bajo",
+              description: `El producto ${product.nombre} tiene solo ${newStock} unidades.`,
+            });
         }
 
          toast({ title: `Stock actualizado para ${product.nombre}` });

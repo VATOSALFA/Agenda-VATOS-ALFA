@@ -136,7 +136,11 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                 currentStock: data.stock,
                 recipientEmail: data.notification_email,
             });
-            toast({ title: "Alerta de stock enviada", description: `Se notificó que el stock de ${data.nombre} es bajo.`});
+            toast({
+              variant: "destructive",
+              title: "Alerta de stock bajo",
+              description: `El producto ${data.nombre} tiene solo ${data.stock} unidades.`,
+            });
         }
       
       onDataSaved();

@@ -192,11 +192,48 @@ export default function FinanzasMensualesPage() {
     const comisionBeatriz = subtotalUtilidad * 0.20;
     const utilidadNeta = subtotalUtilidad - comisionBeatriz;
     
-    // Product summary mock data
-    const ventaProductos = 80000;
-    const reinversion = 25000;
-    const comisionProfesionales = 8000;
-    const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
+    const productSummary = useMemo(() => {
+        if (salesLoading || productsLoading || professionalsLoading) {
+            return { ventaProductos: 0, reinversion: 0, comisionProfesionales: 0, utilidadVatosAlfa: 0 };
+        }
+        
+        const productMap = new Map(products.map(p => [p.id, p]));
+        const professionalMap = new Map(professionals.map(p => [p.id, p]));
+
+        let ventaProductos = 0;
+        let reinversion = 0;
+        let comisionProfesionales = 0;
+        
+        sales.forEach(sale => {
+            sale.items?.forEach(item => {
+                if (item.tipo === 'producto') {
+                    ventaProductos += item.subtotal;
+                    
+                    const product = productMap.get(item.id);
+                    if (product && product.purchase_cost) {
+                        reinversion += product.purchase_cost * item.cantidad;
+                    }
+                    
+                    const professional = professionalMap.get(item.barbero_id);
+                    if (product && professional) {
+                        const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                        if(commissionConfig) {
+                            comisionProfesionales += commissionConfig.type === '%'
+                                ? item.subtotal * (commissionConfig.value / 100)
+                                : commissionConfig.value;
+                        }
+                    }
+                }
+            })
+        });
+        
+        const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
+        
+        return { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa };
+    }, [sales, products, professionals, salesLoading, productsLoading, professionalsLoading]);
+
+    const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
+
 
     const commissionsSummary = useMemo(() => {
         const summary: Record<string, { commission: number, tips: number }> = {};

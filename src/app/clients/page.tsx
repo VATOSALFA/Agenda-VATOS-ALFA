@@ -335,12 +335,12 @@ export default function ClientsPage() {
   
     const dataForExcel = filteredClients.map(client => ({
       'Número de cliente': client.numero_cliente || '',
-      'Nombre': client.nombre,
-      'Apellido': client.apellido,
-      'Correo': client.correo,
-      'Teléfono': client.telefono,
+      'Nombre': client.nombre || '',
+      'Apellido': client.apellido || '',
+      'Correo': client.correo || '',
+      'Teléfono': client.telefono || '',
       'Fecha de Nacimiento': client.fecha_nacimiento ? formatDate(client.fecha_nacimiento) : 'N/A',
-      'Cliente desde': formatDate(client.creado_en),
+      'Cliente desde': client.creado_en ? formatDate(client.creado_en) : 'N/A',
       'Citas totales': client.citas_totales || 0,
       'Citas asistidas': client.citas_asistidas || 0,
       'Citas no asistidas': client.citas_no_asistidas || 0,

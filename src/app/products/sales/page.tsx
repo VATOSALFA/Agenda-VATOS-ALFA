@@ -290,7 +290,7 @@ export default function ProductSalesPage() {
                 'Producto': item.nombre,
                 'Formato/Presentación': presentation,
                 'Unidades Vendidas': item.cantidad,
-                'Fecha de Venta': formatDate(item.fecha_hora_venta, 'd/M/yy'),
+                'Fecha de Venta': formatDate(item.fecha_hora_venta, 'dd/MM/yyyy'),
                 'Vendedor': seller,
                 'Cliente': client,
                 'Precio de Venta': salePrice,

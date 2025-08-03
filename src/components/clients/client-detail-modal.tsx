@@ -99,12 +99,12 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     return format(dateObj, includeTime ? 'PPP p' : 'PPP', { locale: es });
   };
   
-  const totalSpent = salesLoading ? 0 : sales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+  const totalSpent = client.gasto_total || (salesLoading ? 0 : sales.reduce((acc, sale) => acc + (sale.total || 0), 0));
   
-  const attendedAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
-  const unattendedAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length;
-  const cancelledAppointments = reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Cancelado').length;
-  const totalAppointments = reservationsLoading ? 0 : reservations.length;
+  const attendedAppointments = client.citas_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length);
+  const unattendedAppointments = client.citas_no_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length);
+  const cancelledAppointments = client.citas_canceladas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Cancelado').length);
+  const totalAppointments = client.citas_totales || (reservationsLoading ? 0 : reservations.length);
 
 
   return (

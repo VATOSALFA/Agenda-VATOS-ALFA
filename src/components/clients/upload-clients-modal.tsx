@@ -31,7 +31,7 @@ interface UploadClientsModalProps {
   onUploadComplete: () => void;
 }
 
-type ParsedClient = Omit<Client, 'id' | 'creado_en'>;
+type ParsedClient = Omit<Client, 'id' | 'creado_en'> & { creado_en?: any };
 
 export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: UploadClientsModalProps) {
   const [parsedData, setParsedData] = useState<ParsedClient[]>([]);
@@ -58,7 +58,15 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const birthDateIndex = headers.indexOf('fecha de nacimiento');
           const dayIndex = headers.indexOf('día del nacimiento');
           const monthIndex = headers.indexOf('mes del nacimiento');
-          const yearIndex = headers.indexOf('año de nacimiento.');
+          const yearIndex = headers.indexOf('año de nacimiento');
+          const clientSinceDayIndex = headers.indexOf('cliente desde el día');
+          const clientSinceMonthIndex = headers.indexOf('cliente desde el mes');
+          const clientSinceYearIndex = headers.indexOf('cliente desde el año');
+          const totalAppointmentsIndex = headers.indexOf('citas totales');
+          const attendedAppointmentsIndex = headers.indexOf('citas asistidas');
+          const noShowAppointmentsIndex = headers.indexOf('citas no asistidas');
+          const cancelledAppointmentsIndex = headers.indexOf('citas canceladas');
+          const totalSpentIndex = headers.indexOf('gasto total');
           
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
               toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
@@ -67,15 +75,25 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
 
           const data: ParsedClient[] = json.slice(1).map(row => {
             let birthDate = null;
-            if (dayIndex > -1 && monthIndex > -1 && yearIndex > -1) {
+            if (birthDateIndex > -1 && row[birthDateIndex] instanceof Date) {
+                birthDate = format(row[birthDateIndex], 'yyyy-MM-dd');
+            } else if (dayIndex > -1 && monthIndex > -1 && yearIndex > -1) {
                 const day = row[dayIndex];
                 const month = row[monthIndex];
                 const year = row[yearIndex];
                 if (day && month && year) {
                     birthDate = format(new Date(year, month - 1, day), 'yyyy-MM-dd');
                 }
-            } else if (birthDateIndex > -1 && row[birthDateIndex] instanceof Date) {
-                birthDate = format(row[birthDateIndex], 'yyyy-MM-dd');
+            }
+
+            let clientSinceDate = Timestamp.now();
+            if (clientSinceDayIndex > -1 && clientSinceMonthIndex > -1 && clientSinceYearIndex > -1) {
+              const day = row[clientSinceDayIndex];
+              const month = row[clientSinceMonthIndex];
+              const year = row[clientSinceYearIndex];
+              if(day && month && year) {
+                clientSinceDate = Timestamp.fromDate(new Date(year, month - 1, day));
+              }
             }
 
             return {
@@ -84,6 +102,12 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 correo: row[emailIndex] || '',
                 telefono: String(row[phoneIndex] || ''),
                 fecha_nacimiento: birthDate,
+                creado_en: clientSinceDate,
+                citas_totales: Number(row[totalAppointmentsIndex]) || 0,
+                citas_asistidas: Number(row[attendedAppointmentsIndex]) || 0,
+                citas_no_asistidas: Number(row[noShowAppointmentsIndex]) || 0,
+                citas_canceladas: Number(row[cancelledAppointmentsIndex]) || 0,
+                gasto_total: Number(row[totalSpentIndex]) || 0,
             }
           }).filter(client => client.nombre && client.apellido && client.telefono); 
 
@@ -118,10 +142,11 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
         const batch = writeBatch(db);
         parsedData.forEach(clientData => {
             const clientRef = doc(collection(db, 'clientes'));
-            batch.set(clientRef, {
-                ...clientData,
-                creado_en: Timestamp.now()
-            });
+            const dataToSave = {
+              ...clientData,
+              creado_en: clientData.creado_en || Timestamp.now(),
+            };
+            batch.set(clientRef, dataToSave);
         });
         await batch.commit();
         toast({ title: '¡Éxito!', description: `${parsedData.length} clientes han sido importados.` });
@@ -164,8 +189,8 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 <FileSpreadsheet className="h-4 w-4" />
                 <AlertTitle>Formato del archivo</AlertTitle>
                 <AlertDescription>
-                    Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong> y <strong>fecha de nacimiento</strong>. 
-                    <a href="/Base de datos clientes.csv" download="plantilla-clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+                    Asegúrate de que tu archivo .xlsx, .xls o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) otras columnas como <strong>correo</strong>, <strong>fecha de nacimiento</strong>, etc.
+                    <a href="/Base de datos clientes.csv" download className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
                 </AlertDescription>
              </Alert>
           </div>
@@ -180,7 +205,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                                 <TableHead>Apellido</TableHead>
                                 <TableHead>Correo</TableHead>
                                 <TableHead>Teléfono</TableHead>
-                                <TableHead>Fecha de Nacimiento</TableHead>
+                                <TableHead>Gasto Total</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -190,7 +215,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                                     <TableCell>{client.apellido}</TableCell>
                                     <TableCell>{client.correo || 'N/A'}</TableCell>
                                     <TableCell>{client.telefono}</TableCell>
-                                    <TableCell>{client.fecha_nacimiento || 'N/A'}</TableCell>
+                                    <TableCell>${(client.gasto_total || 0).toLocaleString('es-CL')}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

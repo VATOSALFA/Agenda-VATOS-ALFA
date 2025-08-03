@@ -9,6 +9,11 @@ export interface Client {
   fecha_nacimiento?: string | { seconds: number; nanoseconds: number; };
   notas?: string;
   creado_en: any; // Firestore Timestamp
+  citas_totales?: number;
+  citas_asistidas?: number;
+  citas_no_asistidas?: number;
+  citas_canceladas?: number;
+  gasto_total?: number;
 }
 
 export interface Local {

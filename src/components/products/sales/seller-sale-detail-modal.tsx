@@ -25,7 +25,7 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>Detalle de Ventas: {summary.sellerName}</DialogTitle>
           <DialogDescription>

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -54,7 +55,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const lastnameIndex = headers.indexOf('apellido');
           const emailIndex = headers.indexOf('correo');
           const phoneIndex = headers.indexOf('telefono');
-          const birthDateIndex = headers.indexOf('fecha_nacimiento');
+          const birthDateIndex = headers.indexOf('fecha de nacimiento');
           
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
               toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
@@ -146,7 +147,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 <FileSpreadsheet className="h-4 w-4" />
                 <AlertTitle>Formato del archivo</AlertTitle>
                 <AlertDescription>
-                    Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong> y <strong>fecha_nacimiento</strong>. 
+                    Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong> y <strong>fecha de nacimiento</strong>. 
                     <a href="/Base de datos clientes.csv" download="plantilla-clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
                 </AlertDescription>
              </Alert>

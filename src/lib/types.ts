@@ -14,6 +14,7 @@ export interface Client {
   citas_no_asistidas?: number;
   citas_canceladas?: number;
   gasto_total?: number;
+  numero_cliente?: string;
 }
 
 export interface Local {

@@ -67,6 +67,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const noShowAppointmentsIndex = headers.indexOf('citas no asistidas');
           const cancelledAppointmentsIndex = headers.indexOf('citas canceladas');
           const totalSpentIndex = headers.indexOf('gasto total');
+          const clientNumberIndex = headers.indexOf('número de cliente');
           
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
               toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
@@ -108,6 +109,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 citas_no_asistidas: Number(row[noShowAppointmentsIndex]) || 0,
                 citas_canceladas: Number(row[cancelledAppointmentsIndex]) || 0,
                 gasto_total: Number(row[totalSpentIndex]) || 0,
+                numero_cliente: row[clientNumberIndex] ? String(row[clientNumberIndex]) : undefined,
             }
           }).filter(client => client.nombre && client.apellido && client.telefono); 
 

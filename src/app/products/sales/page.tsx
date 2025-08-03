@@ -16,8 +16,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Sale, Product, Profesional, ProductPresentation, SaleItem } from "@/lib/types";
+import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client } from "@/lib/types";
 import { where, Timestamp } from "firebase/firestore";
+import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-detail-modal";
+
 
 interface AggregatedProductSale {
     id: string;
@@ -28,12 +30,21 @@ interface AggregatedProductSale {
     sellers: { [key: string]: number };
 }
 
-interface AggregatedSellerSale {
+export interface SellerSaleDetail {
+    saleId: string;
+    clientName: string;
+    productName: string;
+    unitsSold: number;
+    revenue: number;
+}
+
+export interface AggregatedSellerSale {
     sellerId: string;
     sellerName: string;
     unitsSold: number;
     revenue: number;
     userType: string;
+    details: SellerSaleDetail[];
 }
 
 
@@ -41,6 +52,8 @@ export default function ProductSalesPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [productStatusFilter, setProductStatusFilter] = useState('active');
     const [productFilter, setProductFilter] = useState('todos');
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [selectedSellerSummary, setSelectedSellerSummary] = useState<AggregatedSellerSale | null>(null);
 
     const [activeFilters, setActiveFilters] = useState({
         dateRange,
@@ -59,20 +72,21 @@ export default function ProductSalesPage() {
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: presentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos');
+    const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     
-    const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading;
+    const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading;
 
     const filteredProductItems = useMemo(() => {
         if (isLoading) return [];
         
         const activeProductIds = new Set(products.filter(p => activeFilters.productStatus === 'todos' || p.active === (activeFilters.productStatus === 'active')).map(p => p.id));
         
-        const allItems: (SaleItem & { saleId: string })[] = [];
+        const allItems: (SaleItem & { saleId: string, cliente_id: string })[] = [];
         sales.forEach(sale => {
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto' && activeProductIds.has(item.id)) {
                     if (activeFilters.product === 'todos' || item.id === activeFilters.product) {
-                        allItems.push({ ...item, saleId: sale.id });
+                        allItems.push({ ...item, saleId: sale.id, cliente_id: sale.cliente_id });
                     }
                 }
             });
@@ -151,6 +165,9 @@ export default function ProductSalesPage() {
         }
 
         const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const productMap = new Map(products.map(p => [p.id, p.nombre]));
+        const clientMap = new Map(clients.map(c => [c.id, c.nombre + ' ' + c.apellido]));
+
         const aggregated: Record<string, AggregatedSellerSale> = {};
 
         filteredProductItems.forEach(item => {
@@ -162,7 +179,8 @@ export default function ProductSalesPage() {
                     sellerName: professionalMap.get(item.barbero_id) || 'Desconocido',
                     unitsSold: 0,
                     revenue: 0,
-                    userType: 'Profesional' // Asumiendo que todos son profesionales por ahora
+                    userType: 'Profesional',
+                    details: []
                 };
             }
             
@@ -170,10 +188,17 @@ export default function ProductSalesPage() {
             
             aggregated[item.barbero_id].unitsSold += item.cantidad;
             aggregated[item.barbero_id].revenue += itemRevenue;
+            aggregated[item.barbero_id].details.push({
+                saleId: item.saleId,
+                clientName: clientMap.get(item.cliente_id) || 'Desconocido',
+                productName: productMap.get(item.id) || 'Desconocido',
+                unitsSold: item.cantidad,
+                revenue: itemRevenue,
+            });
         });
 
         return Object.values(aggregated).sort((a,b) => b.revenue - a.revenue);
-    }, [filteredProductItems, professionals, isLoading]);
+    }, [filteredProductItems, professionals, products, clients, isLoading]);
 
     const handleSearch = () => {
         setActiveFilters({
@@ -183,8 +208,14 @@ export default function ProductSalesPage() {
         })
         setQueryKey(prev => prev + 1);
     }
+
+    const handleViewDetails = (summary: AggregatedSellerSale) => {
+        setSelectedSellerSummary(summary);
+        setIsDetailModalOpen(true);
+    }
     
     return (
+        <>
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Venta de Productos</h2>
             
@@ -339,7 +370,11 @@ export default function ProductSalesPage() {
                                             <TableCell>{seller.userType}</TableCell>
                                             <TableCell className="text-right">{seller.unitsSold}</TableCell>
                                             <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-right"><Button variant="outline" size="sm"><Eye className="mr-2 h-4 w-4" />Ver detalles</Button></TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="outline" size="sm" onClick={() => handleViewDetails(seller)}>
+                                                    <Eye className="mr-2 h-4 w-4" />Ver detalles
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -350,5 +385,12 @@ export default function ProductSalesPage() {
             </Card>
 
         </div>
+
+        <SellerSaleDetailModal 
+            isOpen={isDetailModalOpen}
+            onOpenChange={setIsDetailModalOpen}
+            summary={selectedSellerSummary}
+        />
+        </>
     );
 }

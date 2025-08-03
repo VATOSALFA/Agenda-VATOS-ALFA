@@ -34,8 +34,13 @@ export default function StockMovementPage() {
   const [categoryFilter, setCategoryFilter] = useState('todos');
   const [productFilter, setProductFilter] = useState('todos');
 
-  const [activeFilters, setActiveFilters] = useState({
-    dateRange: dateRange,
+  const [activeFilters, setActiveFilters] = useState<{
+    dateRange: DateRange | undefined;
+    status: string;
+    category: string;
+    product: string;
+  }>({
+    dateRange: undefined,
     status: 'todos',
     category: 'todos',
     product: 'todos'
@@ -47,8 +52,9 @@ export default function StockMovementPage() {
     const today = new Date();
     const from = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30));
     const to = endOfDay(today);
-    setDateRange({ from, to });
-    setActiveFilters(prev => ({ ...prev, dateRange: { from, to }}));
+    const initialDateRange = { from, to };
+    setDateRange(initialDateRange);
+    setActiveFilters(prev => ({ ...prev, dateRange: initialDateRange }));
   }, []);
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
@@ -73,7 +79,7 @@ export default function StockMovementPage() {
 
   const { data: movements, loading: movementsLoading } = useFirestoreQuery<StockMovement>(
     'movimientos_stock', 
-    `movements-${queryKey}`, 
+    `movements-${queryKey}-${JSON.stringify(activeFilters)}`, 
     ...movementsQueryConstraints
   );
 

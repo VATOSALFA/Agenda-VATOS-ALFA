@@ -255,7 +255,6 @@ export default function InventoryPage() {
             <div className="flex items-center justify-between">
                 <CardTitle>VATOS ALFA Barber Shop</CardTitle>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline"><Bell className="mr-2 h-4 w-4" /> Alarmas de local</Button>
                     <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
                         <Download className="mr-2 h-4 w-4" /> Descargar inventario
                     </Button>
@@ -292,7 +291,7 @@ export default function InventoryPage() {
                   ))
               ) : filteredProducts.map((product) => (
                 <TableRow key={product.id} className={cn(
-                    !product.active ? 'text-muted-foreground' : 
+                    !product.active ? 'text-muted-foreground' : '',
                     (product.stock_alarm_threshold && product.stock <= product.stock_alarm_threshold) && 'bg-red-500/10 hover:bg-red-500/20'
                 )}>
                   <TableCell className="font-mono text-xs">{product.barcode || 'N/A'}</TableCell>
@@ -317,7 +316,6 @@ export default function InventoryPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onSelect={() => openEditModal(product)}>Editar</DropdownMenuItem>
-                        <DropdownMenuItem>Ver historial de movimientos</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => handleToggleActive(product)}>{product.active ? 'Desactivar' : 'Activar'} producto</DropdownMenuItem>
                          <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => setProductToDelete(product)} className="text-destructive hover:!text-destructive focus:!text-destructive focus:!bg-destructive/10">

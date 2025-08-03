@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2, Edit, Save } from 'lucide-react';
+import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2, Edit, Save, Trash2 } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -429,12 +429,12 @@ export default function FinanzasMensualesPage() {
                     </CardHeader>
                     <CardContent>
                         <Table>
-                            <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead></TableRow></TableHeader>
+                            <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
                             <TableBody>
                                {isLoading ? (
-                                     <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                     <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                 ) : calculatedEgresos.length === 0 ? (
-                                    <TableRow><TableCell colSpan={5} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
                                 ) : (
                                     calculatedEgresos.map((egreso, i) => (
                                         <TableRow key={egreso.id}>
@@ -443,6 +443,14 @@ export default function FinanzasMensualesPage() {
                                             <TableCell>{egreso.aQuien}</TableCell>
                                             <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
                                             <TableCell>{egreso.comentarios}</TableCell>
+                                            <TableCell className="text-right">
+                                                {!egreso.id.startsWith('comm-') && (
+                                                    <div className="flex gap-1 justify-end">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                                    </div>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     ))
                                 )}

@@ -62,38 +62,31 @@ function Calendar({
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
         Dropdown: (props: DropdownProps) => {
             const { fromYear, toYear, fromMonth, toMonth, fromDate, toDate } = props;
-            const options: { label: string; value: number }[] = [];
+            const options: { label: string; value: string }[] = [];
             let selectValue: string | undefined;
 
             if (props.name === 'months') {
-                const currentYear = (props.value !== undefined ? new Date(new Date().setMonth(props.value as number)) : new Date()).getFullYear();
-                const startMonth = fromMonth?.getMonth() ?? 0;
-                const endMonth = toMonth?.getMonth() ?? 11;
-                for (let i = startMonth; i <= endMonth; i++) {
-                    options.push({
-                        value: i,
-                        label: new Date(currentYear, i).toLocaleString('default', { month: 'long' })
-                    });
-                }
-                selectValue = (props.value !== undefined) ? String(props.value) : undefined;
+                const months = Array.from({ length: 12 }, (_, i) => new Date(new Date().getFullYear(), i, 1));
+                options.push(...months.map((month, i) => ({
+                    value: i.toString(),
+                    label: month.toLocaleString('default', { month: 'long' })
+                })));
+                selectValue = props.value !== undefined ? String(props.value) : undefined;
             } else if (props.name === 'years') {
                 const startYear = fromYear || fromDate?.getFullYear() || new Date().getFullYear() - 100;
                 const endYear = toYear || toDate?.getFullYear() || new Date().getFullYear();
                  for (let i = endYear; i >= startYear; i--) {
-                    options.push({ value: i, label: i.toString() });
+                    options.push({ value: i.toString(), label: i.toString() });
                 }
                 selectValue = (props.value !== undefined) ? String(props.value) : undefined;
             }
 
             const handleValueChange = (newValue: string) => {
                 if (props.onChange) {
-                    const newDate = new Date(props.value as number);
-                    if (props.name === 'months') {
-                        newDate.setMonth(parseInt(newValue, 10));
-                    } else if (props.name === 'years') {
-                        newDate.setFullYear(parseInt(newValue, 10));
-                    }
-                    props.onChange(newDate as any);
+                    const changeEvent = {
+                        target: { value: newValue }
+                    } as React.ChangeEvent<HTMLSelectElement>;
+                    props.onChange(changeEvent);
                 }
             };
 
@@ -113,7 +106,7 @@ function Calendar({
                     <SelectContent>
                         <ScrollArea className="h-80">
                             {options.map((option) => (
-                                <SelectItem key={option.value} value={option.value.toString()}>
+                                <SelectItem key={option.value} value={option.value}>
                                     {option.label}
                                 </SelectItem>
                             ))}

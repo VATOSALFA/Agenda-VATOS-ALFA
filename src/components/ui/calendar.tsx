@@ -3,10 +3,12 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import { DayPicker, DropdownProps } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
+import { ScrollArea } from "./scroll-area"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -58,6 +60,46 @@ function Calendar({
       components={{
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
+        Dropdown: (props: DropdownProps) => {
+            const { fromDate, fromMonth, fromYear, toDate, toMonth, toYear } = props;
+            const options = [];
+            if (props.name === 'months') {
+                for (let i = fromMonth!.getMonth(); i <= toMonth!.getMonth(); i++) {
+                    options.push({label: new Date(new Date().getFullYear(), i, 1).toLocaleString('default', { month: 'long' }), value: i});
+                }
+            } else if (props.name === 'years') {
+                const year = fromYear || new Date().getFullYear();
+                for (let i = year; i <= toYear!; i++) {
+                    options.push({label: i.toString(), value: i});
+                }
+            }
+
+            const capitalizedName = props.name?.toString().charAt(0).toUpperCase() + props.name?.toString().slice(1);
+            
+            return (
+                 <Select
+                    onValueChange={(newValue) => {
+                        if (props.name === 'months') {
+                           props.onChange?.(new Date(new Date().getFullYear(), parseInt(newValue), 1) as any)
+                        } else if (props.name === 'years') {
+                            props.onChange?.(new Date(parseInt(newValue), new Date().getMonth(), 1) as any);
+                        }
+                    }}
+                    value={props.value?.toString()}
+                >
+                    <SelectTrigger>{props.value}</SelectTrigger>
+                    <SelectContent>
+                        <ScrollArea className="h-80">
+                            {options.map((option) => (
+                                <SelectItem key={option.value} value={option.value.toString()}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </ScrollArea>
+                    </SelectContent>
+                </Select>
+            )
+        }
       }}
       {...props}
     />

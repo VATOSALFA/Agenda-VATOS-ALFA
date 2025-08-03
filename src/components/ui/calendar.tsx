@@ -61,7 +61,7 @@ function Calendar({
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
         Dropdown: (props: DropdownProps) => {
-            const { fromDate, toDate, fromYear, toYear, fromMonth, toMonth } = props;
+            const { fromYear, toYear, fromMonth, toMonth } = props;
             const options: { label: string; value: number }[] = [];
 
             if (props.name === 'months') {
@@ -81,25 +81,37 @@ function Calendar({
             }
             
             const handleValueChange = (newValue: string) => {
-                const date = new Date(props.value as Date);
-                if (props.name === 'months') {
-                    date.setMonth(parseInt(newValue));
-                } else if (props.name === 'years') {
-                    date.setFullYear(parseInt(newValue));
+                if (props.onChange) {
+                    const newDate = new Date();
+                    if (props.name === 'months') {
+                        // When changing month, we need to know the currently selected year
+                        const currentMonthDate = (props.value !== undefined) ? new Date().setMonth(props.value as number) : new Date();
+                        const currentYear = new Date(currentMonthDate).getFullYear();
+                        newDate.setFullYear(currentYear, parseInt(newValue, 10));
+                    } else if (props.name === 'years') {
+                        // When changing year, we need to know the currently selected month
+                        const currentMonth = (props.value !== undefined) ? new Date().setFullYear(props.value as number) : new Date();
+                        const month = new Date(currentMonth).getMonth();
+                        newDate.setFullYear(parseInt(newValue, 10), month);
+                    }
+                    props.onChange(newDate);
                 }
-                props.onChange?.(date);
             };
-
-            const selectedValue = props.name === 'months' 
-                ? (props.value as Date)?.getMonth().toString()
-                : (props.value as Date)?.getFullYear().toString();
+            
+            const selectedValue = props.value?.toString();
+            
+            // Get the display name for the trigger
+            let triggerDisplayValue = selectedValue;
+            if (props.name === 'months' && selectedValue) {
+                triggerDisplayValue = new Date(new Date().getFullYear(), parseInt(selectedValue)).toLocaleString('default', {month: 'long'})
+            }
 
             return (
                  <Select
                     onValueChange={handleValueChange}
                     value={selectedValue}
                 >
-                    <SelectTrigger>{selectedValue}</SelectTrigger>
+                    <SelectTrigger>{triggerDisplayValue}</SelectTrigger>
                     <SelectContent>
                         <ScrollArea className="h-80">
                             {options.map((option) => (

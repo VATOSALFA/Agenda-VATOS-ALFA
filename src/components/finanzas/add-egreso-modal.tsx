@@ -68,6 +68,10 @@ interface AddEgresoModalProps {
 }
 
 const conceptosPredefinidos = [
+    { id: 'nomina', label: 'Nómina' },
+    { id: 'insumos', label: 'Insumos' },
+    { id: 'publicidad', label: 'Publicidad' },
+    { id: 'internet', label: 'Internet' },
     { id: 'comision_servicios', label: 'Comisión Servicios' },
     { id: 'comision_producto', label: 'Comisión Venta de producto' },
     { id: 'propina_terminal', label: 'Propina en terminal' },
@@ -199,7 +203,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit }: AddEgreso
                       <RadioGroup
                         onValueChange={field.onChange}
                         value={field.value}
-                        className="flex flex-col space-y-1"
+                        className="grid grid-cols-2 gap-2"
                       >
                         {conceptosPredefinidos.map(c => (
                             <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">

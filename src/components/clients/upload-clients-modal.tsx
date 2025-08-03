@@ -5,7 +5,7 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { writeBatch, collection, Timestamp } from 'firebase/firestore';
+import { writeBatch, collection, Timestamp, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Client } from '@/lib/types';
 
@@ -145,7 +145,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
                 <AlertTitle>Formato del archivo</AlertTitle>
                 <AlertDescription>
                     Asegúrate de que tu archivo .xlsx o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) <strong>correo</strong>. 
-                    <a href="/Base de datos clientes.csv" download="Base de datos clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+                    <a href="/Base de datos clientes.csv" download className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
                 </AlertDescription>
              </Alert>
           </div>

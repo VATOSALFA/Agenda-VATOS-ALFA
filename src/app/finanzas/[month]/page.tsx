@@ -232,7 +232,7 @@ export default function FinanzasMensualesPage() {
             <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
 
             {/* KPI Cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-[1fr_0.75fr_1.25fr]">
                 <Card>
                     <CardHeader>
                         <CardTitle>Resumen General del Mes</CardTitle>
@@ -288,7 +288,7 @@ export default function FinanzasMensualesPage() {
                                         <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
                                             <span>Profesional</span>
                                             <span className="text-right">Comisión</span>
-                                            <span className="text-right">Propinas</span>
+                                            <span className="text-right">Propinas Terminal</span>
                                             <span className="text-right">Total</span>
                                         </div>
                                         {commissionsSummary.map(({name, commission, tips}) => (
@@ -311,8 +311,8 @@ export default function FinanzasMensualesPage() {
             </div>
 
             {/* Detailed Tables */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <Card className="lg:col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6">
+                <Card>
                     <CardHeader>
                         <CardTitle>Ingresos del Mes</CardTitle>
                     </CardHeader>
@@ -346,7 +346,7 @@ export default function FinanzasMensualesPage() {
                         </Table>
                     </CardContent>
                 </Card>
-                 <Card className="lg:col-span-3">
+                 <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Egresos del Mes</CardTitle>
                         <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>
@@ -363,7 +363,7 @@ export default function FinanzasMensualesPage() {
                                     <TableRow><TableCell colSpan={5} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
                                 ) : (
                                     calculatedEgresos.map((egreso, i) => (
-                                        <TableRow key={i}>
+                                        <TableRow key={egreso.id}>
                                             <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
                                             <TableCell>{egreso.concepto}</TableCell>
                                             <TableCell>{egreso.aQuien}</TableCell>
@@ -397,5 +397,7 @@ export default function FinanzasMensualesPage() {
 
 
 
+
+    
 
     

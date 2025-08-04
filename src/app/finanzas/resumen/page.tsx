@@ -21,13 +21,13 @@ const mockDeposits = [
     { fecha: '2024-06-20', monto: 25000, comentario: 'Inversión inicial' },
 ];
 
-const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string }) => (
+const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
         <div className="flex items-center gap-2">
             <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
             {children}
         </div>
-        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}</span>
+        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-CL', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`}</span>
     </div>
 );
 

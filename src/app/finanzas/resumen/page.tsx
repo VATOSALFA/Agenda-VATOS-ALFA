@@ -152,7 +152,7 @@ export default function FinanzasResumenPage() {
 
     }, [isLoading, sales, products, professionals]);
 
-    const subtotalUtilidadAnual = totalIngresosAnual - totalEgresosAnual;
+    const subtotalUtilidadAnual = totalIngresosAnual - totalEgresosAnual - ventaProductosAnual;
     const comisionBeatrizAnual = subtotalUtilidadAnual * (beatrizCommissionPercent / 100);
     const utilidadNetaAnual = subtotalUtilidadAnual - comisionBeatrizAnual;
 

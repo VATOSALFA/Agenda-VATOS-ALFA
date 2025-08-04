@@ -333,8 +333,8 @@ export default function FinanzasMensualesPage() {
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                <Card>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+                <Card className="lg:col-span-4">
                     <CardHeader>
                         <CardTitle>Resumen General del Mes</CardTitle>
                     </CardHeader>
@@ -367,7 +367,7 @@ export default function FinanzasMensualesPage() {
                     )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="lg:col-span-3">
                     <CardHeader>
                         <CardTitle>Resumen de Productos</CardTitle>
                     </CardHeader>
@@ -390,7 +390,7 @@ export default function FinanzasMensualesPage() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="lg:col-span-5">
                     <CardHeader>
                         <CardTitle>Resumen de Egresos por Categoría</CardTitle>
                     </CardHeader>
@@ -428,8 +428,8 @@ export default function FinanzasMensualesPage() {
                 </Card>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                 <Card className="lg:col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <Card>
                     <CardHeader>
                         <CardTitle>Ingresos del Mes</CardTitle>
                     </CardHeader>
@@ -463,7 +463,7 @@ export default function FinanzasMensualesPage() {
                         </Table>
                     </CardContent>
                 </Card>
-                <Card className="lg:col-span-3">
+                <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Egresos del Mes</CardTitle>
                         <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>

@@ -405,6 +405,44 @@ export default function FinanzasMensualesPage() {
                             </Table>
                         </CardContent>
                     </Card>
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle>Egresos del Mes</CardTitle>
+                            <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
+                                <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                {isLoading ? (
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                ) : calculatedEgresos.length === 0 ? (
+                                    <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                ) : (
+                                    calculatedEgresos.map((egreso) => (
+                                        <TableRow key={egreso.id}>
+                                            <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
+                                            <TableCell>{egreso.concepto}</TableCell>
+                                            <TableCell>{egreso.aQuien}</TableCell>
+                                            <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>{egreso.comentarios}</TableCell>
+                                            <TableCell className="text-right">
+                                                {!egreso.id.startsWith('comm-') && (
+                                                    <div className="flex gap-1 justify-end">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Second Column (Combined) */}
@@ -470,45 +508,6 @@ export default function FinanzasMensualesPage() {
                             </CardContent>
                         </Card>
                     </div>
-
-                    <Card>
-                        <CardHeader className="flex-row items-center justify-between">
-                            <CardTitle>Egresos del Mes</CardTitle>
-                            <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
-                                <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                {isLoading ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                                ) : calculatedEgresos.length === 0 ? (
-                                    <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
-                                ) : (
-                                    calculatedEgresos.map((egreso) => (
-                                        <TableRow key={egreso.id}>
-                                            <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
-                                            <TableCell>{egreso.concepto}</TableCell>
-                                            <TableCell>{egreso.aQuien}</TableCell>
-                                            <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell>{egreso.comentarios}</TableCell>
-                                            <TableCell className="text-right">
-                                                {!egreso.id.startsWith('comm-') && (
-                                                    <div className="flex gap-1 justify-end">
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
                 </div>
             </div>
         </div>

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { PlusCircle, ShoppingCart, Edit, Save, Loader2 } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Edit, Save, Loader2, TrendingUp, ArrowRight } from 'lucide-react';
 import { AddDepositoModal } from '@/components/finanzas/add-deposito-modal';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -14,12 +14,6 @@ import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
-
-// Mock data for deposits, as this feature is not fully implemented
-const mockDeposits = [
-    { fecha: '2024-07-15', monto: 10000, comentario: 'Adelanto socio' },
-    { fecha: '2024-06-20', monto: 25000, comentario: 'Inversión inicial' },
-];
 
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
@@ -53,10 +47,18 @@ export default function FinanzasResumenPage() {
         const productMap = new Map(products.map(p => [p.id, p]));
         
         const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-        const monthlyData: Record<string, { month: string, ingresos: number, egresos: number, utilidad: number }> = {};
+        const monthlyData: Record<string, { month: string, monthFullName: string, ingresos: number, egresos: number, utilidad: number, subtotalUtilidad: number, rendimiento: number }> = {};
 
-        monthNames.forEach((name) => {
-            monthlyData[name] = { month: name, ingresos: 0, egresos: 0, utilidad: 0 };
+        monthNames.forEach((name, index) => {
+            monthlyData[name] = { 
+                month: name,
+                monthFullName: new Date(2000, index, 1).toLocaleString('es-CL', { month: 'long' }),
+                ingresos: 0, 
+                egresos: 0, 
+                utilidad: 0,
+                subtotalUtilidad: 0,
+                rendimiento: 0,
+            };
         });
 
         sales.forEach(sale => {
@@ -98,7 +100,7 @@ export default function FinanzasResumenPage() {
             monthlyData[monthName].egresos += egreso.monto;
         });
 
-        // Calculate Utility per month
+        // Calculate Utility and Rendimiento per month
         Object.values(monthlyData).forEach(data => {
             const monthIndex = monthNames.indexOf(data.month);
             const monthlySales = sales.filter(s => s.fecha_hora_venta.toDate().getMonth() === monthIndex);
@@ -110,7 +112,9 @@ export default function FinanzasResumenPage() {
 
             const subtotalUtilidad = data.ingresos - data.egresos - ventaProductos;
             const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
+            data.subtotalUtilidad = subtotalUtilidad;
             data.utilidad = subtotalUtilidad - comisionBeatriz;
+            data.rendimiento = data.ingresos > 0 ? (subtotalUtilidad / data.ingresos) * 100 : 0;
         });
 
         return Object.values(monthlyData);
@@ -181,10 +185,10 @@ export default function FinanzasResumenPage() {
                     <CardContent className="space-y-1 text-sm">
                         {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
                           <>
-                            <ResumenGeneralItem label="Ingreso Total" amount={totalIngresosAnual} />
-                            <ResumenGeneralItem label="Egreso Total" amount={totalEgresosAnual} />
-                            <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidadAnual} isBold />
-                            <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatrizAnual}>
+                            <ResumenGeneralItem label="Ingreso Total" amount={totalIngresosAnual} fractionDigits={2}/>
+                            <ResumenGeneralItem label="Egreso Total" amount={totalEgresosAnual} fractionDigits={2}/>
+                            <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidadAnual} isBold fractionDigits={2}/>
+                            <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatrizAnual} fractionDigits={2}>
                                 {isEditingCommission ? (
                                     <div className="flex items-center gap-1">
                                         <Input
@@ -202,7 +206,7 @@ export default function FinanzasResumenPage() {
                                     </Button>
                                 )}
                             </ResumenGeneralItem>
-                            <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNetaAnual} isPrimary isBold className="text-xl"/>
+                            <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNetaAnual} isPrimary isBold className="text-xl" fractionDigits={2}/>
                           </>
                         )}
                     </CardContent>
@@ -235,23 +239,23 @@ export default function FinanzasResumenPage() {
                     </CardContent>
                 </Card>
                 <Card className="lg:col-span-1">
-                    <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle>Historial de Depósitos</CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => setIsDepositoModalOpen(true)}>
-                            <PlusCircle className="mr-2 h-4 w-4"/> Agregar Depósito
-                        </Button>
+                    <CardHeader>
+                        <CardTitle>Rendimiento Mensual</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <Table>
-                             <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Monto</TableHead><TableHead>Comentario</TableHead></TableRow></TableHeader>
-                             <TableBody>
-                                {mockDeposits.map((dep, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell>{dep.fecha}</TableCell>
-                                        <TableCell>${dep.monto.toLocaleString('es-CL')}</TableCell>
-                                        <TableCell>{dep.comentario}</TableCell>
-                                    </TableRow>
-                                ))}
+                            <TableHeader><TableRow><TableHead>Mes</TableHead><TableHead className="text-right">Rendimiento</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {isLoading ? (
+                                    <TableRow><TableCell colSpan={2} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
+                                ) : (
+                                    yearlyData.map((data) => (
+                                        <TableRow key={data.monthFullName}>
+                                            <TableCell className="capitalize">{data.monthFullName}</TableCell>
+                                            <TableCell className="text-right font-semibold text-primary">{data.rendimiento.toFixed(2)}%</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>
@@ -287,3 +291,4 @@ export default function FinanzasResumenPage() {
         </>
     );
 }
+

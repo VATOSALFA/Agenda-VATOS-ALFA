@@ -55,7 +55,7 @@ export default function FinanzasResumenPage() {
         const monthlyData: Record<string, { month: string, ingresos: number, egresos: number, utilidad: number }> = {};
         const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-        monthNames.forEach(name => {
+        monthNames.forEach((name, index) => {
             monthlyData[name] = { month: name, ingresos: 0, egresos: 0, utilidad: 0 };
         });
 
@@ -135,7 +135,7 @@ export default function FinanzasResumenPage() {
                     if (product && item.barbero_id) {
                          const professional = professionalMap.get(item.barbero_id);
                          if (professional) {
-                            const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                            const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                             if(commissionConfig) {
                                 comisionProfesionales += commissionConfig.type === '%'
                                     ? item.subtotal * (commissionConfig.value / 100)

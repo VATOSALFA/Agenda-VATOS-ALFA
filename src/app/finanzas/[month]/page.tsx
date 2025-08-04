@@ -336,7 +336,7 @@ export default function FinanzasMensualesPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
                 <Card className="lg:col-span-4">
                     <CardHeader>
-                        <CardTitle>Resumen General del Mes</CardTitle>
+                        <CardTitle>Resumen</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1 text-sm">
                     {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
@@ -369,7 +369,7 @@ export default function FinanzasMensualesPage() {
                 </Card>
                 <Card className="lg:col-span-3">
                     <CardHeader>
-                        <CardTitle>Resumen de Productos</CardTitle>
+                        <CardTitle>Productos</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         <div className="flex justify-between items-center text-base">
@@ -392,7 +392,7 @@ export default function FinanzasMensualesPage() {
                 </Card>
                 <Card className="lg:col-span-5">
                     <CardHeader>
-                        <CardTitle>Resumen de Egresos por Categoría</CardTitle>
+                        <CardTitle>Egresos</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         <Accordion type="single" collapsible className="w-full">
@@ -427,7 +427,7 @@ export default function FinanzasMensualesPage() {
                         <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
                          <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
                             <span className="font-bold text-primary">Total</span>
-                            <span className="font-extrabold text-primary">${totalResumenEgresos.toLocaleString('es-CL')}</span>
+                            <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-CL')}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -436,7 +436,7 @@ export default function FinanzasMensualesPage() {
              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                  <Card className="lg:col-span-5">
                     <CardHeader>
-                        <CardTitle>Ingresos del Mes</CardTitle>
+                        <CardTitle>Ingresos</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <Table>
@@ -470,7 +470,7 @@ export default function FinanzasMensualesPage() {
                 </Card>
                 <Card className="lg:col-span-7">
                     <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle>Egresos del Mes</CardTitle>
+                        <CardTitle>Egresos</CardTitle>
                         <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
                             <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
                         </Button>

@@ -52,10 +52,10 @@ export default function FinanzasResumenPage() {
         const serviceMap = new Map(services.map(s => [s.id, s]));
         const productMap = new Map(products.map(p => [p.id, p]));
         
-        const monthlyData: Record<string, { month: string, ingresos: number, egresos: number, utilidad: number }> = {};
         const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        const monthlyData: Record<string, { month: string, ingresos: number, egresos: number, utilidad: number }> = {};
 
-        monthNames.forEach((name, index) => {
+        monthNames.forEach((name) => {
             monthlyData[name] = { month: name, ingresos: 0, egresos: 0, utilidad: 0 };
         });
 
@@ -65,44 +65,56 @@ export default function FinanzasResumenPage() {
             monthlyData[monthName].ingresos += sale.total;
         });
 
-        egresos.forEach(egreso => {
-            const egresoDate = egreso.fecha.toDate();
-            const monthName = monthNames[egresoDate.getMonth()];
+        const allEgresos = [
+            ...egresos.map(e => ({ ...e, fecha: e.fecha.toDate() })),
+            ...sales.flatMap(sale => {
+                const saleDate = sale.fecha_hora_venta.toDate();
+                return sale.items?.map(item => {
+                    const professional = professionalMap.get(item.barbero_id);
+                    if (!professional) return null;
+
+                    let commissionConfig = null;
+                    if (item.tipo === 'servicio') {
+                        const service = serviceMap.get(item.id);
+                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
+                    } else if (item.tipo === 'producto') {
+                        const product = productMap.get(item.id);
+                        if (product) commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                    }
+
+                    if (commissionConfig) {
+                        const commissionAmount = commissionConfig.type === '%'
+                            ? item.subtotal * (commissionConfig.value / 100)
+                            : commissionConfig.value;
+                        return { fecha: saleDate, monto: commissionAmount, aQuien: professional.id, concepto: `Comisión ${item.tipo}` };
+                    }
+                    return null;
+                }).filter(e => e !== null) as { fecha: Date, monto: number, aQuien: string, concepto: string }[]
+            })
+        ];
+
+        allEgresos.forEach(egreso => {
+            const monthName = monthNames[egreso.fecha.getMonth()];
             monthlyData[monthName].egresos += egreso.monto;
         });
-        
-        sales.forEach(sale => {
-            const saleDate = sale.fecha_hora_venta.toDate();
-            const monthName = monthNames[saleDate.getMonth()];
 
-             sale.items?.forEach(item => {
-                const professional = professionalMap.get(item.barbero_id);
-                if (!professional) return;
-                
-                let commissionConfig = null;
-                if (item.tipo === 'servicio') {
-                    const service = serviceMap.get(item.id);
-                    if (service) commissionConfig = professional.comisionesPorServicio?.[service.name] || service.defaultCommission || professional.defaultCommission;
-                } else if (item.tipo === 'producto') {
-                    const product = productMap.get(item.id);
-                    if (product) commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                }
-
-                if (commissionConfig) {
-                    const commissionAmount = commissionConfig.type === '%'
-                        ? item.subtotal * (commissionConfig.value / 100)
-                        : commissionConfig.value;
-                    monthlyData[monthName].egresos += commissionAmount;
-                }
-            });
-        });
-
+        // Calculate Utility per month
         Object.values(monthlyData).forEach(data => {
-            data.utilidad = data.ingresos - data.egresos;
+            const monthIndex = monthNames.indexOf(data.month);
+            const monthlySales = sales.filter(s => s.fecha_hora_venta.toDate().getMonth() === monthIndex);
+            
+            const ventaProductos = monthlySales
+                .flatMap(s => s.items)
+                .filter(i => i?.tipo === 'producto')
+                .reduce((sum, i) => sum + (i?.subtotal || 0), 0);
+
+            const subtotalUtilidad = data.ingresos - data.egresos - ventaProductos;
+            const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
+            data.utilidad = subtotalUtilidad - comisionBeatriz;
         });
 
         return Object.values(monthlyData);
-    }, [isLoading, sales, egresos, professionals, services, products]);
+    }, [isLoading, sales, egresos, professionals, services, products, beatrizCommissionPercent]);
     
     const { totalIngresosAnual, totalEgresosAnual } = useMemo(() => {
         return yearlyData.reduce((acc, month) => {

@@ -78,7 +78,7 @@ export default function FinanzasResumenPage() {
                     let commissionConfig = null;
                     if (item.tipo === 'servicio') {
                         const service = serviceMap.get(item.id);
-                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
+                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.name] || service.defaultCommission || professional.defaultCommission;
                     } else if (item.tipo === 'producto') {
                         const product = productMap.get(item.id);
                         if (product) commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
@@ -171,6 +171,9 @@ export default function FinanzasResumenPage() {
     const subtotalUtilidadAnual = totalIngresosAnual - totalEgresosAnual - ventaProductosAnual;
     const comisionBeatrizAnual = subtotalUtilidadAnual * (beatrizCommissionPercent / 100);
     const utilidadNetaAnual = subtotalUtilidadAnual - comisionBeatrizAnual;
+    
+    const firstHalfYear = yearlyData.slice(0, 6);
+    const secondHalfYear = yearlyData.slice(6, 12);
 
     return (
         <>
@@ -180,7 +183,7 @@ export default function FinanzasResumenPage() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <Card className="lg:col-span-1">
                     <CardHeader>
-                        <CardTitle>Resumen General Anual</CardTitle>
+                        <CardTitle>Resumen</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1 text-sm">
                         {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
@@ -213,7 +216,7 @@ export default function FinanzasResumenPage() {
                 </Card>
                  <Card className="lg:col-span-1">
                     <CardHeader>
-                        <CardTitle>Resumen de Productos (Anual)</CardTitle>
+                        <CardTitle>Productos</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
@@ -244,15 +247,24 @@ export default function FinanzasResumenPage() {
                     </CardHeader>
                     <CardContent>
                         <Table>
-                            <TableHeader><TableRow><TableHead>Mes</TableHead><TableHead className="text-right">Rendimiento</TableHead></TableRow></TableHeader>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Mes</TableHead>
+                                    <TableHead className="text-right">Rendimiento</TableHead>
+                                    <TableHead>Mes</TableHead>
+                                    <TableHead className="text-right">Rendimiento</TableHead>
+                                </TableRow>
+                            </TableHeader>
                             <TableBody>
                                 {isLoading ? (
-                                    <TableRow><TableCell colSpan={2} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
                                 ) : (
-                                    yearlyData.map((data) => (
+                                    firstHalfYear.map((data, index) => (
                                         <TableRow key={data.monthFullName}>
                                             <TableCell className="capitalize">{data.monthFullName}</TableCell>
                                             <TableCell className="text-right font-semibold text-primary">{data.rendimiento.toFixed(2)}%</TableCell>
+                                            <TableCell className="capitalize">{secondHalfYear[index]?.monthFullName}</TableCell>
+                                            <TableCell className="text-right font-semibold text-primary">{secondHalfYear[index]?.rendimiento.toFixed(2)}%</TableCell>
                                         </TableRow>
                                     ))
                                 )}
@@ -277,7 +289,7 @@ export default function FinanzasResumenPage() {
                             <Legend />
                             <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-2))" name="Ingresos" />
                             <Line type="monotone" dataKey="egresos" stroke="hsl(var(--destructive))" name="Egresos" />
-                            <Line type="monotone" dataKey="utilidad" stroke="#22c55e" name="Utilidad" strokeWidth={2} />
+                            <Line type="monotone" dataKey="utilidad" stroke="#22c55e" name="Utilidad Neta" strokeWidth={2} />
                         </LineChart>
                     </ResponsiveContainer>
                   )}

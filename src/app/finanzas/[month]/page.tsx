@@ -37,7 +37,7 @@ const monthNameToNumber: { [key: string]: number } = {
 
 
 const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean }) => (
-    <div className="flex justify-between items-center text-base py-1.5 border-b last:border-0">
+    <div className="flex justify-between items-center text-base py-1.5 border-b last:border-b-0">
         <span className={cn("text-muted-foreground", isBold && "font-bold text-foreground", isPrimary && "font-bold text-primary flex items-center")}>{label}</span>
         <span className={cn("font-semibold", isBold && "font-extrabold", isPrimary && "text-primary")}>${amount.toLocaleString('es-CL')}</span>
     </div>
@@ -397,7 +397,7 @@ export default function FinanzasMensualesPage() {
                     <CardContent className="space-y-2">
                         <Accordion type="single" collapsible className="w-full">
                             <AccordionItem value="comisiones" className="border-b-0">
-                                <div className="flex justify-between items-center text-base py-1.5">
+                                <div className="flex justify-between items-center text-base py-1.5 border-b">
                                     <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
                                         <span className="text-muted-foreground">Comisiones</span>
                                     </AccordionTrigger>
@@ -425,7 +425,7 @@ export default function FinanzasMensualesPage() {
                         </Accordion>
                         <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
                         <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
-                         <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
+                         <div className="flex justify-between items-center text-lg pt-2 mt-2">
                             <span className="font-bold text-primary">Total</span>
                             <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-CL')}</span>
                         </div>

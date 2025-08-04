@@ -36,10 +36,10 @@ const monthNameToNumber: { [key: string]: number } = {
 
 
 
-const ResumenEgresoItem = ({ label, amount, isBold }: { label: string, amount: number, isBold?: boolean }) => (
-    <div className="flex justify-between items-center text-sm py-1.5 border-b last:border-0">
-        <span className={cn("text-muted-foreground", isBold && "font-bold text-foreground")}>{label}</span>
-        <span className={cn("font-medium", isBold && "font-bold")}>${amount.toLocaleString('es-CL')}</span>
+const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean }) => (
+    <div className="flex justify-between items-center text-base py-1.5 border-b last:border-0">
+        <span className={cn("text-muted-foreground", isBold && "font-bold text-foreground", isPrimary && "font-bold text-primary flex items-center")}>{label}</span>
+        <span className={cn("font-semibold", isBold && "font-extrabold", isPrimary && "text-primary")}>${amount.toLocaleString('es-CL')}</span>
     </div>
 );
 
@@ -394,14 +394,16 @@ export default function FinanzasMensualesPage() {
                     <CardHeader>
                         <CardTitle>Resumen de Egresos por Categoría</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-2">
                         <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="comisiones" className="border-b">
-                                <AccordionTrigger className="flex justify-between items-center text-sm py-1.5 hover:no-underline font-normal">
-                                    <span className="text-muted-foreground">Comisiones</span>
-                                    <span className="font-medium mr-4">${totalComisiones.toLocaleString('es-CL')}</span>
-                                </AccordionTrigger>
-                                <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-b-md">
+                            <AccordionItem value="comisiones" className="border-b-0">
+                                <div className="flex justify-between items-center text-base py-1.5">
+                                    <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
+                                        <span className="text-muted-foreground">Comisiones</span>
+                                    </AccordionTrigger>
+                                     <span className="font-semibold mr-4">${totalComisiones.toLocaleString('es-CL')}</span>
+                                </div>
+                                <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-md">
                                     <div className="space-y-2">
                                         <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
                                             <span>Profesional</span>
@@ -423,7 +425,10 @@ export default function FinanzasMensualesPage() {
                         </Accordion>
                         <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
                         <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
-                        <ResumenEgresoItem label="Total" amount={totalResumenEgresos} isBold />
+                         <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
+                            <span className="font-bold text-primary">Total</span>
+                            <span className="font-extrabold text-primary">${totalResumenEgresos.toLocaleString('es-CL')}</span>
+                        </div>
                     </CardContent>
                 </Card>
             </div>

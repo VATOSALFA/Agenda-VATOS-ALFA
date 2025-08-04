@@ -334,7 +334,7 @@ export default function FinanzasMensualesPage() {
             <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
 
             {/* Main grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_0.75fr_1.25fr] gap-6">
+             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 
                 {/* First Column */}
                 <div className="flex flex-col gap-6">
@@ -372,7 +372,7 @@ export default function FinanzasMensualesPage() {
                         </CardContent>
                     </Card>
                     <Card>
-                        <CardHeader className="flex-row items-center justify-between">
+                        <CardHeader>
                             <CardTitle>Ingresos del Mes</CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -408,8 +408,8 @@ export default function FinanzasMensualesPage() {
                 </div>
 
                 {/* Second Column (Combined) */}
-                <div className="flex flex-col gap-6 xl:col-span-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[0.75fr_1.25fr] gap-6">
+                 <div className="flex flex-col gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card>
                             <CardHeader>
                                 <CardTitle>Resumen de Productos</CardTitle>

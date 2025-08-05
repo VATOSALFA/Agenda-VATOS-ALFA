@@ -19,7 +19,7 @@ import { Loader2, Copy, UploadCloud, Plus, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { db } from '@/lib/firebase';
-import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc } from 'firebase/firestore';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -151,6 +151,24 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     }
   }, [profesional, form, isOpen]);
 
+  const upsertUser = async (profData: any, profId: string) => {
+    const userRef = doc(db, 'usuarios', profId);
+    const userSnap = await getDoc(userRef);
+
+    const userData = {
+        name: profData.name,
+        email: profData.email,
+        role: 'Staff',
+    };
+
+    if (userSnap.exists()) {
+        await updateDoc(userRef, userData);
+    } else {
+        await setDoc(userRef, userData);
+    }
+    return userRef.id;
+  };
+
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
@@ -159,15 +177,18 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             // Update
             const profRef = doc(db, 'profesionales', profesional.id);
             await updateDoc(profRef, data);
+            await upsertUser(data, profesional.id);
             toast({ title: "Profesional actualizado con éxito" });
         } else {
             // Create
             const collectionRef = collection(db, 'profesionales');
-            await addDoc(collectionRef, { 
+            const profDocRef = await addDoc(collectionRef, { 
                 ...data, 
                 order: 99, // Add to end of list
                 created_at: Timestamp.now() 
             });
+            const userId = await upsertUser(data, profDocRef.id);
+            await updateDoc(profDocRef, { userId: userId });
             toast({ title: "Profesional creado con éxito" });
         }
         onDataSaved();
@@ -188,6 +209,9 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     setIsDeleting(true);
     try {
         await deleteDoc(doc(db, 'profesionales', profesional.id));
+        if (profesional.userId) {
+            await deleteDoc(doc(db, 'usuarios', profesional.userId));
+        }
         toast({ title: "Profesional eliminado con éxito" });
         onDataSaved();
     } catch (error) {

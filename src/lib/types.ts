@@ -30,6 +30,7 @@ export interface Local {
 
 export interface Profesional {
     id: string;
+    userId: string;
     name: string;
     email: string;
     avatar: string;

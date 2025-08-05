@@ -1,28 +1,32 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserCircle, Shield, ConciergeBell, Wrench, Store, Check, X } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserCircle, Shield, ConciergeBell, Wrench, Store, Check, X, UserPlus, Loader2 } from "lucide-react";
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { User } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { UserModal } from '@/components/settings/users/user-modal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
-const mockUsers = [
-  { id: 1, name: 'Azucena Sánchez Sánchez', email: 'vatosalfaazucena@gmail.com', role: 'Recepcionista' },
-  { id: 2, name: 'Beatriz administradora', email: 'vatosalfasuc1@gmail.com', role: 'Administrador Local' },
-  { id: 3, name: 'Erick Ivan Reyes Rodas', email: 'reyesrodaserickivan@gmail.com', role: 'Staff' },
-  { id: 4, name: 'Zeus Alejandro Pacheco Almora', email: 'vatosalfazeus@gmail.com', role: 'Recepcionista' },
-  { id: 5, name: 'Karina Ruiz Rosales', email: 'rosaleskary51@gmail.com', role: 'Staff' },
-  { id: 6, name: 'Lupita', email: 'mishellecampos447@gmail.com', role: 'Staff' },
-  { id: 7, name: 'GLORIA IVON HERNÁNDEZ HERNÁNDEZ', email: 'gloriaivon_25@hotmail.com', role: 'Staff' },
-  { id: 8, name: 'Beatriz Elizarraga Casas', email: 'jezbeth94@gmail.com', role: 'Staff' },
-  { id: 9, name: 'Alejandro Pacheco', email: 'vatosalfa@gmail.com', role: 'Administrador general' },
-  { id: 10, name: 'Usuario Ejemplo 10', email: 'user10@example.com', role: 'Staff' },
-  { id: 11, name: 'Usuario Ejemplo 11', email: 'user11@example.com', role: 'Staff' },
-];
 
 const rolesData = [
   {
@@ -103,14 +107,58 @@ const PermissionItem = ({ access, label }: { access: boolean, label: string }) =
 export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [queryKey, setQueryKey] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const { toast } = useToast();
+  
+  const { data: users, loading } = useFirestoreQuery<User>('usuarios', queryKey);
 
-  const totalPages = Math.ceil(mockUsers.length / itemsPerPage);
-  const paginatedUsers = mockUsers.slice(
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
+  const handleDataUpdated = () => {
+    setQueryKey(prev => prev + 1);
+  }
+
+  const openNewModal = () => {
+    setEditingUser(null);
+    setIsModalOpen(true);
+  }
+
+  const openEditModal = (user: User) => {
+    setEditingUser(user);
+    setIsModalOpen(true);
+  }
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+        await deleteDoc(doc(db, 'usuarios', userToDelete.id));
+        toast({ title: 'Usuario eliminado' });
+        handleDataUpdated();
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error al eliminar' });
+    } finally {
+        setUserToDelete(null);
+    }
+  }
+
+
   return (
+    <>
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       <Alert>
         <Info className="h-4 w-4" />
@@ -125,11 +173,11 @@ export default function UsersPage() {
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar usuario" className="pl-10" />
+            <Input placeholder="Buscar usuario" className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <Button variant="outline">
-            <UserCircle className="mr-2 h-4 w-4" />
-            Cuenta y facturación
+          <Button onClick={openNewModal}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Nuevo Usuario
           </Button>
         </div>
       </div>
@@ -146,17 +194,29 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedUsers.map((user) => (
+              {loading ? (
+                Array.from({length: 5}).map((_, i) => (
+                    <TableRow key={i}>
+                        <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
+                    </TableRow>
+                ))
+              ) : paginatedUsers.length === 0 ? (
+                 <TableRow>
+                    <TableCell colSpan={4} className="h-24 text-center">
+                        No se encontraron usuarios.
+                    </TableCell>
+                 </TableRow>
+              ) : paginatedUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>{user.role}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -234,5 +294,33 @@ export default function UsersPage() {
       </div>
 
     </div>
+    
+    <UserModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onDataSaved={handleDataUpdated}
+        user={editingUser}
+        roles={rolesData.map(r => r.title)}
+    />
+
+    {userToDelete && (
+        <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                       Se eliminará permanentemente al usuario "{userToDelete.name}". Esta acción no se puede deshacer.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )}
+    </>
   );
 }

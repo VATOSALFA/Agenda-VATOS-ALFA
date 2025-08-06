@@ -67,24 +67,31 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   }, [selectedRoleName, roles]);
 
   useEffect(() => {
-    if (user) {
-      form.reset({ 
-        name: user.name, 
-        email: user.email, 
-        role: user.role, 
-        celular: user.celular || '', 
-        password: user.password || '',
-        permissions: user.permissions || selectedRole?.permissions.filter(p => p.access).map(p => p.label) || []
-      });
-    } else {
-      form.reset({ name: '', email: '', celular: '', password: '', role: '', permissions: [] });
+    if (isOpen) {
+        if (user) {
+          form.reset({ 
+            name: user.name, 
+            email: user.email, 
+            role: user.role, 
+            celular: user.celular || '', 
+            password: '', // Always clear password for security
+            permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
+          });
+        } else {
+          form.reset({ name: '', email: '', celular: '', password: '', role: '', permissions: [] });
+        }
     }
-  }, [user, form, isOpen, selectedRole]);
+  }, [user, isOpen, form, roles]);
   
   useEffect(() => {
+    // This effect runs when the selected role changes.
+    // We only want to auto-set permissions if it's NOT in edit mode,
+    // or if the role changes in edit mode.
     if (selectedRole) {
-      const defaultPermissions = selectedRole.permissions.filter(p => p.access).map(p => p.label);
-      form.setValue('permissions', defaultPermissions);
+      const defaultPermissions = selectedRole.permissions
+        .filter(p => p.access)
+        .map(p => p.label);
+      form.setValue('permissions', defaultPermissions, { shouldDirty: true });
     }
   }, [selectedRole, form]);
 
@@ -93,7 +100,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     setIsSubmitting(true);
     try {
         const dataToSave: any = { ...data };
-        if (!data.password) {
+        if (!data.password || data.password === '') {
             delete dataToSave.password;
         }
         

@@ -35,6 +35,7 @@ const userSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido.'),
   email: z.string().email('El email no es válido.'),
   celular: z.string().optional(),
+  password: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
 });
 
@@ -47,14 +48,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: { name: '', email: '', celular: '', role: '' },
+    defaultValues: { name: '', email: '', celular: '', password: '', role: '' },
   });
 
   useEffect(() => {
     if (user) {
-      form.reset({ name: user.name, email: user.email, role: user.role, celular: user.celular || '' });
+      form.reset({ name: user.name, email: user.email, role: user.role, celular: user.celular || '', password: user.password || '' });
     } else {
-      form.reset({ name: '', email: '', celular: '', role: '' });
+      form.reset({ name: '', email: '', celular: '', password: '', role: '' });
     }
   }, [user, form, isOpen]);
 
@@ -62,6 +63,9 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     setIsSubmitting(true);
     try {
         const dataToSave: any = { ...data };
+        if (!data.password) {
+            delete dataToSave.password;
+        }
         
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
@@ -118,6 +122,17 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   <FormItem>
                     <FormLabel>Celular</FormLabel>
                     <FormControl><Input type="tel" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contraseña</FormLabel>
+                    <FormControl><Input type="password" {...field} placeholder={isEditMode ? 'Dejar en blanco para no cambiar' : ''} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

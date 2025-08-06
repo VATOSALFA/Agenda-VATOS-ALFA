@@ -202,4 +202,5 @@ export interface User {
   email: string;
   role: string;
   celular?: string;
+  password?: string;
 }

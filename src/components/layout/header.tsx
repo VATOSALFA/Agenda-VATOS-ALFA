@@ -149,10 +149,6 @@ export default function Header() {
     }
   }
 
-  if (!user && pathname !== '/login') {
-      return null; // Don't render header on non-login pages if not authenticated
-  }
-
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">

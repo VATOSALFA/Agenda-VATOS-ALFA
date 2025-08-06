@@ -149,6 +149,15 @@ export default function Header() {
     }
   }
 
+  const getInitials = (name?: string | null) => {
+    if (!name) return "VA";
+    const nameParts = name.split(' ');
+    if (nameParts.length > 1) {
+      return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
+
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">
@@ -390,8 +399,8 @@ export default function Header() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src="https://placehold.co/100x100" alt="@vatosalfa" data-ai-hint="man portrait" />
-                    <AvatarFallback>VA</AvatarFallback>
+                    <AvatarImage src="" alt="@vatosalfa" />
+                    <AvatarFallback>{getInitials(user?.displayName)}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>

@@ -190,37 +190,29 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                 {selectedRole && (
                     <div className="space-y-2 pt-4 border-t">
                         <h4 className="font-semibold">Permisos</h4>
-                        <FormField
+                        {selectedRole.permissions.map((permission, index) => (
+                          <FormField
+                            key={`${selectedRole.title}-${index}`}
                             control={form.control}
                             name="permissions"
-                            render={() => (
-                                <FormItem className="space-y-2">
-                                {selectedRole.permissions.map(permission => (
-                                    <FormField
-                                        key={permission.label}
-                                        control={form.control}
-                                        name="permissions"
-                                        render={({ field }) => (
-                                            <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3">
-                                                <FormControl>
-                                                    <Checkbox
-                                                        checked={field.value?.includes(permission.label)}
-                                                        onCheckedChange={(checked) => {
-                                                            const currentValue = field.value || [];
-                                                            return checked
-                                                                ? field.onChange([...currentValue, permission.label])
-                                                                : field.onChange(currentValue.filter(value => value !== permission.label))
-                                                        }}
-                                                    />
-                                                </FormControl>
-                                                <FormLabel className="font-normal text-sm">{permission.label}</FormLabel>
-                                            </FormItem>
-                                        )}
-                                    />
-                                ))}
-                                </FormItem>
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(permission.label)}
+                                    onCheckedChange={(checked) => {
+                                      const currentValue = field.value || [];
+                                      return checked
+                                        ? field.onChange([...currentValue, permission.label])
+                                        : field.onChange(currentValue.filter(value => value !== permission.label))
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="font-normal text-sm">{permission.label}</FormLabel>
+                              </FormItem>
                             )}
-                        />
+                          />
+                        ))}
                     </div>
                 )}
               </div>

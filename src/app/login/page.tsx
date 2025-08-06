@@ -40,7 +40,7 @@ export default function LoginPage() {
             toast({
                 variant: "destructive",
                 title: "Error de inicio de sesión",
-                description: "El correo o la contraseña son incorrectos. Por favor, inténtalo de nuevo.",
+                description: error.message || "El correo o la contraseña son incorrectos. Por favor, inténtalo de nuevo.",
             });
         } finally {
             setIsLoading(false);

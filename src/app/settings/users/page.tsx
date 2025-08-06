@@ -300,7 +300,7 @@ export default function UsersPage() {
         onClose={() => setIsModalOpen(false)}
         onDataSaved={handleDataUpdated}
         user={editingUser}
-        roles={rolesData.map(r => r.title)}
+        roles={rolesData}
     />
 
     {userToDelete && (

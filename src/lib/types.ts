@@ -203,4 +203,5 @@ export interface User {
   role: string;
   celular?: string;
   password?: string;
+  permissions?: string[];
 }

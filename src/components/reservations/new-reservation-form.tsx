@@ -336,12 +336,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                         <SelectTrigger className="w-[180px]">
-                          <SelectValue asChild>
-                            <div className="flex items-center gap-2">
-                                <span className={cn('h-3 w-3 rounded-full', statusColor)} />
-                                <span>{selectedStatusLabel}</span>
-                            </div>
-                          </SelectValue>
+                            <SelectValue>
+                                <div className="flex items-center gap-2">
+                                    <span className={cn('h-3 w-3 rounded-full', statusColor)} />
+                                    <span>{selectedStatusLabel}</span>
+                                </div>
+                            </SelectValue>
                         </SelectTrigger>
                     </FormControl>
                     <SelectContent>

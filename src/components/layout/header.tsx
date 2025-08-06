@@ -3,9 +3,10 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { getAuth, signOut } from 'firebase/auth';
 import {
   Scissors,
   Calendar,
@@ -40,6 +41,7 @@ import {
   Copy,
   Share2,
   Landmark,
+  LogOut,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -110,12 +112,14 @@ interface EmpresaSettings {
 
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const { toast } = useToast();
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
+  const auth = getAuth();
 
   const websiteUrl = 'vatosalfabarbershop.site.agendapro.co';
 
@@ -125,6 +129,23 @@ export default function Header() {
       title: '¡Copiado!',
       description: 'El enlace a tu sitio web ha sido copiado al portapapeles.',
     });
+  }
+
+  const handleLogout = async () => {
+    try {
+        await signOut(auth);
+        toast({
+            title: "Sesión cerrada",
+            description: "Has cerrado sesión correctamente.",
+        });
+        router.push('/login');
+    } catch (error) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo cerrar la sesión. Inténtalo de nuevo.",
+        });
+    }
   }
 
   return (
@@ -333,7 +354,7 @@ export default function Header() {
                 <DropdownMenuItem asChild>
                     <Link href="/settings/users">
                         <Users className="mr-2 h-4 w-4" />
-                        <span>Usuarios</span>
+                        <span>Usuarios y permisos</span>
                     </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -383,7 +404,8 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
                   <span>Cerrar Sesión</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>

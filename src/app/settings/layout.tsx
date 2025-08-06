@@ -39,7 +39,6 @@ const advancedLinks = [
 
 const accountLinks = [
   { href: '/settings/profile', label: 'Mi perfil', icon: UserCircle },
-  { href: '/settings/users', label: 'Usuarios', icon: Users },
 ]
 
 type Props = {
@@ -126,6 +125,16 @@ export default function SettingsLayout({ children }: Props) {
                   {label}
                 </Link>
               ))}
+                 <Link
+                  href={'/settings/users'}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                    pathname === '/settings/users' && 'bg-muted text-primary'
+                  )}
+                >
+                  <Users className="h-4 w-4" />
+                  Usuarios y permisos
+                </Link>
             </CollapsibleContent>
           </Collapsible>
         </nav>

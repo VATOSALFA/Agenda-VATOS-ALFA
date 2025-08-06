@@ -1,4 +1,5 @@
 
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -11,7 +12,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAsUWZLiMR7sVkL0of4i09-6zWfBHFjSUY",
   authDomain: "agenda-1ae08.firebaseapp.com",
   projectId: "agenda-1ae08",
-  storageBucket: "agenda-1ae08.firebasestorage.app",
+  storageBucket: "agenda-1ae08.appspot.com",
   messagingSenderId: "34221543030",
   appId: "1:34221543030:web:b46655e3ef8d7de4539957",
   measurementId: "G-MZC8TZBYFL"

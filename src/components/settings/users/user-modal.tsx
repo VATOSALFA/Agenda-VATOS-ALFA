@@ -122,8 +122,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             <DialogHeader>
               <DialogTitle>{isEditMode ? 'Editar Usuario' : 'Nuevo Usuario'}</DialogTitle>
             </DialogHeader>
-            <ScrollArea className="max-h-[70vh] p-1">
-              <div className="py-6 px-5 space-y-4">
+            <div className="py-6 px-1 max-h-[70vh] overflow-y-auto">
+              <div className="px-4 space-y-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -190,33 +190,53 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                 {selectedRole && (
                     <div className="space-y-2 pt-4 border-t">
                         <h4 className="font-semibold">Permisos</h4>
-                        {selectedRole.permissions.map((permission, index) => (
-                          <FormField
-                            key={`${selectedRole.title}-${index}`}
-                            control={form.control}
-                            name="permissions"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value?.includes(permission.label)}
-                                    onCheckedChange={(checked) => {
-                                      const currentValue = field.value || [];
-                                      return checked
-                                        ? field.onChange([...currentValue, permission.label])
-                                        : field.onChange(currentValue.filter(value => value !== permission.label))
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormLabel className="font-normal text-sm">{permission.label}</FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        ))}
+                        <ScrollArea className="h-40 rounded-md border p-3">
+                           <FormField
+                              control={form.control}
+                              name="permissions"
+                              render={() => (
+                                <FormItem className="space-y-3">
+                                  {selectedRole.permissions.map((permission) => (
+                                    <FormField
+                                      key={permission.label}
+                                      control={form.control}
+                                      name="permissions"
+                                      render={({ field }) => {
+                                        return (
+                                          <FormItem
+                                            key={permission.label}
+                                            className="flex flex-row items-center space-x-3 space-y-0"
+                                          >
+                                            <FormControl>
+                                              <Checkbox
+                                                checked={field.value?.includes(permission.label)}
+                                                onCheckedChange={(checked) => {
+                                                  return checked
+                                                    ? field.onChange([...(field.value || []), permission.label])
+                                                    : field.onChange(
+                                                        (field.value || []).filter(
+                                                          (value) => value !== permission.label
+                                                        )
+                                                      )
+                                                }}
+                                              />
+                                            </FormControl>
+                                            <FormLabel className="font-normal text-sm">
+                                              {permission.label}
+                                            </FormLabel>
+                                          </FormItem>
+                                        )
+                                      }}
+                                    />
+                                  ))}
+                                </FormItem>
+                              )}
+                            />
+                        </ScrollArea>
                     </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
             <DialogFooter className="border-t pt-6">
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
               <Button type="submit" disabled={isSubmitting}>

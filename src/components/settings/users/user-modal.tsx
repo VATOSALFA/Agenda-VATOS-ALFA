@@ -74,7 +74,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             email: user.email, 
             role: user.role, 
             celular: user.celular || '', 
-            password: '', // Always clear password for security
+            password: user.password || '',
             permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
           });
         } else {

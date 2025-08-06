@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { getAuth, signOut } from 'firebase/auth';
 import {
   Scissors,
   Calendar,
@@ -62,6 +61,7 @@ import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const mainNavLinks = [
@@ -119,7 +119,7 @@ export default function Header() {
   const { toast } = useToast();
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
-  const auth = getAuth();
+  const { user, signOut } = useAuth();
 
   const websiteUrl = 'vatosalfabarbershop.site.agendapro.co';
 
@@ -132,8 +132,9 @@ export default function Header() {
   }
 
   const handleLogout = async () => {
+    if (!signOut) return;
     try {
-        await signOut(auth);
+        await signOut();
         toast({
             title: "Sesión cerrada",
             description: "Has cerrado sesión correctamente.",
@@ -146,6 +147,10 @@ export default function Header() {
             description: "No se pudo cerrar la sesión. Inténtalo de nuevo.",
         });
     }
+  }
+
+  if (!user && pathname !== '/login') {
+      return null; // Don't render header on non-login pages if not authenticated
   }
 
   return (
@@ -397,9 +402,9 @@ export default function Header() {
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">Admin</p>
+                    <p className="text-sm font-medium leading-none">{user?.displayName || 'Admin'}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      admin@vatosalfa.com
+                      {user?.email || 'admin@vatosalfa.com'}
                     </p>
                   </div>
                 </DropdownMenuLabel>

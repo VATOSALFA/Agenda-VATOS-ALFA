@@ -9,8 +9,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -18,12 +17,22 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
+    const { signIn } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        if (!signIn) {
+             toast({
+                variant: "destructive",
+                title: "Error de configuración",
+                description: "El servicio de autenticación no está disponible.",
+            });
+            setIsLoading(false);
+            return;
+        }
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            await signIn(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
             router.push('/');
         } catch (error: any) {

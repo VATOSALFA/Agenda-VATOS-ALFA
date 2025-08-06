@@ -34,7 +34,7 @@ interface UserModalProps {
 const userSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido.'),
   email: z.string().email('El email no es válido.'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.').optional().or(z.literal('')),
+  celular: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
 });
 
@@ -47,14 +47,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: { name: '', email: '', password: '', role: '' },
+    defaultValues: { name: '', email: '', celular: '', role: '' },
   });
 
   useEffect(() => {
     if (user) {
-      form.reset({ name: user.name, email: user.email, role: user.role, password: '' });
+      form.reset({ name: user.name, email: user.email, role: user.role, celular: user.celular || '' });
     } else {
-      form.reset({ name: '', email: '', password: '', role: '' });
+      form.reset({ name: '', email: '', celular: '', role: '' });
     }
   }, [user, form, isOpen]);
 
@@ -62,10 +62,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     setIsSubmitting(true);
     try {
         const dataToSave: any = { ...data };
-        if (!data.password) {
-            delete dataToSave.password; // Don't update password if it's empty
-        }
-
+        
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
@@ -116,11 +113,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
               />
                <FormField
                 control={form.control}
-                name="password"
+                name="celular"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contraseña</FormLabel>
-                    <FormControl><Input type="password" placeholder={isEditMode ? "Dejar en blanco para no cambiar" : ""} {...field} /></FormControl>
+                    <FormLabel>Celular</FormLabel>
+                    <FormControl><Input type="tel" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

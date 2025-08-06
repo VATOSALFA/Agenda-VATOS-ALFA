@@ -120,6 +120,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         setIsSubmitting(false);
     }
   };
+  
+  const availableRoles = isEditMode ? roles : roles.filter(r => r.title !== 'Administrador general');
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -184,7 +186,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
-                              {roles.map(role => (
+                              {availableRoles.map(role => (
                                   <SelectItem key={role.title} value={role.title}>{role.title}</SelectItem>
                               ))}
                           </SelectContent>

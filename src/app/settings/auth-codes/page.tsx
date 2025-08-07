@@ -23,23 +23,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AuthCode } from '@/lib/types';
 
-export interface AuthCode {
-  id: number;
-  name: string;
-  active: boolean;
-  code: string;
-  reserves: boolean;
-  cashbox: boolean;
-  download: boolean;
-}
-
-const initialCodes: AuthCode[] = [
-    { id: 1, name: 'Beatriz administradora', active: true, code: 'admin', reserves: true, cashbox: false, download: true },
-    { id: 2, name: 'Zeus', active: true, code: '2408', reserves: true, cashbox: true, download: true },
-    { id: 3, name: 'Azucena', active: true, code: 'Azucena11', reserves: true, cashbox: true, download: true },
-    { id: 4, name: 'Beatriz', active: true, code: 'teamookem0702', reserves: true, cashbox: false, download: true },
-];
 
 const PermissionBadge = ({ permitted }: { permitted: boolean }) => (
     <Badge variant={permitted ? 'default' : 'secondary'} className={cn(
@@ -74,10 +63,12 @@ const ToggleField = ({ name, label, control, description }: { name: string, labe
 export default function AuthCodesSettingsPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [authCodes, setAuthCodes] = useState<AuthCode[]>(initialCodes);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCode, setEditingCode] = useState<AuthCode | null>(null);
     const [codeToDelete, setCodeToDelete] = useState<AuthCode | null>(null);
+    const [queryKey, setQueryKey] = useState(0);
+
+    const { data: authCodes, loading } = useFirestoreQuery<AuthCode>('codigos_autorizacion', queryKey);
 
     const form = useForm({
         defaultValues: {
@@ -108,36 +99,41 @@ export default function AuthCodesSettingsPage() {
         setEditingCode(code);
         setIsModalOpen(true);
     }
-    
-    const handleSaveCode = (codeData: Omit<AuthCode, 'id'>) => {
-        if (editingCode) {
-            // Editing existing code
-            setAuthCodes(codes => codes.map(c => c.id === editingCode.id ? { ...editingCode, ...codeData } : c));
-            toast({ title: "Código actualizado con éxito" });
-        } else {
-            // Adding new code
-            const newCode = { ...codeData, id: Date.now() };
-            setAuthCodes(codes => [...codes, newCode]);
-            toast({ title: "Código agregado con éxito" });
-        }
-        setIsModalOpen(false);
-    };
 
-    const handleDeleteCode = () => {
+    const handleDataUpdated = () => {
+        setQueryKey(prev => prev + 1);
+        setIsModalOpen(false);
+    }
+    
+    const handleDeleteCode = async () => {
         if (!codeToDelete) return;
-        setAuthCodes(codes => codes.filter(c => c.id !== codeToDelete.id));
-        toast({
-            title: "Código eliminado",
-            description: `El código para "${codeToDelete.name}" ha sido eliminado.`,
-        });
-        setCodeToDelete(null);
+        try {
+            await deleteDoc(doc(db, 'codigos_autorizacion', codeToDelete.id));
+            toast({
+                title: "Código eliminado",
+                description: `El código para "${codeToDelete.name}" ha sido eliminado.`,
+            });
+            handleDataUpdated();
+        } catch (error) {
+            console.error("Error deleting auth code:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el código.' });
+        } finally {
+            setCodeToDelete(null);
+        }
     }
 
-    const handleToggleActive = (codeId: number, active: boolean) => {
-        setAuthCodes(codes => codes.map(c => c.id === codeId ? { ...c, active } : c));
-        toast({
-            title: `Código ${active ? 'activado' : 'desactivado'}`
-        });
+    const handleToggleActive = async (codeId: string, active: boolean) => {
+        try {
+            const codeRef = doc(db, 'codigos_autorizacion', codeId);
+            await updateDoc(codeRef, { active });
+            toast({
+                title: `Código ${active ? 'activado' : 'desactivado'}`
+            });
+            handleDataUpdated();
+        } catch (error) {
+            console.error("Error toggling active status:", error);
+            toast({ variant: 'destructive', title: 'Error al actualizar.' });
+        }
     }
 
   return (
@@ -194,11 +190,23 @@ export default function AuthCodesSettingsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {authCodes.map(code => (
+                        {loading ? (
+                            Array.from({length: 3}).map((_, i) => (
+                                <TableRow key={i}>
+                                    <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
+                                </TableRow>
+                            ))
+                        ) : authCodes.length === 0 ? (
+                             <TableRow>
+                                <TableCell colSpan={7} className="text-center h-24">
+                                    No hay códigos creados.
+                                </TableCell>
+                             </TableRow>
+                        ) : authCodes.map(code => (
                             <TableRow key={code.id}>
                                 <TableCell className="font-medium">{code.name}</TableCell>
                                 <TableCell><Switch checked={code.active} onCheckedChange={(checked) => handleToggleActive(code.id, checked)} /></TableCell>
-                                <TableCell>{code.code}</TableCell>
+                                <TableCell>••••••</TableCell>
                                 <TableCell><PermissionBadge permitted={code.reserves} /></TableCell>
                                 <TableCell><PermissionBadge permitted={code.cashbox} /></TableCell>
                                 <TableCell><PermissionBadge permitted={code.download} /></TableCell>
@@ -223,7 +231,7 @@ export default function AuthCodesSettingsPage() {
     <AuthCodeModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveCode}
+        onSave={handleDataUpdated}
         code={editingCode}
     />
 
@@ -248,3 +256,5 @@ export default function AuthCodesSettingsPage() {
     </>
   );
 }
+
+    

@@ -19,6 +19,7 @@ import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp } from "firebase/firestore";
 import type { Local, Profesional, Service, Product, Sale, SaleItem, Client } from "@/lib/types";
 import { CommissionDetailModal } from "@/components/sales/commission-detail-modal";
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 interface CommissionRowData {
     professionalId: string;
@@ -41,6 +42,7 @@ interface ProfessionalCommissionSummary {
 
 
 export default function CommissionsPage() {
+    const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
@@ -72,12 +74,19 @@ export default function CommissionsPage() {
         const today = new Date();
         const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
         setDateRange(initialDateRange);
-        setActiveFilters({
+        
+        const initialFilters = {
             dateRange: initialDateRange,
-            local: 'todos',
+            local: user?.local_id || 'todos',
             professional: 'todos'
-        });
-    }, []);
+        };
+
+        setActiveFilters(initialFilters);
+        if (user?.local_id) {
+            setLocalFilter(user.local_id);
+        }
+
+    }, [user]);
 
     const salesQueryConstraints = useMemo(() => {
         if (!activeFilters.dateRange?.from) return undefined;
@@ -229,6 +238,9 @@ export default function CommissionsPage() {
         setSelectedProfessionalSummary(summary);
         setIsDetailModalOpen(true);
     }
+  
+  const isLocalAdmin = user?.role !== 'Administrador general';
+
 
   return (
     <>
@@ -268,12 +280,12 @@ export default function CommissionsPage() {
                     </div>
                     <div className="space-y-2">
                          <label className="text-sm font-medium">Locales</label>
-                        <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading}>
+                        <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLocalAdmin || localesLoading}>
                             <SelectTrigger>
                                 <SelectValue placeholder={localesLoading ? "Cargando..." : "Todos"} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="todos">Todos</SelectItem>
+                                {!isLocalAdmin && <SelectItem value="todos">Todos</SelectItem>}
                                 {locales.map(local => (
                                     <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
                                 ))}

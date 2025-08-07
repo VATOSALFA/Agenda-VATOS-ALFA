@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import * as XLSX from 'xlsx';
 import { Alert, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 
 interface Sale {
@@ -134,6 +135,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
 }
 
 export default function InvoicedSalesPage() {
+    const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
@@ -160,8 +162,16 @@ export default function InvoicedSalesPage() {
         const today = new Date();
         const initialDateRange = { from: today, to: today };
         setDateRange(initialDateRange);
-        setActiveFilters({ dateRange: initialDateRange, local: 'todos', paymentMethod: 'todos' });
-    }, []);
+        const initialFilters = {
+            dateRange: initialDateRange,
+            local: user?.local_id || 'todos',
+            paymentMethod: 'todos'
+        };
+        setActiveFilters(initialFilters);
+        if(user?.local_id) {
+            setLocalFilter(user.local_id);
+        }
+    }, [user]);
 
 
     const salesQueryConstraints = useMemo(() => {
@@ -345,6 +355,8 @@ export default function InvoicedSalesPage() {
         return 'N/A';
     }
 
+    const isLocalAdmin = user?.role !== 'Administrador general';
+
 
     return (
         <>
@@ -372,12 +384,12 @@ export default function InvoicedSalesPage() {
                             <Calendar mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
                         </PopoverContent>
                     </Popover>
-                    <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading}>
+                    <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLocalAdmin || localesLoading}>
                       <SelectTrigger>
                         <SelectValue placeholder={localesLoading ? "Cargando..." : "Todas las sucursales"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="todos">Todas las sucursales</SelectItem>
+                        {!isLocalAdmin && <SelectItem value="todos">Todas las sucursales</SelectItem>}
                         {locales.map(local => (
                           <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
                         ))}

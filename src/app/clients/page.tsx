@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { deleteDoc, doc, where, Timestamp } from "firebase/firestore";
+import { deleteDoc, doc, where, Timestamp, collection, query, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -138,6 +138,8 @@ export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [authCode, setAuthCode] = useState('');
   const { toast } = useToast();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -328,7 +330,7 @@ export default function ClientsPage() {
     return format(dateObj, formatString, { locale: es });
   };
   
-  const handleDownloadExcel = () => {
+  const triggerDownload = () => {
     if (filteredClients.length === 0) {
       toast({
         title: "No hay datos para exportar",
@@ -385,6 +387,28 @@ export default function ClientsPage() {
     });
   };
 
+  const handleDownloadRequest = async () => {
+    if (!authCode) {
+        toast({ variant: 'destructive', title: 'Código requerido' });
+        return;
+    }
+    const authCodeQuery = query(
+        collection(db, 'codigos_autorizacion'),
+        where('code', '==', authCode),
+        where('active', '==', true),
+        where('download', '==', true)
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+        toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    } else {
+        toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
+        triggerDownload();
+        setIsDownloadModalOpen(false);
+        setAuthCode('');
+    }
+  };
+
 
   return (
     <>
@@ -439,7 +463,7 @@ export default function ClientsPage() {
                         <Combine className="mr-2 h-4 w-4" />
                         <span>Combinar clientes</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleDownloadExcel}>
+                      <DropdownMenuItem onSelect={() => setIsDownloadModalOpen(true)}>
                         <Download className="mr-2 h-4 w-4" />
                         <span>Descargar este listado</span>
                       </DropdownMenuItem>
@@ -608,6 +632,28 @@ export default function ClientsPage() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+      
+      <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code">Código de Autorización</Label>
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

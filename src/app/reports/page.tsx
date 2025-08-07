@@ -8,16 +8,10 @@ import { Progress } from "@/components/ui/progress";
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Pie, PieChart as RechartsPieChart, Cell, Legend } from 'recharts';
 import { Calendar, BarChartHorizontal, Users, DollarSign, Wallet, Percent, MessageSquare, Send, CheckCircle, Loader2 } from "lucide-react";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Reservation, Client, Sale } from '@/lib/types';
+import type { Reservation, Client, Sale, Profesional } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
-import { startOfToday, subDays, startOfMonth, endOfMonth, subMonths, endOfToday } from 'date-fns';
-
-const occupancyData = [
-  { professional: 'El Patrón', occupancy: 85 },
-  { professional: 'El Sicario', occupancy: 78 },
-  { professional: 'El Padrino', occupancy: 92 },
-  { professional: 'Extra', occupancy: 65 },
-];
+import { startOfToday, subDays, startOfMonth, endOfMonth, subMonths, endOfToday, eachDayOfInterval, getDay } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
 
@@ -37,7 +31,7 @@ const SummaryCard = ({ title, value, change, icon: Icon, isLoading }: { title: s
 export default function ReportsPage() {
     const [timeFilter, setTimeFilter] = useState('last-30');
     
-    const { startDate, previousStartDate, endDate, previousEndDate } = useMemo(() => {
+    const { startDate, endDate, previousStartDate, previousEndDate } = useMemo(() => {
         const now = new Date();
         let start, end, prevStart, prevEnd;
 
@@ -81,7 +75,8 @@ export default function ReportsPage() {
             startDate: Timestamp.fromDate(start), 
             endDate: Timestamp.fromDate(end),
             previousStartDate: Timestamp.fromDate(prevStart),
-            previousEndDate: Timestamp.fromDate(prevEnd)
+            previousEndDate: Timestamp.fromDate(prevEnd),
+            interval: { start, end }
         };
     }, [timeFilter]);
 
@@ -93,8 +88,10 @@ export default function ReportsPage() {
 
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', where('fecha_hora_venta', '>=', startDate), where('fecha_hora_venta', '<=', endDate));
     const { data: previousSales } = useFirestoreQuery<Sale>('ventas', where('fecha_hora_venta', '>=', previousStartDate), where('fecha_hora_venta', '<=', previousEndDate));
+    
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
-    const isLoading = reservationsLoading || clientsLoading || salesLoading;
+    const isLoading = reservationsLoading || clientsLoading || salesLoading || professionalsLoading;
 
     const getChange = (current: number, previous: number) => {
         if (previous === 0) return current > 0 ? '+100%' : '+0%';
@@ -106,14 +103,14 @@ export default function ReportsPage() {
     const prevTotalReservations = previousReservations.length;
     const newClients = clients.length;
     const prevNewClients = previousClients.length;
-    const totalSales = sales.reduce((acc, sale) => acc + sale.total, 0);
-    const prevTotalSales = previousSales.reduce((acc, sale) => acc + sale.total, 0);
+    const totalSales = sales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+    const prevTotalSales = previousSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
     
     const salesData = useMemo(() => {
         const byCategory = sales.reduce((acc, sale) => {
-            sale.items.forEach(item => {
+            (sale.items || []).forEach(item => {
                 const category = item.tipo === 'servicio' ? 'Servicios' : 'Productos';
-                acc[category] = (acc[category] || 0) + item.subtotal;
+                acc[category] = (acc[category] || 0) + (item.subtotal || 0);
             });
             return acc;
         }, {} as Record<string, number>);
@@ -130,6 +127,54 @@ export default function ReportsPage() {
         
         return Object.entries(bySource).map(([name, value]) => ({name, value}));
     }, [reservations]);
+    
+    const occupancyData = useMemo(() => {
+        if (isLoading) return [];
+        
+        const professionalStats = professionals.map(prof => ({
+            id: prof.id,
+            name: prof.name,
+            totalMinutesAvailable: 0,
+            totalMinutesBooked: 0
+        }));
+
+        const intervalDays = eachDayOfInterval(startDate.toDate(), endDate.toDate());
+        
+        intervalDays.forEach(day => {
+            const dayOfWeekIndex = getDay(day);
+            const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+            const dayOfWeek = dayNames[dayOfWeekIndex];
+            
+            professionals.forEach(prof => {
+                const profStats = professionalStats.find(p => p.id === prof.id);
+                const schedule = prof.schedule?.[dayOfWeek as keyof typeof prof.schedule];
+
+                if (profStats && schedule && schedule.enabled) {
+                    const [startH, startM] = schedule.start.split(':').map(Number);
+                    const [endH, endM] = schedule.end.split(':').map(Number);
+                    profStats.totalMinutesAvailable += (endH * 60 + endM) - (startH * 60 + startM);
+                }
+            });
+        });
+        
+        reservations.forEach(res => {
+            if (!res.items) return;
+            res.items.forEach(item => {
+                const profStats = professionalStats.find(p => p.id === item.barbero_id);
+                 if (profStats) {
+                    const [startH, startM] = res.hora_inicio.split(':').map(Number);
+                    const [endH, endM] = res.hora_fin.split(':').map(Number);
+                    const duration = (endH * 60 + endM) - (startH * 60 + startM);
+                    profStats.totalMinutesBooked += duration;
+                }
+            });
+        });
+        
+        return professionalStats.map(prof => ({
+            professional: prof.name,
+            occupancy: prof.totalMinutesAvailable > 0 ? Math.round((prof.totalMinutesBooked / prof.totalMinutesAvailable) * 100) : 0
+        }));
+    }, [isLoading, professionals, reservations, startDate, endDate]);
 
 
     return (
@@ -251,16 +296,16 @@ export default function ReportsPage() {
                         <div>
                             <div className="flex justify-between mb-1">
                                 <span className="text-sm font-medium text-green-600 flex items-center"><CheckCircle className="mr-1.5 h-4 w-4"/> Entregados</span>
-                                <span className="text-sm font-medium text-green-600">139 (94.5%)</span>
+                                <span className="text-sm font-medium text-green-600">0 (0.0%)</span>
                             </div>
-                            <Progress value={94.5} className="h-2 [&>div]:bg-green-500" />
+                            <Progress value={0} className="h-2 [&>div]:bg-green-500" />
                         </div>
                          <div>
                             <div className="flex justify-between mb-1">
                                 <span className="text-sm font-medium text-red-600 flex items-center"><CheckCircle className="mr-1.5 h-4 w-4"/> Fallidos</span>
-                                <span className="text-sm font-medium text-red-600">5 (3.4%)</span>
+                                <span className="text-sm font-medium text-red-600">0 (0.0%)</span>
                             </div>
-                            <Progress value={3.4} className="h-2 [&>div]:bg-red-500" />
+                            <Progress value={0} className="h-2 [&>div]:bg-red-500" />
                         </div>
                     </CardContent>
                 </Card>

@@ -53,6 +53,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
@@ -123,6 +124,7 @@ export default function AgendaView() {
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
   const [selectedProfessionalFilter, setSelectedProfessionalFilter] = useState('todos');
   const { selectedLocalId, setSelectedLocalId } = useLocal();
+  const { user } = useAuth();
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -158,10 +160,13 @@ export default function AgendaView() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
   useEffect(() => {
-    if (!selectedLocalId && locales.length > 0) {
+    // Let the auth context set the localId if needed.
+    // If user is general admin and no local is selected, select the first one.
+    if (!user?.local_id && !selectedLocalId && locales.length > 0) {
       setSelectedLocalId(locales[0].id);
     }
-  }, [locales, selectedLocalId, setSelectedLocalId]);
+  }, [locales, selectedLocalId, setSelectedLocalId, user]);
+
 
   const selectedLocal = useMemo(() => {
     if (!selectedLocalId || locales.length === 0) return null;
@@ -472,19 +477,21 @@ export default function AgendaView() {
         {/* Left Panel */}
         <aside className="bg-white border-r flex flex-col">
           <div className="p-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="branch-select">Sucursal</Label>
-              <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId}>
-                <SelectTrigger id="branch-select">
-                  <SelectValue placeholder="Seleccionar sucursal..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locales.map(local => (
-                    <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {user?.role === 'Administrador general' && (
+                <div className="space-y-2">
+                  <Label htmlFor="branch-select">Sucursal</Label>
+                  <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
+                    <SelectTrigger id="branch-select">
+                      <SelectValue placeholder="Seleccionar sucursal..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locales.map(local => (
+                        <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="professional-select">Profesional</Label>
               <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>

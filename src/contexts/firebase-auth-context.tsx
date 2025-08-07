@@ -2,14 +2,15 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut as firebaseSignOut, type Auth, type User } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
-interface CustomUser extends User {
+interface CustomUser extends FirebaseUser {
     role?: string;
     permissions?: string[];
+    local_id?: string;
 }
 interface AuthContextType {
   user: CustomUser | null;
@@ -30,8 +31,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // This is a real Firebase Auth user. For this app, we need to fetch our custom user data.
+        // Let's assume the document ID in 'usuarios' is the same as the Firebase Auth UID.
+        const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+            const customData = userDocSnap.data();
+            setUser({ ...firebaseUser, ...customData });
+        } else {
+            // Fallback or handle case where custom user doc doesn't exist
+            setUser(firebaseUser);
+        }
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
 
@@ -55,26 +70,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userDoc = doc;
     });
 
-    if (userData.password !== pass) {
+    // For a real app using Firebase Auth, this would be `signInWithEmailAndPassword`.
+    // Here we are simulating login based on a password field in Firestore.
+    if (!userData.password || userData.password !== pass) {
         throw new Error("El correo o la contraseña son incorrectos.");
     }
-
-    // This part is tricky. We can't "log in" to Firebase Auth with a custom password check.
-    // What we do here is simulate a user session. For a real app, it's better to migrate
-    // these users to Firebase Auth. For now, we'll store user info in the context.
-    // We are creating a mock user object to use in the app.
+    
     const mockUser: CustomUser = {
         uid: userDoc!.id,
         email: userData.email,
         displayName: userData.name,
         role: userData.role,
         permissions: userData.permissions,
-        // Add other required User properties with mock values
+        local_id: userData.local_id,
         emailVerified: true,
         isAnonymous: false,
         metadata: {},
         providerData: [],
-        providerId: 'password', // or 'custom'
+        providerId: 'password',
         tenantId: null,
         delete: async () => {},
         getIdToken: async () => '',
@@ -91,7 +104,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const signOut = () => {
-    setUser(null); // Clear our custom user session
+    setUser(null); 
     return Promise.resolve();
   }
 
@@ -103,7 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
   };
 
-  if (loading && !user) {
+  if (loading) {
       return (
           <div className="flex justify-center items-center h-screen">
               <Loader2 className="h-8 w-8 animate-spin" />

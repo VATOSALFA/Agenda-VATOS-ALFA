@@ -1,7 +1,8 @@
 
 'use client';
 
-import { createContext, useContext, useState, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, type ReactNode, useEffect } from 'react';
+import { useAuth } from './firebase-auth-context';
 
 interface LocalContextType {
   selectedLocalId: string | null;
@@ -11,7 +12,19 @@ interface LocalContextType {
 const LocalContext = createContext<LocalContextType | undefined>(undefined);
 
 export function LocalProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
+  
+  useEffect(() => {
+      // If user has a specific local_id, force that one.
+      if (user?.local_id) {
+          setSelectedLocalId(user.local_id);
+      }
+      // If the user becomes null (logged out), reset the localId.
+      if (!user) {
+        setSelectedLocalId(null);
+      }
+  }, [user]);
 
   const value = useMemo(() => ({
     selectedLocalId,

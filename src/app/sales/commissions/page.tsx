@@ -6,6 +6,7 @@ import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { startOfDay, endOfDay } from 'date-fns';
+import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +14,28 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Eye } from "lucide-react";
+import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Eye, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where, Timestamp } from "firebase/firestore";
-import type { Local, Profesional, Service, Product, Sale, SaleItem, Client } from "@/lib/types";
+import { where, Timestamp, doc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
+import type { Local, Profesional, Service, Product, Sale, SaleItem, Client, AuthCode } from "@/lib/types";
 import { CommissionDetailModal } from "@/components/sales/commission-detail-modal";
 import { useAuth } from "@/contexts/firebase-auth-context";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { db } from "@/lib/firebase";
+import { useToast } from "@/hooks/use-toast";
+
 
 interface CommissionRowData {
     professionalId: string;
@@ -43,6 +59,7 @@ interface ProfessionalCommissionSummary {
 
 export default function CommissionsPage() {
     const { user } = useAuth();
+    const { toast } = useToast();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
@@ -51,6 +68,8 @@ export default function CommissionsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedProfessionalSummary, setSelectedProfessionalSummary] = useState<ProfessionalCommissionSummary | null>(null);
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+    const [authCode, setAuthCode] = useState('');
     
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -238,6 +257,54 @@ export default function CommissionsPage() {
         setSelectedProfessionalSummary(summary);
         setIsDetailModalOpen(true);
     }
+    
+    const triggerDownload = () => {
+        if (summaryByProfessional.length === 0) {
+            toast({ title: "No hay datos para exportar", variant: "destructive" });
+            return;
+        }
+
+        const dataForExcel = summaryByProfessional.map(row => ({
+            'Profesional / Staff': row.professionalName,
+            'Venta total': row.totalSales,
+            'Monto comisión': row.totalCommission,
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Comisiones");
+        XLSX.writeFile(workbook, `Reporte_Comisiones_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+        toast({
+            title: "Reporte generado",
+            description: "La descarga de tu reporte de comisiones ha comenzado.",
+        });
+    };
+    
+    const handleDownloadRequest = async () => {
+        if (!authCode) {
+            toast({ variant: 'destructive', title: 'Código requerido' });
+            return;
+        }
+
+        const authCodeQuery = firestoreQuery(
+            collection(db, 'codigos_autorizacion'),
+            where('code', '==', authCode),
+            where('active', '==', true),
+            where('download', '==', true)
+        );
+        
+        const querySnapshot = await getDocs(authCodeQuery);
+
+        if (querySnapshot.empty) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        } else {
+            toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
+            triggerDownload();
+            setIsDownloadModalOpen(false);
+            setAuthCode('');
+        }
+    };
   
   const isLocalAdmin = user?.role !== 'Administrador general';
 
@@ -352,7 +419,7 @@ export default function CommissionsPage() {
                     <CardTitle>Comisiones por Profesional</CardTitle>
                     <CardDescription>Resumen de comisiones generadas en el período seleccionado.</CardDescription>
                 </div>
-                <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
+                <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}><Download className="mr-2 h-4 w-4" /> Exportar</Button>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -402,6 +469,28 @@ export default function CommissionsPage() {
             summary={selectedProfessionalSummary}
         />
     )}
+
+    <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code">Código de Autorización</Label>
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

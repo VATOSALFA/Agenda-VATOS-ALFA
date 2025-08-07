@@ -15,14 +15,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User } from "lucide-react";
+import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client } from "@/lib/types";
-import { where, Timestamp } from "firebase/firestore";
+import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client, AuthCode } from "@/lib/types";
+import { where, Timestamp, collection, query, getDocs } from "firebase/firestore";
 import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-detail-modal";
 import { ProductSaleDetailModal, type ProductSaleDetail } from "@/components/products/sales/product-sale-detail-modal";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { db } from "@/lib/firebase";
 
 
 export interface AggregatedProductSale {
@@ -64,6 +77,8 @@ export default function ProductSalesPage() {
     const [selectedProductSummary, setSelectedProductSummary] = useState<AggregatedProductSale | null>(null);
     const [activeTab, setActiveTab] = useState('por-productos');
     const { toast } = useToast();
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+    const [authCode, setAuthCode] = useState('');
 
 
     const [activeFilters, setActiveFilters] = useState({
@@ -257,7 +272,7 @@ export default function ProductSalesPage() {
         setIsProductDetailModalOpen(true);
     }
 
-    const handleDownloadReport = () => {
+    const triggerDownload = () => {
         if (filteredProductItems.length === 0) {
             toast({ title: "No hay datos para exportar", variant: "destructive" });
             return;
@@ -314,6 +329,28 @@ export default function ProductSalesPage() {
             title: "Descarga iniciada",
             description: "Tu archivo de Excel se está descargando.",
         });
+    };
+
+    const handleDownloadRequest = async () => {
+        if (!authCode) {
+            toast({ variant: 'destructive', title: 'Código requerido' });
+            return;
+        }
+        const authCodeQuery = query(
+            collection(db, 'codigos_autorizacion'),
+            where('code', '==', authCode),
+            where('active', '==', true),
+            where('download', '==', true)
+        );
+        const querySnapshot = await getDocs(authCodeQuery);
+        if (querySnapshot.empty) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        } else {
+            toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
+            triggerDownload();
+            setIsDownloadModalOpen(false);
+            setAuthCode('');
+        }
     };
     
     return (
@@ -414,7 +451,11 @@ export default function ProductSalesPage() {
             <Card>
                 <CardHeader className="flex-row items-center justify-between">
                     <div><CardTitle>Detalle de la venta</CardTitle></div>
-                    <div className="flex items-center gap-2"><Button variant="outline" onClick={handleDownloadReport}><Download className="mr-2 h-4 w-4" /> Descargar reporte</Button></div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
+                            <Download className="mr-2 h-4 w-4" /> Descargar reporte
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <Tabs defaultValue="por-productos" onValueChange={setActiveTab}>
@@ -503,6 +544,28 @@ export default function ProductSalesPage() {
             onOpenChange={setIsProductDetailModalOpen}
             summary={selectedProductSummary}
         />
+
+        <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                        Requiere Autorización
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="auth-code">Código de Autorización</Label>
+                    <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+                </div>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
         </>
     );
 }

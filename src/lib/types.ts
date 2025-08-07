@@ -206,3 +206,13 @@ export interface User {
   permissions?: string[];
   local_id?: string;
 }
+
+export interface AuthCode {
+  id: string;
+  name: string;
+  active: boolean;
+  code: string;
+  reserves: boolean;
+  cashbox: boolean;
+  download: boolean;
+}

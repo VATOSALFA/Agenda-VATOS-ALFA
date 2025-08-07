@@ -17,7 +17,7 @@ import { CategoryModal } from "@/components/products/category-modal";
 import { BrandModal } from "@/components/products/brand-modal";
 import { PresentationModal } from "@/components/products/presentation-modal";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Product, ProductCategory, ProductBrand, ProductPresentation } from "@/lib/types";
+import type { Product, ProductCategory, ProductBrand, ProductPresentation, AuthCode } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -29,12 +29,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { doc, deleteDoc, updateDoc, increment } from "firebase/firestore";
+import { doc, deleteDoc, updateDoc, increment, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { sendStockAlert } from "@/ai/flows/send-stock-alert-flow";
 import { UploadProductsModal } from "@/components/products/upload-products-modal";
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
 
 
 export default function InventoryPage() {
@@ -44,6 +46,7 @@ export default function InventoryPage() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [authCode, setAuthCode] = useState('');
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -168,11 +171,50 @@ export default function InventoryPage() {
       return entities?.find(e => e.id === id)?.name || 'N/A';
   }
 
-  const handleDownload = () => {
-    // Logic to validate code and download file will be here
-    toast({ title: 'Código aceptado', description: 'Descargando inventario...' });
-    setIsDownloadModalOpen(false);
-  }
+  const triggerDownload = () => {
+    if (filteredProducts.length === 0) {
+        toast({ title: "No hay datos para exportar", variant: "destructive" });
+        return;
+    }
+    const dataForExcel = filteredProducts.map(p => ({
+        'Código de barras': p.barcode || '',
+        'Nombre': p.nombre,
+        'Categoría': getEntityName(p.category_id, categories),
+        'Marca': getEntityName(p.brand_id, brands),
+        'Formato/Presentación': getEntityName(p.presentation_id, presentations),
+        'Precio de venta al público': p.public_price,
+        'Cantidad en stock': p.stock,
+        'Activo': p.active ? 'Sí' : 'No',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
+    XLSX.writeFile(workbook, `inventario_VATOS_ALFA_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast({ title: 'Descarga iniciada', description: 'Tu archivo de inventario se está descargando.' });
+  };
+  
+  const handleDownloadRequest = async () => {
+    if (!authCode) {
+        toast({ variant: 'destructive', title: 'Código requerido' });
+        return;
+    }
+    const authCodeQuery = query(
+        collection(db, 'codigos_autorizacion'),
+        where('code', '==', authCode),
+        where('active', '==', true),
+        where('download', '==', true)
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+        toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    } else {
+        toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
+        triggerDownload();
+        setIsDownloadModalOpen(false);
+        setAuthCode('');
+    }
+  };
 
 
   return (
@@ -258,6 +300,9 @@ export default function InventoryPage() {
         <CardHeader>
             <div className="flex items-center justify-between">
                 <CardTitle>VATOS ALFA Barber Shop</CardTitle>
+                 <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
+                    <Download className="mr-2 h-4 w-4" /> Descargar inventario
+                </Button>
             </div>
         </CardHeader>
         <CardContent>
@@ -400,19 +445,19 @@ export default function InventoryPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                    ¿Está seguro que quieres descargar este archivo?
+                    Requiere Autorización
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                    Para descargar este archivo, es necesario un código de autorización. Por favor, ingréselo a continuación.
+                    Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="py-4">
                 <Label htmlFor="auth-code">Código de Autorización</Label>
-                <Input id="auth-code" type="password" placeholder="Ingrese el código" />
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
             </div>
             <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDownload}>Aceptar</AlertDialogAction>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>

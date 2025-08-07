@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -16,8 +17,8 @@ import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where, doc, deleteDoc } from "firebase/firestore";
-import type { Client, Local, Profesional, Service } from "@/lib/types";
+import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
+import type { Client, Local, Profesional, Service, AuthCode } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
 import {
@@ -153,6 +154,8 @@ export default function InvoicedSalesPage() {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+    const [authCode, setAuthCode] = useState('');
 
     const [queryKey, setQueryKey] = useState(0);
 
@@ -311,11 +314,12 @@ export default function InvoicedSalesPage() {
         }
     };
     
-    const handleDownloadExcel = () => {
+    const triggerDownload = () => {
         if (populatedSales.length === 0) {
             toast({
                 title: "No hay datos para exportar",
                 description: "No hay ventas en el período seleccionado.",
+                variant: 'destructive',
             });
             return;
         }
@@ -335,7 +339,6 @@ export default function InvoicedSalesPage() {
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Pagos");
     
-        // Trigger download
         XLSX.writeFile(workbook, `Pagos_VATOS_ALFA_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
     
         toast({
@@ -344,6 +347,31 @@ export default function InvoicedSalesPage() {
         });
     };
     
+    const handleDownloadRequest = async () => {
+        if (!authCode) {
+            toast({ variant: 'destructive', title: 'Código requerido' });
+            return;
+        }
+
+        const authCodeQuery = firestoreQuery(
+            collection(db, 'codigos_autorizacion'),
+            where('code', '==', authCode),
+            where('active', '==', true),
+            where('download', '==', true)
+        );
+        
+        const querySnapshot = await getDocs(authCodeQuery);
+
+        if (querySnapshot.empty) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        } else {
+            toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
+            triggerDownload();
+            setIsDownloadModalOpen(false);
+            setAuthCode('');
+        }
+    };
+
     const getSaleConcept = (sale: Sale) => {
         if (!sale.items || sale.items.length === 0) return 'N/A';
         const hasService = sale.items.some(item => item.tipo === 'servicio');
@@ -442,7 +470,7 @@ export default function InvoicedSalesPage() {
                         <CardDescription>Listado de ventas facturadas en el período seleccionado.</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={handleDownloadExcel}><Download className="mr-2 h-4 w-4" /> Descargar pagos</Button>
+                        <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}><Download className="mr-2 h-4 w-4" /> Descargar pagos</Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -576,6 +604,29 @@ export default function InvoicedSalesPage() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code">Código de Autorización</Label>
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+
         </>
     );
 }

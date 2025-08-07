@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -19,12 +20,15 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
-import type { AuthCode } from '@/app/admin/auth-codes/page';
+import { useToast } from '@/hooks/use-toast';
+import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { AuthCode } from '@/lib/types';
 
 interface AuthCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<AuthCode, 'id'>) => void;
+  onSave: () => void;
   code: AuthCode | null;
 }
 
@@ -42,6 +46,7 @@ type AuthCodeFormData = z.infer<typeof authCodeSchema>;
 export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!code;
+  const { toast } = useToast();
 
   const form = useForm<AuthCodeFormData>({
     resolver: zodResolver(authCodeSchema),
@@ -70,13 +75,27 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
     }
   }, [code, form, isOpen]);
 
-  const onSubmit = (data: AuthCodeFormData) => {
+  const onSubmit = async (data: AuthCodeFormData) => {
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      onSave(data);
-      setIsSubmitting(false);
-    }, 1000);
+    try {
+        if(isEditMode && code) {
+            const codeRef = doc(db, 'codigos_autorizacion', code.id);
+            await updateDoc(codeRef, data);
+            toast({ title: 'Código actualizado con éxito' });
+        } else {
+            await addDoc(collection(db, 'codigos_autorizacion'), {
+                ...data,
+                created_at: Timestamp.now(),
+            });
+            toast({ title: 'Código creado con éxito' });
+        }
+        onSave();
+    } catch (error) {
+        console.error("Error saving auth code:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el código.' });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -111,7 +130,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                   <FormItem>
                     <FormLabel>Código</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ingresa el código secreto" {...field} />
+                      <Input placeholder="Ingresa el código secreto" type="password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

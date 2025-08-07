@@ -286,43 +286,47 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                 <Button variant="ghost" className={cn(
-                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/finanzas')
-                     ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}>
-                  Finanzas <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start">
-                {finanzasNavLinks.map((item) => (
-                    item.isSeparator ? (
-                        <DropdownMenuSeparator key="separator" />
-                    ) : (
-                        <DropdownMenuItem key={item.href} asChild>
-                            <Link href={item.href!}>
-                                <span>{item.label}</span>
-                            </Link>
-                        </DropdownMenuItem>
-                    )
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {user?.role === 'Administrador general' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={cn(
+                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    pathname.startsWith('/finanzas')
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                  )}>
+                    Finanzas <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="start">
+                  {finanzasNavLinks.map((item, index) => (
+                      item.isSeparator ? (
+                          <DropdownMenuSeparator key={`sep-${index}`} />
+                      ) : (
+                          <DropdownMenuItem key={item.href} asChild>
+                              <Link href={item.href!}>
+                                  <span>{item.label}</span>
+                              </Link>
+                          </DropdownMenuItem>
+                      )
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-            <Link
-              href="/admin/profesionales"
-              className={cn(
-                'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                pathname.startsWith('/admin')
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-300 hover:bg-white/10 hover:text-white'
-              )}
-            >
-              Administración
-            </Link>
+            {user?.role === 'Administrador general' && (
+              <Link
+                href="/admin/profesionales"
+                className={cn(
+                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                  pathname.startsWith('/admin')
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}
+              >
+                Administración
+              </Link>
+            )}
 
           </nav>
           <div className="ml-auto flex items-center space-x-2">

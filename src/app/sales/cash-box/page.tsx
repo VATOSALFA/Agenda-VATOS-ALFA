@@ -84,6 +84,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const SummaryCard = ({
@@ -113,6 +114,7 @@ const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
 
 
 export default function CashBoxPage() {
+  const { user } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedLocalId, setSelectedLocalId] = useState<string>('todos');
   const [activeFilters, setActiveFilters] = useState<{
@@ -141,8 +143,10 @@ export default function CashBoxPage() {
     const today = new Date();
     const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
     setDateRange(initialDateRange);
-    setActiveFilters({ dateRange: initialDateRange, localId: 'todos' });
-  }, []);
+    const initialLocalId = user?.local_id || 'todos';
+    setSelectedLocalId(initialLocalId);
+    setActiveFilters({ dateRange: initialDateRange, localId: initialLocalId });
+  }, [user]);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
@@ -279,6 +283,7 @@ export default function CashBoxPage() {
   const efectivoEnCaja = ingresosEfectivo - totalEgresos;
   
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
+  const isLocalAdmin = user?.role !== 'Administrador general';
 
 
   return (
@@ -297,12 +302,12 @@ export default function CashBoxPage() {
             <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
                 <div className="space-y-2 flex-grow min-w-[200px]">
                 <label className="text-sm font-medium">Local</label>
-                <Select value={selectedLocalId} onValueChange={setSelectedLocalId} disabled={localesLoading}>
+                <Select value={selectedLocalId} onValueChange={setSelectedLocalId} disabled={isLocalAdmin || localesLoading}>
                     <SelectTrigger>
                     <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
                     </SelectTrigger>
                     <SelectContent>
-                    <SelectItem value="todos">Todos los locales</SelectItem>
+                    {!isLocalAdmin && <SelectItem value="todos">Todos los locales</SelectItem>}
                     {locales.map(local => (
                         <SelectItem key={local.id} value={local.id}>
                         {local.name}
@@ -621,5 +626,6 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 
 

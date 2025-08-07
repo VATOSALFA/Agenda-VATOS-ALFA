@@ -225,20 +225,25 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {mainNavLinks.filter(l => !['/', '/products', '/reports'].includes(l.href)).map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'px-3 py-2 rounded-md transition-colors',
-                  pathname.startsWith(href)
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}
-              >
-                {label}
-              </Link>
-            ))}
+            {mainNavLinks.filter(l => !['/', '/products', '/reports'].includes(l.href)).map(({ href, label }) => {
+                if (href === '/reminders' && user?.role !== 'Administrador general') {
+                    return null;
+                }
+                return (
+                    <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'px-3 py-2 rounded-md transition-colors',
+                      pathname.startsWith(href)
+                        ? 'bg-white/10 text-white'
+                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                    )}
+                  >
+                    {label}
+                  </Link>
+                );
+            })}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

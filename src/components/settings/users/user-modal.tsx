@@ -17,13 +17,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, Check, X } from 'lucide-react';
-import type { User } from '@/lib/types';
+import type { User, Local } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 interface RoleData {
     icon: React.ElementType;
@@ -45,6 +46,7 @@ const userSchema = z.object({
   celular: z.string().optional(),
   password: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
+  local_id: z.string().optional(),
   permissions: z.array(z.string()).optional(),
 });
 
@@ -54,6 +56,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!user;
   const { toast } = useToast();
+
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -73,6 +77,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             name: user.name, 
             email: user.email, 
             role: user.role, 
+            local_id: user.local_id,
             celular: user.celular || '', 
             password: user.password || '',
             permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
@@ -102,6 +107,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         const dataToSave: any = { ...data };
         if (!data.password || data.password === '') {
             delete dataToSave.password;
+        }
+
+        if(data.role === 'Administrador general') {
+          dataToSave.local_id = null;
         }
         
         if (isEditMode && user) {
@@ -195,6 +204,31 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
+
+                {selectedRoleName !== 'Administrador general' && (
+                  <FormField
+                    control={form.control}
+                    name="local_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Local asignado</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={localesLoading ? 'Cargando locales...' : "Seleccionar un local"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {!localesLoading && locales.map(local => (
+                                  <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 
                 {selectedRole && (
                     <div className="space-y-2 pt-4 border-t">

@@ -204,4 +204,5 @@ export interface User {
   celular?: string;
   password?: string;
   permissions?: string[];
+  local_id?: string;
 }

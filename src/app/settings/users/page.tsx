@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserCircle, Shield, ConciergeBell, Wrench, Store, Check, X, UserPlus, Loader2 } from "lucide-react";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { User } from '@/lib/types';
+import { User, Local } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserModal } from '@/components/settings/users/user-modal';
 import {
@@ -115,6 +115,9 @@ export default function UsersPage() {
   const { toast } = useToast();
   
   const { data: users, loading } = useFirestoreQuery<User>('usuarios', queryKey);
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+
+  const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(user => 
@@ -190,6 +193,7 @@ export default function UsersPage() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol asignado</TableHead>
+                <TableHead>Local asignado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -197,12 +201,12 @@ export default function UsersPage() {
               {loading ? (
                 Array.from({length: 5}).map((_, i) => (
                     <TableRow key={i}>
-                        <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
+                        <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
                     </TableRow>
                 ))
               ) : paginatedUsers.length === 0 ? (
                  <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                         No se encontraron usuarios.
                     </TableCell>
                  </TableRow>
@@ -211,6 +215,7 @@ export default function UsersPage() {
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>{user.role}</TableCell>
+                  <TableCell>{user.local_id ? localMap.get(user.local_id) : 'Todos'}</TableCell>
                   <TableCell className="text-right">
                     {user.role === 'Administrador general' ? (
                         <span className="text-xs text-muted-foreground">No se puede editar</span>

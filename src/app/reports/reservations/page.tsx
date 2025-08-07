@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,54 +9,29 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, Line, CartesianGrid } from 'recharts';
-import { Calendar as CalendarIcon, Search, CheckCircle, XCircle, Clock, AlertTriangle, Users, BookOpen, Truck, Store, Scissors, DollarSign, BarChart, LineChartIcon, PieChartIcon } from 'lucide-react';
-import { format } from 'date-fns';
+import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, Line, CartesianGrid, BarChart as RechartsBarChart, Bar } from 'recharts';
+import { Calendar as CalendarIcon, Search, CheckCircle, XCircle, Clock, AlertTriangle, Users, BookOpen, Truck, Store, Scissors, DollarSign, BarChart, LineChartIcon, PieChartIcon, Loader2 } from 'lucide-react';
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { Reservation, Service, Profesional } from '@/lib/types';
+import { where, Timestamp } from 'firebase/firestore';
 
 const reservationStatuses = [
-    { id: 'reservado', label: 'Reservado', icon: <BookOpen className="h-4 w-4 mr-2" /> },
-    { id: 'confirmado', label: 'Confirmado', icon: <CheckCircle className="h-4 w-4 mr-2" /> },
-    { id: 'asiste', label: 'Asiste', icon: <Users className="h-4 w-4 mr-2" /> },
-    { id: 'no-asiste', label: 'No asiste', icon: <XCircle className="h-4 w-4 mr-2" /> },
-    { id: 'cancelado', label: 'Cancelado', icon: <AlertTriangle className="h-4 w-4 mr-2" /> },
-    { id: 'en-espera', label: 'En espera', icon: <Clock className="h-4 w-4 mr-2" /> },
-    { id: 'pendiente', label: 'Pendiente', icon: <Clock className="h-4 w-4 mr-2" /> },
-];
-
-const serviceRankingData = [
-  { name: 'Corte Vatos', value: 400 },
-  { name: 'Afeitado Alfa', value: 300 },
-  { name: 'Corte y Barba', value: 300 },
-  { name: 'Diseño de Cejas', value: 200 },
-];
-
-const reservationsByDayData = [
-  { name: 'Lunes', value: 18 },
-  { name: 'Martes', value: 25 },
-  { name: 'Miércoles', value: 30 },
-  { name: 'Jueves', value: 45 },
-  { name: 'Viernes', value: 60 },
-  { name: 'Sábado', value: 80 },
-  { name: 'Domingo', value: 10 },
-];
-
-const reservationsByHourData = [
-  { hour: '09:00', Lunes: 1, Martes: 2, Miércoles: 1, Jueves: 3, Viernes: 5, Sábado: 8, Domingo: 0 },
-  { hour: '10:00', Lunes: 2, Martes: 3, Miércoles: 4, Jueves: 5, Viernes: 8, Sábado: 12, Domingo: 1 },
-  { hour: '11:00', Lunes: 3, Martes: 4, Miércoles: 5, Jueves: 7, Viernes: 10, Sábado: 15, Domingo: 2 },
-  { hour: '12:00', Lunes: 2, Martes: 3, Miércoles: 4, Jueves: 6, Viernes: 9, Sábado: 10, Domingo: 2 },
-  { hour: '13:00', Lunes: 1, Martes: 1, Miércoles: 1, Jueves: 2, Viernes: 3, Sábado: 5, Domingo: 1 },
-  { hour: '14:00', Lunes: 0, Martes: 0, Miércoles: 0, Jueves: 0, Viernes: 0, Sábado: 0, Domingo: 0 },
-  { hour: '15:00', Lunes: 2, Martes: 3, Miércoles: 4, Jueves: 5, Viernes: 6, Sábado: 8, Domingo: 1 },
-  { hour: '16:00', Lunes: 3, Martes: 4, Miércoles: 5, Jueves: 7, Viernes: 8, Sábado: 10, Domingo: 2 },
-  { hour: '17:00', Lunes: 2, Martes: 3, Miércoles: 4, Jueves: 6, Viernes: 7, Sábado: 9, Domingo: 1 },
-  { hour: '18:00', Lunes: 2, Martes: 2, Miércoles: 2, Jueves: 4, Viernes: 4, Sábado: 3, Domingo: 0 },
+    { id: 'Reservado', label: 'Reservado', icon: <BookOpen className="h-4 w-4 mr-2" /> },
+    { id: 'Confirmado', label: 'Confirmado', icon: <CheckCircle className="h-4 w-4 mr-2" /> },
+    { id: 'Asiste', label: 'Asiste', icon: <Users className="h-4 w-4 mr-2" /> },
+    { id: 'No asiste', label: 'No asiste', icon: <XCircle className="h-4 w-4 mr-2" /> },
+    { id: 'Cancelado', label: 'Cancelado', icon: <AlertTriangle className="h-4 w-4 mr-2" /> },
+    { id: 'En espera', label: 'En espera', icon: <Clock className="h-4 w-4 mr-2" /> },
+    { id: 'Pendiente', label: 'Pendiente', icon: <Clock className="h-4 w-4 mr-2" /> },
 ];
 
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
+const DAY_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c', '#d0ed57', '#ffc658'];
+
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -76,9 +51,100 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function ReservationsReportPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: new Date(2025, 6, 1),
-        to: new Date(2025, 6, 31),
+        from: startOfMonth(new Date()),
+        to: endOfMonth(new Date()),
     });
+    const [statusFilter, setStatusFilter] = useState('todos');
+    const [professionalFilter, setProfessionalFilter] = useState('todos');
+    const [serviceFilter, setServiceFilter] = useState('todos');
+    const [activeFilters, setActiveFilters] = useState({ dateRange, status: statusFilter, professional: professionalFilter, service: serviceFilter });
+
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+
+    const reservationQueryConstraints = useMemo(() => {
+        const constraints = [];
+        if (activeFilters.dateRange?.from) {
+            constraints.push(where('fecha', '>=', format(activeFilters.dateRange.from, 'yyyy-MM-dd')));
+        }
+        if (activeFilters.dateRange?.to) {
+            constraints.push(where('fecha', '<=', format(activeFilters.dateRange.to, 'yyyy-MM-dd')));
+        }
+        if (activeFilters.status !== 'todos') {
+            constraints.push(where('estado', '==', activeFilters.status));
+        }
+        if (activeFilters.professional !== 'todos') {
+            constraints.push(where('barbero_id', '==', activeFilters.professional));
+        }
+        if (activeFilters.service !== 'todos') {
+            constraints.push(where('items', 'array-contains', { servicio: activeFilters.service }))
+        }
+
+        return constraints;
+    }, [activeFilters]);
+
+    const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', JSON.stringify(activeFilters), ...reservationQueryConstraints);
+    
+    const isLoading = reservationsLoading || servicesLoading || professionalsLoading;
+    
+    const handleSearch = () => {
+        setActiveFilters({
+            dateRange,
+            status: statusFilter,
+            professional: professionalFilter,
+            service: serviceFilter,
+        });
+    }
+
+    const { totalReservations, totalRevenue, serviceRankingData, reservationsByDayData, reservationsByHourData } = useMemo(() => {
+        if (isLoading) return { totalReservations: 0, totalRevenue: 0, serviceRankingData: [], reservationsByDayData: [], reservationsByHourData: [] };
+
+        const serviceCount: Record<string, number> = {};
+        const dayCount: Record<string, number> = { 'Lunes': 0, 'Martes': 0, 'Miércoles': 0, 'Jueves': 0, 'Viernes': 0, 'Sábado': 0, 'Domingo': 0 };
+        const hourCount: Record<string, Record<string, number>> = {};
+
+        reservations.forEach(res => {
+            if (res.items && Array.isArray(res.items)) {
+                res.items.forEach(item => {
+                    const serviceName = item.servicio || 'Desconocido';
+                    serviceCount[serviceName] = (serviceCount[serviceName] || 0) + 1;
+                });
+            }
+
+            try {
+                const date = parseISO(res.fecha);
+                const dayName = format(date, 'EEEE', { locale: es });
+                dayCount[dayName] = (dayCount[dayName] || 0) + 1;
+                
+                const startHour = res.hora_inicio.substring(0, 2) + ':00';
+                 if (!hourCount[startHour]) {
+                    hourCount[startHour] = { 'Lunes': 0, 'Martes': 0, 'Miércoles': 0, 'Jueves': 0, 'Viernes': 0, 'Sábado': 0, 'Domingo': 0 };
+                }
+                hourCount[startHour][dayName] = (hourCount[startHour][dayName] || 0) + 1;
+
+            } catch (e) {
+                console.warn("Invalid date format in reservation:", res);
+            }
+        });
+        
+        const sortedServices = Object.entries(serviceCount).sort((a,b) => b[1] - a[1]).slice(0, 5);
+        
+        const hourKeys = Object.keys(hourCount).sort();
+        const formattedHourData = hourKeys.map(hour => ({
+            hour,
+            ...hourCount[hour]
+        }));
+
+
+        return {
+            totalReservations: reservations.length,
+            totalRevenue: reservations.reduce((acc, r) => acc + (r.precio || 0), 0),
+            serviceRankingData: sortedServices.map(([name, value]) => ({ name, value })),
+            reservationsByDayData: Object.entries(dayCount).map(([name, value]) => ({ name, value })),
+            reservationsByHourData: formattedHourData,
+        };
+    }, [reservations, isLoading]);
+
 
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -106,7 +172,7 @@ export default function ReservationsReportPage() {
                                 <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
                             </PopoverContent>
                         </Popover>
-                        <Select defaultValue="todos">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger className="w-[180px]">
                                 <SelectValue placeholder="Estado" />
                             </SelectTrigger>
@@ -117,58 +183,29 @@ export default function ReservationsReportPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button><Search className="mr-2 h-4 w-4" /> Buscar</Button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                        {reservationStatuses.map(status => (
-                            <div key={status.id} className="flex items-center space-x-2">
-                                <Checkbox id={status.id} />
-                                <label htmlFor={status.id} className="font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                    {status.label}
-                                </label>
-                            </div>
-                        ))}
+                        <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={professionalsLoading}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Profesional" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos</SelectItem>
+                                {professionals.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Select value={serviceFilter} onValueChange={setServiceFilter} disabled={servicesLoading}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Servicio" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos</SelectItem>
+                                {services.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Button onClick={handleSearch} disabled={isLoading}>
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Search className="mr-2 h-4 w-4" />} Buscar
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <aside className="lg:col-span-1">
-                    <Card>
-                        <CardHeader><CardTitle>Filtros Avanzados</CardTitle></CardHeader>
-                        <CardContent>
-                            <Accordion type="multiple" defaultValue={['general', 'locales']} className="w-full">
-                                <AccordionItem value="general">
-                                    <AccordionTrigger>General</AccordionTrigger>
-                                    <AccordionContent className="space-y-2">
-                                        <p className="text-muted-foreground text-xs">Filtros generales aquí.</p>
-                                    </AccordionContent>
-                                </AccordionItem>
-                                <AccordionItem value="locales">
-                                    <AccordionTrigger>Locales</AccordionTrigger>
-                                    <AccordionContent className="space-y-2">
-                                        <div className="flex items-center"><Checkbox id="local1" /><label htmlFor="local1" className="ml-2">VATOS ALFA Principal</label></div>
-                                        <div className="flex items-center"><Checkbox id="local2" /><label htmlFor="local2" className="ml-2">VATOS ALFA Norte</label></div>
-                                    </AccordionContent>
-                                </AccordionItem>
-                                <AccordionItem value="servicios">
-                                    <AccordionTrigger>Servicios</AccordionTrigger>
-                                     <AccordionContent className="space-y-2">
-                                        <p className="text-muted-foreground text-xs">Filtros de servicios aquí.</p>
-                                    </AccordionContent>
-                                </AccordionItem>
-                                <AccordionItem value="mensajeria">
-                                    <AccordionTrigger>Mensajería Móvil</AccordionTrigger>
-                                     <AccordionContent className="space-y-2">
-                                        <p className="text-muted-foreground text-xs">Filtros de mensajería.</p>
-                                    </AccordionContent>
-                                </AccordionItem>
-                            </Accordion>
-                        </CardContent>
-                    </Card>
-                </aside>
-
-                <main className="lg:col-span-3 space-y-6">
+                <main className="lg:col-span-4 space-y-6">
                     <div className="grid gap-4 md:grid-cols-2">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -176,7 +213,7 @@ export default function ReservationsReportPage() {
                                 <BookOpen className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">228</div>
+                                {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <div className="text-2xl font-bold">{totalReservations}</div>}
                             </CardContent>
                         </Card>
                         <Card>
@@ -185,7 +222,7 @@ export default function ReservationsReportPage() {
                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">$3,125,500</div>
+                               {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <div className="text-2xl font-bold">${totalRevenue.toLocaleString('es-CL')}</div>}
                             </CardContent>
                         </Card>
                     </div>
@@ -194,33 +231,38 @@ export default function ReservationsReportPage() {
                         <Card>
                             <CardHeader><CardTitle className="flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/> Ranking Servicios Utilizados</CardTitle></CardHeader>
                             <CardContent>
+                                {isLoading ? <div className="flex justify-center items-center h-[250px]"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
                                 <ResponsiveContainer width="100%" height={250}>
-                                    <RechartsPieChart>
-                                        <Pie data={serviceRankingData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                                    <RechartsBarChart layout="vertical" data={serviceRankingData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
+                                        <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} />
+                                        <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
                                             {serviceRankingData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
-                                        </Pie>
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend iconSize={10}/>
-                                    </RechartsPieChart>
+                                        </Bar>
+                                    </RechartsBarChart>
                                 </ResponsiveContainer>
+                                )}
                             </CardContent>
                         </Card>
                         <Card>
                             <CardHeader><CardTitle className="flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/> Reservas por Día de la Semana</CardTitle></CardHeader>
                             <CardContent>
+                                {isLoading ? <div className="flex justify-center items-center h-[250px]"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
                                 <ResponsiveContainer width="100%" height={250}>
                                     <RechartsPieChart>
                                         <Pie data={reservationsByDayData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
                                             {reservationsByDayData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                <Cell key={`cell-${index}`} fill={DAY_COLORS[index % DAY_COLORS.length]} />
                                             ))}
                                         </Pie>
                                         <Tooltip content={<CustomTooltip />} />
                                         <Legend iconSize={10}/>
                                     </RechartsPieChart>
                                 </ResponsiveContainer>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -228,6 +270,7 @@ export default function ReservationsReportPage() {
                     <Card>
                         <CardHeader><CardTitle className="flex items-center"><LineChartIcon className="mr-2 h-5 w-5"/> Reservas por Hora por Día</CardTitle></CardHeader>
                         <CardContent>
+                             {isLoading ? <div className="flex justify-center items-center h-[300px]"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
                             <ResponsiveContainer width="100%" height={300}>
                                 <RechartsLineChart data={reservationsByHourData}>
                                     <CartesianGrid strokeDasharray="3 3" />
@@ -235,15 +278,12 @@ export default function ReservationsReportPage() {
                                     <YAxis />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Legend />
-                                    <Line type="monotone" dataKey="Lunes" stroke={COLORS[0]} />
-                                    <Line type="monotone" dataKey="Martes" stroke={COLORS[1]} />
-                                    <Line type="monotone" dataKey="Miércoles" stroke={COLORS[2]} />
-                                    <Line type="monotone" dataKey="Jueves" stroke={COLORS[3]} />
-                                    <Line type="monotone" dataKey="Viernes" stroke={COLORS[4]} />
-                                    <Line type="monotone" dataKey="Sábado" stroke={COLORS[0]} strokeDasharray="5 5"/>
-                                    <Line type="monotone" dataKey="Domingo" stroke={COLORS[1]} strokeDasharray="5 5"/>
+                                    {Object.keys(dayCount).map((day, index) => (
+                                         <Line key={day} type="monotone" dataKey={day} stroke={DAY_COLORS[index % DAY_COLORS.length]} />
+                                    ))}
                                 </RechartsLineChart>
                             </ResponsiveContainer>
+                            )}
                         </CardContent>
                     </Card>
                 </main>

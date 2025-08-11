@@ -66,7 +66,6 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 const mainNavLinks = [
   { href: '/', label: 'Agenda', icon: Calendar },
-  { href: '/reminders', label: 'Recordatorios', icon: Bell },
   { href: '/clients', label: 'Clientes', icon: Users },
 ];
 
@@ -157,6 +156,18 @@ export default function Header() {
     }
     return name.substring(0, 2).toUpperCase();
   }
+  
+  const canSee = (section: 'reminders' | 'products' | 'reports' | 'finanzas' | 'admin' | 'settings') => {
+    if (!user || !user.role) return false;
+    if (user.role === 'Administrador general') return true;
+    if (user.role === 'Administrador local') {
+        return !['reminders', 'finanzas', 'admin', 'settings'].includes(section);
+    }
+    if (user.role.includes('Recepcionista')) {
+        return false;
+    }
+    return false;
+  }
 
   return (
     <>
@@ -226,7 +237,7 @@ export default function Header() {
             </DropdownMenu>
 
             {mainNavLinks.filter(l => !['/', '/products', '/reports'].includes(l.href)).map(({ href, label }) => {
-                if (href === '/reminders' && user?.role !== 'Administrador general') {
+                if (href === '/reminders' && !canSee('reminders')) {
                     return null;
                 }
                 return (
@@ -245,53 +256,57 @@ export default function Header() {
                 );
             })}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className={cn(
-                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/products')
-                     ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}>
-                  Productos <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start">
-                  {productsNavLinks.map(({href, label, icon: Icon}) => (
-                      <DropdownMenuItem key={href} asChild>
-                          <Link href={href}>
-                              <Icon className="mr-2 h-4 w-4" />
-                              <span>{label}</span>
-                          </Link>
-                      </DropdownMenuItem>
+            {canSee('products') && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={cn(
+                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    pathname.startsWith('/products')
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                  )}>
+                    Productos <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="start">
+                    {productsNavLinks.map(({href, label, icon: Icon}) => (
+                        <DropdownMenuItem key={href} asChild>
+                            <Link href={href}>
+                                <Icon className="mr-2 h-4 w-4" />
+                                <span>{label}</span>
+                            </Link>
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {canSee('reports') && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={cn(
+                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    pathname.startsWith('/reports')
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                  )}>
+                    Reportes <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="start">
+                  {reportsNavLinks.map(({href, label, icon: Icon}) => (
+                    <DropdownMenuItem key={href} asChild>
+                      <Link href={href}>
+                        <Icon className="mr-2 h-4 w-4" />
+                        <span>{label}</span>
+                      </Link>
+                    </DropdownMenuItem>
                   ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                 <Button variant="ghost" className={cn(
-                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/reports')
-                     ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}>
-                  Reportes <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start">
-                {reportsNavLinks.map(({href, label, icon: Icon}) => (
-                  <DropdownMenuItem key={href} asChild>
-                    <Link href={href}>
-                      <Icon className="mr-2 h-4 w-4" />
-                      <span>{label}</span>
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {user?.role === 'Administrador general' && (
+            {canSee('finanzas') && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -319,7 +334,7 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-            {user?.role === 'Administrador general' && (
+            {canSee('admin') && (
               <Link
                 href="/admin/profesionales"
                 className={cn(
@@ -357,7 +372,7 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            {user?.role === 'Administrador general' && (
+            {canSee('settings') && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                    <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">

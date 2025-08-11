@@ -149,7 +149,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     const userData = {
         name: profData.name,
         email: profData.email,
-        role: 'Staff',
+        role: 'Staff (Sin edición)',
     };
 
     if (userSnap.exists()) {

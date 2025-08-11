@@ -39,6 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 const FiltersSidebar = ({
     onApply,
@@ -49,7 +50,8 @@ const FiltersSidebar = ({
     serviceFilter, setServiceFilter,
     productFilter, setProductFilter,
     locales, professionals, services, products,
-    isLoading
+    isLoading,
+    isLocalAdmin,
   }: any) => {
 
     return (
@@ -80,10 +82,10 @@ const FiltersSidebar = ({
                 </div>
                  <div className="space-y-1">
                   <Label>Local/sede</Label>
-                  <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLoading}>
+                  <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLoading || isLocalAdmin}>
                     <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="todos">Todos los locales</SelectItem>
+                        {!isLocalAdmin && <SelectItem value="todos">Todos los locales</SelectItem>}
                         {locales.map((l: Local) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -128,6 +130,7 @@ const FiltersSidebar = ({
 }
 
 export default function ClientsPage() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -195,6 +198,12 @@ export default function ClientsPage() {
 
   const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading || productsLoading || salesLoading;
 
+  useEffect(() => {
+    if (user?.local_id) {
+        setLocalFilter(user.local_id);
+    }
+  }, [user]);
+
   const handleApplyFilters = () => {
     setActiveFilters({
       dateRange,
@@ -209,13 +218,13 @@ export default function ClientsPage() {
   
   const handleResetFilters = () => {
     setDateRange(undefined);
-    setLocalFilter('todos');
+    setLocalFilter(user?.local_id || 'todos');
     setProfessionalFilter('todos');
     setServiceFilter('todos');
     setProductFilter('todos');
     setActiveFilters({
         dateRange: undefined,
-        local: 'todos',
+        local: user?.local_id || 'todos',
         professional: 'todos',
         service: 'todos',
         product: 'todos'
@@ -409,6 +418,7 @@ export default function ClientsPage() {
     }
   };
 
+  const isLocalAdmin = user?.role !== 'Administrador general';
 
   return (
     <>
@@ -437,6 +447,7 @@ export default function ClientsPage() {
                 productFilter={productFilter} setProductFilter={setProductFilter}
                 locales={locales} professionals={professionals} services={services} products={products}
                 isLoading={isLoading}
+                isLocalAdmin={isLocalAdmin}
             />
           </aside>
 

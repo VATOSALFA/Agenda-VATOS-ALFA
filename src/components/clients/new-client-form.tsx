@@ -8,9 +8,11 @@ import { z } from 'zod';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format, parseISO, getYear, getMonth, getDate, isValid } from 'date-fns';
 import type { Client } from '@/lib/types';
+import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
+import { useDebounce } from 'use-debounce';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +28,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { DialogFooter } from '@/components/ui/dialog';
-import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
@@ -53,10 +55,25 @@ const months = Array.from({ length: 12 }, (_, i) => ({
   label: format(new Date(2000, i, 1), 'LLLL', { locale: es }),
 }));
 
+const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOutput, onAccept: (text: string) => void }) => {
+    if (!suggestion.hasCorrection) return null;
+    return (
+        <button type="button" onClick={() => onAccept(suggestion.correctedText)} className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 transition-colors p-1 rounded-md bg-blue-50 hover:bg-blue-100">
+            <Sparkles className="h-3 w-3" />
+            ¿Quisiste decir: <span className="font-semibold">{suggestion.correctedText}</span>?
+        </button>
+    )
+}
+
 export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!client;
+  
+  const [nombreSuggestion, setNombreSuggestion] = useState<SpellCheckOutput | null>(null);
+  const [apellidoSuggestion, setApellidoSuggestion] = useState<SpellCheckOutput | null>(null);
+  const [isCheckingNombre, setIsCheckingNombre] = useState(false);
+  const [isCheckingApellido, setIsCheckingApellido] = useState(false);
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -68,6 +85,47 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
       notas: '',
     },
   });
+  
+  const nombreValue = form.watch('nombre');
+  const apellidoValue = form.watch('apellido');
+  
+  const [debouncedNombre] = useDebounce(nombreValue, 750);
+  const [debouncedApellido] = useDebounce(apellidoValue, 750);
+
+  const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
+    if (type === 'nombre') {
+      setIsCheckingNombre(true);
+      setNombreSuggestion(null);
+    } else {
+      setIsCheckingApellido(true);
+      setApellidoSuggestion(null);
+    }
+    
+    try {
+        const result = await spellCheck(text);
+        if (result.hasCorrection) {
+            if (type === 'nombre') setNombreSuggestion(result);
+            else setApellidoSuggestion(result);
+        }
+    } catch (error) {
+        console.error("Spell check failed:", error);
+    } finally {
+        if (type === 'nombre') setIsCheckingNombre(false);
+        else setIsCheckingApellido(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    if (debouncedNombre) {
+      checkSpelling(debouncedNombre, 'nombre');
+    }
+  }, [debouncedNombre, checkSpelling]);
+  
+  useEffect(() => {
+    if (debouncedApellido) {
+      checkSpelling(debouncedApellido, 'apellido');
+    }
+  }, [debouncedApellido, checkSpelling]);
 
   useEffect(() => {
     if (isEditMode && client) {
@@ -164,9 +222,9 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Nombre</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Juan" {...field} />
-                  </FormControl>
+                  <FormControl><Input placeholder="Juan" {...field} /></FormControl>
+                   {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
+                   {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
                   <FormMessage />
                 </FormItem>
               )}
@@ -177,9 +235,9 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Pérez" {...field} />
-                  </FormControl>
+                  <FormControl><Input placeholder="Pérez" {...field} /></FormControl>
+                  {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
+                  {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
                   <FormMessage />
                 </FormItem>
               )}

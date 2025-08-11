@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import type { Profesional, Schedule } from '@/app/admin/profesionales/page';
+import type { Profesional, Schedule, Service, ServiceCategory } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Copy, UploadCloud, Plus, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Local } from '@/components/admin/locales/new-local-modal';
 import { ImageUploader } from '@/components/shared/image-uploader';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 
 interface EditProfesionalModalProps {
@@ -52,32 +53,6 @@ const daysOfWeek = [
     { id: 'domingo', label: 'Domingo' },
 ];
 
-const servicesByCategory = [
-  {
-    category: 'Barba',
-    services: [
-      { id: 'serv_01', name: 'Arreglo de barba, Afeitado clásico' },
-      { id: 'serv_02', name: 'Arreglo de barba expres' },
-    ],
-  },
-  {
-    category: 'Capilar',
-    services: [
-        { id: 'serv_06', name: 'Coloración Capilar' },
-        { id: 'serv_07', name: 'Corte y lavado de cabello' },
-        { id: 'serv_08', name: 'Corte clásico y moderno' },
-        { id: 'serv_09', name: 'Grecas' },
-    ]
-  },
-  {
-      category: 'Facial',
-      services: [
-          { id: 'serv_10', name: 'Arreglo de ceja' },
-          { id: 'serv_11', name: 'Facial completo con Masajeador' },
-      ]
-  }
-];
-
 const defaultSchedule: Schedule = {
   lunes: { enabled: true, start: '10:00', end: '21:00' },
   martes: { enabled: true, start: '10:00', end: '21:00' },
@@ -93,6 +68,22 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+  const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
+
+  const servicesByCategory = useMemo(() => {
+    if (servicesLoading || categoriesLoading) return [];
+    
+    const sortedCategories = [...categories].sort((a, b) => a.order - b.order);
+    
+    return sortedCategories.map(category => ({
+      category: category.name,
+      services: services.filter(service => service.category === category.id)
+    })).filter(group => group.services.length > 0);
+  }, [services, categories, servicesLoading, categoriesLoading]);
+
+  const allServices = useMemo(() => services.map(s => s.id), [services]);
   
   const form = useForm({
     defaultValues: profesional || {
@@ -245,6 +236,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   }
 
   const schedule = form.watch('schedule');
+  const selectedServices = form.watch('services');
 
   return (
     <>
@@ -286,7 +278,19 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                             <Label htmlFor="acceptsOnline">Este profesional acepta reservas en línea</Label>
                         </div>
                         <div className="space-y-4 pt-6 border-t">
-                            <h4 className="text-lg font-semibold">Selecciona los services que realiza el profesional</h4>
+                            <div className="flex justify-between items-center">
+                                <h4 className="text-lg font-semibold">Selecciona los servicios que realiza el profesional</h4>
+                                <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="select-all"
+                                    checked={selectedServices?.length === allServices.length}
+                                    onCheckedChange={(checked) => {
+                                        form.setValue('services', checked ? allServices : []);
+                                    }}
+                                />
+                                <Label htmlFor="select-all">Seleccionar todos</Label>
+                                </div>
+                            </div>
                             <Accordion type="multiple" defaultValue={servicesByCategory.map(s => s.category)}>
                                 {servicesByCategory.map(category => (
                                     <AccordionItem key={category.category} value={category.category}>

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -29,7 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Loader2, PlusCircle, Trash2, MessageCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2, PlusCircle, Trash2, MessageCircle, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Local } from '@/lib/types';
@@ -46,7 +47,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-
+import { TemplateSelectionModal, type Template } from '@/components/admin/whatsapp/template-selection-modal';
+import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
 
 interface WhatsappConfig {
     id: string;
@@ -63,6 +65,12 @@ const whatsappSchema = z.object({
 
 type WhatsappFormData = z.infer<typeof whatsappSchema>;
 
+const initialTemplates: Template[] = [
+    { id: 'confirmacion', name: 'Mensaje de confirmación', body: '¡Hola, {Nombre cliente}! Tu cita para {Servicio} ha sido confirmada para el {Fecha y hora reserva}. ¡Te esperamos!' },
+    { id: 'recordatorio', name: 'Recordatorio de cita', body: '¡No lo olvides, {Nombre cliente}! Mañana a las {Hora reserva} tienes tu cita para {Servicio}. Responde a este mensaje para confirmar tu asistencia.' },
+    { id: 'redes_sociales', name: 'Mensaje para redes sociales', body: '¡Hey! ¿Listo para tu próximo corte? Agenda tu cita directamente desde aquí: {Link de reserva}' },
+];
+
 export default function WhatsappPage() {
   const [queryKey, setQueryKey] = useState(0);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
@@ -70,6 +78,11 @@ export default function WhatsappPage() {
   const [configToDelete, setConfigToDelete] = useState<WhatsappConfig | null>(null);
   const { toast } = useToast();
   
+  const [templates, setTemplates] = useState<Template[]>(initialTemplates);
+  const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
+  const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+
   const form = useForm<WhatsappFormData>({
     resolver: zodResolver(whatsappSchema),
     defaultValues: { name: '', phone: '', local_id: '' },
@@ -103,6 +116,24 @@ export default function WhatsappPage() {
     }
   }
 
+  const handleOpenEditor = (template: Template) => {
+    setEditingTemplate(template);
+    setIsEditorModalOpen(true);
+    setIsSelectionModalOpen(false);
+  }
+
+  const handleSaveTemplate = (data: { name: string, body: string }) => {
+    if (editingTemplate) {
+      setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? { ...t, name: data.name, body: data.body } : t));
+      toast({ title: 'Plantilla actualizada' });
+    } else {
+        const newTemplate = { id: Date.now().toString(), ...data };
+        setTemplates(prev => [...prev, newTemplate]);
+        toast({ title: 'Plantilla creada' });
+    }
+    setIsEditorModalOpen(false);
+  }
+
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLoading = localesLoading || configsLoading;
 
@@ -113,112 +144,156 @@ export default function WhatsappPage() {
           <h2 className="text-3xl font-bold tracking-tight">Whatsapp</h2>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><MessageCircle className="h-6 w-6"/> Conecta tu número</CardTitle>
-                    <CardDescription>Agrega un número de WhatsApp y asígnalo a una de tus sucursales para enviar notificaciones.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                             <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Nombre</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Ej: WhatsApp Sucursal Principal" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                             <FormField
-                                control={form.control}
-                                name="phone"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Número de WhatsApp</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Ej: +521234567890" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                             <FormField
-                                control={form.control}
-                                name="local_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Sucursal</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={localesLoading ? 'Cargando...' : 'Seleccionar sucursal'} />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                            {locales.map((local) => (
-                                                <SelectItem key={local.id} value={local.id}>
-                                                {local.name}
-                                                </SelectItem>
-                                            ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                             <Button type="submit" disabled={form.formState.isSubmitting}>
-                                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Guardar
-                             </Button>
-                        </form>
-                    </Form>
-                </CardContent>
-            </Card>
+        <Tabs defaultValue="numeros">
+            <TabsList>
+                <TabsTrigger value="numeros">Números</TabsTrigger>
+                <TabsTrigger value="plantillas">Plantillas de Mensajes</TabsTrigger>
+            </TabsList>
+            <TabsContent value="numeros" className="mt-4">
+                <div className="grid gap-6 md:grid-cols-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><MessageCircle className="h-6 w-6"/> Conecta tu número</CardTitle>
+                            <CardDescription>Agrega un número de WhatsApp y asígnalo a una de tus sucursales para enviar notificaciones.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Form {...form}>
+                                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                                     <FormField
+                                        control={form.control}
+                                        name="name"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Nombre</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Ej: WhatsApp Sucursal Principal" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                     <FormField
+                                        control={form.control}
+                                        name="phone"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Número de WhatsApp</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Ej: +521234567890" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                     <FormField
+                                        control={form.control}
+                                        name="local_id"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Sucursal</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder={localesLoading ? 'Cargando...' : 'Seleccionar sucursal'} />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                    {locales.map((local) => (
+                                                        <SelectItem key={local.id} value={local.id}>
+                                                        {local.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                     <Button type="submit" disabled={form.formState.isSubmitting}>
+                                        {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                        Guardar
+                                     </Button>
+                                </form>
+                            </Form>
+                        </CardContent>
+                    </Card>
 
-             <Card>
-                <CardHeader>
-                    <CardTitle>Números Configurados</CardTitle>
-                    <CardDescription>Listado de los números de WhatsApp activos.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Número</TableHead>
-                                <TableHead>Sucursal</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {isLoading ? (
-                                <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
-                            ) : whatsappConfigs.length === 0 ? (
-                                <TableRow><TableCell colSpan={4} className="h-24 text-center">No hay números configurados.</TableCell></TableRow>
-                            ) : whatsappConfigs.map(config => (
-                                <TableRow key={config.id}>
-                                    <TableCell className="font-medium">{config.name}</TableCell>
-                                    <TableCell>{config.phone}</TableCell>
-                                    <TableCell>{localMap.get(config.local_id) || 'Desconocido'}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setConfigToDelete(config)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </TableCell>
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Números Configurados</CardTitle>
+                            <CardDescription>Listado de los números de WhatsApp activos.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Nombre</TableHead>
+                                        <TableHead>Número</TableHead>
+                                        <TableHead>Sucursal</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
+                                    ) : whatsappConfigs.length === 0 ? (
+                                        <TableRow><TableCell colSpan={4} className="h-24 text-center">No hay números configurados.</TableCell></TableRow>
+                                    ) : whatsappConfigs.map(config => (
+                                        <TableRow key={config.id}>
+                                            <TableCell className="font-medium">{config.name}</TableCell>
+                                            <TableCell>{config.phone}</TableCell>
+                                            <TableCell>{localMap.get(config.local_id) || 'Desconocido'}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setConfigToDelete(config)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            </TabsContent>
+            <TabsContent value="plantillas" className="mt-4">
+                <Card>
+                    <CardHeader className="flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Plantillas de Mensajes</CardTitle>
+                            <CardDescription>Crea y edita plantillas para tus notificaciones automáticas y campañas.</CardDescription>
+                        </div>
+                        <Button onClick={() => setIsSelectionModalOpen(true)}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Crear plantilla
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                         <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Nombre de la plantilla</TableHead>
+                                    <TableHead>Mensaje</TableHead>
+                                    <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-        </div>
+                            </TableHeader>
+                            <TableBody>
+                                {templates.map((template) => (
+                                    <TableRow key={template.id}>
+                                        <TableCell className="font-medium">{template.name}</TableCell>
+                                        <TableCell className="max-w-md truncate text-muted-foreground">{template.body}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="outline" size="sm" onClick={() => handleOpenEditor(template)}>
+                                                <Edit className="mr-2 h-4 w-4" /> Editar
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
       </div>
       
        {configToDelete && (
@@ -238,6 +313,20 @@ export default function WhatsappPage() {
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+      )}
+
+      <TemplateSelectionModal 
+        isOpen={isSelectionModalOpen}
+        onClose={() => setIsSelectionModalOpen(false)}
+        onSelectAndEdit={handleOpenEditor}
+      />
+      {editingTemplate && (
+          <TemplateEditorModal 
+            isOpen={isEditorModalOpen}
+            onClose={() => setIsEditorModalOpen(false)}
+            onSave={handleSaveTemplate}
+            template={editingTemplate}
+          />
       )}
     </>
   );

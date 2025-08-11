@@ -31,17 +31,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // For development, we are mocking an admin user to avoid logging in every time.
+    const mockAdminUser: CustomUser = {
+        uid: 'mock-admin-uid',
+        email: 'admin@vatosalfa.com',
+        displayName: 'Alejandro Pacheco',
+        role: 'Administrador general',
+        permissions: [],
+        local_id: undefined,
+        emailVerified: true,
+        isAnonymous: false,
+        metadata: {},
+        providerData: [],
+        providerId: 'password',
+        tenantId: null,
+        delete: async () => {},
+        getIdToken: async () => '',
+        getIdTokenResult: async () => ({} as any),
+        reload: async () => {},
+        toJSON: () => ({}),
+        phoneNumber: null,
+        photoURL: null,
+    };
+    setUser(mockAdminUser);
+    setLoading(false);
+
+    // This is the original logic. We can switch back to it when needed.
+    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // This is a real Firebase Auth user. For this app, we need to fetch our custom user data.
-        // Let's assume the document ID in 'usuarios' is the same as the Firebase Auth UID.
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
             const customData = userDocSnap.data();
             setUser({ ...firebaseUser, ...customData });
         } else {
-            // Fallback or handle case where custom user doc doesn't exist
             setUser(firebaseUser);
         }
       } else {
@@ -49,11 +73,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
+    */
   }, []);
 
   const signIn = async (email: string, pass: string) => {
+    // This function can remain for future use but won't be called in dev with the mock user.
     const usersRef = collection(db, "usuarios");
     const q = query(usersRef, where("email", "==", email));
     
@@ -70,13 +95,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userDoc = doc;
     });
 
-    // For a real app using Firebase Auth, this would be `signInWithEmailAndPassword`.
-    // Here we are simulating login based on a password field in Firestore.
     if (!userData.password || userData.password !== pass) {
         throw new Error("El correo o la contraseña son incorrectos.");
     }
     
-    const mockUser: CustomUser = {
+    const loggedInUser: CustomUser = {
         uid: userDoc!.id,
         email: userData.email,
         displayName: userData.name,
@@ -98,12 +121,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         photoURL: null,
     };
     
-    setUser(mockUser);
-    
-    return mockUser;
+    setUser(loggedInUser);
+    return loggedInUser;
   }
 
   const signOut = () => {
+    // In dev mode, we just clear the user state.
     setUser(null); 
     return Promise.resolve();
   }

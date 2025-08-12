@@ -17,20 +17,26 @@ export function useFirestoreQuery<T>(
   collectionName: string,
   keyOrConstraint?: any,
   ...queryConstraints: (QueryConstraint | undefined)[]
-): UseFirestoreQuery<T> {
+): UseFirestoreQuery<T> & { key: any, setKey: React.Dispatch<React.SetStateAction<any>> } {
+  const [internalKey, setInternalKey] = useState(0);
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
+  
+  let effectiveKey: any;
+  let constraints: (QueryConstraint | undefined)[];
 
-  let key: any = collectionName;
-  let constraints: (QueryConstraint | undefined)[] = [];
-
-  if (typeof keyOrConstraint === 'object' && keyOrConstraint !== null && 'type' in keyOrConstraint) {
-      constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
-  } else if (keyOrConstraint !== undefined) {
-      key = keyOrConstraint;
+  if (typeof keyOrConstraint === 'string' || typeof keyOrConstraint === 'number') {
+      effectiveKey = keyOrConstraint;
       constraints = queryConstraints;
+  } else if (keyOrConstraint === undefined) {
+      effectiveKey = internalKey;
+      constraints = queryConstraints;
+  } else if (keyOrConstraint && typeof keyOrConstraint.type === 'string') {
+      effectiveKey = internalKey;
+      constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
   } else {
+      effectiveKey = keyOrConstraint !== undefined ? keyOrConstraint : internalKey;
       constraints = queryConstraints;
   }
   
@@ -63,9 +69,7 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  // Using JSON.stringify on constraints makes sure the effect reruns when the query details change.
-  }, [collectionName, JSON.stringify(finalConstraints)]);
+  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey]);
 
-  return { data, loading, error };
+  return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }
-

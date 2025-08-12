@@ -1,29 +1,33 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Service, Profesional } from '@/lib/types';
+import type { Service, Profesional, Reservation } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowRight, ShoppingCart, User, Clock, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { ArrowRight, ShoppingCart, User, Clock, Calendar as CalendarIcon, Loader2, Info } from 'lucide-react';
+import { format, addMinutes, set } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { where } from 'firebase/firestore';
 
 export default function SchedulePage() {
+    const router = useRouter();
     const searchParams = useSearchParams();
-    const serviceIds = searchParams.get('services')?.split(',') || [];
+    const serviceIds = useMemo(() => searchParams.get('services')?.split(',') || [], [searchParams]);
     
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
     const [selectedProfessional, setSelectedProfessional] = useState<string>('any');
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+    const [isFetchingTimes, setIsFetchingTimes] = useState(false);
 
-    const { data: allServices, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
-    const { data: allProfessionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: allServices, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
+    const { data: allProfessionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
 
     const selectedServices = useMemo(() => {
         if (servicesLoading || serviceIds.length === 0) return [];
@@ -33,10 +37,8 @@ export default function SchedulePage() {
     const availableProfessionals = useMemo(() => {
         if (professionalsLoading || selectedServices.length === 0) return [];
         
-        // Filter professionals who are active and accept online bookings
         const activeProfessionals = allProfessionals.filter(p => p.active && p.acceptsOnline);
 
-        // Filter professionals who can perform ALL selected services
         return activeProfessionals.filter(prof => 
             serviceIds.every(serviceId => prof.services?.includes(serviceId))
         );
@@ -45,10 +47,75 @@ export default function SchedulePage() {
     const totalDuration = useMemo(() => selectedServices.reduce((acc, s) => acc + s.duration, 0), [selectedServices]);
     const totalPrice = useMemo(() => selectedServices.reduce((acc, s) => acc + s.price, 0), [selectedServices]);
     
-    // Mock available times for now
-    const availableTimes = ['10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '16:00', '16:30', '17:00'];
-    
+    const fetchReservationsForDay = useCallback(async (date: Date, professionalId: string) => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const reservationsRef = collection(db, 'reservas');
+        const q = query(reservationsRef, where('fecha', '==', dateStr), where('barbero_id', '==', professionalId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => doc.data() as Reservation);
+    }, []);
+
+    useEffect(() => {
+        if (!selectedDate || totalDuration === 0 || availableProfessionals.length === 0) return;
+
+        const getTimes = async () => {
+            setIsFetchingTimes(true);
+            const times: string[] = [];
+            
+            const professionalsToScan = selectedProfessional === 'any' 
+                ? availableProfessionals
+                : availableProfessionals.filter(p => p.id === selectedProfessional);
+
+            for(const prof of professionalsToScan) {
+                if (!prof.schedule) continue;
+
+                const dayOfWeek = format(selectedDate, 'eeee', { locale: es }).toLowerCase();
+                const daySchedule = prof.schedule[dayOfWeek as keyof typeof prof.schedule];
+
+                if (!daySchedule || !daySchedule.enabled) continue;
+
+                const reservations = await fetchReservationsForDay(selectedDate, prof.id);
+                const bookedSlots = reservations.map(r => ({
+                    start: parse(r.hora_inicio, 'HH:mm', new Date()),
+                    end: parse(r.hora_fin, 'HH:mm', new Date()),
+                }));
+
+                const [startH, startM] = daySchedule.start.split(':').map(Number);
+                let slotTime = set(selectedDate, { hours: startH, minutes: startM, seconds: 0 });
+                const [endH, endM] = daySchedule.end.split(':').map(Number);
+                const endTime = set(selectedDate, { hours: endH, minutes: endM, seconds: 0 });
+
+                while (slotTime < endTime) {
+                    const potentialEndTime = addMinutes(slotTime, totalDuration);
+                    if (potentialEndTime > endTime) break;
+
+                    const isBooked = bookedSlots.some(booked => 
+                        (slotTime >= booked.start && slotTime < booked.end) ||
+                        (potentialEndTime > booked.start && potentialEndTime <= booked.end)
+                    );
+
+                    if (!isBooked && !times.includes(format(slotTime, 'HH:mm'))) {
+                        times.push(format(slotTime, 'HH:mm'));
+                    }
+                    slotTime = addMinutes(slotTime, 15);
+                }
+            }
+            setAvailableTimes(times.sort());
+            setIsFetchingTimes(false);
+        };
+        getTimes();
+    }, [selectedDate, selectedProfessional, totalDuration, availableProfessionals, fetchReservationsForDay]);
+
     const isLoading = servicesLoading || professionalsLoading;
+
+    const handleNextStep = () => {
+        const params = new URLSearchParams();
+        params.set('services', serviceIds.join(','));
+        params.set('date', format(selectedDate!, 'yyyy-MM-dd'));
+        params.set('time', selectedTime!);
+        params.set('professional', selectedProfessional);
+        router.push(`/book/confirm?${params.toString()}`);
+    }
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -94,16 +161,20 @@ export default function SchedulePage() {
                         <div className="space-y-2">
                             <h4 className="font-semibold text-center">{selectedDate ? format(selectedDate, "EEEE, dd 'de' MMMM", { locale: es }) : 'Elige un día'}</h4>
                             <div className="grid grid-cols-3 gap-2">
-                                {isLoading ? Array.from({length: 9}).map((_, i) => <Skeleton key={i} className="h-9 w-full" />) :
-                                    availableTimes.map(time => (
-                                        <Button 
-                                            key={time} 
-                                            variant={selectedTime === time ? 'default' : 'outline'}
-                                            onClick={() => setSelectedTime(time)}
-                                        >
-                                            {time}
-                                        </Button>
-                                    ))
+                                {isFetchingTimes ? Array.from({length: 9}).map((_, i) => <Skeleton key={i} className="h-9 w-full" />) :
+                                    availableTimes.length > 0 ? (
+                                        availableTimes.map(time => (
+                                            <Button 
+                                                key={time} 
+                                                variant={selectedTime === time ? 'default' : 'outline'}
+                                                onClick={() => setSelectedTime(time)}
+                                            >
+                                                {time}
+                                            </Button>
+                                        ))
+                                    ) : (
+                                        <p className="col-span-3 text-center text-sm text-muted-foreground p-4">No hay horarios disponibles para este día. Por favor, selecciona otra fecha.</p>
+                                    )
                                 }
                             </div>
                         </div>
@@ -154,7 +225,7 @@ export default function SchedulePage() {
                             </div>
                         </div>
 
-                        <Button className="w-full" size="lg" disabled={!selectedTime}>
+                        <Button className="w-full" size="lg" disabled={!selectedTime} onClick={handleNextStep}>
                             Continuar <ArrowRight className="ml-2 h-4 w-4"/>
                         </Button>
                     </CardContent>

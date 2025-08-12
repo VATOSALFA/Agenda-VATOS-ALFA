@@ -14,7 +14,7 @@ import { ArrowRight, ShoppingCart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function BookPage() {
-    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where => where('active', '==', true));
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
     const [selectedServices, setSelectedServices] = useState<Service[]>([]);
     const router = useRouter();

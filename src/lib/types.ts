@@ -1,5 +1,7 @@
 
 
+import { Timestamp } from "firebase/firestore";
+
 export interface Client {
   id: string;
   nombre: string;
@@ -64,7 +66,7 @@ export interface Reservation {
     precio?: number;
     notas?: string;
     nota_interna?: string;
-    creado_en: any; // Firestore Timestamp
+    creado_en: Timestamp; // Firestore Timestamp
     canal_reserva?: string;
 }
 

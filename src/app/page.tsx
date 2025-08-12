@@ -1,9 +1,8 @@
-import AgendaView from "@/components/agenda/agenda-view";
+
+'use client';
+
+import BookPage from './book/page';
 
 export default function Home() {
-  return (
-    <div className="h-[calc(100vh-4rem)]">
-      <AgendaView />
-    </div>
-  );
+  return <BookPage />;
 }

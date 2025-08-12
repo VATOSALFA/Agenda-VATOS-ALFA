@@ -11,11 +11,13 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowRight, ShoppingCart } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function BookPage() {
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
     const [selectedServices, setSelectedServices] = useState<Service[]>([]);
+    const router = useRouter();
 
     const servicesByCategory = useMemo(() => {
         if (categoriesLoading || servicesLoading) return [];
@@ -41,6 +43,11 @@ export default function BookPage() {
     const totalPrice = useMemo(() => selectedServices.reduce((acc, s) => acc + s.price, 0), [selectedServices]);
 
     const isLoading = servicesLoading || categoriesLoading;
+
+    const handleNextStep = () => {
+        const serviceIds = selectedServices.map(s => s.id).join(',');
+        router.push(`/book/schedule?services=${serviceIds}`);
+    }
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -123,7 +130,7 @@ export default function BookPage() {
                                         <span>${totalPrice.toLocaleString('es-CL')}</span>
                                     </div>
                                 </div>
-                                <Button className="w-full" size="lg" disabled={selectedServices.length === 0}>
+                                <Button className="w-full" size="lg" disabled={selectedServices.length === 0} onClick={handleNextStep}>
                                     Elegir Fecha y Hora <ArrowRight className="ml-2 h-4 w-4"/>
                                 </Button>
                             </div>

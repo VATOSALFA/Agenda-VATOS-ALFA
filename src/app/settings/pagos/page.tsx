@@ -32,7 +32,7 @@ export default function PagosAgendaProPage() {
         }
     });
     
-    const collectionUrl = 'https://vatosalfabarbershop.site.agendapro.com/mx/link-cobro';
+    const collectionUrl = 'https://vatos-alfa-barbershop.web.app/link-cobro';
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(collectionUrl);

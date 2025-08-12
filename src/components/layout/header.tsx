@@ -120,7 +120,7 @@ export default function Header() {
   const logoUrl = empresaData?.[0]?.logo_url;
   const { user, signOut } = useAuth();
 
-  const websiteUrl = 'vatosalfabarbershop.site.agendapro.co';
+  const websiteUrl = 'vatosalfabarbershop.site.agendapro.com/mx';
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(websiteUrl);

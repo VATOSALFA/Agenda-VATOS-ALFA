@@ -44,7 +44,7 @@ export default function IntegrationsPage() {
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">Integraciones</h2>
                 <p className="text-muted-foreground">
-                    Conecta AgendaPro con tus redes sociales y sitio web para aumentar tus reservas.
+                    Conecta Agenda VATOS ALFA con tus redes sociales y sitio web para aumentar tus reservas.
                 </p>
             </div>
 
@@ -68,7 +68,7 @@ export default function IntegrationsPage() {
                             </div>
                             <div className="space-y-2">
                                 <Image src="https://placehold.co/600x400.png" data-ai-hint="website link form" alt="Paso 3" width={600} height={400} className="rounded-lg border" />
-                                <p><span className="font-bold">3.</span> Pega el link de tu sitio web de AgendaPro y ¡listo!</p>
+                                <p><span className="font-bold">3.</span> Pega el link de tu sitio web de Agenda VATOS ALFA y ¡listo!</p>
                             </div>
                         </div>
                     </CardContent>
@@ -89,7 +89,7 @@ export default function IntegrationsPage() {
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-center"><Image src="https://placehold.co/250x500.png" data-ai-hint="social media profile" alt="Paso 2" width={250} height={500} className="rounded-lg border" /></div>
-                                <p className="text-center"><span className="font-bold">2.</span> Agrega el link de tu sitio web de AgendaPro en el campo "Sitio web".</p>
+                                <p className="text-center"><span className="font-bold">2.</span> Agrega el link de tu sitio web de Agenda VATOS ALFA en el campo "Sitio web".</p>
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-center"><Image src="https://placehold.co/250x500.png" data-ai-hint="user profile social" alt="Paso 3" width={250} height={500} className="rounded-lg border" /></div>
@@ -103,7 +103,7 @@ export default function IntegrationsPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><Globe className="h-6 w-6" /> Sitio web</CardTitle>
                         <CardDescription>
-                            Para insertar AgendaPro en tu sitio web, copia y pega el siguiente código en el HTML.
+                            Para insertar Agenda VATOS ALFA en tu sitio web, copia y pega el siguiente código en el HTML.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

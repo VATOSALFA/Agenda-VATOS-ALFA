@@ -32,9 +32,15 @@ export default function SchedulePage() {
     
     const availableProfessionals = useMemo(() => {
         if (professionalsLoading || selectedServices.length === 0) return [];
-        // This logic will be more complex, for now we show all
-        return allProfessionals.filter(p => p.active && p.acceptsOnline);
-    }, [allProfessionals, selectedServices, professionalsLoading]);
+        
+        // Filter professionals who are active and accept online bookings
+        const activeProfessionals = allProfessionals.filter(p => p.active && p.acceptsOnline);
+
+        // Filter professionals who can perform ALL selected services
+        return activeProfessionals.filter(prof => 
+            serviceIds.every(serviceId => prof.services?.includes(serviceId))
+        );
+    }, [allProfessionals, serviceIds, professionalsLoading, selectedServices.length]);
 
     const totalDuration = useMemo(() => selectedServices.reduce((acc, s) => acc + s.duration, 0), [selectedServices]);
     const totalPrice = useMemo(() => selectedServices.reduce((acc, s) => acc + s.price, 0), [selectedServices]);
@@ -64,6 +70,9 @@ export default function SchedulePage() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                        )}
+                         { !isLoading && availableProfessionals.length === 0 && (
+                            <p className="text-sm text-muted-foreground mt-2">No hay profesionales disponibles que ofrezcan todos los servicios seleccionados.</p>
                         )}
                     </CardContent>
                 </Card>
@@ -154,3 +163,4 @@ export default function SchedulePage() {
         </div>
     );
 }
+

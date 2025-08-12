@@ -1,8 +1,8 @@
 
 'use client';
 
-import BookPage from './book/page';
+import AgendaView from '@/components/agenda/agenda-view';
 
 export default function Home() {
-  return <BookPage />;
+  return <AgendaView />;
 }

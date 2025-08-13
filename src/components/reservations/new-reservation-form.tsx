@@ -154,7 +154,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hours, minutes };
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (initialData && form && services.length > 0) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
@@ -171,12 +171,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
         const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
 
+        const defaultItems = [{ 
+            servicio: '', 
+            barbero_id: isEditMode ? '' : (initialData as any).barbero_id || '' 
+        }];
+
         form.reset({
             cliente_id: initialData.cliente_id,
             items: initialData.items?.length ? initialData.items.map(i => ({ 
                 servicio: services.find(s => s.name === i.servicio)?.id || '',
                 barbero_id: i.barbero_id || '' 
-            })) : [{ servicio: '', barbero_id: '' }],
+            })) : defaultItems,
             fecha,
             hora_inicio_hora: startHour,
             hora_inicio_minuto: startMinute,
@@ -190,7 +195,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             local_id: initialData.local_id
         });
     }
-}, [initialData, form, isOpen, services]);
+}, [initialData, form, isOpen, services, isEditMode]);
   
   // Recalculate price and end time when items change
   useEffect(() => {

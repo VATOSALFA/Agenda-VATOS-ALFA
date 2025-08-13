@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -11,7 +10,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, getDay, addMinutes } from 'date-fns';
+import { parse, format, set, getDay, addMinutes, getHours, getMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -55,7 +54,8 @@ const reservationSchema = z.object({
     })
   ).min(1, 'Debes agregar al menos un servicio.'),
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  hora_inicio: z.string().min(1, 'Selecciona hora.'),
+  hora_inicio_hora: z.string().min(1, "Selecciona una hora."),
+  hora_inicio_minuto: z.string().min(1, "Selecciona un minuto."),
   precio: z.coerce.number().optional().default(0),
   estado: z.string().optional(),
   notas: z.string().optional(),
@@ -92,7 +92,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  const [calculatedEndTime, setCalculatedEndTime] = useState<string | null>(null);
+  const [calculatedEndTime, setCalculatedEndTime] = useState<{hour: string, minute: string} | null>(null);
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -122,7 +122,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const watchedItems = form.watch('items');
   const selectedDate = form.watch('fecha');
-  const selectedStartTime = form.watch('hora_inicio');
+  const selectedStartHour = form.watch('hora_inicio_hora');
+  const selectedStartMinute = form.watch('hora_inicio_minuto');
   const selectedClientId = form.watch('cliente_id');
 
   const selectedClient = useMemo(() => {
@@ -134,18 +135,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return new Map(services.map(s => [s.id, s]));
   }, [services]);
 
-  const timeSlots = useMemo(() => {
-    const startHour = 10;
-    const endHour = 21;
-    const slots = [];
-    let currentTime = set(new Date(), { hours: startHour, minutes: 0 });
-    const endTime = set(new Date(), { hours: endHour, minutes: 0 });
-
-    while (currentTime <= endTime) {
-        slots.push(format(currentTime, 'HH:mm'));
-        currentTime = addMinutes(currentTime, 15);
-    }
-    return slots;
+  const timeOptions = useMemo(() => {
+    const hours = Array.from({ length: 12 }, (_, i) => 10 + i); // 10 AM to 9 PM
+    const minutes = ['00', '15', '30', '45'];
+    return { hours, minutes };
   }, []);
 
   useEffect(() => {
@@ -162,6 +155,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             fecha = new Date((initialData.fecha as any).seconds * 1000);
         }
 
+        const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
+
         form.reset({
             cliente_id: initialData.cliente_id,
             items: initialData.items?.length ? initialData.items.map(i => ({ 
@@ -169,7 +164,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 barbero_id: i.barbero_id || '' 
             })) : [{ servicio: '', barbero_id: '' }],
             fecha,
-            hora_inicio: initialData.hora_inicio,
+            hora_inicio_hora: startHour,
+            hora_inicio_minuto: startMinute,
             estado: initialData.estado,
             precio: initialData.precio || 0,
             notas: initialData.notas || '',
@@ -194,12 +190,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
     form.setValue('precio', totalPrice, { shouldDirty: true });
     
-    if (selectedDate && selectedStartTime && totalDuration > 0) {
+    if (selectedDate && selectedStartHour && selectedStartMinute && totalDuration > 0) {
       try {
-          const [h, m] = selectedStartTime.split(':').map(Number);
-          const startTime = set(selectedDate, { hours: h, minutes: m });
+          const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
           const endTime = addMinutes(startTime, totalDuration);
-          setCalculatedEndTime(format(endTime, 'HH:mm'));
+          setCalculatedEndTime({
+              hour: format(endTime, 'HH'),
+              minute: format(endTime, 'mm')
+          });
       } catch (e) {
           console.error("Error calculating end time", e);
           setCalculatedEndTime(null);
@@ -207,11 +205,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     } else {
         setCalculatedEndTime(null);
     }
-  }, [JSON.stringify(watchedItems), servicesMap, form, selectedDate, selectedStartTime]);
+  }, [JSON.stringify(watchedItems), servicesMap, form, selectedDate, selectedStartHour, selectedStartMinute]);
 
 
   async function onSubmit(data: any) {
     setIsSubmitting(true);
+
+    const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     if (!calculatedEndTime) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo calcular la hora de fin. Revisa los datos.'});
         setIsSubmitting(false);
@@ -230,12 +230,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           }
       });
 
-      const dataToSave: Partial<Reservation> = {
+      const dataToSave: Partial<Reservation> & {hora_inicio?: string} = {
         cliente_id: data.cliente_id,
         items: itemsToSave,
         fecha: formattedDate,
-        hora_inicio: data.hora_inicio,
-        hora_fin: calculatedEndTime,
+        hora_inicio: hora_inicio,
+        hora_fin: `${calculatedEndTime.hour}:${calculatedEndTime.minute}`,
         estado: data.estado || 'Reservado',
         precio: data.precio,
         notas: data.notas || '',
@@ -265,7 +265,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     clientPhone: client.telefono,
                     serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
                     reservationDate: formattedDate,
-                    reservationTime: data.hora_inicio,
+                    reservationTime: hora_inicio,
                 }).then(() => {
                     toast({ title: 'Notificación de WhatsApp enviada.' });
                 }).catch(err => {
@@ -372,24 +372,28 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   </FormItem>
                 )}
               />
-              <FormField control={form.control} name="hora_inicio" render={({field}) => (
-                <FormItem>
+                <div className="space-y-2">
                     <FormLabel>Hora</FormLabel>
-                     <div className="flex items-center gap-2">
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger></FormControl>
-                            <SelectContent>{timeSlots.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                        </Select>
-                        {calculatedEndTime && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
-                                <span>-</span>
-                                <span>{calculatedEndTime}</span>
+                    <div className="flex items-center gap-2">
+                        <div className="flex-grow space-y-1">
+                            <p className="text-xs text-muted-foreground text-center">Inicio</p>
+                            <div className="flex items-center gap-1">
+                                <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <span>:</span>
+                                <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             </div>
-                        )}
+                        </div>
+                        <span className="pt-6 px-1">a</span>
+                        <div className="flex-grow space-y-1">
+                            <p className="text-xs text-muted-foreground text-center">Fin</p>
+                            <div className="flex items-center gap-1">
+                                <Input disabled value={calculatedEndTime?.hour || ''} placeholder="HH" className="bg-muted"/>
+                                <span>:</span>
+                                <Input disabled value={calculatedEndTime?.minute || ''} placeholder="MM" className="bg-muted"/>
+                            </div>
+                        </div>
                     </div>
-                     <FormMessage/>
-                </FormItem>
-                )} />
+                </div>
             </div>
 
              {selectedClient ? (

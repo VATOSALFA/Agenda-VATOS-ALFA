@@ -272,8 +272,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         hora_fin,
         estado: data.estado || 'Reservado',
         precio: data.precio,
-        notas: data.notas || '',
-        nota_interna: data.nota_interna || '',
+        notas: data.notas,
+        nota_interna: data.nota_interna,
         notifications: data.notifications,
       };
       
@@ -384,59 +384,21 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
           {/* Main reservation fields */}
           <div className="space-y-4">
-             {selectedClient ? (
-                <Card>
-                    <CardContent className="p-4">
-                         <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-4">
-                                <Avatar className="h-10 w-10">
-                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
-                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            ) : (
-                <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                    <FormItem>
-                        <div className="flex justify-between items-center">
-                           <FormLabel>Cliente</FormLabel>
-                           <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-                              <DialogTrigger asChild>
-                                 <Button type="button" variant="link" size="sm" className="h-auto p-0">
-                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                 </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-lg">
-                                 <DialogHeader>
-                                    <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-                                    <DialogDescription>
-                                        Completa la información para registrar un nuevo cliente en el sistema.
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                 <NewClientForm onFormSubmit={handleClientCreated} />
-                              </DialogContent>
-                           </Dialog>
-                        </div>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )}/>
-            )}
+            <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                <FormItem>
+                    <div className="flex justify-between items-center">
+                        <FormLabel>Cliente</FormLabel>
+                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                        </Button>
+                    </div>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                        <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                </FormItem>
+            )}/>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}

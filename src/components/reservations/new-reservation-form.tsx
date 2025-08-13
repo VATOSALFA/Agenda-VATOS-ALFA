@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -34,15 +33,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
 import type { Profesional, Service, Reservation } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Checkbox } from '../ui/checkbox';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 
@@ -56,10 +53,7 @@ const reservationSchema = z.object({
     })
   ).min(1, 'Debes agregar al menos un servicio.'),
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  hora_inicio_h: z.string().min(1, 'Selecciona hora.'),
-  hora_inicio_m: z.string().min(1, 'Selecciona minuto.'),
-  hora_fin_h: z.string().min(1, 'Selecciona hora.'),
-  hora_fin_m: z.string().min(1, 'Selecciona minuto.'),
+  hora_inicio: z.string().min(1, 'Selecciona hora.'),
   precio: z.coerce.number().optional().default(0),
   estado: z.string().optional(),
   notas: z.string().optional(),
@@ -70,9 +64,6 @@ const reservationSchema = z.object({
     whatsapp_notification: z.boolean().default(true),
     whatsapp_reminder: z.boolean().default(true),
   }).optional()
-}).refine(data => `${data.hora_fin_h}:${data.hora_fin_m}` > `${data.hora_inicio_h}:${data.hora_inicio_m}`, {
-  message: 'La hora de fin debe ser posterior a la hora de inicio.',
-  path: ['hora_fin_h'],
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -95,13 +86,11 @@ const statusOptions = [
     { value: 'En espera', label: 'En espera', color: 'bg-green-500' },
 ];
 
-const minutesOptions = ['00', '15', '30', '45'];
-
-
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [calculatedEndTime, setCalculatedEndTime] = useState<string | null>(null);
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -131,61 +120,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const watchedItems = form.watch('items');
   const selectedDate = form.watch('fecha');
-  const selectedStartHour = form.watch('hora_inicio_h');
-  const selectedStartMinute = form.watch('hora_inicio_m');
-  const selectedClientId = form.watch('cliente_id');
-
-  const selectedClient = useMemo(() => {
-    return clients.find(c => c.id === selectedClientId)
-  }, [selectedClientId, clients]);
+  const selectedStartTime = form.watch('hora_inicio');
 
   const getServiceData = useCallback((serviceId: string) => {
     if (!services) return null;
     return services.find(s => s.id === serviceId);
   }, [services]);
 
-  const { hoursOptions } = useMemo(() => {
+  const timeSlots = useMemo(() => {
     const startHour = 10;
     const endHour = 21;
-    
-    const hOptions = [];
-    for (let i = startHour; i <= endHour; i++) {
-        hOptions.push(String(i).padStart(2, '0'));
-    }
+    const slots = [];
+    let currentTime = set(new Date(), { hours: startHour, minutes: 0 });
+    const endTime = set(new Date(), { hours: endHour, minutes: 0 });
 
-    return { hoursOptions: hOptions };
+    while (currentTime <= endTime) {
+        slots.push(format(currentTime, 'HH:mm'));
+        currentTime = addMinutes(currentTime, 15);
+    }
+    return slots;
   }, []);
 
-  // Real-time availability check for multiple items
   useEffect(() => {
-    form.clearErrors('items'); 
-    if (watchedItems && selectedDate && selectedStartHour && selectedStartMinute) {
-      watchedItems.forEach((item, index) => {
-          if (item.barbero_id) {
-              const professional = professionals.find(p => p.id === item.barbero_id);
-              if (!professional || !professional.schedule) return;
-
-              const dayOfWeekIndex = getDay(selectedDate);
-              const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-              const dayOfWeek = dayNames[dayOfWeekIndex];
-              const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
-              
-              const selectedTime = `${selectedStartHour}:${selectedStartMinute}`;
-
-              if (!schedule || !schedule.enabled || selectedTime < schedule.start || selectedTime >= schedule.end) {
-                form.setError(`items.${index}.barbero_id`, {
-                    type: 'manual',
-                    message: `Horario no disponible para ${professional.name}`
-                });
-              }
-          }
-      })
-    }
-  }, [watchedItems, selectedDate, selectedStartHour, selectedStartMinute, professionals, form]);
-
-
-  useEffect(() => {
-    if (initialData && form) {
+    if (initialData && form && services.length > 0) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
             const dateParts = initialData.fecha.split('-').map(Number);
@@ -197,25 +154,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         } else if ((initialData.fecha as any)?.seconds) {
             fecha = new Date((initialData.fecha as any).seconds * 1000);
         }
-        
-        const [h, m] = initialData.hora_inicio?.split(':') || ['',''];
-        const [fh, fm] = initialData.hora_fin?.split(':') || ['', ''];
 
-      form.reset({
-        cliente_id: initialData.cliente_id,
-        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.servicio || '', barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
-        fecha,
-        hora_inicio_h: h,
-        hora_inicio_m: m,
-        hora_fin_h: fh,
-        hora_fin_m: fm,
-        estado: initialData.estado,
-        precio: 'precio' in initialData ? initialData.precio || 0 : 0,
-        notas: initialData.notas || '',
-        nota_interna: initialData.nota_interna || '',
-      });
+        form.reset({
+            cliente_id: initialData.cliente_id,
+            items: initialData.items?.length ? initialData.items.map(i => ({ 
+                servicio: services.find(s => s.name === i.servicio)?.id || '',
+                barbero_id: i.barbero_id || '' 
+            })) : [{ servicio: '', barbero_id: '' }],
+            fecha,
+            hora_inicio: initialData.hora_inicio,
+            estado: initialData.estado,
+            precio: initialData.precio || 0,
+            notas: initialData.notas || '',
+            nota_interna: initialData.nota_interna || '',
+            notifications: initialData.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true }
+        });
     }
-  }, [initialData, form, isOpen]);
+}, [initialData, form, isOpen, services]);
   
   // Recalculate price and end time when items change
   useEffect(() => {
@@ -232,25 +187,30 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
     form.setValue('precio', totalPrice, { shouldDirty: true });
     
-    if (selectedDate && selectedStartHour && selectedStartMinute) {
+    if (selectedDate && selectedStartTime && totalDuration > 0) {
       try {
-          const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
+          const [h, m] = selectedStartTime.split(':').map(Number);
+          const startTime = set(selectedDate, { hours: h, minutes: m });
           const endTime = addMinutes(startTime, totalDuration);
-          
-          form.setValue('hora_fin_h', format(endTime, 'HH'), { shouldDirty: true });
-          form.setValue('hora_fin_m', format(endTime, 'mm'), { shouldDirty: true });
+          setCalculatedEndTime(format(endTime, 'HH:mm'));
       } catch (e) {
           console.error("Error calculating end time", e);
+          setCalculatedEndTime(null);
       }
+    } else {
+        setCalculatedEndTime(null);
     }
-  }, [watchedItems, services, getServiceData, form, selectedDate, selectedStartHour, selectedStartMinute]);
+  }, [watchedItems, services, getServiceData, form, selectedDate, selectedStartTime]);
 
 
   async function onSubmit(data: any) {
     setIsSubmitting(true);
+    if (!calculatedEndTime) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo calcular la hora de fin. Revisa los datos.'});
+        setIsSubmitting(false);
+        return;
+    }
     try {
-      const hora_inicio = `${data.hora_inicio_h}:${data.hora_inicio_m}`;
-      const hora_fin = `${data.hora_fin_h}:${data.hora_fin_m}`;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
       
       const itemsToSave = data.items.map((item: any) => {
@@ -267,8 +227,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         cliente_id: data.cliente_id,
         items: itemsToSave,
         fecha: formattedDate,
-        hora_inicio,
-        hora_fin,
+        hora_inicio: data.hora_inicio,
+        hora_fin: calculatedEndTime,
         estado: data.estado || 'Reservado',
         precio: data.precio,
         notas: data.notas || '',
@@ -298,7 +258,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     clientPhone: client.telefono,
                     serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
                     reservationDate: formattedDate,
-                    reservationTime: hora_inicio,
+                    reservationTime: data.hora_inicio,
                 }).then(() => {
                     toast({ title: 'Notificación de WhatsApp enviada.' });
                 }).catch(err => {
@@ -383,6 +343,48 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
           {/* Main reservation fields */}
           <div className="space-y-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <FormField
+                control={form.control}
+                name="fecha"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Fecha</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : <span>Selecciona una fecha</span>}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField control={form.control} name="hora_inicio" render={({field}) => (
+                <FormItem>
+                    <FormLabel>Hora</FormLabel>
+                     <div className="flex items-center gap-2">
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger></FormControl>
+                            <SelectContent>{timeSlots.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                        </Select>
+                        {calculatedEndTime && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+                                <span>-</span>
+                                <span>{calculatedEndTime}</span>
+                            </div>
+                        )}
+                    </div>
+                     <FormMessage/>
+                </FormItem>
+                )} />
+            </div>
+
             <FormField control={form.control} name="cliente_id" render={({ field }) => (
                 <FormItem>
                     <div className="flex justify-between items-center">
@@ -398,52 +400,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     <FormMessage />
                 </FormItem>
             )}/>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="fecha"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Fecha</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "EEEE dd 'de' MMMM 'de' yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <FormLabel>Hora Inicio</FormLabel>
-                      <div className="flex items-center gap-2">
-                          <FormField control={form.control} name="hora_inicio_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={`start_h_${h}`} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
-                          <span>:</span>
-                          <FormField control={form.control} name="hora_inicio_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM"/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={`start_m_${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
-                      </div>
-                  </div>
-                   <div>
-                      <FormLabel>Hora Fin</FormLabel>
-                      <div className="flex items-center gap-2">
-                          <FormField control={form.control} name="hora_fin_h" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{hoursOptions.map(h => <SelectItem key={`end_h_${h}`} value={h}>{h}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
-                          <span>:</span>
-                          <FormField control={form.control} name="hora_fin_m" render={({field}) => (<FormItem className="flex-1"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM"/></SelectTrigger></FormControl><SelectContent>{minutesOptions.map(m => <SelectItem key={`end_m_${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>)} />
-                      </div>
-                  </div>
-              </div>
-            </div>
-
             
             <div className="space-y-4">
                 {fields.map((field, index) => (
-                    <Card key={field.id} className="p-4 relative">
+                    <Card key={field.id} className="p-4 relative bg-muted/50">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
                                 <FormItem>
@@ -480,33 +440,52 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           </div>
 
           {/* Additional Info */}
-          <div className="space-y-4 pt-6 border-t px-6">
-            <h3 className="font-semibold text-lg">Información adicional</h3>
-             <FormField control={form.control} name="precio" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Precio</FormLabel>
-                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                        <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
-                    </div>
-                    <FormMessage />
-                </FormItem>
-            )}/>
-            <FormField control={form.control} name="notas" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Notas compartidas con el cliente</FormLabel>
-                    <FormControl><Textarea rows={4} placeholder="Estas notas serán visibles para el cliente" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )}/>
-             <FormField control={form.control} name="nota_interna" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Nota interna</FormLabel>
-                    <FormControl><Textarea rows={4} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )}/>
-          </div>
+          <Accordion type="single" collapsible className="px-6">
+            <AccordionItem value="item-1">
+                <AccordionTrigger>Información adicional</AccordionTrigger>
+                <AccordionContent className="space-y-4 pt-2">
+                     <FormField control={form.control} name="precio" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Precio</FormLabel>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )}/>
+                    <FormField control={form.control} name="notas" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Notas compartidas con el cliente</FormLabel>
+                            <FormControl><Textarea rows={4} placeholder="Estas notas serán visibles para el cliente" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}/>
+                     <FormField control={form.control} name="nota_interna" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Nota interna</FormLabel>
+                            <FormControl><Textarea rows={4} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}/>
+                     <div className="space-y-3 pt-4 border-t">
+                        <h4 className="font-semibold">Notificaciones Adicionales</h4>
+                         <FormField control={form.control} name="notifications.email_notification" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar email de notificación de reserva</FormLabel></FormItem>
+                         )}/>
+                          <FormField control={form.control} name="notifications.email_reminder" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar email de recordatorio de reserva</FormLabel></FormItem>
+                         )}/>
+                          <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel></FormItem>
+                         )}/>
+                          <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel></FormItem>
+                         )}/>
+                     </div>
+                </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
         
         <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
@@ -525,7 +504,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return <FormContent />;
   }
 
-  // This part is for when the form is a standalone dialog
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

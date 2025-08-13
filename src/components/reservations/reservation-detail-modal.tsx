@@ -102,14 +102,13 @@ export function ReservationDetailModal({
   const handleViewPayment = async () => {
     setIsLoadingSale(true);
     try {
-        // This logic assumes a `reservationId` field is stored on the sale document.
-        // If not, a more complex query would be needed (e.g., by date, client, and amount).
         const salesQuery = query(collection(db, 'ventas'), where('reservationId', '==', reservation.id));
         const salesSnapshot = await getDocs(salesQuery);
 
         if (!salesSnapshot.empty) {
-            const saleData = salesSnapshot.docs[0].data() as Sale;
-            setSaleForReservation({ ...saleData, id: salesSnapshot.docs[0].id });
+            const saleDoc = salesSnapshot.docs[0];
+            const saleData = saleDoc.data() as Sale;
+            setSaleForReservation({ ...saleData, id: saleDoc.id });
             setIsSaleDetailModalOpen(true);
         } else {
             toast({

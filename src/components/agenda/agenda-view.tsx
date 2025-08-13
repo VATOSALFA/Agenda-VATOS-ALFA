@@ -353,18 +353,16 @@ export default function AgendaView() {
     if (!selectedReservation || !clients || !services) return;
     const client = clients.find(c => c.id === selectedReservation.cliente_id);
     if (client && selectedReservation.items) {
-        // Find the full service objects corresponding to the items in the reservation
         const cartItems = selectedReservation.items.map(item => {
-            const service = services.find(s => s.name === item.servicio);
-            // Return a structure that includes the professional ID for this specific item
-            return service ? { ...service, barbero_id: item.barbero_id } : null;
+            const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
+            return service ? { ...service, barbero_id: item.barbero_id, nombre: service.name } : null;
         }).filter((i): i is Service & { barbero_id: string } => !!i);
 
         setSaleInitialData({
             client,
-            items: cartItems, // This now includes barbero_id per item
+            items: cartItems,
             reservationId: selectedReservation.id,
-            local_id: selectedReservation.local_id // Pass the local_id
+            local_id: selectedReservation.local_id
         });
         setIsDetailModalOpen(false);
         setIsSaleSheetOpen(true);

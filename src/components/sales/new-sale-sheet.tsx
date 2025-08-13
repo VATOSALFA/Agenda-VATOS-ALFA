@@ -102,6 +102,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [clientQueryKey, setClientQueryKey] = useState(0);
+  const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
   
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
@@ -216,6 +217,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         form.setValue('cliente_id', initialData.client.id);
         if(initialData.local_id) {
             form.setValue('local_id', initialData.local_id);
+        }
+        if(initialData.reservationId) {
+            setReservationId(initialData.reservationId);
         }
         const initialCartItems = initialData.items.map(item => {
             const tipo = 'duration' in item ? 'servicio' : 'producto';
@@ -340,14 +344,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             creado_por: 'admin'
         };
 
-        if (initialData?.reservationId) {
-            saleDataToSave.reservationId = initialData.reservationId;
+        if (reservationId) {
+            saleDataToSave.reservationId = reservationId;
         }
 
         transaction.set(ventaRef, saleDataToSave);
 
-        if (initialData?.reservationId) {
-            const reservationRef = doc(db, 'reservas', initialData.reservationId);
+        if (reservationId) {
+            const reservationRef = doc(db, 'reservas', reservationId);
             transaction.update(reservationRef, { 
                 pago_estado: 'Pagado',
                 estado: 'Asiste'

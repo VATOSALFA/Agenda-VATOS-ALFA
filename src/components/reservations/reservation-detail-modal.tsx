@@ -29,6 +29,7 @@ import {
   Save,
   Trash2,
   Send,
+  Eye,
 } from 'lucide-react';
 import type { Reservation } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
@@ -108,7 +109,7 @@ export function ReservationDetailModal({
             <div className="flex justify-between items-start">
                 <div>
                     <p className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</p>
-                    <p className="text-sm text-muted-foreground">{reservation.items ? reservation.items.map(i => i.nombre || i.servicio).join(', ') : (reservation as any).servicio}</p>
+                    <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
                 </div>
                 <Badge variant={reservation.pago_estado === 'Pagado' ? 'default' : 'secondary'} className={cn(reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800')}>
                     {reservation.pago_estado}
@@ -121,9 +122,11 @@ export function ReservationDetailModal({
                   <p className="pl-6">{format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", {locale: es})}</p>
                   <p className="pl-6">{reservation.hora_inicio} - {reservation.hora_fin}</p>
                 </div>
-                <div>
-                  <p className="font-medium flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" /> Profesional</p>
-                  <p className="pl-6">{reservation.professionalNames || 'N/A'}</p>
+                 <div>
+                  <p className="font-medium flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" /> Servicios</p>
+                  <ul className="list-disc pl-10">
+                    {reservation.items ? reservation.items.map((i, idx) => <li key={idx}>{i.nombre || i.servicio}</li>) : <li>{(reservation as any).servicio}</li>}
+                  </ul>
                 </div>
             </div>
 
@@ -169,12 +172,21 @@ export function ReservationDetailModal({
             </div>
           </div>
           <DialogFooter className="p-6 border-t flex justify-between">
-              <Button variant="destructive" onClick={() => setIsCancelModalOpen(true)}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
-              </Button>
-               <Button onClick={onPay} className="bg-primary hover:bg-primary/90">
-                  <CreditCard className="mr-2 h-4 w-4" /> Pagar
-              </Button>
+              {reservation.pago_estado !== 'Pagado' ? (
+                <Button variant="destructive" onClick={() => setIsCancelModalOpen(true)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
+                </Button>
+              ) : <div />}
+              
+              {reservation.pago_estado !== 'Pagado' ? (
+                <Button onClick={onPay} className="bg-primary hover:bg-primary/90">
+                    <CreditCard className="mr-2 h-4 w-4" /> Pagar
+                </Button>
+              ) : (
+                <Button onClick={() => toast({ title: 'Funcionalidad en desarrollo' })}>
+                    <Eye className="mr-2 h-4 w-4" /> Ver Pago
+                </Button>
+              )}
           </DialogFooter>
       </DialogContent>
     </Dialog>

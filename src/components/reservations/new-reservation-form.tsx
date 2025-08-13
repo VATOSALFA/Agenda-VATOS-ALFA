@@ -271,8 +271,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         hora_fin,
         estado: data.estado || 'Reservado',
         precio: data.precio,
-        notas: data.notas,
-        nota_interna: data.nota_interna,
+        notas: data.notas || '',
+        nota_interna: data.nota_interna || '',
         notifications: data.notifications,
       };
       

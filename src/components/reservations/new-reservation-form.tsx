@@ -42,6 +42,7 @@ import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
+import { Avatar, AvatarFallback } from '../ui/avatar';
 
 
 const reservationSchema = z.object({
@@ -94,7 +95,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
   
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(reservationSchema),
@@ -121,6 +122,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const watchedItems = form.watch('items');
   const selectedDate = form.watch('fecha');
   const selectedStartTime = form.watch('hora_inicio');
+  const selectedClientId = form.watch('cliente_id');
+
+  const selectedClient = useMemo(() => {
+    return clients.find(c => c.id === selectedClientId)
+  }, [selectedClientId, clients]);
 
   const getServiceData = useCallback((serviceId: string) => {
     if (!services) return null;
@@ -385,22 +391,47 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 )} />
             </div>
 
-            <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                <FormItem>
-                    <div className="flex justify-between items-center">
-                        <FormLabel>Cliente</FormLabel>
-                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                        </Button>
-                    </div>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                        <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-            )}/>
-            
+             {selectedClient ? (
+                <Card>
+                    <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-4">
+                                <Avatar className="h-10 w-10">
+                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            ) : (
+                <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                    <FormItem>
+                        <div className="flex justify-between items-center">
+                            <FormLabel>Cliente</FormLabel>
+                            <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                            </Button>
+                        </div>
+                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}/>
+            )}
+
             <div className="space-y-4">
                 {fields.map((field, index) => (
                     <Card key={field.id} className="p-4 relative bg-muted/50">
@@ -476,12 +507,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           <FormField control={form.control} name="notifications.email_reminder" render={({ field }) => (
                             <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar email de recordatorio de reserva</FormLabel></FormItem>
                          )}/>
-                          <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel></FormItem>
-                         )}/>
-                          <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel></FormItem>
-                         )}/>
+                          {selectedClient?.telefono && (
+                            <>
+                                <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
+                                    <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
+                                    <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel></FormItem>
+                                )}/>
+                            </>
+                          )}
                      </div>
                 </AccordionContent>
             </AccordionItem>

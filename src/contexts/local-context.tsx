@@ -16,15 +16,19 @@ export function LocalProvider({ children }: { children: ReactNode }) {
   const [selectedLocalId, setSelectedLocalId] = useState<string | null>(null);
   
   useEffect(() => {
-      // If user has a specific local_id, force that one.
-      if (user?.local_id) {
-          setSelectedLocalId(user.local_id);
+    if (user) {
+      // If the user has a specific local_id assigned (e.g., local admin, receptionist),
+      // force that local and don't allow changing it from other components that might
+      // try to set a default.
+      if (user.local_id) {
+        setSelectedLocalId(user.local_id);
       }
-      // If the user becomes null (logged out), reset the localId.
-      if (!user) {
-        setSelectedLocalId(null);
-      }
+    } else {
+      // If the user logs out, reset the selected local.
+      setSelectedLocalId(null);
+    }
   }, [user]);
+
 
   const value = useMemo(() => ({
     selectedLocalId,

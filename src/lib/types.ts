@@ -43,6 +43,7 @@ export interface Profesional {
     services: string[];
     schedule?: Schedule;
     order: number;
+    local_id: string; // Added local_id to associate professional with a local
     defaultCommission?: { value: number; type: '%' | '$' };
     comisionesPorServicio?: { [key: string]: { value: number, type: '%' | '$' } };
     comisionesPorProducto?: { [key: string]: { value: number, type: '%' | '$' } };
@@ -68,6 +69,7 @@ export interface Reservation {
     nota_interna?: string;
     creado_en: Timestamp; // Firestore Timestamp
     canal_reserva?: string;
+    local_id?: string; // Added local_id to reservations
 }
 
 export interface Schedule {

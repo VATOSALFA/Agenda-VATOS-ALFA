@@ -202,24 +202,28 @@ export default function AgendaView() {
 
 
   const reservationsQueryConstraint = useMemo(() => {
-    if (!date) return undefined;
-    return where('fecha', '==', format(date, 'yyyy-MM-dd'));
-  }, [date]);
+    if (!date || !selectedLocalId) return undefined;
+    return [
+        where('fecha', '==', format(date, 'yyyy-MM-dd')),
+        where('local_id', '==', selectedLocalId)
+    ];
+  }, [date, selectedLocalId]);
   
-  const reservationsQueryKey = useMemo(() => `reservations-${date ? format(date, 'yyyy-MM-dd') : ''}-${queryKey}`, [date, queryKey]);
-  const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${queryKey}`, [date, queryKey]);
+  const reservationsQueryKey = useMemo(() => `reservations-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, queryKey, selectedLocalId]);
+  const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, queryKey, selectedLocalId]);
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, reservationsQueryConstraint);
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, reservationsQueryConstraint);
+  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
+  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
   
   const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading;
 
   const filteredProfessionals = useMemo(() => {
+    const professionalsOfLocal = professionals.filter(p => p.local_id === selectedLocalId);
     if (selectedProfessionalFilter === 'todos') {
-      return professionals;
+      return professionalsOfLocal;
     }
-    return professionals.filter(p => p.id === selectedProfessionalFilter);
-  }, [professionals, selectedProfessionalFilter]);
+    return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
+  }, [professionals, selectedProfessionalFilter, selectedLocalId]);
 
   const refreshData = () => setQueryKey(prev => prev + 1);
 
@@ -312,6 +316,7 @@ export default function AgendaView() {
         barbero_id: popoverState.barberId,
         fecha: date,
         hora_inicio: popoverState.time,
+        local_id: selectedLocalId,
       });
       setIsReservationModalOpen(true);
       setPopoverState(null);
@@ -378,9 +383,9 @@ export default function AgendaView() {
   const handleCancelReservation = async (reservationId: string) => {
     try {
         const resRef = doc(db, 'reservas', reservationId);
-        await updateDoc(resRef, { estado: 'Cancelado' });
+        await deleteDoc(resRef);
         toast({
-            title: "Reserva cancelada con éxito",
+            title: "Reserva eliminada con éxito",
         });
         setIsCancelModalOpen(false);
         refreshData();

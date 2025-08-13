@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -67,7 +68,8 @@ const reservationSchema = z.object({
     email_reminder: z.boolean().default(true),
     whatsapp_notification: z.boolean().default(true),
     whatsapp_reminder: z.boolean().default(true),
-  }).optional()
+  }).optional(),
+  local_id: z.string().min(1, 'Se requiere un local.')
 }).refine(data => {
     if (data.hora_inicio_hora && data.hora_inicio_minuto && data.hora_fin_hora && data.hora_fin_minuto) {
         const start = parseInt(data.hora_inicio_hora) * 60 + parseInt(data.hora_inicio_minuto);
@@ -184,7 +186,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             precio: initialData.precio || 0,
             notas: initialData.notas || '',
             nota_interna: initialData.nota_interna || '',
-            notifications: initialData.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true }
+            notifications: initialData.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true },
+            local_id: initialData.local_id
         });
     }
 }, [initialData, form, isOpen, services]);
@@ -248,6 +251,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
         notifications: data.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true },
+        local_id: data.local_id
       };
       
       if (isEditMode && initialData?.id) {

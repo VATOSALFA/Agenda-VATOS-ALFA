@@ -128,10 +128,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId)
   }, [selectedClientId, clients]);
-
-  const getServiceData = useCallback((serviceId: string) => {
-    if (!services) return null;
-    return services.find(s => s.id === serviceId);
+  
+  const servicesMap = useMemo(() => {
+    if (!services) return new Map<string, Service>();
+    return new Map(services.map(s => [s.id, s]));
   }, [services]);
 
   const timeSlots = useMemo(() => {
@@ -184,7 +184,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     if (!watchedItems || !services) return;
     
     const { totalPrice, totalDuration } = watchedItems.reduce((acc, currentItem) => {
-        const service = getServiceData(currentItem.servicio);
+        const service = servicesMap.get(currentItem.servicio);
         if (service) {
             acc.totalPrice += service.price || 0;
             acc.totalDuration += service.duration || 0;
@@ -207,7 +207,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     } else {
         setCalculatedEndTime(null);
     }
-  }, [watchedItems, services, getServiceData, form, selectedDate, selectedStartTime]);
+  }, [watchedItems, servicesMap, form, selectedDate, selectedStartTime]);
 
 
   async function onSubmit(data: any) {
@@ -230,7 +230,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           }
       });
 
-      const dataToSave = {
+      const dataToSave: Partial<Reservation> = {
         cliente_id: data.cliente_id,
         items: itemsToSave,
         fecha: formattedDate,
@@ -257,7 +257,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
         
-        if (dataToSave.notifications.whatsapp_notification) {
+        if (dataToSave.notifications?.whatsapp_notification) {
             const client = clients.find(c => c.id === data.cliente_id);
             if (client && client.telefono) {
                 sendWhatsappConfirmation({
@@ -569,4 +569,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </>
   );
 }
-

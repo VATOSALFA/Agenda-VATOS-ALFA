@@ -16,7 +16,7 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   authInstance: Auth;
-  signIn: (email: string, pass: string) => Promise<any>;
+  signIn: (email: string, pass: string) => Promise<CustomUser | null>;
   signOut: () => Promise<void>;
 }
 
@@ -78,14 +78,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, pass: string) => {
-    // This function can remain for future use but won't be called in dev with the mock user.
     const usersRef = collection(db, "usuarios");
     const q = query(usersRef, where("email", "==", email));
     
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-        throw new Error("El correo o la contraseña son incorrectos.");
+        return null;
     }
     
     let userData: any = null;
@@ -96,7 +95,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (!userData.password || userData.password !== pass) {
-        throw new Error("El correo o la contraseña son incorrectos.");
+        return null;
     }
     
     const loggedInUser: CustomUser = {

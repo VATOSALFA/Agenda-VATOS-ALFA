@@ -40,7 +40,7 @@ interface EditProfesionalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: () => void;
-  local: Local | null;
+  local: Local | null; // This might be deprecated if we fetch all locales
 }
 
 const daysOfWeek = [
@@ -71,6 +71,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
   const servicesByCategory = useMemo(() => {
     if (servicesLoading || categoriesLoading) return [];
@@ -95,11 +96,12 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         schedule: defaultSchedule,
         biography: '',
         avatar: 'https://placehold.co/100x100',
+        local_id: '',
     },
   });
   
   const timeOptions = useMemo(() => {
-    if (!local || !local.schedule) {
+    if (!locales || locales.length === 0) {
         // Fallback if local data is not available
         return Array.from({ length: 48 }, (_, i) => {
             const hour = Math.floor(i / 2);
@@ -107,18 +109,16 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             return `${String(hour).padStart(2, '0')}:${minute}`;
         });
     }
-
-    const start = local.schedule.lunes.start; // Assuming schedule is consistent across days
-    const end = local.schedule.lunes.end;
+    const scheduleSource = locales.find(l => l.id === form.watch('local_id'))?.schedule || defaultSchedule;
     
-    const [startHour, startMinute] = start.split(':').map(Number);
-    const [endHour, endMinute] = end.split(':').map(Number);
+    const [startH, startM] = scheduleSource.lunes.start.split(':').map(Number);
+    const [endH, endM] = scheduleSource.lunes.end.split(':').map(Number);
 
     const options = [];
-    let currentHour = startHour;
-    let currentMinute = startMinute;
+    let currentHour = startH;
+    let currentMinute = startM;
 
-    while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
+    while (currentHour < endH || (currentHour === endH && currentMinute <= endM)) {
         options.push(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
         currentMinute += 30;
         if (currentMinute >= 60) {
@@ -127,20 +127,21 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         }
     }
     return options;
-  }, [local]);
+  }, [locales, form.watch('local_id')]);
 
   useEffect(() => {
     if(isOpen) {
-        form.reset(profesional ? 
+        const defaultValues = profesional ? 
             { ...profesional, schedule: profesional.schedule || defaultSchedule } 
             : {
                 name: '', email: '', active: true, acceptsOnline: true, services: [],
                 schedule: defaultSchedule,
-                biography: '', avatar: 'https://placehold.co/100x100', order: 0
-            }
-        );
+                biography: '', avatar: 'https://placehold.co/100x100', order: 0,
+                local_id: locales.length > 0 ? locales[0].id : ''
+            };
+        form.reset(defaultValues);
     }
-  }, [profesional, form, isOpen]);
+  }, [profesional, form, isOpen, locales]);
 
   const upsertUser = async (profData: any, profId: string) => {
     const userRef = doc(db, 'usuarios', profId);
@@ -150,6 +151,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         name: profData.name,
         email: profData.email,
         role: 'Staff (Sin edición)',
+        local_id: profData.local_id
     };
 
     if (userSnap.exists()) {
@@ -265,6 +267,25 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                           <div className="space-y-2">
                               <Label htmlFor="email">Email</Label>
                               <Input id="email" type="email" {...form.register('email')} />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                              <Label htmlFor="local_id">Sucursal</Label>
+                              <Controller 
+                                control={form.control}
+                                name="local_id"
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
+                                        <SelectTrigger id="local_id">
+                                            <SelectValue placeholder="Seleccionar sucursal..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {locales.map(loc => (
+                                                <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                              />
                           </div>
                       </div>
                        <div className="flex items-center space-x-2 pt-4">
@@ -439,3 +460,4 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     </>
   );
 }
+

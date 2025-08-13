@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -105,6 +106,8 @@ export interface Profesional {
     services: string[];
     schedule?: Schedule;
     order: number;
+    local_id: string;
+    userId?: string;
 }
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
@@ -298,6 +301,15 @@ export default function ProfessionalsPage() {
     }
   }
 
+  const professionalsByLocal = useMemo(() => {
+    if (professionalsLoading || localesLoading) return [];
+    
+    return locales.map(local => ({
+      ...local,
+      professionals: professionals.filter(p => p.local_id === local.id).sort((a,b) => a.order - b.order)
+    }));
+  }, [professionals, locales, professionalsLoading, localesLoading]);
+
   const activeProfessional = useMemo(() => professionals.find(p => p.id === activeId), [activeId, professionals]);
   
   if ((professionalsLoading || localesLoading) && !isClientMounted) {
@@ -363,7 +375,9 @@ export default function ProfessionalsPage() {
                                 <SelectValue placeholder="Todos" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="local1">VATOS ALFA Barber Shop</SelectItem>
+                                {locales.map(local => (
+                                  <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                                ))}
                             </SelectContent>
                            </Select>
                         </div>
@@ -377,43 +391,47 @@ export default function ProfessionalsPage() {
                 </Popover>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>VATOS ALFA Barber Shop</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isClientMounted ? (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
-                    >
-                      <SortableContext items={professionals} strategy={verticalListSortingStrategy}>
-                        <ul className="divide-y">
-                          {professionals.map((prof) => (
-                            <SortableProfesionalItem 
-                                key={prof.id} 
-                                prof={prof} 
-                                onToggleActive={handleToggleActive} 
-                                onEdit={() => handleOpenModal(prof)}
-                                onOpenSpecialDay={() => handleOpenSpecialDayModal(prof)}
-                            />
-                          ))}
-                        </ul>
-                      </SortableContext>
-                       <DragOverlay>
-                          {activeProfessional ? (
-                            <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => {}} onEdit={() => {}} onOpenSpecialDay={() => {}} /></ul>
-                          ) : null}
-                      </DragOverlay>
-                    </DndContext>
-                  ) : (
-                    <div className="p-4 text-center text-muted-foreground">Cargando...</div>
-                  )}
-                </CardContent>
-            </Card>
+            {professionalsByLocal.map(localGroup => (
+              localGroup.professionals.length > 0 && (
+                <Card key={localGroup.id}>
+                    <CardHeader>
+                        <CardTitle>{localGroup.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      {isClientMounted ? (
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+                        >
+                          <SortableContext items={localGroup.professionals} strategy={verticalListSortingStrategy}>
+                            <ul className="divide-y">
+                              {localGroup.professionals.map((prof) => (
+                                <SortableProfesionalItem 
+                                    key={prof.id} 
+                                    prof={prof} 
+                                    onToggleActive={handleToggleActive} 
+                                    onEdit={() => handleOpenModal(prof)}
+                                    onOpenSpecialDay={() => handleOpenSpecialDayModal(prof)}
+                                />
+                              ))}
+                            </ul>
+                          </SortableContext>
+                          <DragOverlay>
+                              {activeProfessional ? (
+                                <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => {}} onEdit={() => {}} onOpenSpecialDay={() => {}} /></ul>
+                              ) : null}
+                          </DragOverlay>
+                        </DndContext>
+                      ) : (
+                        <div className="p-4 text-center text-muted-foreground">Cargando...</div>
+                      )}
+                    </CardContent>
+                </Card>
+              )
+            ))}
         </div>
       </div>
 
@@ -423,7 +441,7 @@ export default function ProfessionalsPage() {
           isOpen={!!editingProfessional}
           onClose={handleCloseModal}
           onDataSaved={handleDataUpdated}
-          local={locales[0]}
+          local={null} // Pass null, the modal will fetch all locales
         />
       )}
       
@@ -437,3 +455,4 @@ export default function ProfessionalsPage() {
     </TooltipProvider>
   );
 }
+

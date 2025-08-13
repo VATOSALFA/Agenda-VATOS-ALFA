@@ -44,6 +44,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Checkbox } from '../ui/checkbox';
+import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 
 
 const reservationSchema = z.object({
@@ -280,7 +281,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
          await updateDoc(resRef, dataToSave);
          toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
       } else {
-        await addDoc(collection(db, 'reservas'), {
+        const docRef = await addDoc(collection(db, 'reservas'), {
             ...dataToSave,
             pago_estado: 'Pendiente',
             canal_reserva: 'agenda',
@@ -288,6 +289,21 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             creado_en: Timestamp.now(),
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
+        
+        // Send WhatsApp confirmation
+        if (data.notifications.whatsapp_notification) {
+            const client = clients.find(c => c.id === data.cliente_id);
+            if (client && client.telefono) {
+                await sendWhatsappConfirmation({
+                    clientName: `${client.nombre} ${client.apellido}`,
+                    clientPhone: client.telefono,
+                    serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
+                    reservationDate: formattedDate,
+                    reservationTime: hora_inicio,
+                });
+                toast({ title: 'Notificación de WhatsApp enviada (simulado).' });
+            }
+        }
       }
 
       onFormSubmit();

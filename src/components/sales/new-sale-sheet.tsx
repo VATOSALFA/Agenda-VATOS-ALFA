@@ -88,6 +88,7 @@ interface NewSaleSheetProps {
     client: Client;
     items: (Product | ServiceType)[];
     reservationId?: string;
+    local_id?: string;
   };
   onSaleComplete?: () => void;
 }
@@ -211,8 +212,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [paymentMethod, cashAmount, cardAmount, total, form]);
 
   useEffect(() => {
-    if (initialData) {
+    if (isOpen && initialData) {
         form.setValue('cliente_id', initialData.client.id);
+        if(initialData.local_id) {
+            form.setValue('local_id', initialData.local_id);
+        }
         const initialCartItems = initialData.items.map(item => {
             const tipo = 'duration' in item ? 'servicio' : 'producto';
             const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
@@ -224,7 +228,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 precio: precio || 0,
                 cantidad: 1,
                 tipo,
-                presentation_id
+                presentation_id,
+                barbero_id: (item as any).barbero_id || undefined,
             };
         });
         setCart(initialCartItems);

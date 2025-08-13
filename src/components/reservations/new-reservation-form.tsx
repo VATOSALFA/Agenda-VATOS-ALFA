@@ -148,7 +148,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const timeOptions = useMemo(() => {
     const hours = Array.from({ length: 12 }, (_, i) => 10 + i); // 10 AM to 9 PM
-    const minutes = ['00', '15', '30', '45'];
+    const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
     return { hours, minutes };
   }, []);
 

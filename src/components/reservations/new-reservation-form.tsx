@@ -56,6 +56,8 @@ const reservationSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   hora_inicio_hora: z.string().min(1, "Selecciona una hora."),
   hora_inicio_minuto: z.string().min(1, "Selecciona un minuto."),
+  hora_fin_hora: z.string().min(1, "Selecciona una hora de fin."),
+  hora_fin_minuto: z.string().min(1, "Selecciona un minuto de fin."),
   precio: z.coerce.number().optional().default(0),
   estado: z.string().optional(),
   notas: z.string().optional(),
@@ -66,6 +68,16 @@ const reservationSchema = z.object({
     whatsapp_notification: z.boolean().default(true),
     whatsapp_reminder: z.boolean().default(true),
   }).optional()
+}).refine(data => {
+    if (data.hora_inicio_hora && data.hora_inicio_minuto && data.hora_fin_hora && data.hora_fin_minuto) {
+        const start = parseInt(data.hora_inicio_hora) * 60 + parseInt(data.hora_inicio_minuto);
+        const end = parseInt(data.hora_fin_hora) * 60 + parseInt(data.hora_fin_minuto);
+        return end > start;
+    }
+    return true;
+}, {
+    message: 'La hora de fin debe ser posterior a la hora de inicio.',
+    path: ['hora_fin_hora'],
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -92,7 +104,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  const [calculatedEndTime, setCalculatedEndTime] = useState<{hour: string, minute: string} | null>(null);
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -156,6 +167,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         }
 
         const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
+        const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
 
         form.reset({
             cliente_id: initialData.cliente_id,
@@ -166,6 +178,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             fecha,
             hora_inicio_hora: startHour,
             hora_inicio_minuto: startMinute,
+            hora_fin_hora: endHour,
+            hora_fin_minuto: endMinute,
             estado: initialData.estado,
             precio: initialData.precio || 0,
             notas: initialData.notas || '',
@@ -194,16 +208,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       try {
           const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
           const endTime = addMinutes(startTime, totalDuration);
-          setCalculatedEndTime({
-              hour: format(endTime, 'HH'),
-              minute: format(endTime, 'mm')
-          });
+          form.setValue('hora_fin_hora', format(endTime, 'HH'));
+          form.setValue('hora_fin_minuto', format(endTime, 'mm'));
+
       } catch (e) {
           console.error("Error calculating end time", e);
-          setCalculatedEndTime(null);
       }
-    } else {
-        setCalculatedEndTime(null);
     }
   }, [JSON.stringify(watchedItems), servicesMap, form, selectedDate, selectedStartHour, selectedStartMinute]);
 
@@ -212,11 +222,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     setIsSubmitting(true);
 
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
-    if (!calculatedEndTime) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo calcular la hora de fin. Revisa los datos.'});
-        setIsSubmitting(false);
-        return;
-    }
+    const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
+    
     try {
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
       
@@ -230,12 +237,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           }
       });
 
-      const dataToSave: Partial<Reservation> & {hora_inicio?: string} = {
+      const dataToSave: Partial<Reservation> & {hora_inicio?: string, hora_fin?: string} = {
         cliente_id: data.cliente_id,
         items: itemsToSave,
         fecha: formattedDate,
         hora_inicio: hora_inicio,
-        hora_fin: `${calculatedEndTime.hour}:${calculatedEndTime.minute}`,
+        hora_fin: hora_fin,
         estado: data.estado || 'Reservado',
         precio: data.precio,
         notas: data.notas || '',
@@ -387,9 +394,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         <div className="flex-grow space-y-1">
                             <p className="text-xs text-muted-foreground text-center">Fin</p>
                             <div className="flex items-center gap-1">
-                                <Input disabled value={calculatedEndTime?.hour || ''} placeholder="HH" className="bg-muted"/>
+                               <FormField control={form.control} name="hora_fin_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 <span>:</span>
-                                <Input disabled value={calculatedEndTime?.minute || ''} placeholder="MM" className="bg-muted"/>
+                                <FormField control={form.control} name="hora_fin_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             </div>
                         </div>
                     </div>

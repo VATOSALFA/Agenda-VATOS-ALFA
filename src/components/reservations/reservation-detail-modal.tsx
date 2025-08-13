@@ -31,17 +31,18 @@ import {
   Send,
   Eye,
 } from 'lucide-react';
-import type { Reservation } from '@/lib/types';
+import type { Reservation, Sale } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
+import { SaleDetailModal } from '../sales/sale-detail-modal';
 
 
 interface ReservationDetailModalProps {
@@ -71,6 +72,10 @@ export function ReservationDetailModal({
   onEdit
 }: ReservationDetailModalProps) {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
+  const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
+  const [isLoadingSale, setIsLoadingSale] = useState(false);
+
   const { toast } = useToast();
 
   if (!reservation) return null;
@@ -91,6 +96,33 @@ export function ReservationDetailModal({
             title: "Error",
             description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
         });
+    }
+  };
+
+  const handleViewPayment = async () => {
+    setIsLoadingSale(true);
+    try {
+        // This logic assumes a `reservationId` field is stored on the sale document.
+        // If not, a more complex query would be needed (e.g., by date, client, and amount).
+        const salesQuery = query(collection(db, 'ventas'), where('reservationId', '==', reservation.id));
+        const salesSnapshot = await getDocs(salesQuery);
+
+        if (!salesSnapshot.empty) {
+            const saleData = salesSnapshot.docs[0].data() as Sale;
+            setSaleForReservation({ ...saleData, id: salesSnapshot.docs[0].id });
+            setIsSaleDetailModalOpen(true);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Venta no encontrada',
+                description: 'No se encontró un pago asociado a esta reserva.',
+            });
+        }
+    } catch (error) {
+        console.error("Error fetching sale details:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron obtener los detalles del pago.' });
+    } finally {
+        setIsLoadingSale(false);
     }
   };
 
@@ -183,8 +215,9 @@ export function ReservationDetailModal({
                     <CreditCard className="mr-2 h-4 w-4" /> Pagar
                 </Button>
               ) : (
-                <Button onClick={() => toast({ title: 'Funcionalidad en desarrollo' })}>
-                    <Eye className="mr-2 h-4 w-4" /> Ver Pago
+                <Button onClick={handleViewPayment} disabled={isLoadingSale}>
+                    {isLoadingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Eye className="mr-2 h-4 w-4" />}
+                    Ver Pago
                 </Button>
               )}
           </DialogFooter>
@@ -196,6 +229,12 @@ export function ReservationDetailModal({
         onOpenChange={setIsCancelModalOpen}
         reservation={reservation}
         onConfirm={handleCancelReservation}
+    />
+    
+    <SaleDetailModal
+        isOpen={isSaleDetailModalOpen}
+        onOpenChange={setIsSaleDetailModalOpen}
+        sale={saleForReservation}
     />
     </>
   );

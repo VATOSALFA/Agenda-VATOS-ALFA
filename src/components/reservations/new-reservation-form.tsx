@@ -207,7 +207,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     } else {
         setCalculatedEndTime(null);
     }
-  }, [watchedItems, servicesMap, form, selectedDate, selectedStartTime]);
+  }, [JSON.stringify(watchedItems), servicesMap, form, selectedDate, selectedStartTime]);
 
 
   async function onSubmit(data: any) {

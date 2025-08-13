@@ -203,7 +203,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       form.reset({
         cliente_id: initialData.cliente_id,
-        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.servicio || i.nombre, barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
+        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.servicio || '', barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
         fecha,
         hora_inicio_h: h,
         hora_inicio_m: m,
@@ -273,7 +273,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         precio: data.precio,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
-        notifications: data.notifications,
+        notifications: data.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true },
       };
       
       if (isEditMode && initialData?.id) {
@@ -290,7 +290,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
         
-        if (data.notifications.whatsapp_notification) {
+        if (dataToSave.notifications.whatsapp_notification) {
             const client = clients.find(c => c.id === data.cliente_id);
             if (client && client.telefono) {
                 sendWhatsappConfirmation({
@@ -527,10 +527,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   // This part is for when the form is a standalone dialog
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
         <FormContent />
       </DialogContent>
     </Dialog>
+    <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+             <DialogHeader>
+                <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                <DialogDescription>
+                    Completa la información para registrar un nuevo cliente en el sistema.
+                </DialogDescription>
+              </DialogHeader>
+            <NewClientForm onFormSubmit={handleClientCreated} />
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }

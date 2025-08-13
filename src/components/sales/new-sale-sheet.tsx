@@ -332,13 +332,19 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             subtotal: (precio || 0) * cantidad,
         }));
   
-        transaction.set(ventaRef, {
+        const saleDataToSave: any = {
             ...data,
             items: itemsToSave,
             total,
             fecha_hora_venta: Timestamp.now(),
             creado_por: 'admin'
-        });
+        };
+
+        if (initialData?.reservationId) {
+            saleDataToSave.reservationId = initialData.reservationId;
+        }
+
+        transaction.set(ventaRef, saleDataToSave);
 
         if (initialData?.reservationId) {
             const reservationRef = doc(db, 'reservas', initialData.reservationId);

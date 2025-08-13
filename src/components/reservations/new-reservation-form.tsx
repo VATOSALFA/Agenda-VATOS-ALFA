@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -139,7 +138,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return clients.find(c => c.id === selectedClientId)
   }, [selectedClientId, clients]);
 
-
   const getServiceData = useCallback((serviceId: string) => {
     if (!services) return null;
     return services.find(s => s.id === serviceId);
@@ -221,7 +219,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   // Recalculate price and end time when items change
   useEffect(() => {
     if (!watchedItems || !services) return;
-
+    
     const { totalPrice, totalDuration } = watchedItems.reduce((acc, currentItem) => {
         const service = getServiceData(currentItem.servicio);
         if (service) {
@@ -327,7 +325,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    setClientQueryKey(prev => prev + 1);
+    if(setClientQueryKey) setClientQueryKey(prev => prev + 1); // Refetch clients
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 

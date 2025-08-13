@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -212,8 +211,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         hora_fin_m: fm,
         estado: initialData.estado,
         precio: 'precio' in initialData ? initialData.precio || 0 : 0,
-        notas: initialData.notas,
-        nota_interna: initialData.nota_interna,
+        notas: initialData.notas || '',
+        nota_interna: initialData.nota_interna || '',
       });
     }
   }, [initialData, form, isOpen]);
@@ -380,6 +379,59 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
           {/* Main reservation fields */}
           <div className="space-y-4">
+             {selectedClient ? (
+                <Card>
+                    <CardContent className="p-4">
+                         <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-4">
+                                <Avatar className="h-10 w-10">
+                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            ) : (
+                <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                    <FormItem>
+                        <div className="flex justify-between items-center">
+                           <FormLabel>Cliente</FormLabel>
+                           <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+                              <DialogTrigger asChild>
+                                 <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                 </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-lg">
+                                 <DialogHeader>
+                                    <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                                    <DialogDescription>
+                                        Completa la información para registrar un nuevo cliente en el sistema.
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                 <NewClientForm onFormSubmit={handleClientCreated} />
+                              </DialogContent>
+                           </Dialog>
+                        </div>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}/>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -422,87 +474,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               </div>
             </div>
 
-            {selectedClient ? (
-                <Card>
-                    <CardContent className="p-4">
-                         <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-4">
-                                <Avatar className="h-10 w-10">
-                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
-                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                            </div>
-                        </div>
-                        <Accordion type="single" collapsible className="w-full mt-2">
-                            <AccordionItem value="notifications">
-                                <AccordionTrigger className="text-sm py-2">Notificaciones automáticas de cita y recordatorios</AccordionTrigger>
-                                <AccordionContent>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead></TableHead>
-                                                <TableHead className="text-center">Email</TableHead>
-                                                <TableHead className="text-center">WhatsApp</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            <TableRow>
-                                                <TableCell className="font-medium">Notificaciones de cita</TableCell>
-                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.email_notification" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
-                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
-                                            </TableRow>
-                                            <TableRow>
-                                                <TableCell className="font-medium">Recordatorio</TableCell>
-                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.email_reminder" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
-                                                <TableCell className="text-center"><FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />} /></TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
-                    </CardContent>
-                </Card>
-            ) : (
-                <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                    <FormItem>
-                        <div className="flex justify-between items-center">
-                           <FormLabel>Cliente</FormLabel>
-                           <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-                              <DialogTrigger asChild>
-                                 <Button type="button" variant="link" size="sm" className="h-auto p-0">
-                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                 </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-lg">
-                                 <DialogHeader>
-                                    <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-                                    <DialogDescription>
-                                        Completa la información para registrar un nuevo cliente en el sistema.
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                 <NewClientForm onFormSubmit={handleClientCreated} />
-                              </DialogContent>
-                           </Dialog>
-                        </div>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )}/>
-            )}
             
             <div className="space-y-4">
                 {fields.map((field, index) => (
@@ -574,7 +545,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         
         <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.barbero_id}>
+          <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.items}>
             {(isSubmitting || form.formState.isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar reserva
           </Button>

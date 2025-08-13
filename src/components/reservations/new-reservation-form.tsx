@@ -140,9 +140,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [selectedClientId, clients]);
 
 
-  const getServiceData = useCallback((serviceName: string) => {
+  const getServiceData = useCallback((serviceId: string) => {
     if (!services) return null;
-    return services.find(s => s.name === serviceName);
+    return services.find(s => s.id === serviceId);
   }, [services]);
 
   const { hoursOptions } = useMemo(() => {
@@ -204,7 +204,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       form.reset({
         cliente_id: initialData.cliente_id,
-        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.nombre || i.servicio, barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
+        items: initialData.items?.length ? initialData.items.map(i => ({ servicio: i.servicio || i.nombre, barbero_id: i.barbero_id || '' })) : [{ servicio: '', barbero_id: '' }],
         fecha,
         hora_inicio_h: h,
         hora_inicio_m: m,
@@ -255,9 +255,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
       
       const itemsToSave = data.items.map((item: any) => {
-          const service = services.find(s => s.name === item.servicio);
+          const service = services.find(s => s.id === item.servicio);
           return {
-              servicio: item.servicio,
+              servicio: service?.name || '',
               barbero_id: item.barbero_id,
               precio: service?.price || 0,
               duracion: service?.duration || 0,
@@ -272,8 +272,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         hora_fin,
         estado: data.estado || 'Reservado',
         precio: data.precio,
-        notas: data.notas,
-        nota_interna: data.nota_interna,
+        notas: data.notas || '',
+        nota_interna: data.nota_interna || '',
         notifications: data.notifications,
       };
       
@@ -451,7 +451,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <FormLabel>Servicios</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
-                                        <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent>
+                                        <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                                     </Select>
                                     <FormMessage />
                                 </FormItem>

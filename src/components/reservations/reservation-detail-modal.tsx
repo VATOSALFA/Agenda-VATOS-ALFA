@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -77,12 +76,12 @@ export function ReservationDetailModal({
   const handleCancelReservation = async (reservationId: string) => {
     try {
         const resRef = doc(db, 'reservas', reservationId);
-        await updateDoc(resRef, { estado: 'Cancelado' });
+        await deleteDoc(resRef);
         toast({
-            title: "Reserva cancelada con éxito",
+            title: "Reserva eliminada con éxito",
         });
         onOpenChange(false);
-        onUpdateStatus(reservationId, 'Cancelado'); // Force refetch
+        onUpdateStatus(reservationId, 'Cancelado'); // Force refetch in parent
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({
@@ -108,7 +107,7 @@ export function ReservationDetailModal({
             <div className="flex justify-between items-start">
                 <div>
                     <p className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</p>
-                    <p className="text-sm text-muted-foreground">{reservation.servicio}</p>
+                    <p className="text-sm text-muted-foreground">{reservation.items ? reservation.items.map(i => i.nombre || i.servicio).join(', ') : (reservation as any).servicio}</p>
                 </div>
                 <Badge variant={reservation.pago_estado === 'Pagado' ? 'default' : 'secondary'} className={cn(reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800')}>
                     {reservation.pago_estado}

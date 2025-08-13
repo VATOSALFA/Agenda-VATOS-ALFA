@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -56,7 +55,7 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
                 </div>
                 <AlertDialogTitle className="text-center text-xl">¿Estás seguro que quieres cancelar esta reserva?</AlertDialogTitle>
                 <AlertDialogDescription className="text-center">
-                    Esta acción no se puede revertir. La reserva cambiará su estado a "Cancelado".
+                    Esta acción no se puede revertir. La reserva será eliminada permanentemente de la agenda.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="py-4 space-y-2">

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -128,7 +129,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     name: "items"
   });
 
-  const selectedItems = form.watch('items');
+  const watchedItems = form.watch('items');
   const selectedDate = form.watch('fecha');
   const selectedStartHour = form.watch('hora_inicio_h');
   const selectedStartMinute = form.watch('hora_inicio_m');
@@ -159,8 +160,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   // Real-time availability check for multiple items
   useEffect(() => {
     form.clearErrors('items'); 
-    if (selectedItems && selectedDate && selectedStartHour && selectedStartMinute) {
-      selectedItems.forEach((item, index) => {
+    if (watchedItems && selectedDate && selectedStartHour && selectedStartMinute) {
+      watchedItems.forEach((item, index) => {
           if (item.barbero_id) {
               const professional = professionals.find(p => p.id === item.barbero_id);
               if (!professional || !professional.schedule) return;
@@ -181,7 +182,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           }
       })
     }
-  }, [selectedItems, selectedDate, selectedStartHour, selectedStartMinute, professionals, form]);
+  }, [watchedItems, selectedDate, selectedStartHour, selectedStartMinute, professionals, form]);
 
 
   useEffect(() => {
@@ -217,11 +218,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
   }, [initialData, form, isOpen]);
   
+  // Recalculate price and end time when items change
   useEffect(() => {
-    if (!selectedItems || !services) return;
+    if (!watchedItems || !services) return;
 
-    // Calculate total price and duration
-    const { totalPrice, totalDuration } = selectedItems.reduce((acc, currentItem) => {
+    const { totalPrice, totalDuration } = watchedItems.reduce((acc, currentItem) => {
         const service = getServiceData(currentItem.servicio);
         if (service) {
             acc.totalPrice += service.price || 0;
@@ -230,19 +231,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         return acc;
     }, { totalPrice: 0, totalDuration: 0 });
 
-    // Update form price
-    form.setValue('precio', totalPrice, { shouldValidate: true });
+    form.setValue('precio', totalPrice, { shouldDirty: true });
     
-    // Update form end time
     if (selectedDate && selectedStartHour && selectedStartMinute) {
-      const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
-      const endTime = addMinutes(startTime, totalDuration);
-      
-      form.setValue('hora_fin_h', format(endTime, 'HH'), { shouldValidate: true });
-      form.setValue('hora_fin_m', format(endTime, 'mm'), { shouldValidate: true });
+      try {
+          const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
+          const endTime = addMinutes(startTime, totalDuration);
+          
+          form.setValue('hora_fin_h', format(endTime, 'HH'), { shouldDirty: true });
+          form.setValue('hora_fin_m', format(endTime, 'mm'), { shouldDirty: true });
+      } catch (e) {
+          console.error("Error calculating end time", e);
+      }
     }
-
-  }, [selectedItems, services, getServiceData, form, selectedDate, selectedStartHour, selectedStartMinute]);
+  }, [watchedItems, services, getServiceData, form, selectedDate, selectedStartHour, selectedStartMinute]);
 
 
   async function onSubmit(data: any) {
@@ -289,18 +291,21 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
         
-        // Send WhatsApp confirmation
         if (data.notifications.whatsapp_notification) {
             const client = clients.find(c => c.id === data.cliente_id);
             if (client && client.telefono) {
-                await sendWhatsappConfirmation({
+                sendWhatsappConfirmation({
                     clientName: `${client.nombre} ${client.apellido}`,
                     clientPhone: client.telefono,
                     serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
                     reservationDate: formattedDate,
                     reservationTime: hora_inicio,
+                }).then(() => {
+                    toast({ title: 'Notificación de WhatsApp enviada.' });
+                }).catch(err => {
+                    console.error("WhatsApp send failed:", err);
+                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: 'No se pudo enviar la notificación.'})
                 });
-                toast({ title: 'Notificación de WhatsApp enviada (simulado).' });
             }
         }
       }

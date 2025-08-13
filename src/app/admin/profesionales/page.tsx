@@ -303,11 +303,39 @@ export default function ProfessionalsPage() {
 
   const professionalsByLocal = useMemo(() => {
     if (professionalsLoading || localesLoading) return [];
+  
+    const assignedProfessionals = new Set<string>();
+  
+    const byLocal = locales.map(local => {
+      const prosInLocal = professionals.filter(p => {
+        if (p.local_id === local.id) {
+          assignedProfessionals.add(p.id);
+          return true;
+        }
+        return false;
+      }).sort((a,b) => a.order - b.order);
+      
+      return {
+        ...local,
+        professionals: prosInLocal
+      };
+    }).filter(localGroup => localGroup.professionals.length > 0);
+  
+    const unassignedProfessionals = professionals
+      .filter(p => !p.local_id || !assignedProfessionals.has(p.id))
+      .sort((a,b) => a.order - b.order);
+  
+    const result: any[] = [...byLocal];
+  
+    if (unassignedProfessionals.length > 0) {
+      result.push({
+        id: 'unassigned',
+        name: 'Profesionales Sin Asignar',
+        professionals: unassignedProfessionals
+      });
+    }
     
-    return locales.map(local => ({
-      ...local,
-      professionals: professionals.filter(p => p.local_id === local.id).sort((a,b) => a.order - b.order)
-    }));
+    return result;
   }, [professionals, locales, professionalsLoading, localesLoading]);
 
   const activeProfessional = useMemo(() => professionals.find(p => p.id === activeId), [activeId, professionals]);
@@ -455,4 +483,5 @@ export default function ProfessionalsPage() {
     </TooltipProvider>
   );
 }
+
 

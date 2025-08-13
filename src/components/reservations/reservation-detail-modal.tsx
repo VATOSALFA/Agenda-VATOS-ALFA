@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -122,7 +123,7 @@ export function ReservationDetailModal({
                 </div>
                 <div>
                   <p className="font-medium flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" /> Profesional</p>
-                  <p className="pl-6">{reservation.professionalName}</p>
+                  <p className="pl-6">{reservation.professionalNames || 'N/A'}</p>
                 </div>
             </div>
 

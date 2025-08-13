@@ -242,7 +242,7 @@ export default function AgendaView() {
         return {
             ...res,
             customer: clientMap.get(res.cliente_id),
-            professionalName: professionalMap.get(res.barbero_id) || 'N/A',
+            professionalNames: res.items?.map(i => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
             start: start,
             duration: Math.max(0.5, end - start),
             color: getStatusColor(res.estado),
@@ -647,7 +647,7 @@ export default function AgendaView() {
                                     )}
 
                                      {/* Events */}
-                                    {allEvents.filter(a => (a as any).barbero_id === barber.id || (a as any).items?.some((i: any) => i.barbero_id === barber.id)).map(event => (
+                                    {allEvents.filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id))).map(event => (
                                         <Tooltip key={event.id}>
                                         <TooltipTrigger asChild>
                                             <div

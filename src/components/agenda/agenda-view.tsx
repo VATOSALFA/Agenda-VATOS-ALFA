@@ -669,7 +669,7 @@ export default function AgendaView() {
                                         {event.type === 'appointment' ? (
                                             <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                                 <div className="space-y-2">
-                                                    <p className="font-bold text-base text-foreground">{(event as any).customer?.nombre || 'Cliente Eliminado'}</p>
+                                                    <p className="font-bold text-base text-foreground">{((event as any).customer?.nombre || 'Cliente Eliminado')}</p>
                                                     <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : (event as any).servicio}</p>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                         <Clock className="w-4 h-4" />

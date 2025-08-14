@@ -60,7 +60,7 @@ export interface Reservation {
     estado: string;
     pago_estado?: string;
     customer?: Client; // Updated from string to Client object
-    professionalName?: string; // transient property
+    professionalNames?: string; // transient property
     type?: 'appointment' | 'block';
     start?: number; // transient
     duration?: number; // transient
@@ -70,6 +70,12 @@ export interface Reservation {
     creado_en: Timestamp; // Firestore Timestamp
     canal_reserva?: string;
     local_id?: string; // Added local_id to reservations
+    notifications?: {
+      email_notification: boolean;
+      email_reminder: boolean;
+      whatsapp_notification: boolean;
+      whatsapp_reminder: boolean;
+    };
 }
 
 export interface Schedule {
@@ -165,6 +171,11 @@ export interface Sale {
   total: number;
   creado_por_id?: string;
   creado_por_nombre?: string;
+  reservationId?: string;
+  detalle_pago_combinado?: {
+    efectivo: number;
+    tarjeta: number;
+  };
 }
 
 export interface SaleItem {

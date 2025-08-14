@@ -58,6 +58,7 @@ import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2
 import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; presentation_id?: string;}
@@ -95,6 +96,7 @@ interface NewSaleSheetProps {
 
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -341,7 +343,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             items: itemsToSave,
             total,
             fecha_hora_venta: Timestamp.now(),
-            creado_por: 'admin'
+            creado_por_id: user?.uid,
+            creado_por_nombre: user?.displayName || user?.email,
         };
 
         if (reservationId) {

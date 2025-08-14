@@ -163,6 +163,8 @@ export interface Sale {
   local_id: string;
   metodo_pago: string;
   total: number;
+  creado_por_id?: string;
+  creado_por_nombre?: string;
 }
 
 export interface SaleItem {

@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Mail, Printer, X, Pencil, Store } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Client, Local } from '@/lib/types';
+import type { Client, Local, Sale } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useMemo } from 'react';
 import Image from 'next/image';
@@ -22,23 +22,6 @@ import Image from 'next/image';
 interface EmpresaSettings {
     receipt_logo_url?: string;
     name?: string;
-}
-
-interface Sale {
-    id: string;
-    fecha_hora_venta?: { seconds: number };
-    cliente_id: string;
-    local_id?: string;
-    metodo_pago: string;
-    total: number;
-    items?: { 
-        nombre: string;
-        barbero_id: string;
-        precio: number;
-        precio_unitario?: number;
-    }[];
-    client?: Client;
-    professionalNames?: string;
 }
 
 interface SaleDetailModalProps {
@@ -103,7 +86,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 <h3 className="font-semibold mb-4">Resumen de pago</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                     <InfoItem label="Fecha" value={formatDate(sale.fecha_hora_venta)} />
-                    <InfoItem label="Cajero" value="Sin información" />
+                    <InfoItem label="Cajero" value={sale.creado_por_nombre || 'Sin información'} />
                     <InfoItem label="Cliente" value={`${sale.client?.nombre} ${sale.client?.apellido}`} />
                     <InfoItem label="Local" value={localName} />
                     <InfoItem label="Método de pago" value={sale.metodo_pago} />

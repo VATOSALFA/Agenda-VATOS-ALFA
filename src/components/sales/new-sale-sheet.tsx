@@ -77,7 +77,7 @@ const saleSchema = (total: number) => z.object({
     }
     return true;
 }, {
-    message: `El total combinado debe ser $${total.toLocaleString('es-CL')}`,
+    message: `La suma debe ser exactamente $${total.toLocaleString('es-CL')}`,
     path: ['pago_tarjeta'],
 });
 
@@ -205,6 +205,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const cashAmount = form.watch('pago_efectivo');
   const cardAmount = form.watch('pago_tarjeta');
   const combinedTotal = (cashAmount || 0) + (cardAmount || 0);
+  const remainingAmount = total - combinedTotal;
+
 
   const isCombinedPaymentInvalid = paymentMethod === 'combinado' && combinedTotal !== total;
 
@@ -703,6 +705,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                   </FormItem>
                                 )}
                               />
+                            </div>
+                            <div className="mt-4 space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Total Ingresado:</span>
+                                    <span className="font-medium">${combinedTotal.toLocaleString('es-CL')}</span>
+                                </div>
+                                <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-green-600" : "text-destructive")}>
+                                    <span>Faltante:</span>
+                                    <span>${remainingAmount.toLocaleString('es-CL')}</span>
+                                </div>
                             </div>
                             <FormMessage className="mt-2 text-center text-xs">
                               {form.formState.errors.pago_tarjeta?.message}

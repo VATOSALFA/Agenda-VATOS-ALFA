@@ -514,13 +514,15 @@ export default function AgendaView() {
             </div>
           </div>
           {isClientMounted && (
-              <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  className="rounded-md border mx-4"
-                  locale={es}
-              />
+              <div className="flex justify-center">
+                <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-md border mx-4"
+                    locale={es}
+                />
+              </div>
           )}
         </aside>
 

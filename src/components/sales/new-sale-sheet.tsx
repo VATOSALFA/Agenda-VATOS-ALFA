@@ -63,7 +63,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; presentation_id?: string;}
 
-const saleSchema = z.object({
+const saleSchema = (total: number) => z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
   local_id: z.string().min(1, 'Debes seleccionar un local.'),
   metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
@@ -72,15 +72,16 @@ const saleSchema = z.object({
   notas: z.string().optional(),
 }).refine(data => {
     if (data.metodo_pago === 'combinado') {
-        return (data.pago_efectivo || 0) > 0 && (data.pago_tarjeta || 0) > 0;
+        const combinedTotal = (data.pago_efectivo || 0) + (data.pago_tarjeta || 0);
+        return combinedTotal === total;
     }
     return true;
 }, {
-    message: 'Debes ingresar montos para ambos métodos de pago.',
-    path: ['pago_efectivo'],
+    message: `El total combinado debe ser $${total.toLocaleString('es-CL')}`,
+    path: ['pago_tarjeta'],
 });
 
-type SaleFormData = z.infer<typeof saleSchema>;
+type SaleFormData = z.infer<ReturnType<typeof saleSchema>>;
 
 interface NewSaleSheetProps {
   isOpen: boolean;
@@ -113,8 +114,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   
+  const total = useMemo(() =>
+    cart.reduce((acc, item) => acc + (item.precio || 0) * item.cantidad, 0),
+    [cart]
+  );
+  
   const form = useForm<SaleFormData>({
-    resolver: zodResolver(saleSchema),
+    resolver: zodResolver(saleSchema(total)),
     defaultValues: {
         notas: '',
         pago_efectivo: 0,
@@ -194,25 +200,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     );
   };
 
-  const total = useMemo(() =>
-    cart.reduce((acc, item) => acc + (item.precio || 0) * item.cantidad, 0),
-    [cart]
-  );
   
   const paymentMethod = form.watch('metodo_pago');
   const cashAmount = form.watch('pago_efectivo');
   const cardAmount = form.watch('pago_tarjeta');
+  const combinedTotal = (cashAmount || 0) + (cardAmount || 0);
 
-  useEffect(() => {
-    if (paymentMethod === 'combinado') {
-        const combinedTotal = (cashAmount || 0) + (cardAmount || 0);
-        if (combinedTotal > 0 && combinedTotal !== total) {
-            form.setError('pago_tarjeta', { type: 'manual', message: `El total combinado debe ser $${total.toLocaleString('es-CL')}`});
-        } else {
-            form.clearErrors('pago_tarjeta');
-        }
-    }
-  }, [paymentMethod, cashAmount, cardAmount, total, form]);
+  const isCombinedPaymentInvalid = paymentMethod === 'combinado' && combinedTotal !== total;
+
 
   useEffect(() => {
     if (isOpen && initialData) {
@@ -727,7 +722,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 </div>
                  <SheetFooter className="p-6 bg-background border-t mt-auto">
                     <Button variant="outline" type="button" onClick={() => setStep(1)}>Volver y agregar más ítems</Button>
-                    <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
+                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid} className="bg-primary hover:bg-primary/90">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Finalizar Venta
                     </Button>

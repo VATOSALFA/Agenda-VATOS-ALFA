@@ -202,8 +202,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   
   const paymentMethod = form.watch('metodo_pago');
-  const cashAmount = form.watch('pago_efectivo');
-  const cardAmount = form.watch('pago_tarjeta');
+  const cashAmount = Number(form.watch('pago_efectivo'));
+  const cardAmount = Number(form.watch('pago_tarjeta'));
   const combinedTotal = (cashAmount || 0) + (cardAmount || 0);
   const remainingAmount = total - combinedTotal;
 

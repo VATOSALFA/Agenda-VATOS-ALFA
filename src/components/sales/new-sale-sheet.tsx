@@ -598,166 +598,163 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
-            <div className="flex-grow overflow-y-auto">
-              <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-                <div className="flex-grow overflow-y-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4">
-                        {/* Sale Details Form */}
-                        <div className="space-y-4">
-                            
-                             {selectedClient ? (
-                                <Card>
-                                    <CardContent className="p-4">
-                                         <div className="flex items-start justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <Avatar className="h-10 w-10">
-                                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
-                                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+            <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 overflow-y-auto">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col md:col-span-2">
+                <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Sale Details Form */}
+                    <div className="space-y-4">
+                        
+                         {selectedClient ? (
+                            <Card>
+                                <CardContent className="p-4">
+                                     <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                                    <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                                    <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                                </p>
                                             </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                                    <FormItem>
-                                        <div className="flex justify-between items-center">
-                                           <FormLabel>Cliente</FormLabel>
-                                           <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                           </Button>
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                                         </div>
-                                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                                            <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}/>
-                            )}
-
-                             <FormField
-                                control={form.control}
-                                name="local_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Local</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecciona un local" />
-                                        </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                        {locales.map(l => (
-                                            <SelectItem key={l.id} value={l.id}>
-                                            {l.name}
-                                            </SelectItem>
-                                        ))}
-                                        </SelectContent>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                                <FormItem>
+                                    <div className="flex justify-between items-center">
+                                       <FormLabel>Cliente</FormLabel>
+                                       <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                       </Button>
+                                    </div>
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
+                                        <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
                                     </Select>
                                     <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            
-                            <FormField
-                              control={form.control}
-                              name="metodo_pago"
-                              render={({ field }) => (
-                                <FormItem className="space-y-3">
-                                  <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
-                                  <FormControl>
-                                    <RadioGroup
-                                      onValueChange={field.onChange}
-                                      defaultValue={field.value}
-                                      className="flex flex-wrap gap-2"
-                                    >
-                                      <FormItem>
-                                        <FormControl><RadioGroupItem value="efectivo" id="efectivo" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
-                                      </FormItem>
-                                      <FormItem>
-                                        <FormControl><RadioGroupItem value="tarjeta" id="tarjeta" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
-                                      </FormItem>
-                                      <FormItem>
-                                        <FormControl><RadioGroupItem value="transferencia" id="transferencia" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
-                                      </FormItem>
-                                      <FormItem>
-                                        <FormControl><RadioGroupItem value="combinado" id="combinado" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
-                                      </FormItem>
-                                    </RadioGroup>
-                                  </FormControl>
-                                  <FormMessage />
                                 </FormItem>
-                              )}
-                            />
-                             {paymentMethod === 'combinado' && (
-                              <Card className="p-4 bg-muted/50">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <FormField
-                                    control={form.control}
-                                    name="pago_efectivo"
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>Efectivo</FormLabel>
-                                        <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
-                                      </FormItem>
-                                    )}
-                                  />
-                                  <FormField
-                                    control={form.control}
-                                    name="pago_tarjeta"
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>Tarjeta</FormLabel>
-                                        <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
-                                      </FormItem>
-                                    )}
-                                  />
-                                </div>
-                                 <div className="mt-4 space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Total Ingresado:</span>
-                                        <span className="font-medium">${combinedTotal.toLocaleString('es-CL')}</span>
-                                    </div>
-                                    <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-green-600" : "text-destructive")}>
-                                        <span>Faltante:</span>
-                                        <span>${remainingAmount.toLocaleString('es-CL')}</span>
-                                    </div>
-                                </div>
-                                <FormMessage className="mt-2 text-center text-xs">
-                                  {form.formState.errors.pago_tarjeta?.message}
-                                </FormMessage>
-                              </Card>
-                            )}
-                             <FormField control={form.control} name="notas" render={({ field }) => (
+                            )}/>
+                        )}
+
+                         <FormField
+                            control={form.control}
+                            name="local_id"
+                            render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Notas (Opcional)</FormLabel>
-                                    <FormControl><Textarea placeholder="Añade un comentario sobre la venta..." {...field} /></FormControl>
-                                    <FormMessage />
+                                <FormLabel>Local</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona un local" />
+                                    </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                    {locales.map(l => (
+                                        <SelectItem key={l.id} value={l.id}>
+                                        {l.name}
+                                        </SelectItem>
+                                    ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
                                 </FormItem>
-                            )} />
-                        </div>
-                        {/* Order Summary */}
-                        <ResumenCarrito />
+                            )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="metodo_pago"
+                          render={({ field }) => (
+                            <FormItem className="space-y-3">
+                              <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
+                              <FormControl>
+                                <RadioGroup
+                                  onValueChange={field.onChange}
+                                  defaultValue={field.value}
+                                  className="flex flex-wrap gap-2"
+                                >
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="efectivo" id="efectivo" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
+                                  </FormItem>
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="tarjeta" id="tarjeta" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
+                                  </FormItem>
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="transferencia" id="transferencia" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
+                                  </FormItem>
+                                  <FormItem>
+                                    <FormControl><RadioGroupItem value="combinado" id="combinado" className="sr-only" /></FormControl>
+                                    <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
+                                  </FormItem>
+                                </RadioGroup>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         {paymentMethod === 'combinado' && (
+                          <Card className="p-4 bg-muted/50">
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="pago_efectivo"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Efectivo</FormLabel>
+                                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="pago_tarjeta"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Tarjeta</FormLabel>
+                                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                             <div className="mt-4 space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Total Ingresado:</span>
+                                    <span className="font-medium">${combinedTotal.toLocaleString('es-CL')}</span>
+                                </div>
+                                <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-green-600" : "text-destructive")}>
+                                    <span>Faltante:</span>
+                                    <span>${remainingAmount.toLocaleString('es-CL')}</span>
+                                </div>
+                            </div>
+                            <FormMessage className="mt-2 text-center text-xs">
+                              {form.formState.errors.pago_tarjeta?.message}
+                            </FormMessage>
+                          </Card>
+                        )}
+                         <FormField control={form.control} name="notas" render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Notas (Opcional)</FormLabel>
+                                <FormControl><Textarea placeholder="Añade un comentario sobre la venta..." {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )} />
                     </div>
+                    {/* Order Summary */}
+                    <ResumenCarrito />
                 </div>
                  <SheetFooter className="p-6 bg-background border-t mt-auto">
-                    <Button variant="outline" type="button" onClick={() => setStep(1)}>Volver y agregar más ítems</Button>
                     <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid} className="bg-primary hover:bg-primary/90">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Finalizar Venta

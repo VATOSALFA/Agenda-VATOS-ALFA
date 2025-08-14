@@ -108,7 +108,7 @@ export function ReservationDetailModal({
         if (!salesSnapshot.empty) {
             const saleDoc = salesSnapshot.docs[0];
             const saleData = saleDoc.data() as Sale;
-            setSaleForReservation({ ...saleData, id: saleDoc.id });
+            setSaleForReservation({ ...saleData, id: saleDoc.id, client: reservation.customer });
             setIsSaleDetailModalOpen(true);
         } else {
             toast({

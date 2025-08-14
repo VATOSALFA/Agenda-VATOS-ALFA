@@ -18,7 +18,7 @@ import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
-import type { Client, Local, Profesional, Service, AuthCode } from "@/lib/types";
+import type { Client, Local, Profesional, Service, AuthCode, Sale } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
 import {
@@ -38,24 +38,6 @@ import * as XLSX from 'xlsx';
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/firebase-auth-context";
 
-
-interface Sale {
-    id: string;
-    fecha_hora_venta?: { seconds: number };
-    cliente_id: string;
-    local_id?: string;
-    metodo_pago: string;
-    total: number;
-    items?: {
-        nombre: string;
-        barbero_id: string;
-        precio: number;
-        servicio: string;
-        tipo: 'servicio' | 'producto';
-    }[];
-    client?: Client;
-    professionalNames?: string;
-}
 
 const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, data: any[], total: number, dataLabels?: string[] }) => {
     const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];

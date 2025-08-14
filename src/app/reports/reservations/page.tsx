@@ -96,11 +96,11 @@ export default function ReservationsReportPage() {
         });
     }
 
-    const { totalReservations, totalRevenue, serviceRankingData, reservationsByDayData, reservationsByHourData } = useMemo(() => {
-        if (isLoading) return { totalReservations: 0, totalRevenue: 0, serviceRankingData: [], reservationsByDayData: [], reservationsByHourData: [] };
+    const { totalReservations, totalRevenue, serviceRankingData, reservationsByDayData, reservationsByHourData, dayCount } = useMemo(() => {
+        if (isLoading) return { totalReservations: 0, totalRevenue: 0, serviceRankingData: [], reservationsByDayData: [], reservationsByHourData: [], dayCount: {} };
 
         const serviceCount: Record<string, number> = {};
-        const dayCount: Record<string, number> = { 'Lunes': 0, 'Martes': 0, 'Miércoles': 0, 'Jueves': 0, 'Viernes': 0, 'Sábado': 0, 'Domingo': 0 };
+        const localDayCount: Record<string, number> = { 'Lunes': 0, 'Martes': 0, 'Miércoles': 0, 'Jueves': 0, 'Viernes': 0, 'Sábado': 0, 'Domingo': 0 };
         const hourCount: Record<string, Record<string, number>> = {};
 
         reservations.forEach(res => {
@@ -114,7 +114,7 @@ export default function ReservationsReportPage() {
             try {
                 const date = parseISO(res.fecha);
                 const dayName = format(date, 'EEEE', { locale: es });
-                dayCount[dayName] = (dayCount[dayName] || 0) + 1;
+                localDayCount[dayName] = (localDayCount[dayName] || 0) + 1;
                 
                 const startHour = res.hora_inicio.substring(0, 2) + ':00';
                  if (!hourCount[startHour]) {
@@ -140,8 +140,9 @@ export default function ReservationsReportPage() {
             totalReservations: reservations.length,
             totalRevenue: reservations.reduce((acc, r) => acc + (r.precio || 0), 0),
             serviceRankingData: sortedServices.map(([name, value]) => ({ name, value })),
-            reservationsByDayData: Object.entries(dayCount).map(([name, value]) => ({ name, value })),
+            reservationsByDayData: Object.entries(localDayCount).map(([name, value]) => ({ name, value })),
             reservationsByHourData: formattedHourData,
+            dayCount: localDayCount
         };
     }, [reservations, isLoading]);
 

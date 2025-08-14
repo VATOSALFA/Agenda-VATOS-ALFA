@@ -83,7 +83,6 @@ const productsNavLinks = [
 ];
 
 const reportsNavLinks = [
-  { href: '/reports', label: 'Resumen', icon: PieChart },
   { href: '/reports/reservations', label: 'Reporte de reservas', icon: FileText },
   { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart },
 ];

@@ -191,7 +191,7 @@ export default function SchedulePage() {
                             {selectedServices.map(service => (
                                 <div key={service.id} className="text-sm">
                                     <p className="font-medium">{service.name}</p>
-                                    <p className="text-muted-foreground">${service.price.toLocaleString('es-CL')}</p>
+                                    <p className="text-muted-foreground">${service.price.toLocaleString('es-MX')}</p>
                                 </div>
                             ))}
                         </div>
@@ -221,7 +221,7 @@ export default function SchedulePage() {
                             </div>
                             <div className="flex justify-between font-bold text-lg">
                                 <span>Total</span>
-                                <span>${totalPrice.toLocaleString('es-CL')}</span>
+                                <span>${totalPrice.toLocaleString('es-MX')}</span>
                             </div>
                         </div>
 

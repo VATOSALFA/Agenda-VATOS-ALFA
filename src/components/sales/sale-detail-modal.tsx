@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -107,7 +108,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                     <InfoItem label="Cliente" value={`${sale.client?.nombre} ${sale.client?.apellido}`} />
                     <InfoItem label="Local" value={localName} />
                     <InfoItem label="Método de pago" value={sale.metodo_pago} />
-                    <InfoItem label="Monto total" value={`$${sale.total.toLocaleString('es-CL')}`} />
+                    <InfoItem label="Monto total" value={`$${sale.total.toLocaleString('es-MX')}`} />
                 </div>
             </div>
 
@@ -126,24 +127,24 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                             <TableRow key={index}>
                                 <TableCell>{item.nombre}</TableCell>
                                 <TableCell>{sellerMap.get(item.barbero_id) || 'N/A'}</TableCell>
-                                <TableCell className="text-right">${(item.precio_unitario || 0).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right">${(item.precio_unitario || 0).toLocaleString('es-MX')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                      <TableFooter>
                         <TableRow>
                             <TableCell colSpan={2} className="text-right">Subtotal</TableCell>
-                            <TableCell className="text-right">${subtotal.toLocaleString('es-CL')}</TableCell>
+                            <TableCell className="text-right">${subtotal.toLocaleString('es-MX')}</TableCell>
                         </TableRow>
                         {discountAmount > 0 && (
                             <TableRow>
                                 <TableCell colSpan={2} className="text-right">Descuento</TableCell>
-                                <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-MX')}</TableCell>
                             </TableRow>
                         )}
                         <TableRow className="font-bold text-lg">
                             <TableCell colSpan={2} className="text-right">Total</TableCell>
-                            <TableCell className="text-right">${sale.total.toLocaleString('es-CL')}</TableCell>
+                            <TableCell className="text-right">${sale.total.toLocaleString('es-MX')}</TableCell>
                         </TableRow>
                     </TableFooter>
                 </Table>

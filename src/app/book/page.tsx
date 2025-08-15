@@ -93,7 +93,7 @@ export default function BookPage() {
                                                                     <p className="text-sm text-muted-foreground">{service.duration} min</p>
                                                                 </div>
                                                             </div>
-                                                            <p className="font-semibold text-primary">${service.price.toLocaleString('es-CL')}</p>
+                                                            <p className="font-semibold text-primary">${service.price.toLocaleString('es-MX')}</p>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -119,7 +119,7 @@ export default function BookPage() {
                                             {selectedServices.map(service => (
                                                 <div key={service.id} className="flex justify-between items-center text-sm">
                                                     <span>{service.name}</span>
-                                                    <span className="font-medium">${service.price.toLocaleString('es-CL')}</span>
+                                                    <span className="font-medium">${service.price.toLocaleString('es-MX')}</span>
                                                 </div>
                                             ))}
                                             </div>
@@ -131,7 +131,7 @@ export default function BookPage() {
                                             </div>
                                             <div className="flex justify-between font-bold text-lg">
                                                 <span>Total</span>
-                                                <span>${totalPrice.toLocaleString('es-CL')}</span>
+                                                <span>${totalPrice.toLocaleString('es-MX')}</span>
                                             </div>
                                         </div>
                                         <Button className="w-full" size="lg" disabled={selectedServices.length === 0} onClick={handleNextStep}>

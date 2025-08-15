@@ -352,7 +352,7 @@ export default function ServicesPage() {
                         </div>
                         <div className="flex items-center gap-6">
                           <span className="text-sm text-muted-foreground">{service.duration} min</span>
-                          <span className="text-sm font-semibold">${service.price.toLocaleString('es-CL')}</span>
+                          <span className="text-sm font-semibold">${service.price.toLocaleString('es-MX')}</span>
                           <Badge className={cn(
                             service.active 
                             ? 'bg-green-100 text-green-800 border-green-200' 

@@ -77,7 +77,7 @@ const saleSchema = (total: number) => z.object({
     }
     return true;
 }, {
-    message: `La suma debe ser exactamente $${total.toLocaleString('es-CL')}`,
+    message: `La suma debe ser exactamente $${total.toLocaleString('es-MX')}`,
     path: ['pago_tarjeta'],
 });
 
@@ -435,7 +435,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
                 <div className="flex-grow pr-2">
                     <p className="font-medium capitalize">{item.nombre}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-CL') || '0'}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-MX') || '0'}</p>
                     <div className="flex items-center gap-2 mt-2">
                     <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
                     <span className="w-5 text-center font-bold">{item.cantidad}</span>
@@ -453,7 +453,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                    <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-CL')}</p>
+                    <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</p>
                     <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
                         <Trash2 className="h-4 w-4" />
                     </Button>
@@ -483,15 +483,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
              </div>
              <div className="flex justify-between">
                 <span>Subtotal:</span>
-                <span>${subtotal.toLocaleString('es-CL')}</span>
+                <span>${subtotal.toLocaleString('es-MX')}</span>
              </div>
              <div className="flex justify-between">
                 <span>Descuento:</span>
-                <span>-${discountAmount.toLocaleString('es-CL')}</span>
+                <span>-${discountAmount.toLocaleString('es-MX')}</span>
              </div>
              <div className="flex justify-between font-bold text-xl pt-2 border-t">
                 <span>Total:</span>
-                <span className="text-primary">${total.toLocaleString('es-CL')}</span>
+                <span className="text-primary">${total.toLocaleString('es-MX')}</span>
              </div>
             </div>
         )}
@@ -518,7 +518,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
                                         <div>
                                           <p className="font-semibold">{service.name}</p>
-                                          <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-CL')}</p>
+                                          <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
                                         </div>
                                         <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
                                     </div>
@@ -533,7 +533,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                      <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
                                         <div>
                                             <p className="font-semibold">{product.nombre}</p>
-                                            <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-CL')}</p>
+                                            <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
                                             <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                         </div>
                                         <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
@@ -605,7 +605,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
                                             <CardContent className="p-4">
                                                 <p className="font-semibold">{service.name}</p>
-                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-CL')}</p>
+                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
                                             </CardContent>
                                         </Card>
                                         ) : (
@@ -621,7 +621,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                             <CardContent className="p-4">
                                                 <p className="font-semibold">{product.nombre}</p>
-                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-CL')}</p>
+                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
                                                 <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                             </CardContent>
                                         </Card>
@@ -773,11 +773,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <div className="mt-4 space-y-1 text-sm">
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Total Ingresado:</span>
-                                        <span className="font-medium">${combinedTotal.toLocaleString('es-CL')}</span>
+                                        <span className="font-medium">${combinedTotal.toLocaleString('es-MX')}</span>
                                     </div>
                                     <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-green-600" : "text-destructive")}>
                                         <span>Faltante:</span>
-                                        <span>${remainingAmount.toLocaleString('es-CL')}</span>
+                                        <span>${remainingAmount.toLocaleString('es-MX')}</span>
                                     </div>
                                 </div>
                                 <FormMessage className="mt-2 text-center text-xs">

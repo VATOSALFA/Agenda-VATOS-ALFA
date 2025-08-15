@@ -325,3 +325,5 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     </>
   );
 }
+
+    

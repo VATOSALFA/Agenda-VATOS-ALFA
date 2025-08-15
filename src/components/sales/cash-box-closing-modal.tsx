@@ -254,7 +254,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                 </FormItem>
                             )}
                         />
-
                         <div className="space-y-2 pt-4 border-t flex-shrink-0">
                           <div className="flex justify-between items-center text-sm font-semibold">
                             <p>Total Contado</p>

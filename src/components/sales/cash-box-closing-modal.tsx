@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -74,11 +73,13 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const totalContado = useMemo(() => {
     return Object.entries(watchedDenominations).reduce((acc, [key, count]) => {
       const denominationValue = parseFloat(key);
-      return acc + denominationValue * (count || 0);
+      const countValue = Number(count) || 0;
+      return acc + denominationValue * countValue;
     }, 0);
   }, [watchedDenominations]);
   
-  const diferencia = (totalContado - fondoBase) - initialCash;
+  const diferencia = totalContado - initialCash - fondoBase;
+
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);

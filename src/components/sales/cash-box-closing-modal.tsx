@@ -71,15 +71,16 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const watchedDenominations = form.watch('denominations');
 
   const totalContado = useMemo(() => {
+    if (!watchedDenominations) return 0;
     return Object.entries(watchedDenominations).reduce((acc, [key, count]) => {
       const denominationValue = parseFloat(key);
       const countValue = Number(count) || 0;
+      if (isNaN(denominationValue)) return acc;
       return acc + denominationValue * countValue;
     }, 0);
   }, [watchedDenominations]);
   
-  const diferencia = totalContado - initialCash - fondoBase;
-
+  const diferencia = totalContado - (initialCash + fondoBase);
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -128,7 +129,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             <TableRow key={d.value}>
                                 <TableCell className="font-medium">{d.label}</TableCell>
                                 <TableCell><Input type="number" placeholder="0" {...form.register(`denominations.${d.value}`)} /></TableCell>
-                                <TableCell className="text-right font-mono">${((watchedDenominations[d.value] || 0) * d.value).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right font-mono">${((watchedDenominations ? watchedDenominations[d.value] : 0) || 0 * d.value).toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

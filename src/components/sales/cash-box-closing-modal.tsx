@@ -88,7 +88,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     }, 0);
   }, [watchedDenominations]);
   
-  const diferencia = totalContado - (initialCash + fondoBase);
+  const diferencia = totalContado - initialCash - fondoBase;
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);

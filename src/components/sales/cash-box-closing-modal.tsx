@@ -1,4 +1,5 @@
 
+
       
 'use client';
 
@@ -63,8 +64,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [authCode, setAuthCode] = useState('');
   
   const [fondoBase, setFondoBase] = useState(1000);
-
-  const [testTotal, setTestTotal] = useState(0);
 
   const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
     acc[d.value.toString().replace('.', '_')] = 0;
@@ -222,16 +221,10 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             <CardTitle className="text-yellow-800 text-sm">Tarjeta de Diagnóstico</CardTitle>
                            </CardHeader>
                            <CardContent>
-                                <p className="text-2xl font-bold text-yellow-900">${testTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+                                <p className="text-2xl font-bold text-yellow-900">${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                            </CardContent>
                         </Card>
-                        <Card className="bg-blue-50">
-                            <CardHeader><CardTitle className="text-sm text-blue-800">Prueba de Suma Simple</CardTitle></CardHeader>
-                            <CardContent className="flex gap-2">
-                                <Button type="button" onClick={() => setTestTotal(prev => prev + 100)}>Sumar 100</Button>
-                                <Button type="button" variant="secondary" onClick={() => setTestTotal(0)}>Resetear</Button>
-                            </CardContent>
-                        </Card>
+                        
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>

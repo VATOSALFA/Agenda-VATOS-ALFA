@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -10,7 +9,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Mail, Printer, X, Pencil, Store } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';

@@ -598,9 +598,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
-            <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 overflow-y-auto">
-              <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col md:col-span-2">
-                <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="flex-grow overflow-y-auto">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                     {/* Sale Details Form */}
                     <div className="space-y-4">
                         

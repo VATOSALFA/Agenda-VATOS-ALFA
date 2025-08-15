@@ -164,6 +164,7 @@ export interface CartItem {
 export interface Sale {
   id: string;
   cliente_id: string;
+  client?: Client; // Transient property
   fecha_hora_venta: any;
   items: SaleItem[];
   local_id: string;
@@ -176,6 +177,7 @@ export interface Sale {
     efectivo: number;
     tarjeta: number;
   };
+  professionalNames?: string; // transient
 }
 
 export interface SaleItem {
@@ -184,6 +186,7 @@ export interface SaleItem {
   id: string;
   nombre: string;
   precio: number;
+  precio_unitario?: number;
   subtotal: number;
   tipo: 'servicio' | 'producto';
   servicio?: string;

@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Mail, Printer, X, Pencil, Store } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Client, Local, Sale } from '@/lib/types';
+import type { Client, Local, Sale, Profesional } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useMemo } from 'react';
 import Image from 'next/image';
@@ -39,6 +39,7 @@ const InfoItem = ({ label, value }: { label: string, value: string | number | un
 
 export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalProps) {
     const { data: locales } = useFirestoreQuery<Local>('locales');
+    const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
     const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
     const empresa = empresaData?.[0];
 
@@ -46,6 +47,11 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         if (!sale || !sale.local_id || !locales) return 'N/A';
         return locales.find(l => l.id === sale.local_id)?.name || 'Desconocido';
     }, [sale, locales]);
+
+    const professionalMap = useMemo(() => {
+        if (!professionals) return new Map();
+        return new Map(professionals.map(p => [p.id, p.name]));
+    }, [professionals]);
 
 
     if (!sale) return null;
@@ -108,8 +114,8 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                         {sale.items?.map((item, index) => (
                             <TableRow key={index}>
                                 <TableCell>{item.nombre}</TableCell>
-                                <TableCell>{sale.professionalNames}</TableCell>
-                                <TableCell className="text-right">${(item.precio || item.precio_unitario || 0).toLocaleString('es-CL')}</TableCell>
+                                <TableCell>{professionalMap.get(item.barbero_id) || 'N/A'}</TableCell>
+                                <TableCell className="text-right">${(item.precio_unitario || 0).toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

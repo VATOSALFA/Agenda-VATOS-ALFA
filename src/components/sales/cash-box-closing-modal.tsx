@@ -1,4 +1,5 @@
 
+      
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -21,7 +22,7 @@ import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Card, CardContent } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -340,3 +341,5 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     </>
   );
 }
+
+    

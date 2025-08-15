@@ -218,10 +218,15 @@ export default function InvoicedSalesPage() {
         }
 
         const salesByType = populatedSales.reduce((acc, sale) => {
+          const saleSubtotal = sale.subtotal || 1; // Avoid division by zero
+          const saleTotal = sale.total || 0;
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(item => {
                     const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
-                    acc[type] = (acc[type] || 0) + (item as any).subtotal;
+                    const itemSubtotal = (item as any).subtotal || 0;
+                    const proportion = itemSubtotal / saleSubtotal;
+                    const proportionalTotal = proportion * saleTotal;
+                    acc[type] = (acc[type] || 0) + proportionalTotal;
                 });
             }
             return acc;

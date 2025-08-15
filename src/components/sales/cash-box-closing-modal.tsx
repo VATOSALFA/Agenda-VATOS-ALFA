@@ -165,7 +165,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             <TableRow key={d.value}>
                                 <TableCell className="font-medium">{d.label}</TableCell>
                                 <TableCell><Input type="number" placeholder="0" {...form.register(`denominations.${d.value}`)} /></TableCell>
-                                <TableCell className="text-right font-mono">${((watchedDenominations ? watchedDenominations[d.value] : 0) || 0 * d.value).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right font-mono">${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

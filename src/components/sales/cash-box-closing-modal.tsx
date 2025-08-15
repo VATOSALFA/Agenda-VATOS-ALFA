@@ -1,6 +1,4 @@
 
-
-      
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -86,9 +84,9 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     if (!watchedDenominations) return 0;
     
     let total = 0;
-    for (const [key, count] of Object.entries(watchedDenominations)) {
+    for (const key in watchedDenominations) {
         const denominationValue = parseFloat(key.replace('_', '.'));
-        const countValue = Number(count) || 0;
+        const countValue = Number(watchedDenominations[key]) || 0;
         if (!isNaN(denominationValue) && !isNaN(countValue)) {
             total += denominationValue * countValue;
         }
@@ -213,14 +211,16 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                     </TableRow>
                                 ))}
                               </TableBody>
-                              <TableFooter>
+                            </Table>
+                          </div>
+                           <Table>
+                             <TableFooter>
                                 <TableRow className="bg-muted/50">
                                     <TableCell colSpan={2} className="text-right font-bold text-lg">Total</TableCell>
                                     <TableCell className="text-left font-bold text-lg text-primary">${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</TableCell>
                                 </TableRow>
                               </TableFooter>
-                            </Table>
-                          </div>
+                           </Table>
                         </div>
                     </div>
 

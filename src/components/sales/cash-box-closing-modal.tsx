@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -38,6 +37,12 @@ const denominations = [
   { value: 0.5, label: '$0.50' },
 ];
 
+const initialDenominations = denominations.reduce((acc, d) => {
+    acc[d.value.toString()] = 0;
+    return acc;
+}, {} as Record<string, number | undefined>);
+
+
 const closingSchema = z.object({
   monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
   persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
@@ -53,12 +58,6 @@ interface CashBoxClosingModalProps {
   onFormSubmit: () => void;
   initialCash: number;
 }
-
-const initialDenominations = denominations.reduce((acc, d) => {
-    acc[d.value.toString()] = 0;
-    return acc;
-}, {} as Record<string, number | undefined>);
-
 
 export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash }: CashBoxClosingModalProps) {
   const { toast } = useToast();
@@ -175,23 +174,25 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
               <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 h-full flex flex-col">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-grow overflow-hidden">
                     {/* Left Column */}
-                    <div className="space-y-4 flex flex-col">
-                        <h3 className="font-semibold">Calculadora de Efectivo</h3>
+                    <div className="space-y-4 flex flex-col h-full">
+                        <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
                         <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">Denominación</TableHead>
+                                <TableHead className="text-center w-24">Cantidad</TableHead>
+                                <TableHead className="text-left w-32">Total</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                          </Table>
                           <ScrollArea className="flex-grow">
                             <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="text-right">Denominación</TableHead>
-                                  <TableHead className="text-center w-24">Cantidad</TableHead>
-                                  <TableHead className="text-left w-32">Total</TableHead>
-                                </TableRow>
-                              </TableHeader>
                               <TableBody>
                                 {denominations.map(d => (
                                     <TableRow key={d.value}>
                                         <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
-                                        <TableCell className="py-1">
+                                        <TableCell className="py-1 w-24 px-2">
                                             <FormField
                                                 control={form.control}
                                                 name={`denominations.${d.value}`}
@@ -202,7 +203,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                                 )}
                                             />
                                         </TableCell>
-                                        <TableCell className="font-mono text-left py-1">
+                                        <TableCell className="font-mono text-left py-1 w-32">
                                           ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
                                         </TableCell>
                                     </TableRow>

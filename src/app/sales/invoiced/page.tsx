@@ -221,9 +221,14 @@ export default function InvoicedSalesPage() {
         }, {} as Record<string, number>);
 
         const salesByPaymentMethod = populatedSales.reduce((acc, sale) => {
-            const method = sale.metodo_pago || 'otro';
-            acc[method] = (acc[method] || 0) + (sale.total || 0);
-            return acc;
+          if (sale.metodo_pago === 'combinado') {
+              acc['efectivo'] = (acc['efectivo'] || 0) + (sale.detalle_pago_combinado?.efectivo || 0);
+              acc['tarjeta'] = (acc['tarjeta'] || 0) + (sale.detalle_pago_combinado?.tarjeta || 0);
+          } else {
+              const method = sale.metodo_pago || 'otro';
+              acc[method] = (acc[method] || 0) + (sale.total || 0);
+          }
+          return acc;
         }, {} as Record<string, number>);
 
         const totalSales = populatedSales.reduce((acc, sale) => acc + (sale.total || 0), 0);

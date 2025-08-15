@@ -197,24 +197,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             </TableBody>
                           </Table>
                         </ScrollArea>
-                        <div className="space-y-2 pt-4 border-t flex-shrink-0">
-                          <div className="flex justify-between items-center text-sm font-semibold">
-                            <p>Total Contado</p>
-                            <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <p>Efectivo en caja (Sistema)</p>
-                            <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <p>Fondo Base</p>
-                            <p>- ${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                          </div>
-                           <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
-                              <p>Diferencia</p>
-                              <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                          </div>
-                        </div>
                     </div>
 
                     {/* Right Column */}
@@ -272,6 +254,26 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                 </FormItem>
                             )}
                         />
+
+                        <div className="space-y-2 pt-4 border-t flex-shrink-0">
+                          <div className="flex justify-between items-center text-sm font-semibold">
+                            <p>Total Contado</p>
+                            <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Efectivo en caja (Sistema)</p>
+                            <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Fondo Base</p>
+                            <p>- ${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                           <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                              <p>Diferencia</p>
+                              <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                        </div>
+
                     </div>
                 </div>
                 <DialogFooter className="pt-8 border-t flex-shrink-0">

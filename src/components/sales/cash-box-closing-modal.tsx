@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -9,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +19,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Edit, Save } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { cn } from '@/lib/utils';
 
@@ -54,9 +57,10 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingFondo, setIsEditingFondo] = useState(false);
   
   // This would typically come from local settings
-  const fondoBase = 1000;
+  const [fondoBase, setFondoBase] = useState(1000);
 
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
@@ -75,8 +79,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     return Object.entries(watchedDenominations).reduce((acc, [key, count]) => {
       const denominationValue = parseFloat(key);
       const countValue = Number(count) || 0;
-      if (isNaN(denominationValue)) return acc;
-      return acc + denominationValue * countValue;
+      if (isNaN(denominationValue) || isNaN(countValue)) return acc;
+      return acc + (denominationValue * countValue);
     }, 0);
   }, [watchedDenominations]);
   
@@ -115,7 +119,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         <DialogHeader>
           <DialogTitle>Realizar Corte de Caja</DialogTitle>
           <DialogDescription>
-            Cuenta el efectivo, registra la entrega y cierra tu turno.
+             {format(new Date(), "eeee, dd 'de' MMMM 'de' yyyy", { locale: es })}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -149,8 +153,18 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             <div className="space-y-4">
                 <Card>
                   <CardContent className="p-4">
-                    <FormLabel>Fondo Base en Caja</FormLabel>
-                    <p className="text-2xl font-bold">${fondoBase.toLocaleString('es-CL')}</p>
+                    <div className="flex justify-between items-center">
+                        <FormLabel>Fondo Base en Caja</FormLabel>
+                         <Button variant="ghost" size="sm" onClick={() => setIsEditingFondo(!isEditingFondo)}>
+                            {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
+                            {isEditingFondo ? 'Guardar' : 'Editar'}
+                        </Button>
+                    </div>
+                    {isEditingFondo ? (
+                        <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="mt-2 text-2xl font-bold h-auto p-0 border-0 shadow-none focus-visible:ring-0" />
+                    ) : (
+                        <p className="text-2xl font-bold">${fondoBase.toLocaleString('es-CL')}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">Este monto debe permanecer en caja. Editable por el administrador.</p>
                   </CardContent>
                 </Card>

@@ -110,11 +110,18 @@ export default function FinanzasMensualesPage() {
             if (!acc[saleDate]) {
                 acc[saleDate] = { fecha: saleDate, efectivo: 0, deposito: 0, total: 0 };
             }
-            if (sale.metodo_pago === 'efectivo') {
+            
+            const metodoPago = sale.metodo_pago;
+
+            if (metodoPago === 'efectivo') {
                 acc[saleDate].efectivo += sale.total;
-            } else if (['tarjeta', 'transferencia'].includes(sale.metodo_pago)) {
+            } else if (['tarjeta', 'transferencia'].includes(metodoPago)) {
                 acc[saleDate].deposito += sale.total;
+            } else if (metodoPago === 'combinado' && sale.detalle_pago_combinado) {
+                acc[saleDate].efectivo += sale.detalle_pago_combinado.efectivo || 0;
+                acc[saleDate].deposito += sale.detalle_pago_combinado.tarjeta || 0;
             }
+            
             acc[saleDate].total += sale.total;
             return acc;
         }, {} as Record<string, { fecha: string; efectivo: number; deposito: number; total: number }>);
@@ -132,10 +139,15 @@ export default function FinanzasMensualesPage() {
 
             sales.forEach(sale => {
                 const saleDate = sale.fecha_hora_venta.toDate();
+                const saleSubtotal = sale.subtotal || 1;
 
                 sale.items?.forEach(item => {
                     const professional = professionalMap.get(item.barbero_id);
                     if (!professional) return;
+                    
+                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                    const proportion = itemSubtotal / saleSubtotal;
+                    const proportionalTotal = proportion * sale.total;
 
                     let commissionConfig = null;
                     if (item.tipo === 'servicio') {
@@ -152,7 +164,7 @@ export default function FinanzasMensualesPage() {
 
                     if (commissionConfig) {
                         const commissionAmount = commissionConfig.type === '%'
-                            ? item.subtotal * (commissionConfig.value / 100)
+                            ? proportionalTotal * (commissionConfig.value / 100)
                             : commissionConfig.value;
                         
                         const key = `${format(saleDate, 'yyyy-MM-dd')}-${professional.id}`;
@@ -222,9 +234,14 @@ export default function FinanzasMensualesPage() {
         let comisionProfesionales = 0;
         
         sales.forEach(sale => {
+            const saleSubtotal = sale.subtotal || 1;
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
-                    ventaProductos += item.subtotal;
+                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                    const proportion = itemSubtotal / saleSubtotal;
+                    const proportionalTotal = proportion * sale.total;
+
+                    ventaProductos += proportionalTotal;
                     
                     const product = productMap.get(item.id);
                     if (product && product.purchase_cost) {
@@ -236,7 +253,7 @@ export default function FinanzasMensualesPage() {
                         const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                         if(commissionConfig) {
                             comisionProfesionales += commissionConfig.type === '%'
-                                ? item.subtotal * (commissionConfig.value / 100)
+                                ? proportionalTotal * (commissionConfig.value / 100)
                                 : commissionConfig.value;
                         }
                     }

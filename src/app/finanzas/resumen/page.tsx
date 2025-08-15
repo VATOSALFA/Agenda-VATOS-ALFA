@@ -85,8 +85,13 @@ export default function FinanzasResumenPage() {
                     }
 
                     if (commissionConfig) {
+                        const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                        const saleSubtotal = sale.subtotal || 1;
+                        const proportion = itemSubtotal / saleSubtotal;
+                        const proportionalTotal = proportion * sale.total;
+                        
                         const commissionAmount = commissionConfig.type === '%'
-                            ? item.subtotal * (commissionConfig.value / 100)
+                            ? proportionalTotal * (commissionConfig.value / 100)
                             : commissionConfig.value;
                         return { fecha: saleDate, monto: commissionAmount, aQuien: professional.id, concepto: `Comisión ${item.tipo}` };
                     }
@@ -105,10 +110,15 @@ export default function FinanzasResumenPage() {
             const monthIndex = monthNames.indexOf(data.month);
             const monthlySales = sales.filter(s => s.fecha_hora_venta.toDate().getMonth() === monthIndex);
             
-            const ventaProductos = monthlySales
-                .flatMap(s => s.items)
-                .filter(i => i?.tipo === 'producto')
-                .reduce((sum, i) => sum + (i?.subtotal || 0), 0);
+            const ventaProductos = monthlySales.reduce((sum, sale) => {
+                const saleSubtotal = sale.subtotal || 1;
+                const productSubtotal = sale.items
+                    .filter(i => i.tipo === 'producto')
+                    .reduce((itemSum, i) => itemSum + (i.subtotal || i.precio_unitario || 0), 0);
+                
+                const proportion = productSubtotal / saleSubtotal;
+                return sum + (proportion * sale.total);
+            }, 0);
 
             const subtotalUtilidad = data.ingresos - data.egresos - ventaProductos;
             const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
@@ -139,9 +149,14 @@ export default function FinanzasResumenPage() {
         let comisionProfesionales = 0;
         
         sales.forEach(sale => {
+            const saleSubtotal = sale.subtotal || 1;
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
-                    ventaProductos += item.subtotal;
+                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                    const proportion = itemSubtotal / saleSubtotal;
+                    const proportionalTotal = proportion * sale.total;
+                    
+                    ventaProductos += proportionalTotal;
                     
                     const product = productMap.get(item.id);
                     if (product && product.purchase_cost) {
@@ -154,7 +169,7 @@ export default function FinanzasResumenPage() {
                             const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                             if(commissionConfig) {
                                 comisionProfesionales += commissionConfig.type === '%'
-                                    ? item.subtotal * (commissionConfig.value / 100)
+                                    ? proportionalTotal * (commissionConfig.value / 100)
                                     : commissionConfig.value;
                             }
                          }
@@ -257,7 +272,7 @@ export default function FinanzasResumenPage() {
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                 ) : (
                                     firstHalfYear.map((data, index) => (
                                         <TableRow key={data.monthFullName}>

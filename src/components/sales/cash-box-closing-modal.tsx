@@ -186,12 +186,12 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                               </TableRow>
                             </TableHeader>
                           </Table>
-                          <ScrollArea className="flex-grow">
+                           <div className="flex-grow overflow-y-auto">
                             <Table>
                               <TableBody>
                                 {denominations.map(d => (
                                     <TableRow key={d.value}>
-                                        <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
+                                        <TableCell className="text-right py-1">{d.label}</TableCell>
                                         <TableCell className="py-1 w-24 px-2">
                                             <FormField
                                                 control={form.control}
@@ -203,14 +203,14 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                                 )}
                                             />
                                         </TableCell>
-                                        <TableCell className="font-mono text-left py-1 w-32">
-                                          ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
+                                        <TableCell className="text-left py-1 w-32">
+                                          ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                                         </TableCell>
                                     </TableRow>
                                 ))}
                               </TableBody>
                             </Table>
-                          </ScrollArea>
+                          </div>
                         </div>
                     </div>
 
@@ -230,7 +230,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                     <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
                                 </div>
                             ) : (
-                                <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                                <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                             )}
                         </div>
                         <FormField
@@ -272,22 +272,21 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                         <div className="space-y-2 pt-4 border-t flex-shrink-0">
                           <div className="flex justify-between items-center text-sm font-semibold">
                             <p>Total Contado</p>
-                            <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                            <p>${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <p>Efectivo en caja (Sistema)</p>
-                            <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                            <p>${initialCash.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <p>Fondo Base</p>
-                            <p>- ${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                            <p>- ${fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>
                            <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
                               <p>Diferencia</p>
-                              <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                              <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>
                         </div>
-
                     </div>
                 </div>
                 <DialogFooter className="pt-8 border-t flex-shrink-0">

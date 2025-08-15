@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -55,7 +54,7 @@ interface CashBoxClosingModalProps {
 }
 
 const initialDenominations = denominations.reduce((acc, d) => {
-    acc[d.value] = 0;
+    acc[d.value.toString()] = 0;
     return acc;
 }, {} as Record<string, number | undefined>);
 
@@ -160,45 +159,45 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow overflow-hidden">
-          <ScrollArea className="h-full pr-6">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 h-full flex flex-col">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-grow overflow-hidden">
                     {/* Left Column */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex flex-col">
                         <h3 className="font-semibold">Calculadora de Efectivo</h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-right">Denominación</TableHead>
-                              <TableHead className="text-center w-24">Cantidad</TableHead>
-                              <TableHead className="text-left w-32">Total</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {denominations.map(d => (
-                                <TableRow key={d.value}>
-                                    <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
-                                    <TableCell className="py-1">
-                                        <FormField
-                                            control={form.control}
-                                            name={`denominations.${d.value}`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormControl><Input type="number" placeholder="0" {...field} className="text-center h-8" /></FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="font-mono text-left py-1">
-                                      ${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-
-                        <div className="space-y-2 pt-4 border-t">
+                        <ScrollArea className="flex-grow border rounded-lg">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">Denominación</TableHead>
+                                <TableHead className="text-center w-24">Cantidad</TableHead>
+                                <TableHead className="text-left w-32">Total</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {denominations.map(d => (
+                                  <TableRow key={d.value}>
+                                      <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
+                                      <TableCell className="py-1">
+                                          <FormField
+                                              control={form.control}
+                                              name={`denominations.${d.value}`}
+                                              render={({ field }) => (
+                                                  <FormItem>
+                                                      <FormControl><Input type="number" placeholder="0" {...field} className="text-center h-8" /></FormControl>
+                                                  </FormItem>
+                                              )}
+                                          />
+                                      </TableCell>
+                                      <TableCell className="font-mono text-left py-1">
+                                        ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2}) || '-'}
+                                      </TableCell>
+                                  </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </ScrollArea>
+                        <div className="space-y-2 pt-4 border-t flex-shrink-0">
                           <div className="flex justify-between items-center text-sm font-semibold">
                             <p>Total Contado</p>
                             <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
@@ -275,7 +274,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                         />
                     </div>
                 </div>
-                <DialogFooter className="pt-8 border-t">
+                <DialogFooter className="pt-8 border-t flex-shrink-0">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
                     <Button type="submit" disabled={isSubmitting}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -284,7 +283,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                 </DialogFooter>
               </form>
             </Form>
-          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>

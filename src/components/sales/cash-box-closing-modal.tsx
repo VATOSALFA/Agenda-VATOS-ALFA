@@ -84,12 +84,16 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
   const totalContado = useMemo(() => {
     if (!watchedDenominations) return 0;
-    return Object.entries(watchedDenominations).reduce((acc, [key, count]) => {
-      const denominationValue = parseFloat(key.replace('_', '.'));
-      const countValue = Number(count) || 0;
-      if (isNaN(denominationValue) || isNaN(countValue)) return acc;
-      return acc + (denominationValue * countValue);
-    }, 0);
+    
+    let total = 0;
+    for (const [key, count] of Object.entries(watchedDenominations)) {
+        const denominationValue = parseFloat(key.replace('_', '.'));
+        const countValue = Number(count) || 0;
+        if (!isNaN(denominationValue) && !isNaN(countValue)) {
+            total += denominationValue * countValue;
+        }
+    }
+    return total;
   }, [watchedDenominations]);
 
   const diferencia = totalContado - fondoBase - initialCash;

@@ -68,6 +68,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [authCode, setAuthCode] = useState('');
   
   const [fondoBase, setFondoBase] = useState(1000);
+  const [testTotal, setTestTotal] = useState(0);
 
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
@@ -220,9 +221,18 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                 <CardTitle className="text-sm">Debug - Total Contado</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-2xl font-bold">${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+                                <p className="text-2xl font-bold">${testTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                             </CardContent>
                         </Card>
+                        
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm">Prueba de Suma Simple</h4>
+                          <div className="flex gap-2">
+                            <Button type="button" onClick={() => setTestTotal(t => t + 100)}>Sumar 100</Button>
+                            <Button type="button" variant="outline" onClick={() => setTestTotal(0)}>Resetear</Button>
+                          </div>
+                        </div>
+                        
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>

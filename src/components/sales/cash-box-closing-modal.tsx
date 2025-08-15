@@ -22,6 +22,7 @@ import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { ScrollArea } from '../ui/scroll-area';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -151,132 +152,140 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Realizar Corte de Caja</DialogTitle>
           <DialogDescription>
              {format(new Date(), "eeee, dd 'de' MMMM 'de' yyyy", { locale: es })}
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Left Column */}
-                <div className="space-y-4">
-                    <h3 className="font-semibold">Calculadora de Efectivo</h3>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">Denominación</TableHead>
-                          <TableHead className="text-center">Cantidad</TableHead>
-                          <TableHead className="text-left">Total</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                         {denominations.map(d => (
-                            <TableRow key={d.value}>
-                                <TableCell className="font-mono text-right">{d.label}</TableCell>
-                                <TableCell>
-                                    <FormField
-                                        control={form.control}
-                                        name={`denominations.${d.value}`}
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormControl><Input type="number" placeholder="0" {...field} className="text-center" /></FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                </TableCell>
-                                <TableCell className="font-mono text-left">
-                                  ${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
-                                </TableCell>
+        <div className="flex-grow overflow-hidden">
+          <ScrollArea className="h-full pr-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left Column */}
+                    <div className="space-y-4">
+                        <h3 className="font-semibold">Calculadora de Efectivo</h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">Denominación</TableHead>
+                              <TableHead className="text-center">Cantidad</TableHead>
+                              <TableHead className="text-left">Total</TableHead>
                             </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {denominations.map(d => (
+                                <TableRow key={d.value}>
+                                    <TableCell className="font-mono text-right">{d.label}</TableCell>
+                                    <TableCell>
+                                        <FormField
+                                            control={form.control}
+                                            name={`denominations.${d.value}`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input type="number" placeholder="0" {...field} className="text-center" /></FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="font-mono text-left">
+                                      ${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
 
-                    <div className="space-y-2 pt-4 border-t">
-                      <div className="flex justify-between items-center text-sm">
-                        <p>Total en Sistema</p>
-                        <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                      </div>
-                      <div className="flex justify-between items-center text-lg font-bold">
-                        <p>Total Contado</p>
-                        <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                      </div>
-                      <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
-                          <p>Diferencia</p>
-                          <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                      </div>
+                        <div className="space-y-2 pt-4 border-t">
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Total Contado</p>
+                            <p className="font-bold">${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Efectivo en caja</p>
+                            <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Fondo base</p>
+                            <p>${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                          <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                              <p>Diferencia</p>
+                              <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <FormLabel className="flex justify-between items-center">
+                                <span>Fondo base en caja</span>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
+                                    {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
+                                    {isEditingFondo ? 'Guardar' : 'Editar'}
+                                </Button>
+                            </FormLabel>
+                            {isEditingFondo ? (
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
+                                </div>
+                            ) : (
+                                <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                            )}
+                        </div>
+                        <FormField
+                            control={form.control}
+                            name="monto_entregado"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Monto entregado (sin fondo base)</FormLabel>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <FormControl><Input type="number" {...field} className="pl-6" /></FormControl>
+                                </div>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="persona_recibe"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Nombre de quien recibe</FormLabel>
+                                <FormControl><Input {...field} /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="comentarios"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Comentarios</FormLabel>
+                                <FormControl><Input {...field} placeholder="(Opcional)" /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </div>
                 </div>
-
-                {/* Right Column */}
-                <div className="space-y-6">
-                    <div className="space-y-2">
-                        <FormLabel className="flex justify-between items-center">
-                            <span>Fondo base en caja</span>
-                             <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
-                                {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
-                                {isEditingFondo ? 'Guardar' : 'Editar'}
-                            </Button>
-                        </FormLabel>
-                        {isEditingFondo ? (
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
-                            </div>
-                        ) : (
-                            <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                        )}
-                    </div>
-                     <FormField
-                        control={form.control}
-                        name="monto_entregado"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Monto entregado total</FormLabel>
-                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                <FormControl><Input type="number" {...field} className="pl-6" /></FormControl>
-                             </div>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                     <FormField
-                        control={form.control}
-                        name="persona_recibe"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Nombre de quien recibe</FormLabel>
-                            <FormControl><Input {...field} /></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                     <FormField
-                        control={form.control}
-                        name="comentarios"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Comentarios</FormLabel>
-                            <FormControl><Input {...field} placeholder="(Opcional)" /></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-            </div>
-            <DialogFooter className="pt-8">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Corte
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+                <DialogFooter className="pt-8 border-t">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Guardar Corte
+                    </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
     <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>

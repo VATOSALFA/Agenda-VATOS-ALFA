@@ -57,7 +57,7 @@ interface CashBoxClosingModalProps {
 const initialDenominations = denominations.reduce((acc, d) => {
     acc[d.value] = 0;
     return acc;
-}, {} as Record<string, number>);
+}, {} as Record<string, number | undefined>);
 
 
 export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash }: CashBoxClosingModalProps) {
@@ -93,7 +93,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     }, 0);
   }, [watchedDenominations]);
   
-  const diferencia = totalContado - initialCash - fondoBase;
+  const diferencia = totalContado - fondoBase - initialCash;
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -178,8 +178,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                           <TableBody>
                             {denominations.map(d => (
                                 <TableRow key={d.value}>
-                                    <TableCell className="font-mono text-right py-1.5">{d.label}</TableCell>
-                                    <TableCell className="py-1.5">
+                                    <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
+                                    <TableCell className="py-1">
                                         <FormField
                                             control={form.control}
                                             name={`denominations.${d.value}`}
@@ -190,7 +190,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                             )}
                                         />
                                     </TableCell>
-                                    <TableCell className="font-mono text-left py-1.5">
+                                    <TableCell className="font-mono text-left py-1">
                                       ${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
                                     </TableCell>
                                 </TableRow>
@@ -199,13 +199,17 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                         </Table>
 
                         <div className="space-y-2 pt-4 border-t">
-                          <div className="flex justify-between items-center text-sm">
-                            <p className="font-bold">Total Contado</p>
-                            <p className="font-bold">${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          <div className="flex justify-between items-center text-sm font-semibold">
+                            <p>Total Contado</p>
+                            <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <p>Efectivo en caja (Sistema)</p>
                             <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Fondo Base</p>
+                            <p>- ${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
                           </div>
                            <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
                               <p>Diferencia</p>

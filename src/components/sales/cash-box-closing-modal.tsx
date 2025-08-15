@@ -171,26 +171,26 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                           <TableHeader>
                             <TableRow>
                               <TableHead className="text-right">Denominación</TableHead>
-                              <TableHead className="text-center">Cantidad</TableHead>
-                              <TableHead className="text-left">Total</TableHead>
+                              <TableHead className="text-center w-24">Cantidad</TableHead>
+                              <TableHead className="text-left w-32">Total</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {denominations.map(d => (
                                 <TableRow key={d.value}>
-                                    <TableCell className="font-mono text-right">{d.label}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="font-mono text-right py-1.5">{d.label}</TableCell>
+                                    <TableCell className="py-1.5">
                                         <FormField
                                             control={form.control}
                                             name={`denominations.${d.value}`}
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormControl><Input type="number" placeholder="0" {...field} className="text-center" /></FormControl>
+                                                    <FormControl><Input type="number" placeholder="0" {...field} className="text-center h-8" /></FormControl>
                                                 </FormItem>
                                             )}
                                         />
                                     </TableCell>
-                                    <TableCell className="font-mono text-left">
+                                    <TableCell className="font-mono text-left py-1.5">
                                       ${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
                                     </TableCell>
                                 </TableRow>
@@ -200,18 +200,14 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
                         <div className="space-y-2 pt-4 border-t">
                           <div className="flex justify-between items-center text-sm">
-                            <p>Total Contado</p>
+                            <p className="font-bold">Total Contado</p>
                             <p className="font-bold">${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
                           </div>
                           <div className="flex justify-between items-center text-sm">
-                            <p>Efectivo en caja</p>
+                            <p>Efectivo en caja (Sistema)</p>
                             <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
                           </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <p>Fondo base</p>
-                            <p>${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                          </div>
-                          <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                           <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
                               <p>Diferencia</p>
                               <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
                           </div>

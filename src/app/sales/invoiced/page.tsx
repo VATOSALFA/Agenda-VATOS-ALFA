@@ -18,7 +18,7 @@ import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
-import type { Client, Local, Profesional, Service, AuthCode, Sale } from "@/lib/types";
+import type { Client, Local, Profesional, Service, AuthCode, Sale, User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
 import {
@@ -174,6 +174,7 @@ export default function InvoicedSalesPage() {
     const { data: clients } = useFirestoreQuery<Client>('clientes');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: users } = useFirestoreQuery<User>('usuarios');
 
     const sales = useMemo(() => {
         return salesDataFromHook.filter(sale => {
@@ -188,19 +189,25 @@ export default function InvoicedSalesPage() {
         return new Map(clients.map(c => [c.id, c]));
     }, [clients]);
 
-    const professionalMap = useMemo(() => {
-        if (!professionals) return new Map();
-        return new Map(professionals.map(p => [p.id, p.name]));
-    }, [professionals]);
+    const sellerMap = useMemo(() => {
+        const map = new Map<string, string>();
+        if (professionals) {
+            professionals.forEach(p => map.set(p.id, p.name));
+        }
+        if (users) {
+            users.forEach(u => map.set(u.id, u.name));
+        }
+        return map;
+    }, [professionals, users]);
     
     const populatedSales = useMemo(() => {
-        if (!sales || !clientMap.size || !professionalMap.size) return [];
+        if (!sales || !clientMap.size || !sellerMap.size) return [];
         return sales.map(sale => ({
             ...sale,
             client: clientMap.get(sale.cliente_id),
-            professionalNames: sale.items?.map(item => professionalMap.get(item.barbero_id)).filter(Boolean).join(', ') || 'N/A'
+            professionalNames: sale.items?.map(item => sellerMap.get(item.barbero_id)).filter(Boolean).join(', ') || 'N/A'
         }));
-    }, [sales, clientMap, professionalMap]);
+    }, [sales, clientMap, sellerMap]);
 
     const salesData = useMemo(() => {
         if (!populatedSales) {
@@ -492,7 +499,12 @@ export default function InvoicedSalesPage() {
                                     <TableCell>{sale.professionalNames}</TableCell>
                                     <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
                                     <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
-                                    <TableCell>0.00%</TableCell>
+                                    <TableCell>
+                                        {sale.descuento?.valor > 0 
+                                            ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-CL')}`)
+                                            : '0.00%'
+                                        }
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>

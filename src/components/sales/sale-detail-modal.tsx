@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Mail, Printer, X, Pencil, Store } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Client, Local, Sale, Profesional } from '@/lib/types';
+import type { Client, Local, Sale, Profesional, User } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useMemo } from 'react';
 import Image from 'next/image';
@@ -40,6 +40,7 @@ const InfoItem = ({ label, value }: { label: string, value: string | number | un
 export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalProps) {
     const { data: locales } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: users } = useFirestoreQuery<User>('usuarios');
     const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
     const empresa = empresaData?.[0];
 
@@ -48,10 +49,16 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         return locales.find(l => l.id === sale.local_id)?.name || 'Desconocido';
     }, [sale, locales]);
 
-    const professionalMap = useMemo(() => {
-        if (!professionals) return new Map();
-        return new Map(professionals.map(p => [p.id, p.name]));
-    }, [professionals]);
+    const sellerMap = useMemo(() => {
+        const map = new Map<string, string>();
+        if (professionals) {
+            professionals.forEach(p => map.set(p.id, p.name));
+        }
+        if (users) {
+            users.forEach(u => map.set(u.id, u.name));
+        }
+        return map;
+    }, [professionals, users]);
 
 
     if (!sale) return null;
@@ -69,6 +76,11 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         if (isNaN(dateObj.getTime())) return 'Fecha inválida';
         return format(dateObj, 'PP p', { locale: es });
     };
+
+    const subtotal = sale.subtotal || sale.items?.reduce((acc, item) => acc + (item.precio_unitario || 0) * item.cantidad, 0) || 0;
+    const discountAmount = sale.descuento?.valor && sale.descuento.tipo === 'percentage'
+        ? (subtotal * sale.descuento.valor) / 100
+        : (sale.descuento?.valor || 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -114,11 +126,27 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                         {sale.items?.map((item, index) => (
                             <TableRow key={index}>
                                 <TableCell>{item.nombre}</TableCell>
-                                <TableCell>{professionalMap.get(item.barbero_id) || 'N/A'}</TableCell>
+                                <TableCell>{sellerMap.get(item.barbero_id) || 'N/A'}</TableCell>
                                 <TableCell className="text-right">${(item.precio_unitario || 0).toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
+                     <TableFooter>
+                        <TableRow>
+                            <TableCell colSpan={2} className="text-right">Subtotal</TableCell>
+                            <TableCell className="text-right">${subtotal.toLocaleString('es-CL')}</TableCell>
+                        </TableRow>
+                        {discountAmount > 0 && (
+                            <TableRow>
+                                <TableCell colSpan={2} className="text-right">Descuento</TableCell>
+                                <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-CL')}</TableCell>
+                            </TableRow>
+                        )}
+                        <TableRow className="font-bold text-lg">
+                            <TableCell colSpan={2} className="text-right">Total</TableCell>
+                            <TableCell className="text-right">${sale.total.toLocaleString('es-CL')}</TableCell>
+                        </TableRow>
+                    </TableFooter>
                 </Table>
             </div>
         </div>

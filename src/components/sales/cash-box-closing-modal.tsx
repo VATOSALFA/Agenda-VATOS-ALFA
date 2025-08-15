@@ -36,12 +36,6 @@ const denominations = [
   { value: 0.5, label: '$0.50' },
 ];
 
-const initialDenominations = denominations.reduce((acc, d) => {
-    acc[d.value.toString().replace('.', '_')] = 0;
-    return acc;
-}, {} as Record<string, number | undefined>);
-
-
 const closingSchema = z.object({
   monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
   persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
@@ -68,6 +62,11 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   
   const [fondoBase, setFondoBase] = useState(1000);
 
+  const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
+    acc[d.value.toString().replace('.', '_')] = 0;
+    return acc;
+  }, {} as Record<string, number | undefined>), []);
+
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
     defaultValues: {
@@ -89,7 +88,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
       return acc + (denominationValue * countValue);
     }, 0);
   }, [watchedDenominations]);
-  
+
   const diferencia = totalContado - fondoBase - initialCash;
 
   useEffect(() => {
@@ -101,7 +100,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
              denominations: initialDenominations,
         })
     }
-  }, [isOpen, form]);
+  }, [isOpen, form, initialDenominations]);
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -214,7 +213,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
                     {/* Right Column */}
                     <div className="space-y-4 flex flex-col">
-                        
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>

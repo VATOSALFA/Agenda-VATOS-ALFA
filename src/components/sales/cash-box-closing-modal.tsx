@@ -22,7 +22,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 const denominations = [
@@ -207,12 +207,18 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                                 )}
                                             />
                                         </TableCell>
-                                        <TableCell className="text-left py-1 w-32">
+                                        <TableCell className="text-left py-1 w-32 font-medium">
                                           ${((watchedDenominations?.[String(d.value).replace('.', '_')] || 0) * d.value).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                                         </TableCell>
                                     </TableRow>
                                 ))}
                               </TableBody>
+                              <TableFooter>
+                                <TableRow className="bg-muted/50">
+                                    <TableCell colSpan={2} className="text-right font-bold text-lg">Total</TableCell>
+                                    <TableCell className="text-left font-bold text-lg text-primary">${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</TableCell>
+                                </TableRow>
+                              </TableFooter>
                             </Table>
                           </div>
                         </div>
@@ -220,15 +226,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
                     {/* Right Column */}
                     <div className="space-y-4 flex flex-col">
-                        <Card className="bg-yellow-100 border-yellow-300">
-                           <CardHeader>
-                            <CardTitle className="text-yellow-800 text-sm">Tarjeta de Diagnóstico</CardTitle>
-                           </CardHeader>
-                           <CardContent>
-                                <p className="text-2xl font-bold text-yellow-900">${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                           </CardContent>
-                        </Card>
-                        
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>
@@ -338,5 +335,3 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     </>
   );
 }
-
-    

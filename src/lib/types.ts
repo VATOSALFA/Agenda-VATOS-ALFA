@@ -169,6 +169,11 @@ export interface Sale {
   items: SaleItem[];
   local_id: string;
   metodo_pago: string;
+  subtotal: number;
+  descuento: {
+    valor: number;
+    tipo: 'fixed' | 'percentage';
+  };
   total: number;
   creado_por_id?: string;
   creado_por_nombre?: string;

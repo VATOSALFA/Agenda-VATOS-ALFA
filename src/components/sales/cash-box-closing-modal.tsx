@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -17,6 +18,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Loader2 } from 'lucide-react';
+import { Card, CardContent } from '../ui/card';
+import { cn } from '@/lib/utils';
 
 const denominations = [
   { value: 1000, label: '$1,000' },
@@ -33,7 +36,7 @@ const denominations = [
 ];
 
 const closingSchema = z.object({
-  fondo_base: z.coerce.number().min(0, 'El fondo debe ser un número positivo.'),
+  monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
   persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
   comentarios: z.string().optional(),
   denominations: z.record(z.coerce.number().min(0).optional()),
@@ -52,11 +55,14 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // This would typically come from local settings
+  const fondoBase = 1000;
 
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
     defaultValues: {
-      fondo_base: 0,
+      monto_entregado: 0,
       persona_recibe: '',
       comentarios: '',
       denominations: {},
@@ -65,14 +71,14 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
   const watchedDenominations = form.watch('denominations');
 
-  const totalCalculado = useMemo(() => {
+  const totalContado = useMemo(() => {
     return Object.entries(watchedDenominations).reduce((acc, [key, count]) => {
       const denominationValue = parseFloat(key);
       return acc + denominationValue * (count || 0);
     }, 0);
   }, [watchedDenominations]);
   
-  const diferencia = totalCalculado - initialCash;
+  const diferencia = (totalContado - fondoBase) - initialCash;
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -82,8 +88,9 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             persona_entrega_id: user?.uid,
             persona_entrega_nombre: user?.displayName,
             persona_recibe: data.persona_recibe,
-            fondo_base: data.fondo_base,
-            total_calculado: totalCalculado,
+            fondo_base: fondoBase,
+            monto_entregado: data.monto_entregado,
+            total_calculado: totalContado,
             total_sistema: initialCash,
             diferencia: diferencia,
             comentarios: data.comentarios,
@@ -126,21 +133,31 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     </TableBody>
                 </Table>
               </ScrollArea>
-              <div className="p-4 border rounded-lg space-y-2">
-                <div className="flex justify-between font-bold text-lg"><p>Total Contado:</p> <p>${totalCalculado.toLocaleString('es-CL')}</p></div>
-                <div className="flex justify-between text-sm"><p>Total en Sistema:</p> <p>${initialCash.toLocaleString('es-CL')}</p></div>
-                <div className={`flex justify-between font-bold text-sm ${diferencia < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                    <p>Diferencia:</p> <p>${diferencia.toLocaleString('es-CL')}</p>
-                </div>
-              </div>
+              <Card>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex justify-between font-bold text-lg"><p>Total Contado:</p> <p>${totalContado.toLocaleString('es-CL')}</p></div>
+                  <div className="flex justify-between text-sm"><p>Total en Sistema (Ingresos - Egresos):</p> <p>${initialCash.toLocaleString('es-CL')}</p></div>
+                   <div className="flex justify-between text-sm"><p>Fondo Base:</p> <p>${fondoBase.toLocaleString('es-CL')}</p></div>
+                  <div className={cn("flex justify-between font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                      <p>Diferencia:</p> <p>${diferencia.toLocaleString('es-CL')}</p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
             <div className="space-y-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <FormLabel>Fondo Base en Caja</FormLabel>
+                    <p className="text-2xl font-bold">${fondoBase.toLocaleString('es-CL')}</p>
+                    <p className="text-xs text-muted-foreground">Este monto debe permanecer en caja. Editable por el administrador.</p>
+                  </CardContent>
+                </Card>
                 <FormField
                     control={form.control}
-                    name="fondo_base"
+                    name="monto_entregado"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Fondo Base Entregado</FormLabel>
+                        <FormLabel>Monto entregado (sin fondo base)</FormLabel>
                         <FormControl><Input type="number" {...field} /></FormControl>
                         <FormMessage />
                         </FormItem>

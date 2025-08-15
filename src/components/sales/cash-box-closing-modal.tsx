@@ -21,6 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -52,6 +53,12 @@ interface CashBoxClosingModalProps {
   initialCash: number;
 }
 
+const initialDenominations = denominations.reduce((acc, d) => {
+    acc[d.value] = 0;
+    return acc;
+}, {} as Record<string, number>);
+
+
 export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash }: CashBoxClosingModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -69,7 +76,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
       monto_entregado: 0,
       persona_recibe: '',
       comentarios: '',
-      denominations: {},
+      denominations: initialDenominations,
     },
   });
 
@@ -157,37 +164,45 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                 {/* Left Column */}
                 <div className="space-y-4">
                     <h3 className="font-semibold">Calculadora de Efectivo</h3>
-                    <div className="space-y-1">
-                        {denominations.map(d => (
-                            <div key={d.value} className="grid grid-cols-3 items-center gap-4">
-                                <span className="font-mono text-right">${d.value.toLocaleString('es-CL', {minimumFractionDigits: 2})}</span>
-                                <FormField
-                                    control={form.control}
-                                    name={`denominations.${d.value}`}
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormControl><Input type="number" placeholder="0" {...field} className="text-center" /></FormControl>
-                                        </FormItem>
-                                    )}
-                                />
-                                <span className="font-mono text-left">
-                                  ${((watchedDenominations?.[d.value] || 0) * d.value) > 0 ? ((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2}) : '-'}
-                                </span>
-                            </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">Denominación</TableHead>
+                          <TableHead className="text-center">Cantidad</TableHead>
+                          <TableHead className="text-left">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                         {denominations.map(d => (
+                            <TableRow key={d.value}>
+                                <TableCell className="font-mono text-right">{d.label}</TableCell>
+                                <TableCell>
+                                    <FormField
+                                        control={form.control}
+                                        name={`denominations.${d.value}`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl><Input type="number" placeholder="0" {...field} className="text-center" /></FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </TableCell>
+                                <TableCell className="font-mono text-left">
+                                  ${((watchedDenominations?.[d.value] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
+                                </TableCell>
+                            </TableRow>
                         ))}
-                    </div>
+                      </TableBody>
+                    </Table>
+
                     <div className="space-y-2 pt-4 border-t">
+                      <div className="flex justify-between items-center text-sm">
+                        <p>Total en Sistema</p>
+                        <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
+                      </div>
                       <div className="flex justify-between items-center text-lg font-bold">
                         <p>Total Contado</p>
                         <p>${totalContado.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <p>Efectivo en caja</p>
-                        <p>${initialCash.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <p>Fondo base</p>
-                        <p>${fondoBase.toLocaleString('es-CL', {minimumFractionDigits: 2})}</p>
                       </div>
                       <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
                           <p>Diferencia</p>

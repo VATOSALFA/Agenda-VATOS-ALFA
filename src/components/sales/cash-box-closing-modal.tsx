@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ScrollArea } from '../ui/scroll-area';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -41,7 +42,6 @@ const closingSchema = z.object({
   monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
   persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
   comentarios: z.string().optional(),
-  denominations: z.record(z.coerce.number().min(0).optional()),
 });
 
 type ClosingFormData = z.infer<typeof closingSchema>;
@@ -62,11 +62,13 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [authCode, setAuthCode] = useState('');
   
   const [fondoBase, setFondoBase] = useState(1000);
-
+  
   const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
-    acc[d.value.toString().replace('.', '_')] = 0;
+    acc[d.value] = 0;
     return acc;
-  }, {} as Record<string, number | undefined>), []);
+  }, {} as Record<string, number>), []);
+
+  const [denominationCounts, setDenominationCounts] = useState<Record<string, number>>(initialDenominations);
 
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
@@ -74,26 +76,16 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
       monto_entregado: 0,
       persona_recibe: '',
       comentarios: '',
-      denominations: initialDenominations,
     },
   });
 
-  const watchedDenominations = form.watch('denominations');
-
   const totalContado = useMemo(() => {
-    if (!watchedDenominations) return 0;
-    
-    let total = 0;
-    for (const key in watchedDenominations) {
-        const denominationValue = parseFloat(key.replace('_', '.'));
-        const countValue = Number(watchedDenominations[key]) || 0;
-        if (!isNaN(denominationValue) && !isNaN(countValue)) {
-            total += denominationValue * countValue;
-        }
-    }
-    return total;
-  }, [watchedDenominations]);
-
+    return denominations.reduce((total, d) => {
+      const count = denominationCounts[d.value] || 0;
+      return total + (count * d.value);
+    }, 0);
+  }, [denominationCounts, denominations]);
+  
   const diferencia = totalContado - fondoBase - initialCash;
 
   useEffect(() => {
@@ -102,8 +94,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
              monto_entregado: 0,
              persona_recibe: '',
              comentarios: '',
-             denominations: initialDenominations,
-        })
+        });
+        setDenominationCounts(initialDenominations);
     }
   }, [isOpen, form, initialDenominations]);
 
@@ -121,7 +113,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             total_sistema: initialCash,
             diferencia: diferencia,
             comentarios: data.comentarios,
-            detalle_conteo: data.denominations,
+            detalle_conteo: denominationCounts,
         });
         toast({ title: 'Corte de caja guardado con éxito.' });
         onFormSubmit();
@@ -160,6 +152,11 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     setAuthCode('');
   };
 
+  const handleDenominationChange = (value: number, count: string) => {
+    const newCount = parseInt(count, 10) || 0;
+    setDenominationCounts(prev => ({...prev, [value]: newCount}));
+  }
+
 
   return (
     <>
@@ -178,49 +175,25 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     {/* Left Column */}
                     <div className="space-y-4 flex flex-col h-full">
                         <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
-                        <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-right">Denominación</TableHead>
-                                <TableHead className="text-center w-24">Cantidad</TableHead>
-                                <TableHead className="text-left w-32">Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                          </Table>
-                           <div className="flex-grow overflow-y-auto">
-                            <Table>
-                              <TableBody>
-                                {denominations.map(d => (
-                                    <TableRow key={d.value}>
-                                        <TableCell className="text-right py-1">{d.label}</TableCell>
-                                        <TableCell className="py-1 w-24 px-2">
-                                            <FormField
-                                                control={form.control}
-                                                name={`denominations.${String(d.value).replace('.', '_')}`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormControl><Input type="number" placeholder="0" {...field} value={field.value || 0} className="h-8 text-center" /></FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-left py-1 w-32 font-medium">
-                                          ${((watchedDenominations?.[String(d.value).replace('.', '_')] || 0) * d.value).toLocaleString('es-MX', {minimumFractionDigits: 2})}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                           <Table>
-                             <TableFooter>
-                                <TableRow className="bg-muted/50">
-                                    <TableCell colSpan={2} className="text-right font-bold text-lg">Total</TableCell>
-                                    <TableCell className="text-left font-bold text-lg text-primary">${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</TableCell>
-                                </TableRow>
-                              </TableFooter>
-                           </Table>
+                         <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
+                            <ScrollArea>
+                                <div className="p-4 space-y-3">
+                                  {denominations.map(d => (
+                                    <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
+                                      <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
+                                      <Input 
+                                        id={`den-${d.value}`}
+                                        type="number"
+                                        placeholder="0" 
+                                        value={denominationCounts[d.value] || ''}
+                                        onChange={(e) => handleDenominationChange(d.value, e.target.value)}
+                                        className="h-8 text-center" 
+                                      />
+                                      <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                            </ScrollArea>
                         </div>
                     </div>
 

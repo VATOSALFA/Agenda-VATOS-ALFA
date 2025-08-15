@@ -21,7 +21,6 @@ import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { ScrollArea } from '../ui/scroll-area';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -38,7 +37,7 @@ const denominations = [
 ];
 
 const initialDenominations = denominations.reduce((acc, d) => {
-    acc[d.value.toString()] = 0;
+    acc[d.value.toString().replace('.', '_')] = 0;
     return acc;
 }, {} as Record<string, number | undefined>);
 
@@ -67,7 +66,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
   
-  // This would typically come from local settings
   const [fondoBase, setFondoBase] = useState(1000);
 
   const form = useForm<ClosingFormData>({
@@ -85,7 +83,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const totalContado = useMemo(() => {
     if (!watchedDenominations) return 0;
     return Object.entries(watchedDenominations).reduce((acc, [key, count]) => {
-      const denominationValue = parseFloat(key);
+      const denominationValue = parseFloat(key.replace('_', '.'));
       const countValue = Number(count) || 0;
       if (isNaN(denominationValue) || isNaN(countValue)) return acc;
       return acc + (denominationValue * countValue);
@@ -195,7 +193,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                         <TableCell className="py-1 w-24 px-2">
                                             <FormField
                                                 control={form.control}
-                                                name={`denominations.${d.value}`}
+                                                name={`denominations.${String(d.value).replace('.', '_')}`}
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormControl><Input type="number" placeholder="0" {...field} className="text-center h-8" /></FormControl>
@@ -204,7 +202,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                             />
                                         </TableCell>
                                         <TableCell className="text-left py-1 w-32">
-                                          ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                                          ${((watchedDenominations?.[String(d.value).replace('.', '_')] || 0) * d.value).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -325,5 +323,3 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     </>
   );
 }
-
-    

@@ -7,7 +7,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { format } from 'date-fns';
@@ -16,12 +16,14 @@ import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Save } from 'lucide-react';
+import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { cn } from '@/lib/utils';
+import { Label } from '../ui/label';
 
 const denominations = [
   { value: 1000, label: '$1,000' },
@@ -58,6 +60,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditingFondo, setIsEditingFondo] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authCode, setAuthCode] = useState('');
   
   // This would typically come from local settings
   const [fondoBase, setFondoBase] = useState(1000);
@@ -113,7 +117,35 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     }
   }
 
+  const handleAuthRequest = () => {
+    setIsAuthModalOpen(true);
+  };
+  
+  const handleAuthCodeSubmit = async () => {
+    if (!authCode) {
+      toast({ variant: 'destructive', title: 'Código requerido' });
+      return;
+    }
+    const authCodeQuery = query(
+      collection(db, 'codigos_autorizacion'),
+      where('code', '==', authCode),
+      where('active', '==', true),
+      where('cashbox', '==', true)
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+      toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    } else {
+      toast({ title: 'Código correcto' });
+      setIsEditingFondo(true);
+      setIsAuthModalOpen(false);
+    }
+    setAuthCode('');
+  };
+
+
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
@@ -155,7 +187,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                   <CardContent className="p-4">
                     <div className="flex justify-between items-center">
                         <FormLabel>Fondo Base en Caja</FormLabel>
-                         <Button variant="ghost" size="sm" onClick={() => setIsEditingFondo(!isEditingFondo)}>
+                         <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
                             {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
                             {isEditingFondo ? 'Guardar' : 'Editar'}
                         </Button>
@@ -213,5 +245,27 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         </Form>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para editar el fondo de caja, es necesario un código con permisos de caja.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code-fondo">Código de Autorización</Label>
+                <Input id="auth-code-fondo" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

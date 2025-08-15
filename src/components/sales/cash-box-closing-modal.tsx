@@ -21,7 +21,6 @@ import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -68,7 +67,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [authCode, setAuthCode] = useState('');
   
   const [fondoBase, setFondoBase] = useState(1000);
-  const [testTotal, setTestTotal] = useState(0);
 
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
@@ -216,22 +214,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
                     {/* Right Column */}
                     <div className="space-y-4 flex flex-col">
-                        <Card className="bg-yellow-100 border-yellow-400">
-                            <CardHeader>
-                                <CardTitle className="text-sm">Debug - Total Contado</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-2xl font-bold">${testTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                            </CardContent>
-                        </Card>
-                        
-                        <div className="space-y-2">
-                          <h4 className="font-semibold text-sm">Prueba de Suma Simple</h4>
-                          <div className="flex gap-2">
-                            <Button type="button" onClick={() => setTestTotal(t => t + 100)}>Sumar 100</Button>
-                            <Button type="button" variant="outline" onClick={() => setTestTotal(0)}>Resetear</Button>
-                          </div>
-                        </div>
                         
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">

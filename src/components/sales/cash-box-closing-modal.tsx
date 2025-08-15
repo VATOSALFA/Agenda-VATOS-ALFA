@@ -94,6 +94,17 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   
   const diferencia = totalContado - fondoBase - initialCash;
 
+  useEffect(() => {
+    if (isOpen) {
+        form.reset({
+             monto_entregado: 0,
+             persona_recibe: '',
+             comentarios: '',
+             denominations: initialDenominations,
+        })
+    }
+  }, [isOpen, form]);
+
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
     try {
@@ -165,8 +176,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     {/* Left Column */}
                     <div className="space-y-4 flex flex-col">
                         <h3 className="font-semibold">Calculadora de Efectivo</h3>
-                        <div className="flex-grow border rounded-lg overflow-hidden">
-                          <ScrollArea className="h-full">
+                        <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
+                          <ScrollArea className="flex-grow">
                             <Table>
                               <TableHeader>
                                 <TableRow>
@@ -191,7 +202,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                             />
                                         </TableCell>
                                         <TableCell className="font-mono text-left py-1">
-                                          ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2}) || '-'}
+                                          ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2})}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -202,7 +213,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     </div>
 
                     {/* Right Column */}
-                    <div className="space-y-6 flex flex-col">
+                    <div className="space-y-4 flex flex-col">
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>

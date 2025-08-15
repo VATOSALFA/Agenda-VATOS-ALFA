@@ -165,42 +165,44 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     {/* Left Column */}
                     <div className="space-y-4 flex flex-col">
                         <h3 className="font-semibold">Calculadora de Efectivo</h3>
-                        <ScrollArea className="flex-grow border rounded-lg">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-right">Denominación</TableHead>
-                                <TableHead className="text-center w-24">Cantidad</TableHead>
-                                <TableHead className="text-left w-32">Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {denominations.map(d => (
-                                  <TableRow key={d.value}>
-                                      <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
-                                      <TableCell className="py-1">
-                                          <FormField
-                                              control={form.control}
-                                              name={`denominations.${d.value}`}
-                                              render={({ field }) => (
-                                                  <FormItem>
-                                                      <FormControl><Input type="number" placeholder="0" {...field} className="text-center h-8" /></FormControl>
-                                                  </FormItem>
-                                              )}
-                                          />
-                                      </TableCell>
-                                      <TableCell className="font-mono text-left py-1">
-                                        ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2}) || '-'}
-                                      </TableCell>
-                                  </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </ScrollArea>
+                        <div className="flex-grow border rounded-lg overflow-hidden">
+                          <ScrollArea className="h-full">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-right">Denominación</TableHead>
+                                  <TableHead className="text-center w-24">Cantidad</TableHead>
+                                  <TableHead className="text-left w-32">Total</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {denominations.map(d => (
+                                    <TableRow key={d.value}>
+                                        <TableCell className="font-mono text-right py-1">{d.label}</TableCell>
+                                        <TableCell className="py-1">
+                                            <FormField
+                                                control={form.control}
+                                                name={`denominations.${d.value}`}
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormControl><Input type="number" placeholder="0" {...field} className="text-center h-8" /></FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="font-mono text-left py-1">
+                                          ${((watchedDenominations?.[d.value.toString()] || 0) * d.value).toLocaleString('es-CL', {minimumFractionDigits: 2}) || '-'}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </ScrollArea>
+                        </div>
                     </div>
 
                     {/* Right Column */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 flex flex-col">
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>

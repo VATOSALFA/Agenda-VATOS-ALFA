@@ -221,7 +221,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             name="monto_entregado"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Monto entregado (sin fondo base)</FormLabel>
+                                <FormLabel>Monto entregado</FormLabel>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                                     <FormControl><Input type="number" {...field} className="pl-6" /></FormControl>

@@ -39,6 +39,7 @@ const denominations = [
 ];
 
 const closingSchema = z.object({
+  denominations: z.record(z.coerce.number().min(0).optional()),
   monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
   persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
   comentarios: z.string().optional(),
@@ -63,41 +64,37 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   
   const [fondoBase, setFondoBase] = useState(1000);
   
-  const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
-    acc[d.value] = 0;
-    return acc;
-  }, {} as Record<string, number>), []);
-
-  const [denominationCounts, setDenominationCounts] = useState<Record<string, number>>(initialDenominations);
-
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
     defaultValues: {
+      denominations: denominations.reduce((acc, d) => ({...acc, [d.value]: 0}), {}),
       monto_entregado: 0,
       persona_recibe: '',
       comentarios: '',
     },
   });
 
+  const watchedDenominations = form.watch('denominations');
+
   const totalContado = useMemo(() => {
     return denominations.reduce((total, d) => {
-      const count = denominationCounts[d.value] || 0;
+      const count = watchedDenominations[d.value] || 0;
       return total + (count * d.value);
     }, 0);
-  }, [denominationCounts, denominations]);
+  }, [watchedDenominations, denominations]);
   
   const diferencia = totalContado - fondoBase - initialCash;
-
+  
   useEffect(() => {
     if (isOpen) {
         form.reset({
+             denominations: denominations.reduce((acc, d) => ({...acc, [d.value]: 0}), {}),
              monto_entregado: 0,
              persona_recibe: '',
              comentarios: '',
         });
-        setDenominationCounts(initialDenominations);
     }
-  }, [isOpen, form, initialDenominations]);
+  }, [isOpen, form, denominations]);
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -113,7 +110,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             total_sistema: initialCash,
             diferencia: diferencia,
             comentarios: data.comentarios,
-            detalle_conteo: denominationCounts,
+            detalle_conteo: data.denominations,
         });
         toast({ title: 'Corte de caja guardado con éxito.' });
         onFormSubmit();
@@ -152,11 +149,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     setAuthCode('');
   };
 
-  const handleDenominationChange = (value: number, count: string) => {
-    const newCount = parseInt(count, 10) || 0;
-    setDenominationCounts(prev => ({...prev, [value]: newCount}));
-  }
-
 
   return (
     <>
@@ -176,24 +168,53 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     <div className="space-y-4 flex flex-col h-full">
                         <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
                          <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Denominación</TableHead>
+                                        <TableHead>Cantidad</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                            </Table>
                             <ScrollArea>
-                                <div className="p-4 space-y-3">
-                                  {denominations.map(d => (
-                                    <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
-                                      <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
-                                      <Input 
-                                        id={`den-${d.value}`}
-                                        type="number"
-                                        placeholder="0" 
-                                        value={denominationCounts[d.value] || ''}
-                                        onChange={(e) => handleDenominationChange(d.value, e.target.value)}
-                                        className="h-8 text-center" 
-                                      />
-                                      <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                                    </div>
-                                  ))}
-                                </div>
+                                <Table>
+                                    <TableBody>
+                                        {denominations.map((d) => (
+                                        <TableRow key={d.value}>
+                                            <TableCell className="font-medium">{d.label}</TableCell>
+                                            <TableCell>
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`denominations.${d.value}`}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="0"
+                                                            {...field}
+                                                            className="h-8 w-24"
+                                                        />
+                                                    )}
+                                                />
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium">
+                                               $ {(d.value * (watchedDenominations?.[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    </TableBody>
+                                </Table>
                             </ScrollArea>
+                             <Table>
+                                <TableFooter className="bg-muted/50">
+                                    <TableRow>
+                                        <TableCell colSpan={2} className="text-right font-bold text-lg">Total</TableCell>
+                                        <TableCell className="text-right font-bold text-lg">
+                                            $ {totalContado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
                         </div>
                     </div>
 
@@ -221,7 +242,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             name="monto_entregado"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Monto entregado (sin fondo base)</FormLabel>
+                                <FormLabel>Monto entregado</FormLabel>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                                     <FormControl><Input type="number" {...field} className="pl-6" /></FormControl>

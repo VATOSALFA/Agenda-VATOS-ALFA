@@ -6,7 +6,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { format } from 'date-fns';
@@ -15,8 +15,9 @@ import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
@@ -38,7 +39,6 @@ const denominations = [
 ];
 
 const closingSchema = z.object({
-  denominations: z.record(z.coerce.number().min(0).optional()),
   monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
   persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
   comentarios: z.string().optional(),
@@ -57,38 +57,47 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingFondo, setIsEditingFondo] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authCode, setAuthCode] = useState('');
   
+  const [fondoBase, setFondoBase] = useState(1000);
+  
+  const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
+    acc[d.value] = 0;
+    return acc;
+  }, {} as Record<string, number>), []);
+
+  const [denominationCounts, setDenominationCounts] = useState<Record<string, number>>(initialDenominations);
+
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
     defaultValues: {
-      denominations: denominations.reduce((acc, d) => ({...acc, [d.value]: 0}), {}),
       monto_entregado: 0,
       persona_recibe: '',
       comentarios: '',
     },
   });
 
-  const watchedDenominations = form.watch('denominations');
-
   const totalContado = useMemo(() => {
     return denominations.reduce((total, d) => {
-      const count = watchedDenominations[d.value] || 0;
+      const count = denominationCounts[d.value] || 0;
       return total + (count * d.value);
     }, 0);
-  }, [watchedDenominations]);
+  }, [denominationCounts, denominations]);
   
-  const diferencia = totalContado - initialCash;
-  
+  const diferencia = totalContado - fondoBase - initialCash;
+
   useEffect(() => {
     if (isOpen) {
         form.reset({
-             denominations: denominations.reduce((acc, d) => ({...acc, [d.value]: 0}), {}),
              monto_entregado: 0,
              persona_recibe: '',
              comentarios: '',
         });
+        setDenominationCounts(initialDenominations);
     }
-  }, [isOpen, form]);
+  }, [isOpen, form, initialDenominations]);
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -98,12 +107,13 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             persona_entrega_id: user?.uid,
             persona_entrega_nombre: user?.displayName,
             persona_recibe: data.persona_recibe,
+            fondo_base: fondoBase,
             monto_entregado: data.monto_entregado,
             total_calculado: totalContado,
             total_sistema: initialCash,
             diferencia: diferencia,
             comentarios: data.comentarios,
-            detalle_conteo: data.denominations,
+            detalle_conteo: denominationCounts,
         });
         toast({ title: 'Corte de caja guardado con éxito.' });
         onFormSubmit();
@@ -116,7 +126,40 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     }
   }
 
+  const handleAuthRequest = () => {
+    setIsAuthModalOpen(true);
+  };
+  
+  const handleAuthCodeSubmit = async () => {
+    if (!authCode) {
+      toast({ variant: 'destructive', title: 'Código requerido' });
+      return;
+    }
+    const authCodeQuery = query(
+      collection(db, 'codigos_autorizacion'),
+      where('code', '==', authCode),
+      where('active', '==', true),
+      where('cashbox', '==', true)
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+      toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    } else {
+      toast({ title: 'Código correcto' });
+      setIsEditingFondo(true);
+      setIsAuthModalOpen(false);
+    }
+    setAuthCode('');
+  };
+
+  const handleDenominationChange = (value: number, count: string) => {
+    const newCount = parseInt(count, 10) || 0;
+    setDenominationCounts(prev => ({...prev, [value]: newCount}));
+  }
+
+
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
@@ -132,59 +175,47 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     {/* Left Column */}
                     <div className="space-y-4 flex flex-col h-full">
                         <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
-                        <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Denominación</TableHead>
-                                        <TableHead>Cantidad</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                            </Table>
+                         <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
                             <ScrollArea>
-                                <Table>
-                                    <TableBody>
-                                        {denominations.map((d) => (
-                                        <TableRow key={d.value}>
-                                            <TableCell className="font-medium">{d.label}</TableCell>
-                                            <TableCell>
-                                                <FormField
-                                                    control={form.control}
-                                                    name={`denominations.${d.value}`}
-                                                    render={({ field }) => (
-                                                        <Input
-                                                            type="number"
-                                                            placeholder="0"
-                                                            {...field}
-                                                            className="h-8 w-24"
-                                                        />
-                                                    )}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium">
-                                               $ {(d.value * (watchedDenominations?.[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    </TableBody>
-                                </Table>
+                                <div className="p-4 space-y-3">
+                                  {denominations.map(d => (
+                                    <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
+                                      <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
+                                      <Input 
+                                        id={`den-${d.value}`}
+                                        type="number"
+                                        placeholder="0" 
+                                        value={denominationCounts[d.value] || ''}
+                                        onChange={(e) => handleDenominationChange(d.value, e.target.value)}
+                                        className="h-8 text-center" 
+                                      />
+                                      <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                                    </div>
+                                  ))}
+                                </div>
                             </ScrollArea>
-                             <Table>
-                                <TableFooter className="bg-muted/50">
-                                    <TableRow>
-                                        <TableCell colSpan={2} className="text-right font-bold text-lg">Total</TableCell>
-                                        <TableCell className="text-right font-bold text-lg">
-                                            $ {totalContado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                        </TableCell>
-                                    </TableRow>
-                                </TableFooter>
-                            </Table>
                         </div>
                     </div>
 
                     {/* Right Column */}
                     <div className="space-y-4 flex flex-col">
+                        <div className="space-y-2">
+                            <FormLabel className="flex justify-between items-center">
+                                <span>Fondo base en caja</span>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
+                                    {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
+                                    {isEditingFondo ? 'Guardar' : 'Editar'}
+                                </Button>
+                            </FormLabel>
+                            {isEditingFondo ? (
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
+                                </div>
+                            ) : (
+                                <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+                            )}
+                        </div>
                         <FormField
                             control={form.control}
                             name="monto_entregado"
@@ -230,6 +261,10 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             <p>Efectivo en caja (Sistema)</p>
                             <p>${initialCash.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <p>Fondo Base</p>
+                            <p>- ${fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+                          </div>
                            <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
                               <p>Diferencia</p>
                               <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
@@ -249,5 +284,27 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         </div>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para editar el fondo de caja, es necesario un código con permisos de caja.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code-fondo">Código de Autorización</Label>
+                <Input id="auth-code-fondo" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

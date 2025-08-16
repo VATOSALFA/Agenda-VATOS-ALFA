@@ -23,6 +23,15 @@ import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { User } from '@/lib/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -40,7 +49,7 @@ const denominations = [
 
 const closingSchema = z.object({
   monto_entregado: z.coerce.number().min(0, 'El monto debe ser un número positivo.'),
-  persona_recibe: z.string().min(1, 'Debes ingresar el nombre de quien recibe.'),
+  persona_recibe: z.string().min(1, 'Debes seleccionar a la persona que recibe.'),
   comentarios: z.string().optional(),
 });
 
@@ -63,12 +72,12 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   
   const [fondoBase, setFondoBase] = useState(1000);
   
+  const { data: allUsers, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
+  
   const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
     acc[d.value] = 0;
     return acc;
   }, {} as Record<string, number>), []);
-
-  const [denominationCounts, setDenominationCounts] = useState<Record<string, number>>(initialDenominations);
 
   const form = useForm<ClosingFormData>({
     resolver: zodResolver(closingSchema),
@@ -79,14 +88,21 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     },
   });
 
+  const watchedDenominations = form.watch('denominations');
+
   const totalContado = useMemo(() => {
+    if (!watchedDenominations) return 0;
     return denominations.reduce((total, d) => {
-      const count = denominationCounts[d.value] || 0;
+      const count = watchedDenominations[d.value] || 0;
       return total + (count * d.value);
     }, 0);
-  }, [denominationCounts, denominations]);
+  }, [watchedDenominations, denominations]);
   
   const diferencia = totalContado - fondoBase - initialCash;
+  
+  useEffect(() => {
+    form.setValue('monto_entregado', totalContado);
+  }, [totalContado, form]);
 
   useEffect(() => {
     if (isOpen) {
@@ -94,8 +110,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
              monto_entregado: 0,
              persona_recibe: '',
              comentarios: '',
+             denominations: initialDenominations,
         });
-        setDenominationCounts(initialDenominations);
     }
   }, [isOpen, form, initialDenominations]);
 
@@ -113,7 +129,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             total_sistema: initialCash,
             diferencia: diferencia,
             comentarios: data.comentarios,
-            detalle_conteo: denominationCounts,
+            detalle_conteo: data.denominations,
         });
         toast({ title: 'Corte de caja guardado con éxito.' });
         onFormSubmit();
@@ -152,11 +168,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     setAuthCode('');
   };
 
-  const handleDenominationChange = (value: number, count: string) => {
-    const newCount = parseInt(count, 10) || 0;
-    setDenominationCounts(prev => ({...prev, [value]: newCount}));
-  }
-
 
   return (
     <>
@@ -172,33 +183,74 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 h-full flex flex-col">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-grow overflow-hidden">
-                    {/* Left Column */}
+                    {/* Left Column: Calculator */}
                     <div className="space-y-4 flex flex-col h-full">
                         <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
                          <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
                             <ScrollArea>
                                 <div className="p-4 space-y-3">
                                   {denominations.map(d => (
-                                    <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
-                                      <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
-                                      <Input 
-                                        id={`den-${d.value}`}
-                                        type="number"
-                                        placeholder="0" 
-                                        value={denominationCounts[d.value] || ''}
-                                        onChange={(e) => handleDenominationChange(d.value, e.target.value)}
-                                        className="h-8 text-center" 
-                                      />
-                                      <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                                    </div>
+                                    <FormField
+                                        key={d.value}
+                                        control={form.control}
+                                        name={`denominations.${d.value}`}
+                                        render={({ field }) => (
+                                            <FormItem className="grid grid-cols-3 gap-2 items-center">
+                                                <FormLabel htmlFor={`den-${d.value}`} className="text-right">{d.label}</FormLabel>
+                                                <FormControl>
+                                                    <Input 
+                                                        id={`den-${d.value}`}
+                                                        type="number"
+                                                        placeholder="0" 
+                                                        {...field}
+                                                        onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)}
+                                                        className="h-8 text-center" 
+                                                    />
+                                                </FormControl>
+                                                <p className="font-medium text-sm text-center">= ${(d.value * (field.value || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                                            </FormItem>
+                                        )}
+                                    />
                                   ))}
                                 </div>
                             </ScrollArea>
+                            <TableFooter className="p-4 border-t bg-muted/50 mt-auto">
+                                <TableRow>
+                                    <TableCell colSpan={2} className="text-right font-bold text-lg">Total Contado</TableCell>
+                                    <TableCell className="text-right font-bold text-lg">${totalContado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
+                                </TableRow>
+                            </TableFooter>
                         </div>
                     </div>
 
-                    {/* Right Column */}
+                    {/* Right Column: Summary and Form */}
                     <div className="space-y-4 flex flex-col">
+                         <div className="space-y-2">
+                             <Label>Persona que entrega</Label>
+                             <Input readOnly value={user?.displayName || 'No identificado'} />
+                         </div>
+                        <FormField
+                            control={form.control}
+                            name="persona_recibe"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Nombre de quien recibe</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                        <SelectTrigger>
+                                        <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona un usuario'} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        {!usersLoading && allUsers.map(u => (
+                                            <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>
@@ -224,19 +276,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                 <FormLabel>Monto entregado</FormLabel>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <FormControl><Input type="number" {...field} className="pl-6" /></FormControl>
+                                    <FormControl><Input type="number" {...field} className="pl-6" readOnly /></FormControl>
                                 </div>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="persona_recibe"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Nombre de quien recibe</FormLabel>
-                                <FormControl><Input {...field} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -253,10 +294,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             )}
                         />
                         <div className="space-y-2 pt-4 border-t flex-shrink-0">
-                          <div className="flex justify-between items-center text-sm font-semibold">
-                            <p>Total Contado</p>
-                            <p>${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                          </div>
                           <div className="flex justify-between items-center text-sm">
                             <p>Efectivo en caja (Sistema)</p>
                             <p>${initialCash.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
@@ -265,7 +302,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             <p>Fondo Base</p>
                             <p>- ${fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>
-                           <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                           <div className={cn("flex justify-between items-center font-bold text-lg pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
                               <p>Diferencia</p>
                               <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
                           </div>

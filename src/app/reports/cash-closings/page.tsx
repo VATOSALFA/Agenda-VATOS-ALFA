@@ -25,6 +25,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashClosing | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) => {
   if (!closing) return null;
 
+  const sortedDenominations = useMemo(() => {
+    return Object.entries(closing.detalle_conteo).sort(([valA], [valB]) => Number(valB) - Number(valA));
+  }, [closing.detalle_conteo]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -55,17 +59,17 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Denominación</TableHead>
-                            <TableHead className="text-right">Cantidad</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="py-2">Denominación</TableHead>
+                            <TableHead className="text-right py-2">Cantidad</TableHead>
+                            <TableHead className="text-right py-2">Total</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {Object.entries(closing.detalle_conteo).map(([value, count]) => (
+                        {sortedDenominations.map(([value, count]) => (
                             <TableRow key={value}>
-                                <TableCell>${Number(value).toLocaleString('es-CL')}</TableCell>
-                                <TableCell className="text-right">{count}</TableCell>
-                                <TableCell className="text-right">${(Number(value) * count).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="py-2">${Number(value).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right py-2">{count}</TableCell>
+                                <TableCell className="text-right py-2">${(Number(value) * count).toLocaleString('es-CL')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -23,6 +22,10 @@ import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import type { User } from '@/lib/types';
+
 
 const denominations = [
   { value: 1000, label: '$1,000.00' },
@@ -63,6 +66,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   
   const [fondoBase, setFondoBase] = useState(1000);
   
+  const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
+  
   const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
     acc[d.value] = 0;
     return acc;
@@ -98,6 +103,10 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         setDenominationCounts(initialDenominations);
     }
   }, [isOpen, form, initialDenominations]);
+  
+   useEffect(() => {
+    form.setValue('monto_entregado', totalContado);
+  }, [totalContado, form]);
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
@@ -164,7 +173,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
       <DialogContent className="sm:max-w-5xl max-h-[95vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Realizar Corte de Caja</DialogTitle>
-          <DialogDescription>
+           <DialogDescription>
              {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
           </DialogDescription>
         </DialogHeader>
@@ -199,9 +208,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
                     {/* Right Column */}
                     <div className="space-y-4 flex flex-col">
-                        <div className="text-right">
-                           <p className="text-sm text-muted-foreground">{user?.displayName}</p>
-                        </div>
+                       <p className="text-sm text-right text-muted-foreground">{user?.displayName}</p>
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>
@@ -227,19 +234,32 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                 <FormLabel>Monto entregado</FormLabel>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <FormControl><Input type="number" {...field} className="pl-6" /></FormControl>
+                                    <FormControl><Input type="number" {...field} readOnly className="pl-6 font-bold" /></FormControl>
                                 </div>
                                 <FormMessage />
                                 </FormItem>
                             )}
                         />
-                        <FormField
+                         <FormField
                             control={form.control}
                             name="persona_recibe"
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Nombre de quien recibe</FormLabel>
-                                <FormControl><Input {...field} /></FormControl>
+                                 <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona un usuario'} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        {users.map((u) => (
+                                            <SelectItem key={u.id} value={u.name}>
+                                                {u.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 <FormMessage />
                                 </FormItem>
                             )}

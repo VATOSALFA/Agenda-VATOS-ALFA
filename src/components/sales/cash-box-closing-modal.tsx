@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -164,7 +165,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         <DialogHeader>
           <DialogTitle>Realizar Corte de Caja</DialogTitle>
           <DialogDescription>
-             {format(new Date(), "eeee, dd 'de' MMMM 'de' yyyy", { locale: es })}
+             {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow overflow-hidden">
@@ -198,6 +199,9 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
                     {/* Right Column */}
                     <div className="space-y-4 flex flex-col">
+                        <div className="text-right">
+                           <p className="text-sm text-muted-foreground">{user?.displayName}</p>
+                        </div>
                         <div className="space-y-2">
                             <FormLabel className="flex justify-between items-center">
                                 <span>Fondo base en caja</span>

@@ -241,3 +241,18 @@ export interface AuthCode {
   cashbox: boolean;
   download: boolean;
 }
+
+export interface CashClosing {
+    id: string;
+    fecha_corte: Timestamp;
+    persona_entrega_id: string;
+    persona_entrega_nombre: string;
+    persona_recibe: string;
+    fondo_base: number;
+    monto_entregado: number;
+    total_calculado: number;
+    total_sistema: number;
+    diferencia: number;
+    comentarios?: string;
+    detalle_conteo: Record<string, number>;
+}

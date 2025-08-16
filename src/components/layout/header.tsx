@@ -85,6 +85,7 @@ const productsNavLinks = [
 const reportsNavLinks = [
   { href: '/reports/reservations', label: 'Reporte de reservas', icon: FileText },
   { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart },
+  { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet },
 ];
 
 const finanzasNavLinks = [

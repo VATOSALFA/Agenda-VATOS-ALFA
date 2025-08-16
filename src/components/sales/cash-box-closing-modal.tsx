@@ -161,7 +161,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Realizar Corte de Caja</DialogTitle>
           <DialogDescription>

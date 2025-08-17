@@ -347,7 +347,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 from: currentStock,
                 to: newStock,
                 cause: 'Venta',
-                staff_id: item.barbero_id,
+                staff_id: item.barbero_id || null,
                 comment: `Venta de ${item.cantidad} unidad(es).`
             });
         }

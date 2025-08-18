@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { where, Timestamp } from 'firebase/firestore';
 import type { Sale, Service, ServiceCategory, Local, SaleItem } from '@/lib/types';

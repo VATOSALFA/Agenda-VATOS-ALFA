@@ -1,107 +1,206 @@
-
 'use client';
 
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ResponsiveContainer, BarChart, XAxis, YAxis, Tooltip, Bar, LineChart, Line, Legend, CartesianGrid } from 'recharts';
-import { ArrowUp, ArrowDown } from 'lucide-react';
+import { ResponsiveContainer, BarChart, XAxis, YAxis, Tooltip, Bar, LineChart, Line, Legend, CartesianGrid, Cell } from 'recharts';
+import { ArrowUp, ArrowDown, Search } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { DateRange } from 'react-day-picker';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { where, Timestamp } from 'firebase/firestore';
+import type { Sale, Service, ServiceCategory, Local, SaleItem } from '@/lib/types';
 
-const salesOverTimeData = [
-  { date: '14/06', current: 4000, previous: 2400 },
-  { date: '21/06', current: 3000, previous: 1398 },
-  { date: '28/06', current: 2000, previous: 9800 },
-  { date: '05/07', current: 2780, previous: 3908 },
-  { date: '12/07', current: 1890, previous: 4800 },
-  { date: '19/07', current: 2390, previous: 3800 },
-  { date: '26/07', current: 3490, previous: 4300 },
-];
 
-const salesByCategoryData = [
-    { name: 'Cortes y lavado', value: 75869, change: 1.1 },
-    { name: 'Paquetes', value: 11220, change: 25.5 },
-    { name: 'Barba', value: 1875, change: -18.3 },
-    { name: 'Capilar', value: 1500, change: 0 },
-    { name: 'Facial', value: 1500, change: 21.9 },
-];
-
-const salesByServiceData = [
-    { name: 'Corte clásico y moderno', value: 75789, change: 1.1 },
-    { name: 'El Caballero Alfa', value: 4114, change: -14.7 },
-    { name: 'Héroe en descanso', value: 2031, change: 82.4 },
-];
-
-const KpiCard = ({ title, value, change, isPositive }: { title: string, value: string, change: string, isPositive: boolean }) => (
+const KpiCard = ({ title, value, change, isPositive, prefix = '', suffix = '' }: { title: string, value: string, change?: string, isPositive?: boolean, prefix?: string, suffix?: string }) => (
     <div className="space-y-1">
         <p className="text-sm text-muted-foreground">{title}</p>
-        <p className="text-3xl font-bold">{value}</p>
-        <p className={cn("text-xs flex items-center", isPositive ? 'text-green-500' : 'text-red-500')}>
-            {isPositive ? <ArrowUp className="h-3 w-3 mr-1" /> : <ArrowDown className="h-3 w-3 mr-1" />}
-            {change}
-        </p>
+        <p className="text-3xl font-bold">{prefix}{value}{suffix}</p>
+        {change && (
+            <p className={cn("text-xs flex items-center", isPositive ? 'text-green-500' : 'text-red-500')}>
+                {isPositive ? <ArrowUp className="h-3 w-3 mr-1" /> : <ArrowDown className="h-3 w-3 mr-1" />}
+                {change}
+            </p>
+        )}
     </div>
 );
 
 const CustomBarLabel = ({ x, y, width, value }: any) => {
     return (
         <text x={x + width + 10} y={y + 10} fill="hsl(var(--foreground))" textAnchor="start" fontSize={12}>
-            {`$${value.toLocaleString('es-CL')}`}
+            {`$${value.toLocaleString('es-MX')}`}
         </text>
     );
 };
 
 export default function SalesReportPage() {
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 28), to: new Date() });
+    const [localFilter, setLocalFilter] = useState('todos');
+    const [queryKey, setQueryKey] = useState(0);
+
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey,
+        ...(dateRange?.from ? [where('fecha_hora_venta', '>=', Timestamp.fromDate(dateRange.from))] : []),
+        ...(dateRange?.to ? [where('fecha_hora_venta', '<=', Timestamp.fromDate(dateRange.to))] : []),
+        ...(localFilter !== 'todos' ? [where('local_id', '==', localFilter)] : [])
+    );
+    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+    const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    
+    const isLoading = salesLoading || servicesLoading || categoriesLoading || localesLoading;
+
+    const handlePeriodChange = (value: string) => {
+        const today = new Date();
+        if (value === 'this_week') {
+            setDateRange({ from: startOfWeek(today, { weekStartsOn: 1 }), to: endOfWeek(today, { weekStartsOn: 1 }) });
+        } else if (value === 'this_month') {
+            setDateRange({ from: startOfMonth(today), to: endOfMonth(today) });
+        } else if (value === 'last_4_weeks') {
+            setDateRange({ from: subDays(today, 28), to: today });
+        }
+    };
+
+    const handleSearch = () => {
+        setQueryKey(prev => prev + 1);
+    };
+
+    const serviceMap = useMemo(() => {
+        if (servicesLoading) return new Map();
+        return new Map(services.map(s => [s.id, s]));
+    }, [services, servicesLoading]);
+    
+    const categoryMap = useMemo(() => {
+        if (categoriesLoading) return new Map();
+        return new Map(categories.map(c => [c.id, c.name]));
+    }, [categories, categoriesLoading]);
+
+    const aggregatedData = useMemo(() => {
+        if (isLoading) return {
+            totalSales: 0,
+            salesCount: 0,
+            averageSale: 0,
+            salesOverTime: [],
+            salesByCategory: [],
+            salesByService: []
+        };
+        
+        const totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+        const salesCount = sales.length;
+        const averageSale = salesCount > 0 ? totalSales / salesCount : 0;
+        
+        const salesByDate: Record<string, number> = {};
+        sales.forEach(sale => {
+            const date = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
+            salesByDate[date] = (salesByDate[date] || 0) + (sale.total || 0);
+        });
+
+        const salesOverTime = Object.entries(salesByDate).map(([date, total]) => ({
+            date: format(parseISO(date), 'dd/MM'),
+            current: total
+        }));
+
+        const salesByService: Record<string, number> = {};
+        const salesByCategory: Record<string, number> = {};
+
+        sales.forEach(sale => {
+            sale.items?.forEach((item: SaleItem) => {
+                if (item.tipo === 'servicio') {
+                    const service = services.find(s => s.id === item.id || s.name === item.servicio);
+                    if (service) {
+                        salesByService[service.name] = (salesByService[service.name] || 0) + (item.subtotal || 0);
+                        const categoryName = categoryMap.get(service.category);
+                        if (categoryName) {
+                            salesByCategory[categoryName] = (salesByCategory[categoryName] || 0) + (item.subtotal || 0);
+                        }
+                    }
+                }
+            });
+        });
+
+        const sortedServices = Object.entries(salesByService).sort(([, a], [, b]) => b - a).slice(0, 5);
+        const sortedCategories = Object.entries(salesByCategory).sort(([, a], [, b]) => b - a).slice(0, 5);
+
+        return {
+            totalSales,
+            salesCount,
+            averageSale,
+            salesOverTime,
+            salesByCategory: sortedCategories.map(([name, value]) => ({ name, value })),
+            salesByService: sortedServices.map(([name, value]) => ({ name, value }))
+        };
+
+    }, [sales, services, categories, categoryMap, isLoading]);
+
 
     return (
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Reporte de ventas</h2>
 
-            {/* Filters */}
             <Card>
                 <CardContent className="pt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                         <div className="space-y-1">
                             <label className="text-sm font-medium">Periodo</label>
-                            <Select defaultValue="last-4-weeks"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="last-4-weeks">Últimas 4 semanas</SelectItem></SelectContent></Select>
+                            <Select defaultValue="last_4_weeks" onValueChange={handlePeriodChange}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="this_week">Esta semana</SelectItem>
+                                    <SelectItem value="this_month">Este mes</SelectItem>
+                                    <SelectItem value="last_4_weeks">Últimas 4 semanas</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                         <div className="space-y-1">
-                            <label className="text-sm font-medium">Local</label>
-                            <Select><SelectTrigger><SelectValue placeholder="Seleccione una opción" /></SelectTrigger><SelectContent/></Select>
+                         <div className="space-y-1 md:col-span-2">
+                             <label className="text-sm font-medium">Rango de fechas</label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {dateRange?.from ? (dateRange.to ? <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</> : format(dateRange.from, "LLL dd, y", { locale: es })) : <span>Selecciona un rango</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                                </PopoverContent>
+                            </Popover>
                         </div>
-                         <div className="space-y-1">
-                            <label className="text-sm font-medium">Comparar contra</label>
-                            <Select defaultValue="previous-period"><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="previous-period">Periodo anterior</SelectItem></SelectContent></Select>
-                        </div>
+                        <Button onClick={handleSearch} disabled={isLoading}>
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />} Buscar
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
             
             <Card>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
-                    {/* KPIs */}
                     <div className="lg:col-span-1">
                         <h3 className="text-xl font-semibold mb-4">Resumen</h3>
                         <div className="space-y-6">
-                           <KpiCard title="Total" value="$96,376.1" change="8.5%" isPositive={true} />
-                           <KpiCard title="Cantidad de ventas" value="558" change="5.7%" isPositive={true} />
-                           <KpiCard title="Venta promedio" value="$172.72" change="2.6%" isPositive={true} />
+                           <KpiCard title="Total" value={aggregatedData.totalSales.toLocaleString('es-MX')} prefix="$" />
+                           <KpiCard title="Cantidad de ventas" value={aggregatedData.salesCount.toLocaleString()} />
+                           <KpiCard title="Venta promedio" value={aggregatedData.averageSale.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
                         </div>
                     </div>
-
-                    {/* Line Chart */}
                     <div className="lg:col-span-2">
                         <h3 className="text-xl font-semibold mb-4">Ventas por periodo</h3>
+                        {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
                         <ResponsiveContainer width="100%" height={250}>
-                            <LineChart data={salesOverTimeData}>
+                            <LineChart data={aggregatedData.salesOverTime}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                                <YAxis tickFormatter={(value) => `${value/1000}k`} tick={{ fontSize: 12 }} />
-                                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
+                                <YAxis tickFormatter={(value) => `$${value/1000}k`} tick={{ fontSize: 12 }} />
+                                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
                                 <Legend iconSize={10} wrapperStyle={{fontSize: "12px"}}/>
                                 <Line type="monotone" name="Periodo seleccionado" dataKey="current" stroke="hsl(var(--primary))" strokeWidth={2} />
-                                <Line type="monotone" name="Periodo comparativo" dataKey="previous" stroke="hsl(var(--secondary))" strokeWidth={2} />
                             </LineChart>
                         </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
             </Card>
@@ -112,34 +211,44 @@ export default function SalesReportPage() {
                         <CardTitle>Ventas por categoría</CardTitle>
                     </CardHeader>
                     <CardContent>
+                         {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
                         <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={salesByCategoryData} layout="vertical" margin={{ left: 60 }}>
+                            <BarChart data={aggregatedData.salesByCategory} layout="vertical" margin={{ left: 60 }}>
                                 <XAxis type="number" hide />
                                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
-                                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />} />
+                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />}>
+                                    {aggregatedData.salesByCategory.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
+                                    ))}
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
+                        )}
                     </CardContent>
                 </Card>
                  <Card>
                     <CardHeader>
-                        <CardTitle>Ventas por servicio</CardTitle>
+                        <CardTitle>Ventas por servicio (Top 5)</CardTitle>
                     </CardHeader>
                     <CardContent>
+                        {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
                          <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={salesByServiceData} layout="vertical" margin={{ left: 120 }}>
+                            <BarChart data={aggregatedData.salesByService} layout="vertical" margin={{ left: 120 }}>
                                 <XAxis type="number" hide />
                                 <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
-                                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />} />
+                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />}>
+                                     {aggregatedData.salesByService.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
+                                    ))}
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
+                        )}
                     </CardContent>
                 </Card>
             </div>
-
-
         </div>
     );
 }

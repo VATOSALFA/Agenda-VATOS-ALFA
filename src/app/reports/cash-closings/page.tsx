@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -44,10 +45,10 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
                 <div className="space-y-2 text-sm">
                     <div className="flex justify-between"><span>Entregado por:</span> <span className="font-medium">{closing.persona_entrega_nombre}</span></div>
                     <div className="flex justify-between"><span>Recibido por:</span> <span className="font-medium">{closing.persona_recibe}</span></div>
-                    <div className="flex justify-between border-t pt-2 mt-2"><span>Total en sistema:</span> <span className="font-medium">${closing.total_sistema.toLocaleString('es-CL')}</span></div>
-                    <div className="flex justify-between"><span>Fondo base:</span> <span className="font-medium">${closing.fondo_base.toLocaleString('es-CL')}</span></div>
-                    <div className="flex justify-between"><span>Total contado:</span> <span className="font-medium">${closing.total_calculado.toLocaleString('es-CL')}</span></div>
-                    <div className={cn("flex justify-between font-bold", closing.diferencia !== 0 ? 'text-destructive' : 'text-green-600')}><span>Diferencia:</span> <span>${closing.diferencia.toLocaleString('es-CL')}</span></div>
+                    <div className="flex justify-between border-t pt-2 mt-2"><span>Total en sistema:</span> <span className="font-medium">${closing.total_sistema.toLocaleString('es-MX')}</span></div>
+                    <div className="flex justify-between"><span>Fondo base:</span> <span className="font-medium">${closing.fondo_base.toLocaleString('es-MX')}</span></div>
+                    <div className="flex justify-between"><span>Total contado:</span> <span className="font-medium">${closing.total_calculado.toLocaleString('es-MX')}</span></div>
+                    <div className={cn("flex justify-between font-bold", closing.diferencia !== 0 ? 'text-destructive' : 'text-green-600')}><span>Diferencia:</span> <span>${closing.diferencia.toLocaleString('es-MX')}</span></div>
                     <div className="pt-2">
                         <h5 className="font-semibold">Comentarios:</h5>
                         <p className="text-muted-foreground">{closing.comentarios || 'Sin comentarios.'}</p>
@@ -67,9 +68,9 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
                     <TableBody>
                         {sortedDenominations.map(([value, count]) => (
                             <TableRow key={value}>
-                                <TableCell className="py-2">${Number(value).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="py-2">${Number(value).toLocaleString('es-MX')}</TableCell>
                                 <TableCell className="text-right py-2">{count}</TableCell>
-                                <TableCell className="text-right py-2">${(Number(value) * count).toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right py-2">${(Number(value) * count).toLocaleString('es-MX')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -188,10 +189,10 @@ export default function CashClosingsPage() {
                                     <TableCell>{format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}</TableCell>
                                     <TableCell>{closing.persona_entrega_nombre}</TableCell>
                                     <TableCell>{closing.persona_recibe}</TableCell>
-                                    <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-CL')}</TableCell>
-                                    <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-CL')}</TableCell>
+                                    <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-MX')}</TableCell>
+                                    <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-MX')}</TableCell>
                                     <TableCell className={cn("text-right font-bold", closing.diferencia !== 0 ? 'text-destructive' : 'text-green-600')}>
-                                        ${closing.diferencia.toLocaleString('es-CL')}
+                                        ${closing.diferencia.toLocaleString('es-MX')}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="outline" size="sm" onClick={() => setSelectedClosing(closing)}><Eye className="mr-2 h-4 w-4"/> Ver Detalle</Button>

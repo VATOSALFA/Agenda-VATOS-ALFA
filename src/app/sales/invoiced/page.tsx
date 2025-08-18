@@ -83,12 +83,12 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                                     backgroundColor: 'hsl(var(--background))',
                                     border: '1px solid hsl(var(--border))'
                                 }}
-                                formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
+                                formatter={(value: number) => `$${value.toLocaleString('es-MX')}`}
                             />}
                         </RechartsPieChart>
                     </ResponsiveContainer>
                     {data.length > 0 && <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-2xl font-bold">${total.toLocaleString('es-CL')}</span>
+                        <span className="text-2xl font-bold">${total.toLocaleString('es-MX')}</span>
                     </div>}
                 </div>
                  <div className="text-sm">
@@ -106,7 +106,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
                                         {item.name}
                                     </TableCell>
-                                    <TableCell className="text-right">${item.value.toLocaleString('es-CL')}</TableCell>
+                                    <TableCell className="text-right">${item.value.toLocaleString('es-MX')}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -503,10 +503,10 @@ export default function InvoicedSalesPage() {
                                     <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                     <TableCell>{sale.professionalNames}</TableCell>
                                     <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                    <TableCell>${(sale.total || 0).toLocaleString('es-CL')}</TableCell>
+                                    <TableCell>${(sale.total || 0).toLocaleString('es-MX')}</TableCell>
                                     <TableCell>
                                         {sale.descuento?.valor > 0 
-                                            ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-CL')}`)
+                                            ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-MX')}`)
                                             : '0.00%'
                                         }
                                     </TableCell>
@@ -553,7 +553,7 @@ export default function InvoicedSalesPage() {
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-right font-bold">Total</TableCell>
                                     <TableCell className="font-bold">
-                                        ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-CL')}
+                                        ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-MX')}
                                     </TableCell>
                                     <TableCell colSpan={2}></TableCell>
                                 </TableRow>

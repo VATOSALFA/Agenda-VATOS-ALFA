@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -21,7 +22,7 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
             <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
             {children}
         </div>
-        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-CL', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`}</span>
+        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-MX', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`}</span>
     </div>
 );
 
@@ -238,19 +239,19 @@ export default function FinanzasResumenPage() {
                             <>
                                 <div className="flex justify-between items-center text-base">
                                     <span className="text-muted-foreground">Venta de productos</span>
-                                    <span className="font-semibold">${ventaProductosAnual.toLocaleString('es-CL')}</span>
+                                    <span className="font-semibold">${ventaProductosAnual.toLocaleString('es-MX')}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-base">
                                     <span className="text-muted-foreground">Reinversión</span>
-                                    <span className="font-semibold text-red-600">-${reinversionAnual.toLocaleString('es-CL')}</span>
+                                    <span className="font-semibold text-red-600">-${reinversionAnual.toLocaleString('es-MX')}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-base">
                                     <span className="text-muted-foreground">Comisión de profesionales</span>
-                                    <span className="font-semibold text-red-600">-${comisionProfesionalesAnual.toLocaleString('es-CL')}</span>
+                                    <span className="font-semibold text-red-600">-${comisionProfesionalesAnual.toLocaleString('es-MX')}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
                                     <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
-                                    <span className="font-extrabold text-primary">${utilidadVatosAlfaAnual.toLocaleString('es-CL')}</span>
+                                    <span className="font-extrabold text-primary">${utilidadVatosAlfaAnual.toLocaleString('es-MX')}</span>
                                 </div>
                             </>
                         )}
@@ -300,7 +301,7 @@ export default function FinanzasResumenPage() {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="month" />
                             <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                            <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-CL')}`} />
+                            <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
                             <Legend />
                             <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-2))" name="Ingresos" />
                             <Line type="monotone" dataKey="egresos" stroke="hsl(var(--destructive))" name="Egresos" />
@@ -318,4 +319,3 @@ export default function FinanzasResumenPage() {
         </>
     );
 }
-

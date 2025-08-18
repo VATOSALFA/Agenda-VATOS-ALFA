@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useParams } from 'next/navigation';
@@ -39,7 +40,7 @@ const monthNameToNumber: { [key: string]: number } = {
 const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean }) => (
     <div className="flex justify-between items-center text-base py-1.5 border-b last:border-b-0">
         <span className={cn("text-muted-foreground", isBold && "font-bold text-foreground", isPrimary && "font-bold text-primary flex items-center")}>{label}</span>
-        <span className={cn("font-semibold", isBold && "font-extrabold", isPrimary && "text-primary")}>${amount.toLocaleString('es-CL')}</span>
+        <span className={cn("font-semibold", isBold && "font-extrabold", isPrimary && "text-primary")}>${amount.toLocaleString('es-MX')}</span>
     </div>
 );
 
@@ -49,7 +50,7 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
             <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
             {children}
         </div>
-        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
     </div>
 );
 
@@ -391,19 +392,19 @@ export default function FinanzasMensualesPage() {
                     <CardContent className="space-y-2">
                         <div className="flex justify-between items-center text-base">
                             <span className="text-muted-foreground">Venta de productos</span>
-                            <span className="font-semibold">${ventaProductos.toLocaleString('es-CL')}</span>
+                            <span className="font-semibold">${ventaProductos.toLocaleString('es-MX')}</span>
                         </div>
                         <div className="flex justify-between items-center text-base">
                             <span className="text-muted-foreground">Reinversión</span>
-                            <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-CL')}</span>
+                            <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-MX')}</span>
                         </div>
                         <div className="flex justify-between items-center text-base">
                             <span className="text-muted-foreground">Comisión de profesionales</span>
-                            <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-CL')}</span>
+                            <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-MX')}</span>
                         </div>
                         <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
                             <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
-                            <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-CL')}</span>
+                            <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-MX')}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -418,7 +419,7 @@ export default function FinanzasMensualesPage() {
                                     <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
                                         <span className="text-muted-foreground">Comisiones</span>
                                     </AccordionTrigger>
-                                     <span className="font-semibold mr-4">${totalComisiones.toLocaleString('es-CL')}</span>
+                                     <span className="font-semibold mr-4">${totalComisiones.toLocaleString('es-MX')}</span>
                                 </div>
                                 <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-md">
                                     <div className="space-y-2">
@@ -431,9 +432,9 @@ export default function FinanzasMensualesPage() {
                                         {commissionsSummary.map(({name, commission, tips}) => (
                                             <div key={name} className="grid grid-cols-4 text-xs">
                                                 <span>{name}</span>
-                                                <span className="text-right font-mono">${commission.toLocaleString('es-CL')}</span>
-                                                <span className="text-right font-mono">${tips.toLocaleString('es-CL')}</span>
-                                                <span className="text-right font-bold">${(commission + tips).toLocaleString('es-CL')}</span>
+                                                <span className="text-right font-mono">${commission.toLocaleString('es-MX')}</span>
+                                                <span className="text-right font-mono">${tips.toLocaleString('es-MX')}</span>
+                                                <span className="text-right font-bold">${(commission + tips).toLocaleString('es-MX')}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -444,7 +445,7 @@ export default function FinanzasMensualesPage() {
                         <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
                          <div className="flex justify-between items-center text-lg pt-2 mt-2">
                             <span className="font-bold text-primary">Total</span>
-                            <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-CL')}</span>
+                            <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-MX')}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -475,9 +476,9 @@ export default function FinanzasMensualesPage() {
                                     dailyIncome.map((ingreso, i) => (
                                         <TableRow key={i}>
                                             <TableCell>{ingreso.fecha}</TableCell>
-                                            <TableCell>${ingreso.efectivo.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell>${ingreso.deposito.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
+                                            <TableCell>${ingreso.deposito.toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
                                         </TableRow>
                                     ))
                                 )}
@@ -506,7 +507,7 @@ export default function FinanzasMensualesPage() {
                                         <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
                                         <TableCell>{egreso.concepto}</TableCell>
                                         <TableCell>{egreso.aQuien}</TableCell>
-                                        <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-CL')}</TableCell>
+                                        <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-MX')}</TableCell>
                                         <TableCell>{egreso.comentarios}</TableCell>
                                         <TableCell className="text-right">
                                             {!egreso.id.startsWith('comm-') && (
@@ -543,7 +544,7 @@ export default function FinanzasMensualesPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Se eliminará permanentemente el egreso de <strong>{egresoToDelete.concepto}</strong> por <strong>${egresoToDelete.monto.toLocaleString('es-CL')}</strong>.
+                            Esta acción no se puede deshacer. Se eliminará permanentemente el egreso de <strong>{egresoToDelete.concepto}</strong> por <strong>${egresoToDelete.monto.toLocaleString('es-MX')}</strong>.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

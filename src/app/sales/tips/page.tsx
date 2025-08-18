@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -170,14 +171,14 @@ export default function TipsPage() {
                                 <TableCell>{tip.localId === 'local1' ? 'VATOS ALFA Barber Shop' : tip.localId}</TableCell>
                                 <TableCell>{tip.clientName}</TableCell>
                                 <TableCell>{tip.professionalName}</TableCell>
-                                <TableCell className="text-right font-semibold">${tip.tip.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className="text-right font-semibold">${tip.tip.toLocaleString('es-MX')}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                     <TableFooter>
                         <TableRow className="bg-muted/50">
                             <TableHead colSpan={6} className="text-right font-bold text-lg">Total Propinas</TableHead>
-                            <TableHead className="text-right font-bold text-lg text-primary">${totalTips.toLocaleString('es-CL')}</TableHead>
+                            <TableHead className="text-right font-bold text-lg text-primary">${totalTips.toLocaleString('es-MX')}</TableHead>
                         </TableRow>
                     </TableFooter>
                 </Table>

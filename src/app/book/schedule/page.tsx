@@ -1,19 +1,21 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Service, Profesional, Reservation } from '@/lib/types';
+import type { Service, Profesional, Reservation, TimeBlock } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowRight, ShoppingCart, User, Clock, Calendar as CalendarIcon, Loader2, Info } from 'lucide-react';
-import { format, addMinutes, set } from 'date-fns';
+import { format, addMinutes, set, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { where } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function SchedulePage() {
     const router = useRouter();
@@ -35,28 +37,58 @@ export default function SchedulePage() {
     }, [allServices, serviceIds, servicesLoading]);
     
     const availableProfessionals = useMemo(() => {
-        if (professionalsLoading || selectedServices.length === 0) return [];
+        if (professionalsLoading || selectedServices.length === 0 || !selectedDate) return [];
         
         const activeProfessionals = allProfessionals.filter(p => p.active && p.acceptsOnline);
+        const dayOfWeek = format(selectedDate, 'eeee', { locale: es }).toLowerCase();
 
-        return activeProfessionals.filter(prof => 
-            serviceIds.every(serviceId => prof.services?.includes(serviceId))
-        );
-    }, [allProfessionals, serviceIds, professionalsLoading, selectedServices.length]);
+        return activeProfessionals.filter(prof => {
+            const canPerformServices = serviceIds.every(serviceId => prof.services?.includes(serviceId));
+            if (!canPerformServices) return false;
+
+            const daySchedule = prof.schedule?.[dayOfWeek as keyof typeof prof.schedule];
+            return daySchedule?.enabled ?? false;
+        });
+    }, [allProfessionals, serviceIds, professionalsLoading, selectedServices.length, selectedDate]);
 
     const totalDuration = useMemo(() => selectedServices.reduce((acc, s) => acc + s.duration, 0), [selectedServices]);
     const totalPrice = useMemo(() => selectedServices.reduce((acc, s) => acc + s.price, 0), [selectedServices]);
     
-    const fetchReservationsForDay = useCallback(async (date: Date, professionalId: string) => {
+    const fetchOccupiedSlots = useCallback(async (date: Date, professionalId: string) => {
         const dateStr = format(date, 'yyyy-MM-dd');
+        
+        // Fetch reservations
         const reservationsRef = collection(db, 'reservas');
-        const q = query(reservationsRef, where('fecha', '==', dateStr), where('barbero_id', '==', professionalId));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data() as Reservation);
+        const resQuery = query(reservationsRef, where('fecha', '==', dateStr), where('barbero_id', '==', professionalId));
+        const resSnapshot = await getDocs(resQuery);
+        const bookedSlots = resSnapshot.docs.map(doc => {
+            const data = doc.data() as Reservation;
+            return {
+                start: parse(data.hora_inicio, 'HH:mm', new Date()),
+                end: parse(data.hora_fin, 'HH:mm', new Date()),
+            }
+        });
+
+        // Fetch time blocks
+        const blocksRef = collection(db, 'bloqueos_horario');
+        const blockQuery = query(blocksRef, where('fecha', '==', dateStr), where('barbero_id', '==', professionalId));
+        const blockSnapshot = await getDocs(blockQuery);
+        blockSnapshot.docs.forEach(doc => {
+            const data = doc.data() as TimeBlock;
+            bookedSlots.push({
+                start: parse(data.hora_inicio, 'HH:mm', new Date()),
+                end: parse(data.hora_fin, 'HH:mm', new Date()),
+            });
+        });
+
+        return bookedSlots;
     }, []);
 
     useEffect(() => {
-        if (!selectedDate || totalDuration === 0 || availableProfessionals.length === 0) return;
+        if (!selectedDate || totalDuration === 0 || availableProfessionals.length === 0) {
+            setAvailableTimes([]);
+            return;
+        };
 
         const getTimes = async () => {
             setIsFetchingTimes(true);
@@ -74,11 +106,7 @@ export default function SchedulePage() {
 
                 if (!daySchedule || !daySchedule.enabled) continue;
 
-                const reservations = await fetchReservationsForDay(selectedDate, prof.id);
-                const bookedSlots = reservations.map(r => ({
-                    start: parse(r.hora_inicio, 'HH:mm', new Date()),
-                    end: parse(r.hora_fin, 'HH:mm', new Date()),
-                }));
+                const occupiedSlots = await fetchOccupiedSlots(selectedDate, prof.id);
 
                 const [startH, startM] = daySchedule.start.split(':').map(Number);
                 let slotTime = set(selectedDate, { hours: startH, minutes: startM, seconds: 0 });
@@ -89,9 +117,10 @@ export default function SchedulePage() {
                     const potentialEndTime = addMinutes(slotTime, totalDuration);
                     if (potentialEndTime > endTime) break;
 
-                    const isBooked = bookedSlots.some(booked => 
+                    const isBooked = occupiedSlots.some(booked => 
                         (slotTime >= booked.start && slotTime < booked.end) ||
-                        (potentialEndTime > booked.start && potentialEndTime <= booked.end)
+                        (potentialEndTime > booked.start && potentialEndTime <= booked.end) ||
+                        (slotTime < booked.start && potentialEndTime > booked.end)
                     );
 
                     if (!isBooked && !times.includes(format(slotTime, 'HH:mm'))) {
@@ -104,7 +133,7 @@ export default function SchedulePage() {
             setIsFetchingTimes(false);
         };
         getTimes();
-    }, [selectedDate, selectedProfessional, totalDuration, availableProfessionals, fetchReservationsForDay]);
+    }, [selectedDate, selectedProfessional, totalDuration, availableProfessionals, fetchOccupiedSlots]);
 
     const isLoading = servicesLoading || professionalsLoading;
 
@@ -139,7 +168,7 @@ export default function SchedulePage() {
                             </Select>
                         )}
                          { !isLoading && availableProfessionals.length === 0 && (
-                            <p className="text-sm text-muted-foreground mt-2">No hay profesionales disponibles que ofrezcan todos los servicios seleccionados.</p>
+                            <p className="text-sm text-muted-foreground mt-2">No hay profesionales disponibles que ofrezcan todos los servicios seleccionados en esta fecha.</p>
                         )}
                     </CardContent>
                 </Card>

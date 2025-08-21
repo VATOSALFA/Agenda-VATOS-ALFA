@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -34,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
-import type { Profesional, Service, Reservation } from '@/lib/types';
+import type { Profesional, Service, Reservation, TimeBlock } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
@@ -172,7 +173,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hours, minutes };
   }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (initialData && form && services.length > 0) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
@@ -188,18 +189,23 @@ useEffect(() => {
 
         const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
         const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
-
-        const defaultItems = [{ 
-            servicio: '', 
-            barbero_id: isEditMode ? '' : (initialData as any).barbero_id || '' 
-        }];
-
+        
+        let itemsToSet;
+        if(isEditMode && initialData.items && services.length > 0) {
+            itemsToSet = initialData.items.map(i => ({
+                servicio: services.find(s => s.name === i.servicio)?.id || '',
+                barbero_id: i.barbero_id || ''
+            }));
+        } else {
+            itemsToSet = [{ 
+                servicio: '', 
+                barbero_id: (initialData as any).barbero_id || '' 
+            }];
+        }
+        
         form.reset({
             cliente_id: initialData.cliente_id,
-            items: initialData.items?.length ? initialData.items.map(i => ({ 
-                servicio: services.find(s => s.name === i.servicio)?.id || '',
-                barbero_id: i.barbero_id || '' 
-            })) : defaultItems,
+            items: itemsToSet,
             fecha,
             hora_inicio_hora: startHour,
             hora_inicio_minuto: startMinute,
@@ -270,33 +276,61 @@ useEffect(() => {
       const professionalsInvolved = [...new Set(data.items.map((item: any) => item.barbero_id))];
 
       for (const profId of professionalsInvolved) {
-          const q = query(
+          const professional = professionals.find(p => p.id === profId);
+          if (!professional) continue;
+
+          // Check against professional's general schedule
+          const dayOfWeek = format(data.fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
+          if (!daySchedule || !daySchedule.enabled) {
+              toast({ variant: "destructive", title: "Profesional no disponible", description: `${professional.name} no trabaja en la fecha seleccionada.` });
+              setIsSubmitting(false);
+              return;
+          }
+          if (hora_inicio < daySchedule.start || hora_fin > daySchedule.end) {
+              toast({ variant: "destructive", title: "Fuera de horario", description: `El horario seleccionado está fuera del horario laboral de ${professional.name} (${daySchedule.start} - ${daySchedule.end}).` });
+              setIsSubmitting(false);
+              return;
+          }
+
+          // Check against existing reservations
+          const reservationsQuery = query(
               collection(db, 'reservas'),
               where('local_id', '==', data.local_id),
               where('fecha', '==', formattedDate),
               where('items', 'array-contains-any', [{ barbero_id: profId }])
           );
-
-          const snapshot = await getDocs(q);
-          const existingReservations = snapshot.docs.map(d => d.data() as Reservation)
+          const reservationsSnapshot = await getDocs(reservationsQuery);
+          const existingReservations = reservationsSnapshot.docs.map(d => d.data() as Reservation)
               .filter(r => isEditMode && initialData ? d.id !== initialData.id : true); // Exclude current reservation if editing
 
-          const conflict = existingReservations.some(r => {
-              const existingStart = r.hora_inicio;
-              const existingEnd = r.hora_fin;
-              // Check for time overlap
-              return (hora_inicio < existingEnd && hora_fin > existingStart);
+          const reservationConflict = existingReservations.some(r => {
+              return (hora_inicio < r.hora_fin && hora_fin > r.hora_inicio);
           });
           
-          if (conflict) {
-              const prof = professionals.find(p => p.id === profId);
-              toast({
-                  variant: "destructive",
-                  title: "Conflicto de Horario",
-                  description: `${prof?.name || 'El profesional'} ya tiene una cita en este horario.`,
-              });
+          if (reservationConflict) {
+              toast({ variant: "destructive", title: "Conflicto de Horario", description: `${professional.name} ya tiene una cita en este horario.` });
               setIsSubmitting(false);
               return;
+          }
+          
+          // Check against time blocks
+          const blocksQuery = query(
+            collection(db, 'bloqueos_horario'),
+            where('barbero_id', '==', profId),
+            where('fecha', '==', formattedDate)
+          );
+          const blocksSnapshot = await getDocs(blocksQuery);
+          const timeBlocks = blocksSnapshot.docs.map(d => d.data() as TimeBlock);
+
+          const blockConflict = timeBlocks.some(b => {
+              return (hora_inicio < b.hora_fin && hora_fin > b.hora_inicio);
+          });
+
+          if(blockConflict) {
+            toast({ variant: "destructive", title: "Profesional no disponible", description: `${professional.name} tiene un bloqueo en este horario.` });
+            setIsSubmitting(false);
+            return;
           }
       }
       
@@ -474,9 +508,6 @@ useEffect(() => {
                             </div>
                         </div>
                     </div>
-                    <FormMessage className="text-center text-xs">
-                        {form.formState.errors.hora_inicio_hora?.message}
-                    </FormMessage>
                 </div>
             </div>
 

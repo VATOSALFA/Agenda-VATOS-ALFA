@@ -105,7 +105,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 <div className="grid grid-cols-3 gap-4 text-sm">
                     <InfoItem label="Fecha" value={formatDate(sale.fecha_hora_venta)} />
                     <InfoItem label="Cajero" value={sale.creado_por_nombre || 'Sin información'} />
-                    <InfoItem label="Cliente" value={`${sale.client?.nombre} ${sale.client?.apellido}`} />
+                    <InfoItem label="Cliente" value={`${sale.client?.nombre || ''} ${sale.client?.apellido || ''}`.trim() || 'No registrado'} />
                     <InfoItem label="Local" value={localName} />
                     <InfoItem label="Método de pago" value={sale.metodo_pago} />
                     <InfoItem label="Monto total" value={`$${sale.total.toLocaleString('es-MX')}`} />

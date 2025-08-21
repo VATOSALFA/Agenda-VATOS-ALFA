@@ -212,7 +212,7 @@ export default function CashBoxPage() {
     if (salesLoading || clientsLoading) return [];
     return sales.map(sale => ({
         ...sale,
-        cliente: clientMap.get(sale.cliente_id)
+        client: clientMap.get(sale.cliente_id)
     }))
   }, [sales, clientMap, salesLoading, clientsLoading]);
 
@@ -430,7 +430,7 @@ export default function CashBoxPage() {
                             <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
                             <TableCell>{sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A'}</TableCell>
                             <TableCell>{localMap.get(sale.local_id ?? '') || sale.local_id}</TableCell>
-                            <TableCell>{sale.cliente?.nombre} {sale.cliente?.apellido}</TableCell>
+                            <TableCell>{sale.client?.nombre} {sale.client?.apellido}</TableCell>
                             <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
                             <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
                             <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-CL')}</TableCell>

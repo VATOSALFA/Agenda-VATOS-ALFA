@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -43,6 +44,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Checkbox } from '../ui/checkbox';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 import { Avatar, AvatarFallback } from '../ui/avatar';
+import { useDebounce } from 'use-debounce';
 
 
 const reservationSchema = z.object({
@@ -79,27 +81,8 @@ const reservationSchema = z.object({
 }, {
     message: 'La hora de fin debe ser posterior a la hora de inicio.',
     path: ['hora_fin_hora'],
-}).refine(data => {
-    if (!data.fecha || !data.hora_inicio_hora || !data.hora_inicio_minuto) return true;
-    
-    const now = new Date();
-    const selectedDateTime = new Date(data.fecha);
-    selectedDateTime.setHours(parseInt(data.hora_inicio_hora, 10), parseInt(data.hora_inicio_minuto, 10), 0, 0);
-
-    // Allow a small grace period (e.g., 1 minute) to account for delays, only if it's today
-    if(dateFnsIsToday(selectedDateTime)){
-        now.setMinutes(now.getMinutes() - 1);
-    } else {
-        selectedDateTime.setHours(0,0,0,0);
-        now.setHours(0,0,0,0);
-    }
-    
-    return selectedDateTime >= now;
-
-}, {
-    message: 'No se pueden crear reservas en una fecha u hora pasada.',
-    path: ['hora_inicio_hora'],
 });
+
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
 
@@ -125,10 +108,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  
+  const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
+
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
+  const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
+  const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(reservationSchema),
@@ -151,11 +137,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     control: form.control,
     name: "items"
   });
+  
+  const watchedValues = form.watch();
+  const [debouncedValues] = useDebounce(watchedValues, 300);
 
-  const watchedItems = form.watch('items');
-  const selectedDate = form.watch('fecha');
-  const selectedStartHour = form.watch('hora_inicio_hora');
-  const selectedStartMinute = form.watch('hora_inicio_minuto');
   const selectedClientId = form.watch('cliente_id');
 
   const selectedClient = useMemo(() => {
@@ -172,6 +157,62 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
     return { hours, minutes };
   }, []);
+
+  const validateItemsAvailability = useCallback(() => {
+    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = debouncedValues;
+    const errors: Record<number, string> = {};
+
+    if (!items || !fecha || !hora_inicio_hora || !hora_inicio_minuto || !hora_fin_hora || !hora_fin_minuto) {
+      setAvailabilityErrors({});
+      return;
+    }
+
+    const hora_inicio = `${hora_inicio_hora}:${hora_inicio_minuto}`;
+    const hora_fin = `${hora_fin_hora}:${hora_fin_minuto}`;
+    const formattedDate = format(fecha, 'yyyy-MM-dd');
+
+    items.forEach((item, index) => {
+      if (!item.barbero_id) return;
+
+      const professional = professionals.find(p => p.id === item.barbero_id);
+      if (!professional) return;
+      
+      const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
+      
+      if (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end) {
+        errors[index] = `El horario o día de la reserva no está disponible para este prestador(${professional.name})`;
+        return;
+      }
+
+      const reservationConflict = allReservations.some(r => {
+        const isSameProfessional = r.items?.some(i => i.barbero_id === item.barbero_id);
+        if (r.fecha !== formattedDate || !isSameProfessional || (isEditMode && r.id === initialData?.id)) return false;
+        return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
+      });
+
+      if (reservationConflict) {
+        errors[index] = `El horario o día de la reserva no está disponible para este prestador(${professional.name})`;
+        return;
+      }
+      
+      const blockConflict = allTimeBlocks.some(b => {
+          if (b.barbero_id !== item.barbero_id || b.fecha !== formattedDate) return false;
+          return hora_inicio < b.hora_fin && hora_fin > b.hora_inicio;
+      });
+
+      if(blockConflict) {
+          errors[index] = `El horario o día de la reserva no está disponible para este prestador(${professional.name})`;
+          return;
+      }
+    });
+    setAvailabilityErrors(errors);
+  }, [debouncedValues, professionals, allReservations, allTimeBlocks, isEditMode, initialData]);
+
+  useEffect(() => {
+    validateItemsAvailability();
+  }, [validateItemsAvailability]);
+
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -221,7 +262,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
 }, [initialData, form, isOpen, services, isEditMode]);
   
-  // Recalculate price and end time when items change
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (
@@ -267,72 +307,19 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   async function onSubmit(data: any) {
     setIsSubmitting(true);
+    
+    // Final validation check before submitting
+    if (Object.keys(availabilityErrors).length > 0) {
+        toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado."});
+        setIsSubmitting(false);
+        return;
+    }
 
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
-    const formattedDate = format(data.fecha, 'yyyy-MM-dd');
     
     try {
-      const professionalsInvolved = [...new Set(data.items.map((item: any) => item.barbero_id))];
-
-      for (const profId of professionalsInvolved) {
-          const professional = professionals.find(p => p.id === profId);
-          if (!professional) continue;
-
-          // Check against professional's general schedule
-          const dayOfWeek = format(data.fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
-          if (!daySchedule || !daySchedule.enabled) {
-              toast({ variant: "destructive", title: "Profesional no disponible", description: `${professional.name} no trabaja en la fecha seleccionada.` });
-              setIsSubmitting(false);
-              return;
-          }
-          if (hora_inicio < daySchedule.start || hora_fin > daySchedule.end) {
-              toast({ variant: "destructive", title: "Fuera de horario", description: `El horario seleccionado está fuera del horario laboral de ${professional.name} (${daySchedule.start} - ${daySchedule.end}).` });
-              setIsSubmitting(false);
-              return;
-          }
-
-          // Check against existing reservations
-          const reservationsQuery = query(
-              collection(db, 'reservas'),
-              where('local_id', '==', data.local_id),
-              where('fecha', '==', formattedDate),
-              where('items', 'array-contains-any', [{ barbero_id: profId }])
-          );
-          const reservationsSnapshot = await getDocs(reservationsQuery);
-          const existingReservations = reservationsSnapshot.docs.map(d => d.data() as Reservation)
-              .filter(r => isEditMode && initialData ? d.id !== initialData.id : true); // Exclude current reservation if editing
-
-          const reservationConflict = existingReservations.some(r => {
-              return (hora_inicio < r.hora_fin && hora_fin > r.hora_inicio);
-          });
-          
-          if (reservationConflict) {
-              toast({ variant: "destructive", title: "Conflicto de Horario", description: `${professional.name} ya tiene una cita en este horario.` });
-              setIsSubmitting(false);
-              return;
-          }
-          
-          // Check against time blocks
-          const blocksQuery = query(
-            collection(db, 'bloqueos_horario'),
-            where('barbero_id', '==', profId),
-            where('fecha', '==', formattedDate)
-          );
-          const blocksSnapshot = await getDocs(blocksQuery);
-          const timeBlocks = blocksSnapshot.docs.map(d => d.data() as TimeBlock);
-
-          const blockConflict = timeBlocks.some(b => {
-              return (hora_inicio < b.hora_fin && hora_fin > b.hora_inicio);
-          });
-
-          if(blockConflict) {
-            toast({ variant: "destructive", title: "Profesional no disponible", description: `${professional.name} tiene un bloqueo en este horario.` });
-            setIsSubmitting(false);
-            return;
-          }
-      }
+      const formattedDate = format(data.fecha, 'yyyy-MM-dd');
       
       const itemsToSave = data.items.map((item: any) => {
           const service = services.find(s => s.id === item.servicio);
@@ -597,10 +584,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                 <FormItem>
                                     <FormLabel>Profesional</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl><SelectTrigger><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
+                                        <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
                                         <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                                     </Select>
-                                    <FormMessage />
+                                     {availabilityErrors[index] && <p className="text-sm font-medium text-destructive">{availabilityErrors[index]}</p>}
                                 </FormItem>
                             )}/>
                         </div>
@@ -653,7 +640,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         
         <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || !!form.formState.errors.items}>
+          <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || Object.keys(availabilityErrors).length > 0}>
             {(isSubmitting || form.formState.isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar reserva
           </Button>

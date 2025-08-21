@@ -190,23 +190,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
         const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
-
-        const defaultItems = [{ 
-            servicio: '', 
-            barbero_id: isEditMode ? '' : (initialData as any).barbero_id || '' 
-        }];
         
-        let itemsToSet = defaultItems;
+        let itemsToSet;
         if(isEditMode && initialData.items && services.length > 0) {
             itemsToSet = initialData.items.map(i => ({
                 servicio: services.find(s => s.name === i.servicio)?.id || '',
                 barbero_id: i.barbero_id || ''
             }));
-        } else if (!isEditMode && (initialData as any).barbero_id) {
-            itemsToSet = [{servicio: '', barbero_id: (initialData as any).barbero_id}]
+        } else {
+            itemsToSet = [{ 
+                servicio: '', 
+                barbero_id: (initialData as any).barbero_id || '' 
+            }];
         }
-
-
+        
         form.reset({
             cliente_id: initialData.cliente_id,
             items: itemsToSet,
@@ -279,21 +276,26 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     try {
       const professionalsInvolved = [...new Set(data.items.map((item: any) => item.barbero_id))];
 
-      for(const profId of professionalsInvolved) {
+      for (const profId of professionalsInvolved) {
           const q = query(
               collection(db, 'reservas'),
-              where('barbero_id', '==', profId),
+              where('local_id', '==', data.local_id),
               where('fecha', '==', formattedDate),
-              where('hora_fin', '>', hora_inicio)
+              where('items', 'array-contains-any', [{ barbero_id: profId }])
           );
 
-          const overlappingSnapshot = await getDocs(q);
-          const overlappingReservations = overlappingSnapshot.docs
-              .map(d => d.data())
-              .filter(r => r.hora_inicio < hora_fin)
-              .filter(r => (isEditMode && initialData) ? r.id !== initialData.id : true);
+          const snapshot = await getDocs(q);
+          const existingReservations = snapshot.docs.map(d => d.data() as Reservation)
+              .filter(r => isEditMode && initialData ? d.id !== initialData.id : true); // Exclude current reservation if editing
+
+          const conflict = existingReservations.some(r => {
+              const existingStart = r.hora_inicio;
+              const existingEnd = r.hora_fin;
+              // Check for time overlap
+              return (hora_inicio < existingEnd && hora_fin > existingStart);
+          });
           
-          if (overlappingReservations.length > 0) {
+          if (conflict) {
               const prof = professionals.find(p => p.id === profId);
               toast({
                   variant: "destructive",

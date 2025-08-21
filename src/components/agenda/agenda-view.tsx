@@ -606,6 +606,14 @@ export default function AgendaView() {
                                             <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b" />
                                         ))}
                                     </div>
+
+                                    {!isWorking && (
+                                        <NonWorkBlock
+                                          top={0}
+                                          height={HOURLY_SLOT_HEIGHT * timeSlots.length}
+                                          text="Día no laboral"
+                                        />
+                                    )}
                                     
                                      {/* Hover Popover */}
                                     {isWorking && hoveredSlot?.barberId === barber.id && (

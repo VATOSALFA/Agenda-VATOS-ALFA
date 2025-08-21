@@ -458,7 +458,7 @@ export default function AgendaView() {
 
   const formatHour = (hour: number) => {
       const h = Math.floor(hour);
-      const m = (hour % 1) * 60;
+      const m = Math.round((hour % 1) * 60);
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 

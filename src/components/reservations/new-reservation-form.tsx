@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -212,7 +211,7 @@ useEffect(() => {
       { totalPrice: 0, totalDuration: 0 }
     );
 
-    form.setValue('precio', totalPrice, { shouldDirty: true });
+    form.setValue('precio', totalPrice);
 
     if (selectedDate && selectedStartHour && selectedStartMinute && totalDuration > 0) {
       try {

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -9,7 +10,7 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, getDay, addMinutes, getHours, getMinutes } from 'date-fns';
+import { parse, format, set, getDay, addMinutes, getHours, getMinutes, isToday as dateFnsIsToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -78,6 +79,26 @@ const reservationSchema = z.object({
 }, {
     message: 'La hora de fin debe ser posterior a la hora de inicio.',
     path: ['hora_fin_hora'],
+}).refine(data => {
+    if (!data.fecha || !data.hora_inicio_hora || !data.hora_inicio_minuto) return true;
+    
+    const now = new Date();
+    const selectedDateTime = new Date(data.fecha);
+    selectedDateTime.setHours(parseInt(data.hora_inicio_hora, 10), parseInt(data.hora_inicio_minuto, 10), 0, 0);
+
+    // Allow a small grace period (e.g., 1 minute) to account for delays, only if it's today
+    if(dateFnsIsToday(selectedDateTime)){
+        now.setMinutes(now.getMinutes() - 1);
+    } else {
+        selectedDateTime.setHours(0,0,0,0);
+        now.setHours(0,0,0,0);
+    }
+    
+    return selectedDateTime >= now;
+
+}, {
+    message: 'No se pueden crear reservas en una fecha u hora pasada.',
+    path: ['hora_inicio_hora'],
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -395,7 +416,7 @@ useEffect(() => {
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                      <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus /></PopoverContent>
                     </Popover>
                     <FormMessage />
                   </FormItem>

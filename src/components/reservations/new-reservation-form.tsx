@@ -197,36 +197,46 @@ useEffect(() => {
   
   // Recalculate price and end time when items change
   useEffect(() => {
-    if (!watchedItems || !servicesMap.size) return;
+    const subscription = form.watch((value, { name, type }) => {
+      if (
+        type === 'change' &&
+        (name?.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name as string))
+      ) {
+        const { items, fecha, hora_inicio_hora, hora_inicio_minuto } = value;
 
-    const { totalPrice, totalDuration } = watchedItems.reduce(
-      (acc, currentItem) => {
-        const service = servicesMap.get(currentItem.servicio);
-        if (service) {
-          acc.totalPrice += service.price || 0;
-          acc.totalDuration += service.duration || 0;
+        if (!items || !servicesMap.size) return;
+
+        const { totalPrice, totalDuration } = items.reduce(
+          (acc, currentItem) => {
+            const service = servicesMap.get(currentItem?.servicio);
+            if (service) {
+              acc.totalPrice += service.price || 0;
+              acc.totalDuration += service.duration || 0;
+            }
+            return acc;
+          },
+          { totalPrice: 0, totalDuration: 0 }
+        );
+
+        form.setValue('precio', totalPrice, { shouldValidate: true });
+
+        if (fecha && hora_inicio_hora && hora_inicio_minuto && totalDuration > 0) {
+          try {
+            const startTime = set(fecha, {
+              hours: parseInt(hora_inicio_hora, 10),
+              minutes: parseInt(hora_inicio_minuto, 10),
+            });
+            const endTime = addMinutes(startTime, totalDuration);
+            form.setValue('hora_fin_hora', format(endTime, 'HH'), { shouldValidate: true });
+            form.setValue('hora_fin_minuto', format(endTime, 'mm'), { shouldValidate: true });
+          } catch (e) {
+            console.error("Error calculating end time", e);
+          }
         }
-        return acc;
-      },
-      { totalPrice: 0, totalDuration: 0 }
-    );
-
-    form.setValue('precio', totalPrice);
-
-    if (selectedDate && selectedStartHour && selectedStartMinute && totalDuration > 0) {
-      try {
-        const startTime = set(selectedDate, {
-          hours: parseInt(selectedStartHour),
-          minutes: parseInt(selectedStartMinute),
-        });
-        const endTime = addMinutes(startTime, totalDuration);
-        form.setValue('hora_fin_hora', format(endTime, 'HH'));
-        form.setValue('hora_fin_minuto', format(endTime, 'mm'));
-      } catch (e) {
-        console.error("Error calculating end time", e);
       }
-    }
-  }, [watchedItems, servicesMap, form, selectedDate, selectedStartHour, selectedStartMinute]);
+    });
+    return () => subscription.unsubscribe();
+  }, [form, servicesMap]);
 
 
   async function onSubmit(data: any) {

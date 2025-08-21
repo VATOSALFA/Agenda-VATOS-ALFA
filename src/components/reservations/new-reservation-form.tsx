@@ -98,7 +98,7 @@ const reservationSchema = z.object({
 
 }, {
     message: 'No se pueden crear reservas en una fecha u hora pasada.',
-    path: ['hora_inicio_minuto'], // Attach error to a more central field
+    path: ['hora_inicio_hora'],
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -173,7 +173,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hours, minutes };
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (initialData && form && services.length > 0) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
@@ -430,21 +430,21 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                             <div className="flex items-center gap-1">
                                 <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 <span>:</span>
-                                <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                             </div>
                         </div>
                         <span className="pt-6 px-1">a</span>
                         <div className="flex-grow space-y-1">
                             <p className="text-xs text-muted-foreground text-center">Fin</p>
                             <div className="flex items-center gap-1">
-                               <FormField control={form.control} name="hora_fin_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                               <FormField control={form.control} name="hora_fin_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 <span>:</span>
-                                <FormField control={form.control} name="hora_fin_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="hora_fin_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                             </div>
                         </div>
                     </div>
                     <FormMessage className="text-center text-xs">
-                        {form.formState.errors.hora_inicio_minuto?.message}
+                        {form.formState.errors.hora_inicio_hora?.message}
                     </FormMessage>
                 </div>
             </div>

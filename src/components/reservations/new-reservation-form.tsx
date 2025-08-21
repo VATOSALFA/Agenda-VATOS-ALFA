@@ -98,7 +98,7 @@ const reservationSchema = z.object({
 
 }, {
     message: 'No se pueden crear reservas en una fecha u hora pasada.',
-    path: ['hora_inicio_hora'],
+    path: ['hora_inicio_minuto'], // Attach error to a more central field
 });
 
 type ReservationFormData = z.infer<typeof reservationSchema>;
@@ -173,7 +173,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hours, minutes };
   }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (initialData && form && services.length > 0) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
@@ -428,7 +428,7 @@ useEffect(() => {
                         <div className="flex-grow space-y-1">
                             <p className="text-xs text-muted-foreground text-center">Inicio</p>
                             <div className="flex items-center gap-1">
-                                <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 <span>:</span>
                                 <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             </div>
@@ -443,6 +443,9 @@ useEffect(() => {
                             </div>
                         </div>
                     </div>
+                    <FormMessage className="text-center text-xs">
+                        {form.formState.errors.hora_inicio_minuto?.message}
+                    </FormMessage>
                 </div>
             </div>
 

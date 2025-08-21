@@ -48,7 +48,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Profesional, Client, Service, ScheduleDay, Reservation, Local } from '@/lib/types';
+import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
@@ -57,20 +57,6 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
-
-interface TimeBlock {
-    id: string;
-    barbero_id: string;
-    motivo: string;
-    fecha: string;
-    hora_inicio: string;
-    hora_fin: string;
-    type?: 'block';
-    customer?: string;
-    start?: number;
-    duration?: number;
-    color?: string;
-}
 
 const useCurrentTime = () => {
     const [time, setTime] = useState<Date | null>(null);
@@ -258,7 +244,7 @@ export default function AgendaView() {
         return {
           ...block,
           id: block.id,
-          barberId: block.barbero_id,
+          barbero_id: block.barbero_id,
           customer: { nombre: block.motivo },
           service: 'Bloqueado',
           start: start,
@@ -408,6 +394,7 @@ export default function AgendaView() {
         title: "Horario desbloqueado",
         description: `El bloqueo para "${blockToDelete.motivo}" ha sido eliminado.`,
       });
+      refreshData();
     } catch (error) {
       console.error("Error deleting block: ", error);
       toast({

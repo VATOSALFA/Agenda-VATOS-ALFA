@@ -78,6 +78,20 @@ export interface Reservation {
     };
 }
 
+export interface TimeBlock {
+    id: string;
+    barbero_id: string;
+    motivo: string;
+    fecha: string;
+    hora_inicio: string;
+    hora_fin: string;
+    type?: 'block';
+    customer?: { nombre: string }; // For unified rendering
+    start?: number; // transient
+    duration?: number; // transient
+    color?: string; // transient
+}
+
 export interface Schedule {
     lunes: ScheduleDay;
     martes: ScheduleDay;

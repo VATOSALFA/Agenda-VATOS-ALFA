@@ -36,6 +36,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
+import { useLocal } from '@/contexts/local-context';
 
 const blockSchema = z.object({
   barbero_id: z.string().min(1, 'Debes seleccionar un barbero.'),
@@ -43,6 +44,7 @@ const blockSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   hora_inicio: z.string().min(1, 'Debes seleccionar una hora de inicio.'),
   hora_fin: z.string().min(1, 'Debes seleccionar una hora de fin.'),
+  local_id: z.string().min(1, 'El local es requerido.'),
 }).refine(data => data.hora_fin > data.hora_inicio, {
   message: 'La hora de fin debe ser posterior a la hora de inicio.',
   path: ['hora_fin'],
@@ -64,6 +66,7 @@ interface BlockScheduleFormProps {
 export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialData }: BlockScheduleFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { selectedLocalId } = useLocal();
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
 
@@ -84,14 +87,16 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         fecha: initialData.fecha,
         hora_inicio: initialData.hora_inicio,
         motivo: '',
+        local_id: selectedLocalId || '',
       });
     } else {
         form.reset({
             fecha: new Date(),
             motivo: '',
+            local_id: selectedLocalId || '',
         });
     }
-  }, [initialData, form, isOpen]);
+  }, [initialData, form, isOpen, selectedLocalId]);
 
   const timeSlots = useMemo(() => {
     if (!selectedBarberId || !selectedDate || !professionals) return [];
@@ -154,6 +159,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         hora_inicio: data.hora_inicio,
         hora_fin: data.hora_fin,
         creado_en: Timestamp.now(),
+        local_id: data.local_id,
       });
       
       toast({

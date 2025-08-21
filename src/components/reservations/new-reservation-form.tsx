@@ -159,7 +159,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   });
   
   const watchedValues = form.watch();
-  const [debouncedValues] = useDebounce(watchedValues, 300);
+  const [debouncedValues] = useDebounce(watchedValues, 500);
 
   const selectedClientId = form.watch('cliente_id');
 

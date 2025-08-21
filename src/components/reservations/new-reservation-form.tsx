@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -199,31 +198,36 @@ useEffect(() => {
   
   // Recalculate price and end time when items change
   useEffect(() => {
-    if (!watchedItems || !services) return;
-    
-    const { totalPrice, totalDuration } = watchedItems.reduce((acc, currentItem) => {
+    if (!watchedItems || !servicesMap.size) return;
+
+    const { totalPrice, totalDuration } = watchedItems.reduce(
+      (acc, currentItem) => {
         const service = servicesMap.get(currentItem.servicio);
         if (service) {
-            acc.totalPrice += service.price || 0;
-            acc.totalDuration += service.duration || 0;
+          acc.totalPrice += service.price || 0;
+          acc.totalDuration += service.duration || 0;
         }
         return acc;
-    }, { totalPrice: 0, totalDuration: 0 });
+      },
+      { totalPrice: 0, totalDuration: 0 }
+    );
 
     form.setValue('precio', totalPrice, { shouldDirty: true });
-    
+
     if (selectedDate && selectedStartHour && selectedStartMinute && totalDuration > 0) {
       try {
-          const startTime = set(selectedDate, { hours: parseInt(selectedStartHour), minutes: parseInt(selectedStartMinute) });
-          const endTime = addMinutes(startTime, totalDuration);
-          form.setValue('hora_fin_hora', format(endTime, 'HH'));
-          form.setValue('hora_fin_minuto', format(endTime, 'mm'));
-
+        const startTime = set(selectedDate, {
+          hours: parseInt(selectedStartHour),
+          minutes: parseInt(selectedStartMinute),
+        });
+        const endTime = addMinutes(startTime, totalDuration);
+        form.setValue('hora_fin_hora', format(endTime, 'HH'));
+        form.setValue('hora_fin_minuto', format(endTime, 'mm'));
       } catch (e) {
-          console.error("Error calculating end time", e);
+        console.error("Error calculating end time", e);
       }
     }
-  }, [JSON.stringify(watchedItems), servicesMap, form, selectedDate, selectedStartHour, selectedStartMinute]);
+  }, [watchedItems, servicesMap, form, selectedDate, selectedStartHour, selectedStartMinute]);
 
 
   async function onSubmit(data: any) {

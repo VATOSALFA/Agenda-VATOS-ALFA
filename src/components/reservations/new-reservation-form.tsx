@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -173,8 +174,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hours, minutes };
   }, []);
 
-useEffect(() => {
-    if (initialData && form && services.length > 0) {
+  useEffect(() => {
+    if (initialData) {
         let fecha = new Date();
         if (typeof initialData.fecha === 'string') {
             const dateParts = initialData.fecha.split('-').map(Number);
@@ -194,13 +195,21 @@ useEffect(() => {
             servicio: '', 
             barbero_id: isEditMode ? '' : (initialData as any).barbero_id || '' 
         }];
+        
+        let itemsToSet = defaultItems;
+        if(isEditMode && initialData.items && services.length > 0) {
+            itemsToSet = initialData.items.map(i => ({
+                servicio: services.find(s => s.name === i.servicio)?.id || '',
+                barbero_id: i.barbero_id || ''
+            }));
+        } else if (!isEditMode && (initialData as any).barbero_id) {
+            itemsToSet = [{servicio: '', barbero_id: (initialData as any).barbero_id}]
+        }
+
 
         form.reset({
             cliente_id: initialData.cliente_id,
-            items: initialData.items?.length ? initialData.items.map(i => ({ 
-                servicio: services.find(s => s.name === i.servicio)?.id || '',
-                barbero_id: i.barbero_id || '' 
-            })) : defaultItems,
+            items: itemsToSet,
             fecha,
             hora_inicio_hora: startHour,
             hora_inicio_minuto: startMinute,
@@ -265,9 +274,36 @@ useEffect(() => {
 
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
+    const formattedDate = format(data.fecha, 'yyyy-MM-dd');
     
     try {
-      const formattedDate = format(data.fecha, 'yyyy-MM-dd');
+      const professionalsInvolved = [...new Set(data.items.map((item: any) => item.barbero_id))];
+
+      for(const profId of professionalsInvolved) {
+          const q = query(
+              collection(db, 'reservas'),
+              where('barbero_id', '==', profId),
+              where('fecha', '==', formattedDate),
+              where('hora_fin', '>', hora_inicio)
+          );
+
+          const overlappingSnapshot = await getDocs(q);
+          const overlappingReservations = overlappingSnapshot.docs
+              .map(d => d.data())
+              .filter(r => r.hora_inicio < hora_fin)
+              .filter(r => (isEditMode && initialData) ? r.id !== initialData.id : true);
+          
+          if (overlappingReservations.length > 0) {
+              const prof = professionals.find(p => p.id === profId);
+              toast({
+                  variant: "destructive",
+                  title: "Conflicto de Horario",
+                  description: `${prof?.name || 'El profesional'} ya tiene una cita en este horario.`,
+              });
+              setIsSubmitting(false);
+              return;
+          }
+      }
       
       const itemsToSave = data.items.map((item: any) => {
           const service = services.find(s => s.id === item.servicio);

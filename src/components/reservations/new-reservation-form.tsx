@@ -81,6 +81,26 @@ const reservationSchema = z.object({
 }, {
     message: 'La hora de fin debe ser posterior a la hora de inicio.',
     path: ['hora_fin_hora'],
+}).refine(data => {
+    if (!data.fecha || !data.hora_inicio_hora || !data.hora_inicio_minuto) return true;
+    
+    const now = new Date();
+    const selectedDateTime = new Date(data.fecha);
+    selectedDateTime.setHours(parseInt(data.hora_inicio_hora, 10), parseInt(data.hora_inicio_minuto, 10), 0, 0);
+
+    // Allow a small grace period (e.g., 1 minute) to account for delays, only if it's today
+    if(dateFnsIsToday(selectedDateTime)){
+        now.setMinutes(now.getMinutes() - 1);
+    } else {
+        selectedDateTime.setHours(0,0,0,0);
+        now.setHours(0,0,0,0);
+    }
+    
+    return selectedDateTime >= now;
+
+}, {
+    message: 'No se pueden crear reservas en una fecha u hora pasada.',
+    path: ['hora_inicio_hora'],
 });
 
 
@@ -158,8 +178,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return { hours, minutes };
   }, []);
 
-  const validateItemsAvailability = useCallback(() => {
-    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = debouncedValues;
+  const validateItemsAvailability = useCallback((values: ReservationFormData) => {
+    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = values;
     const errors: Record<number, string> = {};
 
     if (!items || !fecha || !hora_inicio_hora || !hora_inicio_minuto || !hora_fin_hora || !hora_fin_minuto) {
@@ -181,7 +201,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
       
       if (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end) {
-        errors[index] = `El horario o día de la reserva no está disponible para este prestador(${professional.name})`;
+        errors[index] = `El profesional no está disponible en este horario.`;
         return;
       }
 
@@ -192,7 +212,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       });
 
       if (reservationConflict) {
-        errors[index] = `El horario o día de la reserva no está disponible para este prestador(${professional.name})`;
+        errors[index] = `El profesional ya tiene una cita en este horario.`;
         return;
       }
       
@@ -202,17 +222,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       });
 
       if(blockConflict) {
-          errors[index] = `El horario o día de la reserva no está disponible para este prestador(${professional.name})`;
+          errors[index] = `El profesional tiene un bloqueo en este horario.`;
           return;
       }
     });
     setAvailabilityErrors(errors);
-  }, [debouncedValues, professionals, allReservations, allTimeBlocks, isEditMode, initialData]);
+  }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData]);
 
   useEffect(() => {
-    validateItemsAvailability();
-  }, [validateItemsAvailability]);
-
+    validateItemsAvailability(debouncedValues);
+  }, [debouncedValues, validateItemsAvailability]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -262,6 +281,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
 }, [initialData, form, isOpen, services, isEditMode]);
   
+  // Recalculate price and end time when items change
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (
@@ -495,6 +515,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                             </div>
                         </div>
                     </div>
+                    <FormMessage className="text-center text-xs">
+                        {form.formState.errors.hora_inicio_hora?.message}
+                    </FormMessage>
                 </div>
             </div>
 

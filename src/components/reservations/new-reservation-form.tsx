@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -44,7 +43,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Checkbox } from '../ui/checkbox';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 import { Avatar, AvatarFallback } from '../ui/avatar';
-import { useDebounce } from 'use-debounce';
 
 
 const reservationSchema = z.object({
@@ -103,7 +101,6 @@ const reservationSchema = z.object({
     path: ['hora_inicio_hora'],
 });
 
-
 type ReservationFormData = z.infer<typeof reservationSchema>;
 
 interface NewReservationFormProps {
@@ -129,7 +126,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
-
+  
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
@@ -157,9 +154,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     control: form.control,
     name: "items"
   });
-  
-  const watchedValues = form.watch();
-  const [debouncedValues] = useDebounce(watchedValues, 500);
 
   const selectedClientId = form.watch('cliente_id');
 
@@ -206,7 +200,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
 
       const reservationConflict = allReservations.some(r => {
-        const isSameProfessional = r.items?.some(i => i.barbero_id === item.barbero_id);
+        if (!r.items) return false;
+        const isSameProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
         if (r.fecha !== formattedDate || !isSameProfessional || (isEditMode && r.id === initialData?.id)) return false;
         return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
       });
@@ -230,8 +225,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData]);
 
   useEffect(() => {
-    validateItemsAvailability(debouncedValues);
-  }, [debouncedValues, validateItemsAvailability]);
+    const subscription = form.watch((value, { name }) => {
+      // Only validate when a relevant field changes
+      if (name && (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name))) {
+        validateItemsAvailability(value as ReservationFormData);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, validateItemsAvailability]);
+
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -337,10 +339,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
+    const formattedDate = format(data.fecha, 'yyyy-MM-dd');
     
     try {
-      const formattedDate = format(data.fecha, 'yyyy-MM-dd');
-      
       const itemsToSave = data.items.map((item: any) => {
           const service = services.find(s => s.id === item.servicio);
           return {

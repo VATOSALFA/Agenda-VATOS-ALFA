@@ -523,7 +523,7 @@ export default function AgendaView() {
             {empresaLoading ? (
                 <Skeleton className="h-24 w-24 rounded-full" />
             ) : receiptLogoUrl ? (
-                <Image src={receiptLogoUrl} alt="Logo de la empresa" width={96} height={96} className="object-contain" />
+                <Image src={receiptLogoUrl} alt="Logo de la empresa" width={150} height={150} className="object-contain" />
             ) : null}
           </div>
         </aside>

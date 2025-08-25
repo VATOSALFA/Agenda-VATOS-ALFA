@@ -54,7 +54,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit, Percent, DollarSign } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit, Percent, DollarSign, Calculator } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
@@ -112,6 +112,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [discountValue, setDiscountValue] = useState(0);
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   
+  const [amountPaid, setAmountPaid] = useState<number>(0);
+
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
@@ -746,6 +748,28 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </FormItem>
                             )}
                             />
+
+                            {paymentMethod === 'efectivo' && (
+                                <Card className="p-4 bg-muted/50">
+                                    <FormLabel className="flex items-center text-sm font-medium mb-2"><Calculator className="mr-2 h-4 w-4" /> Calculadora de Cambio</FormLabel>
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-4 items-center">
+                                            <FormItem>
+                                                <FormLabel className="text-xs">Paga con</FormLabel>
+                                                <div className="relative">
+                                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                                  <Input type="number" placeholder="0" className="pl-6" value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
+                                                </div>
+                                            </FormItem>
+                                            <div className="text-center">
+                                                <p className="text-xs text-muted-foreground">Cambio</p>
+                                                <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - total).toLocaleString('es-MX')}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            )}
+
                             {paymentMethod === 'combinado' && (
                             <Card className="p-4 bg-muted/50">
                                 <div className="grid grid-cols-2 gap-4">

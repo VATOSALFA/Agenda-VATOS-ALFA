@@ -54,6 +54,11 @@ import { CancelReservationModal } from '../reservations/cancel-reservation-modal
 import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import Image from 'next/image';
+
+interface EmpresaSettings {
+    receipt_logo_url?: string;
+}
 
 
 const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
@@ -144,6 +149,9 @@ export default function AgendaView() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
+  const receiptLogoUrl = empresaData?.[0]?.receipt_logo_url;
+
 
   useEffect(() => {
     // Let the auth context set the localId if needed.
@@ -511,6 +519,13 @@ export default function AgendaView() {
                 />
               </div>
           )}
+          <div className="mt-auto p-4 flex justify-center">
+            {empresaLoading ? (
+                <Skeleton className="h-24 w-24 rounded-full" />
+            ) : receiptLogoUrl ? (
+                <Image src={receiptLogoUrl} alt="Logo de la empresa" width={96} height={96} className="object-contain" />
+            ) : null}
+          </div>
         </aside>
 
         {/* Main Content Area */}

@@ -59,8 +59,6 @@ import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { MercadoPagoProvider } from './mercado-pago-provider';
-import { Payment } from '@mercadopago/sdk-react';
 
 
 interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; presentation_id?: string;}
@@ -296,7 +294,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
-  async function onSubmit(data: SaleFormData, paymentId?: string) {
+  async function onSubmit(data: SaleFormData) {
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
@@ -384,10 +382,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 efectivo: data.pago_efectivo,
                 tarjeta: data.pago_tarjeta,
             };
-        }
-
-        if (paymentId) {
-            saleDataToSave.mercado_pago_id = paymentId;
         }
 
         if (reservationId) {
@@ -648,8 +642,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
-              <MercadoPagoProvider>
-                <form onSubmit={form.handleSubmit((data) => onSubmit(data))} className="h-full flex flex-col">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                         {/* Sale Details Form */}
                         <div className="space-y-4">
@@ -828,35 +821,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        {paymentMethod === 'tarjeta' ? (
-                            <Payment
-                                initialization={{ amount: total }}
-                                customization={{
-                                    paymentMethods: {
-                                        creditCard: "all",
-                                        debitCard: "all",
-                                    },
-                                }}
-                                onSubmit={async (paymentData) => {
-                                    console.log('Payment successful', paymentData);
-                                    toast({ title: "Pago Aprobado", description: `ID de pago: ${paymentData.id}` });
-                                    await onSubmit(form.getValues(), paymentData.id);
-                                }}
-                                onError={(error) => {
-                                    console.error('Payment error', error);
-                                    toast({ variant: 'destructive', title: "Error en el Pago", description: "No se pudo procesar el pago con tarjeta." });
-                                }}
-                                onReady={() => setIsSubmitting(false)}
-                            />
-                        ) : (
-                            <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid} className="bg-primary hover:bg-primary/90">
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Finalizar Venta
-                            </Button>
-                        )}
+                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Finalizar Venta
+                        </Button>
                     </SheetFooter>
                   </form>
-                </MercadoPagoProvider>
             )}
         </Form>
         

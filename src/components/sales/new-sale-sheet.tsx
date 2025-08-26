@@ -54,7 +54,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit, Percent, DollarSign, Calculator } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
@@ -113,6 +113,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [paymentSent, setPaymentSent] = useState(false);
+
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
@@ -286,6 +288,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setStep(1);
     form.reset();
     setIsSubmitting(false);
+    setPaymentSent(false);
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -416,6 +419,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  const handleSendToTerminal = () => {
+    // In a real integration, this would call the Mercado Pago API
+    // to create a payment intent for the physical terminal.
+    // For this prototype, we'll simulate the action.
+    toast({
+        title: "Enviando a terminal...",
+        description: `Se ha enviado un cobro de $${total.toLocaleString('es-MX')} a la terminal.`
+    });
+    setPaymentSent(true);
   }
 
   const ResumenCarrito = () => (
@@ -821,10 +835,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Finalizar Venta
-                        </Button>
+                        {paymentMethod === 'tarjeta' ? (
+                            <div className="flex gap-2">
+                                <Button type="button" variant="secondary" onClick={handleSendToTerminal} disabled={paymentSent}>
+                                    <Send className="mr-2 h-4 w-4"/> Enviar a Terminal
+                                </Button>
+                                <Button type="submit" disabled={isSubmitting || !paymentSent}>
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Finalizar Venta
+                                </Button>
+                            </div>
+                        ) : (
+                             <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
+                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Finalizar Venta
+                            </Button>
+                        )}
                     </SheetFooter>
                   </form>
             )}

@@ -735,7 +735,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
                                 <FormControl>
                                     <RadioGroup
-                                    onValueChange={field.onChange}
+                                    onValueChange={(value) => {
+                                        field.onChange(value);
+                                        setPaymentSent(false); // Reset payment status when method changes
+                                    }}
                                     defaultValue={field.value}
                                     className="flex flex-wrap gap-2"
                                     >
@@ -838,7 +841,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         {paymentMethod === 'tarjeta' ? (
                             <div className="flex gap-2">
                                 <Button type="button" variant="secondary" onClick={handleSendToTerminal} disabled={paymentSent}>
-                                    <Send className="mr-2 h-4 w-4"/> Enviar a Terminal
+                                    <Send className="mr-2 h-4 w-4"/> {paymentSent ? 'Pago Enviado' : 'Enviar a Terminal'}
                                 </Button>
                                 <Button type="submit" disabled={isSubmitting || !paymentSent}>
                                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,6 +11,8 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import type { Client, Product, Service as ServiceType, Profesional, Local, User } from '@/lib/types';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
+import { MercadoPagoProvider } from './mercado-pago-provider';
+import { Payment } from '@mercadopago/sdk-react';
 
 
 import { Button } from '@/components/ui/button';
@@ -113,7 +113,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
-  const [paymentSent, setPaymentSent] = useState(false);
 
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
@@ -288,7 +287,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setStep(1);
     form.reset();
     setIsSubmitting(false);
-    setPaymentSent(false);
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -297,7 +295,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
-  async function onSubmit(data: SaleFormData) {
+  async function onSubmit(data: SaleFormData, paymentId?: string) {
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
@@ -378,6 +376,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             fecha_hora_venta: Timestamp.now(),
             creado_por_id: user?.uid,
             creado_por_nombre: user?.displayName || user?.email,
+            mercado_pago_id: paymentId
         };
         
         if (data.metodo_pago === 'combinado') {
@@ -419,17 +418,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  const handleSendToTerminal = () => {
-    // In a real integration, this would call the Mercado Pago API
-    // to create a payment intent for the physical terminal.
-    // For this prototype, we'll simulate the action.
-    toast({
-        title: "Enviando a terminal...",
-        description: `Se ha enviado un cobro de $${total.toLocaleString('es-MX')} a la terminal.`
-    });
-    setPaymentSent(true);
   }
 
   const ResumenCarrito = () => (
@@ -656,7 +644,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
-                <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
+                <form onSubmit={form.handleSubmit((data) => onSubmit(data))} className="h-full flex flex-col">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                         {/* Sale Details Form */}
                         <div className="space-y-4">
@@ -735,10 +723,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
                                 <FormControl>
                                     <RadioGroup
-                                    onValueChange={(value) => {
-                                        field.onChange(value);
-                                        setPaymentSent(false); // Reset payment status when method changes
-                                    }}
+                                    onValueChange={field.onChange}
                                     defaultValue={field.value}
                                     className="flex flex-wrap gap-2"
                                     >
@@ -839,15 +824,52 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
                         {paymentMethod === 'tarjeta' ? (
-                            <div className="flex gap-2">
-                                <Button type="button" variant="secondary" onClick={handleSendToTerminal} disabled={paymentSent}>
-                                    <Send className="mr-2 h-4 w-4"/> {paymentSent ? 'Pago Enviado' : 'Enviar a Terminal'}
-                                </Button>
-                                <Button type="submit" disabled={isSubmitting || !paymentSent}>
-                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Finalizar Venta
-                                </Button>
-                            </div>
+                             <MercadoPagoProvider>
+                                <Payment
+                                    initialization={{
+                                        amount: total,
+                                        payer: {
+                                            email: selectedClient?.correo,
+                                            firstName: selectedClient?.nombre,
+                                            lastName: selectedClient?.apellido,
+                                        },
+                                    }}
+                                    customization={{
+                                        paymentMethods: {
+                                            creditCard: 'all',
+                                            debitCard: 'all',
+                                        },
+                                        visual: {
+                                            style: {
+                                                theme: 'bootstrap',
+                                            }
+                                        }
+                                    }}
+                                    onSubmit={async ({ formData }) => {
+                                        // This is a placeholder for a server-side call
+                                        // In a real app, you would send formData to your backend
+                                        // to create the payment with Mercado Pago's API.
+                                        console.log('Payment form data:', formData);
+                                        toast({
+                                            title: "Procesando pago...",
+                                            description: "En un entorno real, esto se enviaría a un backend."
+                                        });
+                                        // For this prototype, we'll simulate a successful payment
+                                        // and then call our onSubmit function.
+                                        const mockPaymentId = `MOCK_PAY_${Date.now()}`;
+                                        await onSubmit(form.getValues(), mockPaymentId);
+                                    }}
+                                    onReady={() => console.log('Mercado Pago component is ready.')}
+                                    onError={(error) => {
+                                        console.error('Mercado Pago error:', error);
+                                        toast({
+                                            variant: 'destructive',
+                                            title: 'Error de Pago',
+                                            description: 'No se pudo procesar el pago. Por favor, revisa los datos.',
+                                        });
+                                    }}
+                                />
+                            </MercadoPagoProvider>
                         ) : (
                              <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
                                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -882,4 +904,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </Dialog>
     </>
   );
-}

@@ -666,7 +666,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
           <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || Object.keys(availabilityErrors).length > 0}>
             {(isSubmitting || form.formState.isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar reserva
+            Guardar Reserva
           </Button>
         </DialogFooter>
       </form>

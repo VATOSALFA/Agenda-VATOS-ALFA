@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -845,6 +846,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             }
                                         }
                                     }}
+                                    onReady={() => console.log('Mercado Pago component is ready.')}
+                                    onError={(error: any) => {
+                                        console.error('Mercado Pago error:', JSON.stringify(error, null, 2));
+                                        toast({
+                                            variant: 'destructive',
+                                            title: 'Error de Pago',
+                                            description: error.message || 'No se pudo procesar el pago. Por favor, revisa los datos.',
+                                        });
+                                    }}
                                     onSubmit={async ({ formData }) => {
                                         // This is a placeholder for a server-side call
                                         // In a real app, you would send formData to your backend
@@ -858,15 +868,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         // and then call our onSubmit function.
                                         const mockPaymentId = `MOCK_PAY_${Date.now()}`;
                                         await onSubmit(form.getValues(), mockPaymentId);
-                                    }}
-                                    onReady={() => console.log('Mercado Pago component is ready.')}
-                                    onError={(error) => {
-                                        console.error('Mercado Pago error:', error);
-                                        toast({
-                                            variant: 'destructive',
-                                            title: 'Error de Pago',
-                                            description: 'No se pudo procesar el pago. Por favor, revisa los datos.',
-                                        });
                                     }}
                                 />
                             </MercadoPagoProvider>
@@ -904,3 +905,5 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </Dialog>
     </>
   );
+
+    

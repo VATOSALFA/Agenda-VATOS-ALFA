@@ -850,16 +850,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     }}
                                     onReady={() => console.log('Mercado Pago component is ready.')}
                                     onError={(error: any) => {
+                                        console.error('Mercado Pago error:', JSON.stringify(error, null, 2));
                                         toast({
                                             variant: 'destructive',
-                                            title: 'Conexión fallida. Pago rechazado por Mercado Pago.',
+                                            title: 'Error de Pago',
                                             description: error.message || 'Inténtalo de nuevo.',
                                         });
                                     }}
-                                    onSubmit={async () => {
-                                         toast({
-                                            title: "¡Conexión exitosa! Pago aprobado por Mercado Pago.",
-                                        });
+                                    onSubmit={async ({ formData }) => {
+                                        await onSubmit(form.getValues(), formData.payment_id)
                                     }}
                                 />
                             </MercadoPagoProvider>
@@ -899,5 +898,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 

@@ -16,6 +16,10 @@ export default function MainLayout({ children, onDataRefresh }: Props) {
   if (pathname === '/login') {
     return <main>{children}</main>;
   }
+  
+  if (pathname === '/book' || pathname.startsWith('/book/')) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex flex-col min-h-screen">

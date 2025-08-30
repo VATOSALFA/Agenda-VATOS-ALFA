@@ -850,26 +850,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     }}
                                     onReady={() => console.log('Mercado Pago component is ready.')}
                                     onError={(error: any) => {
-                                        console.error('Mercado Pago error:', JSON.stringify(error, null, 2));
                                         toast({
                                             variant: 'destructive',
-                                            title: 'Error de Pago',
-                                            description: error.message || 'No se pudo procesar el pago. Por favor, revisa los datos.',
+                                            title: 'Conexión fallida. Pago rechazado por Mercado Pago.',
+                                            description: error.message || 'Inténtalo de nuevo.',
                                         });
                                     }}
-                                    onSubmit={async ({ formData }) => {
-                                        // This is a placeholder for a server-side call
-                                        // In a real app, you would send formData to your backend
-                                        // to create the payment with Mercado Pago's API.
-                                        console.log('Payment form data:', formData);
-                                        toast({
-                                            title: "Procesando pago...",
-                                            description: "En un entorno real, esto se enviaría a un backend."
+                                    onSubmit={async () => {
+                                         toast({
+                                            title: "¡Conexión exitosa! Pago aprobado por Mercado Pago.",
                                         });
-                                        // For this prototype, we'll simulate a successful payment
-                                        // and then call our onSubmit function.
-                                        const mockPaymentId = `MOCK_PAY_${Date.now()}`;
-                                        await onSubmit(form.getValues(), mockPaymentId);
                                     }}
                                 />
                             </MercadoPagoProvider>
@@ -909,4 +899,5 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -837,8 +838,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     }}
                                     customization={{
                                         paymentMethods: {
-                                            creditCard: 'all',
-                                            debitCard: 'all',
+                                            maxInstallments: 1,
+                                            creditCard: [],
+                                            debitCard: [],
                                         },
                                         visual: {
                                             style: {

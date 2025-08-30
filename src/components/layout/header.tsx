@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Link from 'next/link';
@@ -110,11 +109,7 @@ interface EmpresaSettings {
     logo_url?: string;
 }
 
-interface HeaderProps {
-  onDataRefresh?: () => void;
-}
-
-export default function Header({ onDataRefresh }: HeaderProps) {
+export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -458,10 +453,12 @@ export default function Header({ onDataRefresh }: HeaderProps) {
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
           <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
             <NewReservationForm
+              isOpen={isReservationModalOpen}
+              onOpenChange={setIsReservationModalOpen}
               isDialogChild
               onFormSubmit={() => {
-                  setIsReservationModalOpen(false);
-                  onDataRefresh?.();
+                setIsReservationModalOpen(false);
+                // Maybe a global state/context would be better to trigger a refetch
               }}
             />
           </DialogContent>
@@ -472,11 +469,10 @@ export default function Header({ onDataRefresh }: HeaderProps) {
         onOpenChange={setIsBlockScheduleModalOpen}
         onFormSubmit={() => {
             setIsBlockScheduleModalOpen(false);
-            onDataRefresh?.();
         }} 
       />
 
-      <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} onSaleComplete={onDataRefresh} />
+      <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} />
     </>
   );
 }

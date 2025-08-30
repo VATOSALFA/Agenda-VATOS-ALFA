@@ -7,9 +7,10 @@ import { usePathname } from 'next/navigation';
 
 type Props = {
   children: ReactNode;
+  onDataRefresh?: () => void;
 };
 
-export default function MainLayout({ children }: Props) {
+export default function MainLayout({ children, onDataRefresh }: Props) {
   const pathname = usePathname();
 
   // Don't render header on login page
@@ -19,7 +20,7 @@ export default function MainLayout({ children }: Props) {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header />
+      <Header onDataRefresh={onDataRefresh} />
       <main className="flex-grow pt-16">{children}</main>
     </div>
   );

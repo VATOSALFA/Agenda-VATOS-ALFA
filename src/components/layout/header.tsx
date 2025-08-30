@@ -110,7 +110,11 @@ interface EmpresaSettings {
     logo_url?: string;
 }
 
-export default function Header() {
+interface HeaderProps {
+  onDataRefresh?: () => void;
+}
+
+export default function Header({ onDataRefresh }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -454,12 +458,10 @@ export default function Header() {
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
           <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
             <NewReservationForm
-              isOpen={isReservationModalOpen}
-              onOpenChange={setIsReservationModalOpen}
               isDialogChild
               onFormSubmit={() => {
-                setIsReservationModalOpen(false);
-                // Maybe a global state/context would be better to trigger a refetch
+                  setIsReservationModalOpen(false);
+                  onDataRefresh?.();
               }}
             />
           </DialogContent>
@@ -470,10 +472,11 @@ export default function Header() {
         onOpenChange={setIsBlockScheduleModalOpen}
         onFormSubmit={() => {
             setIsBlockScheduleModalOpen(false);
+            onDataRefresh?.();
         }} 
       />
 
-      <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} />
+      <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} onSaleComplete={onDataRefresh} />
     </>
   );
 }

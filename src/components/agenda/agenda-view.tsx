@@ -55,6 +55,7 @@ import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
+import MainLayout from '../layout/main-layout';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -473,308 +474,310 @@ export default function AgendaView() {
   const currentTimeTop = calculateCurrentTimePosition();
 
   return (
-    <TooltipProvider>
-      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-2">
-        {/* Left Panel */}
-        <aside className="bg-white border-r flex flex-col">
-          <div className="p-4 space-y-4">
-            {user?.role === 'Administrador general' && (
-                <div className="space-y-2">
-                  <Label htmlFor="branch-select">Sucursal</Label>
-                  <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
-                    <SelectTrigger id="branch-select">
-                      <SelectValue placeholder="Seleccionar sucursal..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {locales.map(local => (
-                        <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+    <MainLayout onDataRefresh={refreshData}>
+      <TooltipProvider>
+        <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-2">
+          {/* Left Panel */}
+          <aside className="bg-white border-r flex flex-col">
+            <div className="p-4 space-y-4">
+              {user?.role === 'Administrador general' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="branch-select">Sucursal</Label>
+                    <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
+                      <SelectTrigger id="branch-select">
+                        <SelectValue placeholder="Seleccionar sucursal..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locales.map(local => (
+                          <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="professional-select">Profesional</Label>
+                <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
+                  <SelectTrigger id="professional-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {professionals.map(prof => (
+                      <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {isClientMounted && (
+                <div className="flex justify-center">
+                  <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={setDate}
+                      className="rounded-md border mx-4"
+                      locale={es}
+                  />
                 </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="professional-select">Profesional</Label>
-              <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
-                <SelectTrigger id="professional-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {professionals.map(prof => (
-                    <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="mt-auto p-4 flex justify-center">
+              {empresaLoading ? (
+                  <Skeleton className="h-24 w-24 rounded-full" />
+              ) : receiptLogoUrl ? (
+                  <Image src={receiptLogoUrl} alt="Logo de la empresa" width={300} height={300} className="object-contain" />
+              ) : null}
             </div>
-          </div>
-          {isClientMounted && (
-              <div className="flex justify-center">
-                <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    className="rounded-md border mx-4"
-                    locale={es}
-                />
+          </aside>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col">
+              {/* Agenda Header */}
+              <div className="flex-shrink-0 flex items-center justify-between gap-4 p-4">
+                  <div className="flex items-center gap-4">
+                      <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
+                      <div className='flex items-center gap-2'>
+                          <Button variant="ghost" size="icon" onClick={handlePrevDay}><ChevronLeft className="h-5 w-5" /></Button>
+                          <Button variant="ghost" size="icon" onClick={handleNextDay}><ChevronRight className="h-5 w-5" /></Button>
+                      </div>
+                      <div>
+                          <h2 className="text-xl font-semibold capitalize">{selectedDateFormatted}</h2>
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                              <Store className='w-4 h-4'/> {selectedLocal?.name || 'Cargando...'}
+                          </p>
+                      </div>
+                  </div>
               </div>
-          )}
-          <div className="mt-auto p-4 flex justify-center">
-            {empresaLoading ? (
-                <Skeleton className="h-24 w-24 rounded-full" />
-            ) : receiptLogoUrl ? (
-                <Image src={receiptLogoUrl} alt="Logo de la empresa" width={300} height={300} className="object-contain" />
-            ) : null}
+
+              {/* Main Content Area */}
+              <div className="flex-grow flex flex-col overflow-hidden">
+                  <ScrollArea className="flex-grow" orientation="both">
+                      <div className="grid gap-2" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
+                          
+                          {/* Top-left empty cell & time interval selector */}
+                          <div className="flex-shrink-0 sticky top-0 left-0 z-30">
+                              <div className="h-28 flex items-center justify-center p-2 border-b">
+                                  <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                      <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                      {[5, 10, 15, 30, 40, 45, 60].map(min => (
+                                          <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
+                                              {min} minutos
+                                          </DropdownMenuItem>
+                                      ))}
+                                  </DropdownMenuContent>
+                                  </DropdownMenu>
+                              </div>
+                          </div>
+
+                          {/* Professional Headers */}
+                          {filteredProfessionals.map(barber => (
+                              <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20 p-2 h-28 flex flex-col items-center justify-center">
+                                  <Avatar className="h-[60px] w-[60px]">
+                                      <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                      <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                  </Avatar>
+                                  <p className="font-semibold text-sm text-center mt-2">{barber.name}</p>
+                              </div>
+                          ))}
+
+                          {/* Time Column */}
+                          <div className="flex-shrink-0 sticky left-0 z-20">
+                              <div className="flex flex-col">
+                                  {timeSlots.slice(0, -1).map((time, index) => (
+                                      <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b flex items-center justify-center text-center">
+                                          <span className="text-xs text-muted-foreground font-semibold">{time}</span>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+
+                          {/* Grid Cells */}
+                          {filteredProfessionals.map((barber) => {
+                              const daySchedule = getDaySchedule(barber);
+                              const isWorking = daySchedule && daySchedule.enabled;
+                              
+                              let barberStartHour = startHour;
+                              let barberEndHour = endHour;
+                              if (isWorking) {
+                                  const [startH] = daySchedule.start.split(':').map(Number);
+                                  const [endH] = daySchedule.end.split(':').map(Number);
+                                  barberStartHour = startH;
+                                  barberEndHour = endH;
+                              }
+                              
+                              return (
+                              <div key={barber.id} className="relative">
+                                  <div 
+                                      className="relative"
+                                      ref={el => gridRefs.current[barber.id] = el}
+                                      onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
+                                      onMouseLeave={handleMouseLeave}
+                                      onClick={(e) => isWorking && handleClickSlot(e)}
+                                  >
+                                      {/* Background Grid Cells */}
+                                      <div className="flex flex-col">
+                                          {timeSlots.slice(0, -1).map((time, index) => (
+                                              <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b" />
+                                          ))}
+                                      </div>
+
+                                      {!isWorking && (
+                                          <NonWorkBlock
+                                            top={0}
+                                            height={HOURLY_SLOT_HEIGHT * timeSlots.length}
+                                            text="Día no laboral"
+                                          />
+                                      )}
+                                      
+                                      {/* Hover Popover */}
+                                      {isWorking && hoveredSlot?.barberId === barber.id && (
+                                          <div
+                                              className="absolute w-full p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
+                                              style={{...calculatePopoverPosition(hoveredSlot.time)}}
+                                          >
+                                              <p className="text-xs font-bold text-primary flex items-center">
+                                                  <Plus className="w-3 h-3 mr-1" />
+                                                  {hoveredSlot.time}
+                                              </p>
+                                          </div>
+                                      )}
+
+                                      {/* Click Popover */}
+                                      {isWorking && popoverState?.barberId === barber.id && (
+                                          <div
+                                              className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
+                                              style={{top: calculatePopoverPosition(popoverState.time).top}}
+                                              onClick={(e) => e.stopPropagation()}
+                                          >
+                                              <Card className="shadow-lg border-primary">
+                                                  <CardContent className="p-2 space-y-1">
+                                                      <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenReservationModal}><Plus className="w-4 h-4 mr-2" /> Agregar Reserva</Button>
+                                                      <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}><Lock className="w-4 h-4 mr-2" /> Bloquear horario</Button>
+                                                  </CardContent>
+                                              </Card>
+                                          </div>
+                                      )}
+
+                                      {/* Events */}
+                                      {allEvents.filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id))).map(event => (
+                                          <Tooltip key={event.id}>
+                                          <TooltipTrigger asChild>
+                                              <div
+                                                  onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
+                                                  className={cn("absolute w-[calc(100%_-_2px)] left-[1px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
+                                                  style={calculatePosition((event as any).start, (event as any).duration)}
+                                              >
+                                                <div className="flex-grow overflow-hidden pr-1">
+                                                      <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? ((event as any).customer?.nombre || 'Cliente Eliminado') : (event as any).motivo}</p>
+                                                  </div>
+                                                  {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
+                                                      <div className="absolute top-0 right-0 h-full w-6 bg-green-500 flex items-center justify-center">
+                                                          <DollarSign className="h-4 w-4 text-black font-bold" />
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </TooltipTrigger>
+                                          {event.type === 'appointment' ? (
+                                              <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
+                                                  <div className="space-y-2">
+                                                      <p className="font-bold text-base text-foreground">{((event as any).customer?.nombre || 'Cliente Eliminado')}</p>
+                                                      <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : (event as any).servicio}</p>
+                                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                          <Clock className="w-4 h-4" />
+                                                          <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
+                                                      </div>
+                                                      {(event as Reservation).pago_estado &&
+                                                          <div className="flex items-center gap-2 text-sm">
+                                                              <DollarSign className="w-4 h-4" />
+                                                              <span className={cn(
+                                                                  (event as Reservation).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                                              )}>
+                                                                  {(event as Reservation).pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
+                                                              </span>
+                                                          </div>
+                                                      }
+                                                  </div>
+                                              </TooltipContent>
+                                          ) : (
+                                              <TooltipContent><p>Horario Bloqueado: {(event as any).customer.nombre}</p></TooltipContent>
+                                          )}
+                                          </Tooltip>
+                                      ))}
+                                  </div>
+                              </div>
+                              )
+                          })}
+                      </div>
+                  </ScrollArea>
+              </div>
           </div>
-        </aside>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col">
-            {/* Agenda Header */}
-            <div className="flex-shrink-0 flex items-center justify-between gap-4 p-4">
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
-                    <div className='flex items-center gap-2'>
-                        <Button variant="ghost" size="icon" onClick={handlePrevDay}><ChevronLeft className="h-5 w-5" /></Button>
-                        <Button variant="ghost" size="icon" onClick={handleNextDay}><ChevronRight className="h-5 w-5" /></Button>
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-semibold capitalize">{selectedDateFormatted}</h2>
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Store className='w-4 h-4'/> {selectedLocal?.name || 'Cargando...'}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="flex-grow flex flex-col overflow-hidden">
-                <ScrollArea className="flex-grow" orientation="both">
-                    <div className="grid gap-2" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
-                        
-                        {/* Top-left empty cell & time interval selector */}
-                        <div className="flex-shrink-0 sticky top-0 left-0 z-30">
-                             <div className="h-28 flex items-center justify-center p-2 border-b">
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    {[5, 10, 15, 30, 40, 45, 60].map(min => (
-                                        <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
-                                            {min} minutos
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-                        </div>
-
-                        {/* Professional Headers */}
-                        {filteredProfessionals.map(barber => (
-                            <div key={barber.id} className="flex-shrink-0 sticky top-0 z-20 p-2 h-28 flex flex-col items-center justify-center">
-                                <Avatar className="h-[60px] w-[60px]">
-                                    <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                                </Avatar>
-                                <p className="font-semibold text-sm text-center mt-2">{barber.name}</p>
-                            </div>
-                        ))}
-
-                        {/* Time Column */}
-                        <div className="flex-shrink-0 sticky left-0 z-20">
-                             <div className="flex flex-col">
-                                {timeSlots.slice(0, -1).map((time, index) => (
-                                    <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b flex items-center justify-center text-center">
-                                        <span className="text-xs text-muted-foreground font-semibold">{time}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Grid Cells */}
-                         {filteredProfessionals.map((barber) => {
-                            const daySchedule = getDaySchedule(barber);
-                            const isWorking = daySchedule && daySchedule.enabled;
-                            
-                            let barberStartHour = startHour;
-                            let barberEndHour = endHour;
-                            if (isWorking) {
-                                const [startH] = daySchedule.start.split(':').map(Number);
-                                const [endH] = daySchedule.end.split(':').map(Number);
-                                barberStartHour = startH;
-                                barberEndHour = endH;
-                            }
-                            
-                            return (
-                            <div key={barber.id} className="relative">
-                                <div 
-                                    className="relative"
-                                    ref={el => gridRefs.current[barber.id] = el}
-                                    onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
-                                    onMouseLeave={handleMouseLeave}
-                                    onClick={(e) => isWorking && handleClickSlot(e)}
-                                >
-                                    {/* Background Grid Cells */}
-                                    <div className="flex flex-col">
-                                        {timeSlots.slice(0, -1).map((time, index) => (
-                                            <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b" />
-                                        ))}
-                                    </div>
-
-                                    {!isWorking && (
-                                        <NonWorkBlock
-                                          top={0}
-                                          height={HOURLY_SLOT_HEIGHT * timeSlots.length}
-                                          text="Día no laboral"
-                                        />
-                                    )}
-                                    
-                                     {/* Hover Popover */}
-                                    {isWorking && hoveredSlot?.barberId === barber.id && (
-                                        <div
-                                            className="absolute w-full p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
-                                            style={{...calculatePopoverPosition(hoveredSlot.time)}}
-                                        >
-                                            <p className="text-xs font-bold text-primary flex items-center">
-                                                <Plus className="w-3 h-3 mr-1" />
-                                                {hoveredSlot.time}
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* Click Popover */}
-                                    {isWorking && popoverState?.barberId === barber.id && (
-                                        <div
-                                            className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
-                                            style={{top: calculatePopoverPosition(popoverState.time).top}}
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <Card className="shadow-lg border-primary">
-                                                <CardContent className="p-2 space-y-1">
-                                                    <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenReservationModal}><Plus className="w-4 h-4 mr-2" /> Agregar Reserva</Button>
-                                                    <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}><Lock className="w-4 h-4 mr-2" /> Bloquear horario</Button>
-                                                </CardContent>
-                                            </Card>
-                                        </div>
-                                    )}
-
-                                     {/* Events */}
-                                    {allEvents.filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id))).map(event => (
-                                        <Tooltip key={event.id}>
-                                        <TooltipTrigger asChild>
-                                            <div
-                                                onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                                className={cn("absolute w-[calc(100%_-_2px)] left-[1px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
-                                                style={calculatePosition((event as any).start, (event as any).duration)}
-                                            >
-                                               <div className="flex-grow overflow-hidden pr-1">
-                                                    <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? ((event as any).customer?.nombre || 'Cliente Eliminado') : (event as any).motivo}</p>
-                                                </div>
-                                                {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
-                                                     <div className="absolute top-0 right-0 h-full w-6 bg-green-500 flex items-center justify-center">
-                                                        <DollarSign className="h-4 w-4 text-black font-bold" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </TooltipTrigger>
-                                        {event.type === 'appointment' ? (
-                                            <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
-                                                <div className="space-y-2">
-                                                    <p className="font-bold text-base text-foreground">{((event as any).customer?.nombre || 'Cliente Eliminado')}</p>
-                                                    <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : (event as any).servicio}</p>
-                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                        <Clock className="w-4 h-4" />
-                                                        <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
-                                                    </div>
-                                                    {(event as Reservation).pago_estado &&
-                                                        <div className="flex items-center gap-2 text-sm">
-                                                            <DollarSign className="w-4 h-4" />
-                                                            <span className={cn(
-                                                                (event as Reservation).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
-                                                            )}>
-                                                                {(event as Reservation).pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
-                                                            </span>
-                                                        </div>
-                                                    }
-                                                </div>
-                                            </TooltipContent>
-                                        ) : (
-                                            <TooltipContent><p>Horario Bloqueado: {(event as any).customer.nombre}</p></TooltipContent>
-                                        )}
-                                        </Tooltip>
-                                    ))}
-                                </div>
-                            </div>
-                            )
-                        })}
-                    </div>
-                </ScrollArea>
-            </div>
         </div>
-      </div>
-      
-      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-            <NewReservationForm
-              isDialogChild
-              onFormSubmit={refreshData}
-              initialData={reservationInitialData}
-              isEditMode={!!reservationInitialData?.id}
+        
+        <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+            <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+              <NewReservationForm
+                isDialogChild
+                onFormSubmit={refreshData}
+                initialData={reservationInitialData}
+                isEditMode={!!reservationInitialData?.id}
+              />
+            </DialogContent>
+        </Dialog>
+        
+        <BlockScheduleForm
+          isOpen={isBlockScheduleModalOpen}
+          onOpenChange={setIsBlockScheduleModalOpen}
+          onFormSubmit={refreshData}
+          initialData={blockInitialData}
+        />
+        
+        {selectedReservation && (
+            <ReservationDetailModal
+              reservation={selectedReservation}
+              isOpen={isDetailModalOpen}
+              onOpenChange={setIsDetailModalOpen}
+              onPay={handlePayFromDetail}
+              onUpdateStatus={handleUpdateStatus}
+              onEdit={handleEditFromDetail}
             />
-          </DialogContent>
-      </Dialog>
-      
-      <BlockScheduleForm
-        isOpen={isBlockScheduleModalOpen}
-        onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={refreshData}
-        initialData={blockInitialData}
-      />
-      
-      {selectedReservation && (
-          <ReservationDetailModal
-            reservation={selectedReservation}
-            isOpen={isDetailModalOpen}
-            onOpenChange={setIsDetailModalOpen}
-            onPay={handlePayFromDetail}
-            onUpdateStatus={handleUpdateStatus}
-            onEdit={handleEditFromDetail}
-          />
-      )}
-      
-      <NewSaleSheet 
-        isOpen={isSaleSheetOpen} 
-        onOpenChange={setIsSaleSheetOpen}
-        initialData={saleInitialData}
-        onSaleComplete={refreshData}
-      />
+        )}
+        
+        <NewSaleSheet 
+          isOpen={isSaleSheetOpen} 
+          onOpenChange={setIsSaleSheetOpen}
+          initialData={saleInitialData}
+          onSaleComplete={refreshData}
+        />
 
-      <CancelReservationModal
-        isOpen={!!reservationToCancel}
-        onOpenChange={() => setReservationToCancel(null)}
-        reservation={reservationToCancel}
-        onConfirm={handleCancelReservation}
-      />
-      
-      {blockToDelete && (
-        <AlertDialog open={!!blockToDelete} onOpenChange={() => setBlockToDelete(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>¿Desbloquear Horario?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                       Se eliminará el bloqueo "{blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteBlock}>
-                        Sí, desbloquear
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-      )}
-    </TooltipProvider>
+        <CancelReservationModal
+          isOpen={!!reservationToCancel}
+          onOpenChange={() => setReservationToCancel(null)}
+          reservation={reservationToCancel}
+          onConfirm={handleCancelReservation}
+        />
+        
+        {blockToDelete && (
+          <AlertDialog open={!!blockToDelete} onOpenChange={() => setBlockToDelete(null)}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>¿Desbloquear Horario?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Se eliminará el bloqueo "{blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteBlock}>
+                          Sí, desbloquear
+                      </AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </TooltipProvider>
+    </MainLayout>
   );
 }

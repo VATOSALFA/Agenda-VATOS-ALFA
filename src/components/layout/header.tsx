@@ -454,9 +454,12 @@ export default function Header() {
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
           <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
             <NewReservationForm
+              isOpen={isReservationModalOpen}
+              onOpenChange={setIsReservationModalOpen}
               isDialogChild
               onFormSubmit={() => {
                 setIsReservationModalOpen(false);
+                // Maybe a global state/context would be better to trigger a refetch
               }}
             />
           </DialogContent>

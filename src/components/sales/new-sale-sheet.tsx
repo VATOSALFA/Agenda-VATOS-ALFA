@@ -839,8 +839,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     customization={{
                                         paymentMethods: {
                                             maxInstallments: 1,
-                                            creditCard: [],
-                                            debitCard: [],
+                                            creditCard: "all",
+                                            debitCard: "all",
                                         },
                                         visual: {
                                             style: {
@@ -909,3 +909,4 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+

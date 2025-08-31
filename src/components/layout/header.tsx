@@ -459,12 +459,7 @@ export default function Header({ onDataRefresh }: HeaderProps) {
               isOpen={isReservationModalOpen}
               onOpenChange={setIsReservationModalOpen}
               isDialogChild
-              onFormSubmit={() => {
-                setIsReservationModalOpen(false);
-                if (onDataRefresh) {
-                    onDataRefresh();
-                }
-              }}
+              onFormSubmit={onDataRefresh || (() => {})}
             />
           </DialogContent>
       </Dialog>
@@ -472,12 +467,7 @@ export default function Header({ onDataRefresh }: HeaderProps) {
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={() => {
-            setIsBlockScheduleModalOpen(false);
-             if (onDataRefresh) {
-                onDataRefresh();
-            }
-        }} 
+        onFormSubmit={onDataRefresh || (() => {})} 
       />
 
       <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} onSaleComplete={onDataRefresh} />

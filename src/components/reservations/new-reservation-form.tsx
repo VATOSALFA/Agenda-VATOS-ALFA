@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -44,6 +42,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Checkbox } from '../ui/checkbox';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 import { Avatar, AvatarFallback } from '../ui/avatar';
+import { useLocal } from '@/contexts/local-context';
 
 
 const createReservationSchema = (isEditMode: boolean) => z.object({
@@ -688,8 +687,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             Cancelar
           </Button>
           <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar Reserva
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Reserva'}
           </Button>
         </DialogFooter>
       </form>

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -45,7 +46,7 @@ import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 
 
-const reservationSchema = z.object({
+const createReservationSchema = (isEditMode: boolean) => z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
   items: z.array(
     z.object({
@@ -80,6 +81,7 @@ const reservationSchema = z.object({
     message: 'La hora de fin debe ser posterior a la hora de inicio.',
     path: ['hora_fin_hora'],
 }).refine(data => {
+    if (isEditMode) return true; // Don't validate past dates when editing
     if (!data.fecha || !data.hora_inicio_hora || !data.hora_inicio_minuto) return true;
     
     const now = new Date();
@@ -101,7 +103,8 @@ const reservationSchema = z.object({
     path: ['hora_inicio_hora'],
 });
 
-type ReservationFormData = z.infer<typeof reservationSchema>;
+
+type ReservationFormData = z.infer<ReturnType<typeof createReservationSchema>>;
 
 interface NewReservationFormProps {
   onFormSubmit: () => void;
@@ -129,12 +132,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   
   const form = useForm<ReservationFormData>({
-    resolver: zodResolver(reservationSchema),
+    resolver: zodResolver(createReservationSchema(isEditMode)),
     mode: 'onChange',
     defaultValues: {
       notas: '',
@@ -163,7 +166,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [selectedClientId, clients]);
   
   const servicesMap = useMemo(() => {
-    if (!services) return new Map<string, Service>();
+    if (!services) return new Map<string, ServiceType>();
     return new Map(services.map(s => [s.id, s]));
   }, [services]);
 

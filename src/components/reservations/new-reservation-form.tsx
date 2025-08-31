@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -131,9 +132,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
+  const { selectedLocalId } = useLocal();
   
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(createReservationSchema(isEditMode)),
@@ -165,7 +167,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [selectedClientId, clients]);
   
   const servicesMap = useMemo(() => {
-    if (!services) return new Map<string, ServiceType>();
+    if (!services) return new Map<string, Service>();
     return new Map(services.map(s => [s.id, s]));
   }, [services]);
 
@@ -284,8 +286,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             notifications: initialData.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true },
             local_id: initialData.local_id
         });
+    } else if (isOpen) {
+        form.reset({
+            notas: '',
+            nota_interna: '',
+            estado: 'Reservado',
+            precio: 0,
+            items: [{ servicio: '', barbero_id: '' }],
+            notifications: {
+                email_notification: true,
+                email_reminder: true,
+                whatsapp_notification: true,
+                whatsapp_reminder: true,
+            },
+            local_id: selectedLocalId || '',
+        });
     }
-  }, [initialData, form, isOpen, services, isEditMode]);
+  }, [initialData, form, isOpen, services, isEditMode, selectedLocalId]);
   
   // Recalculate price and end time when items change
   useEffect(() => {

@@ -111,7 +111,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
 
-  const [discountValue, setDiscountValue] = useState<number | string>('');
+  const [discountValue, setDiscountValue] = useState<number | ''>('');
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
@@ -475,8 +475,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 <Input
                     placeholder="Descuento"
                     type="number"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
+                    defaultValue={discountValue === '' ? undefined : discountValue}
+                    onBlur={(e) => setDiscountValue(Number(e.target.value))}
                 />
                 <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => setDiscountType(value)}>
                     <SelectTrigger className="w-[80px]">
@@ -899,6 +899,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 
 

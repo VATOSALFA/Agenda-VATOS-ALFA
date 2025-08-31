@@ -111,7 +111,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
 
-  const [discountValue, setDiscountValue] = useState(0);
+  const [discountValue, setDiscountValue] = useState<number | string>('');
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
@@ -142,10 +142,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
   
   const discountAmount = useMemo(() => {
+    const numericDiscountValue = Number(discountValue) || 0;
     if (discountType === 'percentage') {
-      return (subtotal * discountValue) / 100;
+      return (subtotal * numericDiscountValue) / 100;
     }
-    return discountValue;
+    return numericDiscountValue;
   }, [subtotal, discountValue, discountType]);
 
   const total = useMemo(() => Math.max(0, subtotal - discountAmount), [subtotal, discountAmount]);
@@ -371,7 +372,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             items: itemsToSave,
             subtotal: subtotal,
             descuento: {
-                valor: discountValue,
+                valor: Number(discountValue) || 0,
                 tipo: discountType
             },
             total,
@@ -474,8 +475,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 <Input
                     placeholder="Descuento"
                     type="number"
-                    value={discountValue || ''}
-                    onChange={(e) => setDiscountValue(Number(e.target.value) || 0)}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
                 />
                 <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => setDiscountType(value)}>
                     <SelectTrigger className="w-[80px]">
@@ -898,6 +899,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 
 

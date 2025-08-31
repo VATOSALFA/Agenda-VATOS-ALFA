@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -96,6 +95,32 @@ interface NewSaleSheetProps {
     local_id?: string;
   };
   onSaleComplete?: () => void;
+}
+
+const DiscountInput = ({ value, onChange }: { value: number | '', onChange: (value: number | '') => void }) => {
+    const [inputValue, setInputValue] = useState(value);
+
+    useEffect(() => {
+        setInputValue(value);
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setInputValue(e.target.value);
+    };
+    
+    const handleBlur = () => {
+        onChange(inputValue === '' ? '' : Number(inputValue));
+    };
+
+    return (
+        <Input
+            placeholder="Descuento"
+            type="number"
+            value={inputValue}
+            onChange={handleChange}
+            onBlur={handleBlur}
+        />
+    )
 }
 
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
@@ -472,12 +497,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         {cart.length > 0 && (
             <div className="p-4 border-t space-y-2 text-sm">
              <div className="flex items-center gap-2">
-                <Input
-                    placeholder="Descuento"
-                    type="number"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(Number(e.target.value))}
-                />
+                <DiscountInput value={discountValue} onChange={setDiscountValue} />
                 <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => setDiscountType(value)}>
                     <SelectTrigger className="w-[80px]">
                         <SelectValue />
@@ -904,6 +924,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 
 

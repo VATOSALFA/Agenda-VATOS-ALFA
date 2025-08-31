@@ -135,6 +135,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(reservationSchema),
+    mode: 'onChange',
     defaultValues: {
       notas: '',
       nota_interna: '',
@@ -663,9 +664,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         </div>
         
         <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
-          <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" disabled={isSubmitting || form.formState.isSubmitting || Object.keys(availabilityErrors).length > 0}>
-            {(isSubmitting || form.formState.isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar Reserva
           </Button>
         </DialogFooter>

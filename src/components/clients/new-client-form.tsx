@@ -28,7 +28,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { DialogFooter } from '@/components/ui/dialog';
-import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, CheckCircle } from 'lucide-react';
+import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, CheckCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
@@ -286,7 +286,17 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                         )}
                       >
                         {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        {field.value ? (
+                          <X
+                            className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              field.onChange(undefined);
+                            }}
+                          />
+                        ) : (
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        )}
                       </Button>
                     </FormControl>
                   </PopoverTrigger>

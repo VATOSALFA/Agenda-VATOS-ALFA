@@ -54,10 +54,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { NewReservationForm } from '../reservations/new-reservation-form';
-import { BlockScheduleForm } from '../reservations/block-schedule-form';
-import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -108,16 +104,9 @@ interface EmpresaSettings {
     logo_url?: string;
 }
 
-interface HeaderProps {
-  onDataRefresh?: () => void;
-}
-
-export default function Header({ onDataRefresh }: HeaderProps) {
+export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
-  const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
-  const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const { toast } = useToast();
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
@@ -170,6 +159,10 @@ export default function Header({ onDataRefresh }: HeaderProps) {
         return false;
     }
     return false;
+  }
+
+  const dispatchCustomEvent = (eventName: string) => {
+    document.dispatchEvent(new CustomEvent(eventName));
   }
 
   return (
@@ -360,15 +353,15 @@ export default function Header({ onDataRefresh }: HeaderProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onSelect={() => setIsReservationModalOpen(true)}>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')}>
                   <Calendar className="mr-2 h-4 w-4" />
                   <span>Crear nueva reserva</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setIsBlockScheduleModalOpen(true)}>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')}>
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Bloquear horario</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setIsSaleSheetOpen(true)}>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')}>
                   <Tag className="mr-2 h-4 w-4" />
                   <span>Registrar nueva venta</span>
                 </DropdownMenuItem>
@@ -452,25 +445,6 @@ export default function Header({ onDataRefresh }: HeaderProps) {
           </div>
         </div>
       </header>
-      
-      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-            <NewReservationForm
-              isOpen={isReservationModalOpen}
-              onOpenChange={setIsReservationModalOpen}
-              isDialogChild
-              onFormSubmit={onDataRefresh || (() => {})}
-            />
-          </DialogContent>
-      </Dialog>
-      
-      <BlockScheduleForm
-        isOpen={isBlockScheduleModalOpen}
-        onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={onDataRefresh || (() => {})} 
-      />
-
-      <NewSaleSheet isOpen={isSaleSheetOpen} onOpenChange={setIsSaleSheetOpen} onSaleComplete={onDataRefresh} />
     </>
   );
 }

@@ -144,6 +144,30 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   useEffect(() => {
     setIsClientMounted(true)
     setDate(new Date());
+
+    const handleNewReservation = () => {
+        setReservationInitialData(null);
+        setIsReservationModalOpen(true);
+    };
+    const handleNewBlock = () => {
+        setBlockInitialData(null);
+        setIsBlockScheduleModalOpen(true);
+    };
+    const handleNewSale = () => {
+        setSaleInitialData(null);
+        setIsSaleSheetOpen(true);
+    }
+
+    document.addEventListener('new-reservation', handleNewReservation);
+    document.addEventListener('new-block', handleNewBlock);
+    document.addEventListener('new-sale', handleNewSale);
+
+    return () => {
+        document.removeEventListener('new-reservation', handleNewReservation);
+        document.removeEventListener('new-block', handleNewBlock);
+        document.removeEventListener('new-sale', handleNewSale);
+    };
+
   }, []);
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
@@ -219,8 +243,6 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     }
     return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
   }, [professionals, selectedProfessionalFilter, selectedLocalId]);
-
-  const refreshData = () => setQueryKey(prev => prev + 1);
 
   const allEvents = useMemo(() => {
     if (!reservations || !timeBlocks || !clients || !professionals) return [];
@@ -384,7 +406,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
             title: "Reserva eliminada con éxito",
         });
         setIsCancelModalOpen(false);
-        refreshData();
+        onDataRefresh();
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({
@@ -403,7 +425,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
         title: "Horario desbloqueado",
         description: `El bloqueo para "${blockToDelete.motivo}" ha sido eliminado.`,
       });
-      refreshData();
+      onDataRefresh();
     } catch (error) {
       console.error("Error deleting block: ", error);
       toast({
@@ -721,7 +743,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
               isOpen={isReservationModalOpen}
               onOpenChange={setIsReservationModalOpen}
               isDialogChild
-              onFormSubmit={refreshData}
+              onFormSubmit={onDataRefresh}
               initialData={reservationInitialData}
               isEditMode={!!reservationInitialData?.id}
             />
@@ -731,7 +753,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}
         onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={refreshData}
+        onFormSubmit={onDataRefresh}
         initialData={blockInitialData}
       />
       
@@ -750,7 +772,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
         isOpen={isSaleSheetOpen} 
         onOpenChange={setIsSaleSheetOpen}
         initialData={saleInitialData}
-        onSaleComplete={refreshData}
+        onSaleComplete={onDataRefresh}
       />
 
       <CancelReservationModal

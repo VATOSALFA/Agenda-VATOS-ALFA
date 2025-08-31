@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -7,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 type Props = {
   children: ReactNode;

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -270,6 +269,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         }
         
         form.reset({
+            ...initialData,
             cliente_id: initialData.cliente_id,
             items: itemsToSet,
             fecha,
@@ -285,7 +285,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             local_id: initialData.local_id
         });
     }
-}, [initialData, form, isOpen, services, isEditMode]);
+  }, [initialData, form, isOpen, services, isEditMode]);
   
   // Recalculate price and end time when items change
   useEffect(() => {

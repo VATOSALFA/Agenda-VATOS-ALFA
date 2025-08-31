@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -451,7 +450,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const ResumenCarrito = () => (
     <Dialog>
         <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
-        <div className="p-4 border-b flex justify-between items-center">
+        <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
             {step === 2 && (
                 <DialogTrigger asChild>
@@ -495,7 +494,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             </div>
         </ScrollArea>
         {cart.length > 0 && (
-            <div className="p-4 border-t space-y-2 text-sm">
+            <div className="p-4 border-t space-y-2 text-sm flex-shrink-0">
              <div className="flex items-center gap-2">
                 <DiscountInput value={discountValue} onChange={setDiscountValue} />
                 <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => setDiscountType(value)}>
@@ -922,12 +921,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </Dialog>
     </>
   );
-
-    
-
-
-
-
-
-
-

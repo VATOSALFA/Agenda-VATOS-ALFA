@@ -475,8 +475,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 <Input
                     placeholder="Descuento"
                     type="number"
-                    defaultValue={discountValue === '' ? undefined : discountValue}
-                    onBlur={(e) => setDiscountValue(Number(e.target.value))}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(Number(e.target.value))}
                 />
                 <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => setDiscountType(value)}>
                     <SelectTrigger className="w-[80px]">
@@ -876,7 +876,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         
         {step === 1 && (
             <SheetFooter className="p-6 bg-background border-t">
-                 <Button type="button" className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-white" onClick={handleNextStep} disabled={cart.length === 0 || !selectedClientId}>
+                 <Button
+                    type="button"
+                    className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-white"
+                    onClick={handleNextStep}
+                    disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
+                >
                     Continuar
                 </Button>
             </SheetFooter>
@@ -899,6 +904,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 
 

@@ -446,6 +446,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
 
   const FormContent = () => (
+    <>
     <div className="flex flex-col h-full">
       <div className="p-6 pb-2">
           <DialogHeader>
@@ -694,19 +695,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       </form>
     </Form>
     </div>
-  );
-
-  if (isDialogChild) {
-    return <FormContent />;
-  }
-
-  return (
-    <>
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-        <FormContent />
-      </DialogContent>
-    </Dialog>
     <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-lg">
              <DialogHeader>
@@ -719,5 +707,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         </DialogContent>
     </Dialog>
     </>
+  );
+
+  if (isDialogChild) {
+    return <FormContent />;
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+        <FormContent />
+      </DialogContent>
+    </Dialog>
   );
 }

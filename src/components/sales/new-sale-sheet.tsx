@@ -461,7 +461,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
           )}
         </div>
         <div className="flex-grow overflow-hidden min-h-0">
-          <ScrollArea className="h-80">
+          <ScrollArea className="h-[22rem]">
             <div className="p-4 space-y-4">
               {cart.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
@@ -927,6 +927,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 
 

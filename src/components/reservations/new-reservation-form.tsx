@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -34,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
-import type { Profesional, Service, Reservation, TimeBlock } from '@/lib/types';
+import type { Profesional, Service, Reservation, TimeBlock, Local } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
@@ -521,7 +522,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         <div className="flex-grow space-y-1">
                             <p className="text-xs text-muted-foreground text-center">Inicio</p>
                             <div className="flex items-center gap-1">
-                                <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={(value) => { field.onChange(value); form.setValue('hora_inicio_minuto', '00'); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 <span>:</span>
                                 <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                             </div>

@@ -316,6 +316,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setStep(1);
     form.reset();
     setIsSubmitting(false);
+    setDiscountValue('');
+    setDiscountType('fixed');
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -461,7 +463,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
           )}
         </div>
         <div className="flex-grow overflow-hidden min-h-0">
-          <ScrollArea className="h-[22rem]">
+          <ScrollArea className="h-full">
             <div className="p-4 space-y-4">
               {cart.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
@@ -927,6 +929,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   );
 
     
+
 
 
 

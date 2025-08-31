@@ -144,30 +144,6 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   useEffect(() => {
     setIsClientMounted(true)
     setDate(new Date());
-
-    const handleNewReservation = () => {
-        setReservationInitialData(null);
-        setIsReservationModalOpen(true);
-    };
-    const handleNewBlock = () => {
-        setBlockInitialData(null);
-        setIsBlockScheduleModalOpen(true);
-    };
-    const handleNewSale = () => {
-        setSaleInitialData(null);
-        setIsSaleSheetOpen(true);
-    }
-
-    document.addEventListener('new-reservation', handleNewReservation);
-    document.addEventListener('new-block', handleNewBlock);
-    document.addEventListener('new-sale', handleNewSale);
-
-    return () => {
-        document.removeEventListener('new-reservation', handleNewReservation);
-        document.removeEventListener('new-block', handleNewBlock);
-        document.removeEventListener('new-sale', handleNewSale);
-    };
-
   }, []);
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);

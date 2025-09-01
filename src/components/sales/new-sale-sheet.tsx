@@ -242,10 +242,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     );
   };
 
-  const updateItemDiscount = (itemId: string, value: number | '', type: 'fixed' | 'percentage') => {
+  const updateItemDiscount = (itemId: string, value: string, type: 'fixed' | 'percentage') => {
       setCart(prev => prev.map(item => {
           if (item.id === itemId) {
-              const newDiscountValue = value === '' ? undefined : Number(value);
+              const newDiscountValue = value === '' ? undefined : parseFloat(value);
               const newDiscountType = type;
               return {...item, discountValue: newDiscountValue, discountType: newDiscountType};
           }
@@ -502,10 +502,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             placeholder="Desc."
                             type="number"
                             value={item.discountValue || ''}
-                            onChange={(e) => updateItemDiscount(item.id, e.target.value === '' ? '' : Number(e.target.value), item.discountType || 'fixed')}
+                            onChange={(e) => updateItemDiscount(item.id, e.target.value, item.discountType || 'fixed')}
                             className="h-8 text-xs"
                         />
-                        <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, item.discountValue || 0, value)}>
+                        <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, String(item.discountValue || 0), value)}>
                             <SelectTrigger className="w-[60px] h-8 text-xs">
                             <SelectValue />
                             </SelectTrigger>

@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -35,10 +35,11 @@ import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquar
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Profesional, Local, Egreso } from '@/lib/types';
+import type { Profesional, Local, Egreso, User as AppUser } from '@/lib/types';
 import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLocal } from '@/contexts/local-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'];
@@ -48,7 +49,7 @@ const egresoSchema = z.object({
   monto: z.number({ coerce: true }).min(1, 'El monto debe ser mayor a 0.'),
   concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
   concepto_otro: z.string().optional(),
-  aQuien: z.string(),
+  aQuien: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
   local_id: z.string().min(1, 'Debes seleccionar un local.'),
   comentarios: z.string().optional(),
 }).refine(data => {
@@ -59,14 +60,6 @@ const egresoSchema = z.object({
 }, {
     message: 'Por favor, especifica el concepto.',
     path: ['concepto_otro'],
-}).refine(data => {
-    if (conceptosCostoFijo.includes(data.concepto)) {
-        return true; 
-    }
-    return data.aQuien && data.aQuien.trim().length > 0 && data.aQuien !== 'Costos fijos';
-}, {
-    message: 'Debes seleccionar un profesional.',
-    path: ['aQuien'],
 });
 
 
@@ -79,27 +72,39 @@ interface AddEgresoModalProps {
   egreso?: Egreso | null;
 }
 
-const conceptosPredefinidos = [
+const adminConcepts = [
     { id: 'nomina', label: 'Nómina' },
     { id: 'pago_renta', label: 'Pago de renta' },
     { id: 'insumos', label: 'Insumos' },
     { id: 'publicidad', label: 'Publicidad' },
     { id: 'internet', label: 'Internet' },
-    { id: 'comision_servicios', label: 'Comisión Servicios' },
-    { id: 'comision_producto', label: 'Comisión Venta de producto' },
-    { id: 'propina_terminal', label: 'Propina en terminal' },
     { id: 'otro', label: 'Otro' },
 ];
 
+const cashierConcepts = [
+    { id: 'entrega_efectivo', label: 'Entrega de efectivo' }
+];
 
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: AddEgresoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { selectedLocalId } = useLocal();
+  const { user } = useAuth();
   const isEditMode = !!egreso;
   
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
+
+  const isAdmin = user?.role === 'Administrador general' || user?.role === 'Administrador local';
+
+  const conceptosDisponibles = isAdmin ? adminConcepts : cashierConcepts;
+
+  const destinatariosDisponibles = useMemo(() => {
+    if (isAdmin) return professionals;
+    return users.filter(u => u.role === 'Administrador general' || u.role === 'Administrador local');
+  }, [isAdmin, professionals, users]);
+  
 
   const form = useForm<EgresoFormData>({
     resolver: zodResolver(egresoSchema),
@@ -127,7 +132,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 ? egreso.fecha.toDate() 
                 : (egreso.fecha instanceof Date ? egreso.fecha : new Date());
 
-            const isPredefinedConcept = conceptosPredefinidos.some(c => c.label === egreso.concepto);
+            const isPredefinedConcept = conceptosDisponibles.some(c => c.label === egreso.concepto);
 
             form.reset({
                 ...egreso,
@@ -139,7 +144,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             form.reset({
                 fecha: new Date(),
                 monto: 0,
-                concepto: '',
+                concepto: !isAdmin ? 'Entrega de efectivo' : '',
                 aQuien: '',
                 comentarios: '',
                 concepto_otro: '',
@@ -147,18 +152,22 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             });
         }
     }
-  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId]);
+  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
 
 
   async function onSubmit(data: EgresoFormData) {
     setIsSubmitting(true);
     const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
     
+    const aQuienValue = isAdmin && conceptosCostoFijo.includes(finalConcepto as string) 
+        ? 'Costos fijos' 
+        : data.aQuien;
+
     const dataToSave = {
         fecha: Timestamp.fromDate(data.fecha),
         monto: data.monto,
         concepto: finalConcepto,
-        aQuien: data.aQuien,
+        aQuien: aQuienValue,
         local_id: data.local_id,
         comentarios: data.comentarios,
     };
@@ -243,8 +252,9 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                         onValueChange={field.onChange}
                         value={field.value}
                         className="grid grid-cols-2 gap-2"
+                        disabled={!isAdmin}
                       >
-                        {conceptosPredefinidos.map(c => (
+                        {conceptosDisponibles.map(c => (
                             <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">
                                 <FormControl>
                                     <RadioGroupItem value={c.label} />
@@ -261,7 +271,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 )}
               />
 
-             {conceptoSeleccionado === 'Otro' && (
+             {conceptoSeleccionado === 'Otro' && isAdmin && (
                  <FormField
                     control={form.control}
                     name="concepto_otro"
@@ -284,12 +294,12 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                      <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading ? 'Cargando...' : 'Selecciona un profesional')} />
+                          <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona...')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {professionals.map(prof => (
-                            <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                        {destinatariosDisponibles.map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

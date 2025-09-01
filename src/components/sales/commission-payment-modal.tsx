@@ -95,6 +95,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                 }
 
                 const itemPrice = item.subtotal || item.precio || 0;
+                const itemDiscount = item.descuento?.monto || 0;
+                const finalItemPrice = itemPrice - itemDiscount;
+
                 let commissionConfig = null;
 
                 if(item.tipo === 'servicio') {
@@ -111,10 +114,10 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
                 if (commissionConfig) {
                     const commissionAmount = commissionConfig.type === '%'
-                        ? itemPrice * (commissionConfig.value / 100)
+                        ? finalItemPrice * (commissionConfig.value / 100)
                         : commissionConfig.value;
                     
-                    commissionsByProfessional[professional.id].totalSales += itemPrice;
+                    commissionsByProfessional[professional.id].totalSales += finalItemPrice;
                     commissionsByProfessional[professional.id].totalCommission += commissionAmount;
                 }
             });

@@ -6,6 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
 import {
   Card,
   CardHeader,
@@ -284,6 +285,45 @@ export default function CashBoxPage() {
     }
   };
   
+  const handleDownload = () => {
+    const salesData = salesWithClientData.map(sale => ({
+        ID: sale.id,
+        'Fecha De Pago': sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A',
+        Local: localMap.get(sale.local_id ?? '') || sale.local_id,
+        Cliente: `${sale.client?.nombre || ''} ${sale.client?.apellido || ''}`,
+        Detalle: sale.items?.map(i => i.nombre).join(', '),
+        'Monto Facturado': sale.total,
+    }));
+
+    const egresosData = egresosWithData.map(egreso => ({
+        Fecha: format(egreso.fecha.toDate(), 'dd-MM-yyyy'),
+        Local: localMap.get(egreso.local_id ?? ''),
+        Concepto: egreso.concepto,
+        'A quién se entrega': egreso.aQuienNombre,
+        Comentarios: egreso.comentarios,
+        Monto: egreso.monto,
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    
+    if (salesData.length > 0) {
+        const salesWorksheet = XLSX.utils.json_to_sheet(salesData);
+        XLSX.utils.book_append_sheet(workbook, salesWorksheet, 'Ventas');
+    }
+    
+    if (egresosData.length > 0) {
+        const egresosWorksheet = XLSX.utils.json_to_sheet(egresosData);
+        XLSX.utils.book_append_sheet(workbook, egresosWorksheet, 'Egresos');
+    }
+    
+    XLSX.writeFile(workbook, `Reporte_Caja_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+    toast({
+        title: 'Reporte generado',
+        description: 'La descarga de tu reporte ha comenzado.'
+    })
+  }
+
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
   const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
@@ -379,7 +419,7 @@ export default function CashBoxPage() {
       </div>
       
       <div className="flex justify-between items-center">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={handleDownload}>
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
           </Button>

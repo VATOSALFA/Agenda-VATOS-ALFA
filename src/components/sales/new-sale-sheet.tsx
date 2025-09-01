@@ -445,8 +445,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             fecha_hora_venta: Timestamp.now(),
             creado_por_id: user?.uid,
             creado_por_nombre: user?.displayName || user?.email,
-            mercado_pago_id: paymentId
         };
+
+        if(paymentId) {
+            saleDataToSave.mercado_pago_id = paymentId;
+        }
         
         if (data.metodo_pago === 'combinado') {
             saleDataToSave.detalle_pago_combinado = {

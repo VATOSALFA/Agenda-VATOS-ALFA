@@ -66,6 +66,8 @@ import {
   LogOut,
   Percent,
   MessageCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -150,6 +152,10 @@ export default function CashBoxPage() {
   const [authCode, setAuthCode] = useState('');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authAction, setAuthAction] = useState<(() => void) | null>(null);
+  const [currentPageSales, setCurrentPageSales] = useState(1);
+  const [itemsPerPageSales, setItemsPerPageSales] = useState(10);
+  const [currentPageEgresos, setCurrentPageEgresos] = useState(1);
+  const [itemsPerPageEgresos, setItemsPerPageEgresos] = useState(10);
 
 
    useEffect(() => {
@@ -408,6 +414,17 @@ export default function CashBoxPage() {
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLocalAdmin = user?.role !== 'Administrador general';
 
+  const totalPagesSales = Math.ceil(salesWithClientData.length / itemsPerPageSales);
+  const paginatedSales = salesWithClientData.slice(
+    (currentPageSales - 1) * itemsPerPageSales,
+    currentPageSales * itemsPerPageSales
+  );
+
+  const totalPagesEgresos = Math.ceil(egresosWithData.length / itemsPerPageEgresos);
+  const paginatedEgresos = egresosWithData.slice(
+    (currentPageEgresos - 1) * itemsPerPageEgresos,
+    currentPageEgresos * itemsPerPageEgresos
+  );
 
   return (
     <>
@@ -541,12 +558,12 @@ export default function CashBoxPage() {
                                   <TableCell colSpan={8}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
                               </TableRow>
                           ))
-                      ) : salesWithClientData.length === 0 ? (
+                      ) : paginatedSales.length === 0 ? (
                           <TableRow>
                               <TableCell colSpan={8} className="text-center h-24">No hay ventas para el período seleccionado.</TableCell>
                           </TableRow>
                       ) : (
-                        salesWithClientData.map((sale) => (
+                        paginatedSales.map((sale) => (
                           <TableRow key={sale.id}>
                             <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
                             <TableCell>{sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A'}</TableCell>
@@ -587,6 +604,32 @@ export default function CashBoxPage() {
                       )}
                     </TableBody>
                   </Table>
+                    {paginatedSales.length > 0 && (
+                        <div className="flex items-center justify-end space-x-6 pt-4">
+                            <div className="flex items-center space-x-2">
+                                <p className="text-sm font-medium">Resultados por página</p>
+                                <Select
+                                    value={`${itemsPerPageSales}`}
+                                    onValueChange={(value) => {
+                                        setItemsPerPageSales(Number(value))
+                                        setCurrentPageSales(1)
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={itemsPerPageSales} /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="20">20</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="text-sm font-medium">Página {currentPageSales} de {totalPagesSales}</div>
+                            <div className="flex items-center space-x-2">
+                                <Button variant="outline" size="sm" onClick={() => setCurrentPageSales(p => Math.max(p - 1, 1))} disabled={currentPageSales === 1}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
+                                <Button variant="outline" size="sm" onClick={() => setCurrentPageSales(p => Math.min(p + 1, totalPagesSales))} disabled={currentPageSales === totalPagesSales}>Siguiente <ChevronRight className="h-4 w-4 ml-1" /></Button>
+                            </div>
+                        </div>
+                    )}
                 </TabsContent>
                 <TabsContent value="otros-ingresos" className="mt-4">
                     <div className="text-center text-muted-foreground p-12">
@@ -596,11 +639,8 @@ export default function CashBoxPage() {
                 <TabsContent value="egresos" className="mt-4">
                     {isLoading ? (
                          <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                    ) : egresosWithData.length === 0 ? (
-                        <div className="text-center text-muted-foreground p-12">
-                            <p>No hay egresos registrados para este período.</p>
-                        </div>
                     ) : (
+                        <>
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -614,7 +654,9 @@ export default function CashBoxPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {egresosWithData.map((egreso) => (
+                                {paginatedEgresos.length === 0 ? (
+                                    <TableRow><TableCell colSpan={7} className="text-center h-24">No hay egresos para el período seleccionado.</TableCell></TableRow>
+                                ) : paginatedEgresos.map((egreso) => (
                                     <TableRow key={egreso.id}>
                                         <TableCell>{format(egreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
                                         <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
@@ -646,6 +688,33 @@ export default function CashBoxPage() {
                                 ))}
                             </TableBody>
                         </Table>
+                         {paginatedEgresos.length > 0 && (
+                            <div className="flex items-center justify-end space-x-6 pt-4">
+                                <div className="flex items-center space-x-2">
+                                    <p className="text-sm font-medium">Resultados por página</p>
+                                    <Select
+                                        value={`${itemsPerPageEgresos}`}
+                                        onValueChange={(value) => {
+                                            setItemsPerPageEgresos(Number(value))
+                                            setCurrentPageEgresos(1)
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={itemsPerPageEgresos} /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="text-sm font-medium">Página {currentPageEgresos} de {totalPagesEgresos}</div>
+                                <div className="flex items-center space-x-2">
+                                    <Button variant="outline" size="sm" onClick={() => setCurrentPageEgresos(p => Math.max(p - 1, 1))} disabled={currentPageEgresos === 1}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setCurrentPageEgresos(p => Math.min(p + 1, totalPagesEgresos))} disabled={currentPageEgresos === totalPagesEgresos}>Siguiente <ChevronRight className="h-4 w-4 ml-1" /></Button>
+                                </div>
+                            </div>
+                        )}
+                        </>
                     )}
                 </TabsContent>
             </Tabs>
@@ -816,6 +885,7 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 
 
 

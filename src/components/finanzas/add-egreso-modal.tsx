@@ -170,6 +170,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
         aQuien: aQuienValue,
         local_id: data.local_id,
         comentarios: data.comentarios,
+        persona_entrega_id: user?.uid,
+        persona_entrega_nombre: user?.displayName
     };
 
     try {
@@ -285,6 +287,12 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     )}
                   />
              )}
+               <FormItem>
+                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Entrega</FormLabel>
+                  <FormControl>
+                    <Input readOnly value={user?.displayName || 'Usuario no identificado'} disabled className="bg-muted"/>
+                  </FormControl>
+              </FormItem>
                <FormField
                 control={form.control}
                 name="aQuien"
@@ -355,3 +363,4 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     </Dialog>
   );
 }
+

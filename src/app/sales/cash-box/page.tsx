@@ -137,6 +137,7 @@ export default function CashBoxPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
   const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
   const [egresoDeleteConfirmationText, setEgresoDeleteConfirmationText] = useState('');
   const { toast } = useToast();
@@ -256,6 +257,11 @@ export default function CashBoxPage() {
     }
   };
 
+  const handleOpenEditEgreso = (egreso: Egreso) => {
+    setEditingEgreso(egreso);
+    setIsEgresoModalOpen(true);
+  };
+
   const handleDeleteEgreso = async () => {
     if (!egresoToDelete || egresoDeleteConfirmationText !== 'ELIMINAR') return;
     try {
@@ -297,7 +303,7 @@ export default function CashBoxPage() {
            <div className="flex items-center space-x-2">
             <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4"/>Realizar corte de caja</Button>
             <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
-            <Button variant="outline" onClick={() => setIsEgresoModalOpen(true)}>Agregar Egreso</Button>
+            <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>Agregar Egreso</Button>
           </div>
       </div>
 
@@ -503,7 +509,7 @@ export default function CashBoxPage() {
                                         <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
                                         <TableCell className="text-right">
                                            <div className="flex items-center justify-end gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => toast({ title: "Funcionalidad no implementada" })}>
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenEditEgreso(egreso)}>
                                                     <Pencil className="mr-2 h-4 w-4" /> Editar
                                                 </Button>
                                                 <DropdownMenu>
@@ -546,6 +552,7 @@ export default function CashBoxPage() {
             setIsEgresoModalOpen(false)
             handleSearch()
         }}
+        egreso={editingEgreso}
     />
     <CashBoxClosingModal
         isOpen={isClosingModalOpen}

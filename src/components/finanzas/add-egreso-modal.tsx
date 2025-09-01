@@ -127,9 +127,13 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 ? egreso.fecha.toDate() 
                 : (egreso.fecha instanceof Date ? egreso.fecha : new Date());
 
+            const isPredefinedConcept = conceptosPredefinidos.some(c => c.label === egreso.concepto);
+
             form.reset({
                 ...egreso,
                 fecha: fechaEgreso,
+                concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
+                concepto_otro: isPredefinedConcept ? '' : egreso.concepto
             });
         } else {
             form.reset({

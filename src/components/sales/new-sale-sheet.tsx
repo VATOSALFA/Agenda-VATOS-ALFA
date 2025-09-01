@@ -71,7 +71,7 @@ interface CartItem {
     tipo: 'producto' | 'servicio'; 
     barbero_id?: string; 
     presentation_id?: string;
-    discountValue?: number;
+    discountValue?: string | number;
     discountType?: 'fixed' | 'percentage';
 }
 
@@ -133,13 +133,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string, name: string }>();
-    professionals.forEach(p => allSellers.set(p.id, { id: p.id, name: p.name }));
-    users.forEach(u => {
-      // Avoid duplicating if a professional is also a user
-      if (!allSellers.has(u.id)) {
-        allSellers.set(u.id, { id: u.id, name: u.name });
-      }
-    });
+    if(professionals) {
+      professionals.forEach(p => allSellers.set(p.id, { id: p.id, name: p.name }));
+    }
+    if (users) {
+      users.forEach(u => {
+        // Avoid duplicating if a professional is also a user
+        if (!allSellers.has(u.id)) {
+          allSellers.set(u.id, { id: u.id, name: u.name });
+        }
+      });
+    }
     return Array.from(allSellers.values());
   }, [professionals, users]);
 
@@ -245,7 +249,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const updateItemDiscount = (itemId: string, value: string, type: 'fixed' | 'percentage') => {
       setCart(prev => prev.map(item => {
           if (item.id === itemId) {
-              const newDiscountValue = value === '' ? undefined : parseFloat(value);
+              const newDiscountValue = value;
               const newDiscountType = type;
               return {...item, discountValue: newDiscountValue, discountType: newDiscountType};
           }
@@ -505,7 +509,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             onChange={(e) => updateItemDiscount(item.id, e.target.value, item.discountType || 'fixed')}
                             className="h-8 text-xs"
                         />
-                        <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, String(item.discountValue || 0), value)}>
+                        <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, String(item.discountValue || '0'), value)}>
                             <SelectTrigger className="w-[60px] h-8 text-xs">
                             <SelectValue />
                             </SelectTrigger>

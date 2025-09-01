@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -46,10 +45,7 @@ const FiltersSidebar = ({
     onReset,
     dateRange, setDateRange,
     localFilter, setLocalFilter,
-    professionalFilter, setProfessionalFilter,
-    serviceFilter, setServiceFilter,
-    productFilter, setProductFilter,
-    locales, professionals, services, products,
+    locales,
     isLoading,
     isLocalAdmin,
   }: any) => {
@@ -90,36 +86,6 @@ const FiltersSidebar = ({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label>Profesional/prestador</Label>
-                  <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={isLoading}>
-                    <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
-                     <SelectContent>
-                        <SelectItem value="todos">Todos los profesionales</SelectItem>
-                        {professionals.map((p: Profesional) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                 <div className="space-y-1">
-                  <Label>Servicios</Label>
-                  <Select value={serviceFilter} onValueChange={setServiceFilter} disabled={isLoading}>
-                    <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
-                     <SelectContent>
-                        <SelectItem value="todos">Todos los servicios</SelectItem>
-                        {services.map((s: Service) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Productos</Label>
-                  <Select value={productFilter} onValueChange={setProductFilter} disabled={isLoading}>
-                    <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
-                     <SelectContent>
-                        <SelectItem value="todos">Todos los productos</SelectItem>
-                        {products.map((p: Product) => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
             </div>
             <div className="space-y-2 pt-4 border-t">
                 <Button className="w-full" onClick={onApply}>Buscar</Button>
@@ -149,25 +115,16 @@ export default function ClientsPage() {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [localFilter, setLocalFilter] = useState('todos');
-  const [professionalFilter, setProfessionalFilter] = useState('todos');
-  const [serviceFilter, setServiceFilter] = useState('todos');
-  const [productFilter, setProductFilter] = useState('todos');
   
   const [activeFilters, setActiveFilters] = useState({
       dateRange: dateRange,
       local: 'todos',
-      professional: 'todos',
-      service: 'todos',
-      product: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
-  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
-  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
   
   const historyQueryConstraints = useMemo(() => {
     const constraints = [];
@@ -180,29 +137,17 @@ export default function ClientsPage() {
     return constraints;
   }, [activeFilters.dateRange]);
   
-  const reservationsQueryConstraints = useMemo(() => {
-    const constraints = [];
-    if (activeFilters.dateRange?.from) {
-        constraints.push(where('fecha', '>=', format(startOfDay(activeFilters.dateRange.from), 'yyyy-MM-dd')));
-    }
-    if (activeFilters.dateRange?.to) {
-        constraints.push(where('fecha', '<=', format(endOfDay(activeFilters.dateRange.to), 'yyyy-MM-dd')));
-    }
-    return constraints;
-  }, [activeFilters.dateRange]);
-  
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${queryKey}`, ...historyQueryConstraints);
-  const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', `reservations-${queryKey}`, ...reservationsQueryConstraints);
   
-  // Hooks to fetch the entire history for download, regardless of filters
   const { data: allReservations, loading: allReservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
 
-  const isLoading = clientsLoading || localesLoading || professionalsLoading || servicesLoading || reservationsLoading || productsLoading || salesLoading;
+  const isLoading = clientsLoading || localesLoading || salesLoading;
 
   useEffect(() => {
     if (user?.local_id) {
         setLocalFilter(user.local_id);
+        setActiveFilters(prev => ({...prev, local: user.local_id!}));
     }
   }, [user]);
 
@@ -210,11 +155,8 @@ export default function ClientsPage() {
     setActiveFilters({
       dateRange,
       local: localFilter,
-      professional: professionalFilter,
-      service: serviceFilter,
-      product: productFilter,
     });
-    setCurrentPage(1); // Reset to first page on new filter
+    setCurrentPage(1);
     setQueryKey(prev => prev + 1);
     toast({ title: "Filtros aplicados" });
   };
@@ -222,15 +164,9 @@ export default function ClientsPage() {
   const handleResetFilters = () => {
     setDateRange(undefined);
     setLocalFilter(user?.local_id || 'todos');
-    setProfessionalFilter('todos');
-    setServiceFilter('todos');
-    setProductFilter('todos');
     setActiveFilters({
         dateRange: undefined,
         local: user?.local_id || 'todos',
-        professional: 'todos',
-        service: 'todos',
-        product: 'todos'
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -242,39 +178,20 @@ export default function ClientsPage() {
 
     const hasAdvancedFilters = 
         activeFilters.local !== 'todos' || 
-        activeFilters.professional !== 'todos' || 
-        activeFilters.service !== 'todos' || 
-        activeFilters.product !== 'todos' ||
         activeFilters.dateRange !== undefined;
 
     if (hasAdvancedFilters) {
-        let clientIdsFromHistory = new Set<string>();
+        let clientIdsFromSales = new Set<string>();
 
-        // Filter based on reservations (for service/professional)
-        if (activeFilters.professional !== 'todos' || activeFilters.service !== 'todos') {
-            const filteredReservations = reservations.filter(r => {
-                const profMatch = activeFilters.professional === 'todos' || r.items?.some(i => i.barbero_id === activeFilters.professional);
-                const serviceMatch = activeFilters.service === 'todos' || r.items?.some(i => i.id === activeFilters.service);
-                return profMatch && serviceMatch;
-            });
-            filteredReservations.forEach(r => clientIdsFromHistory.add(r.cliente_id));
-        }
-
-        // Filter based on sales (for product/local)
-        if (activeFilters.product !== 'todos' || activeFilters.local !== 'todos') {
-            const filteredSales = sales.filter(s => {
-                const localMatch = activeFilters.local === 'todos' || s.local_id === activeFilters.local;
-                const productMatch = activeFilters.product === 'todos' || s.items?.some(i => i.id === activeFilters.product);
-                return localMatch && productMatch;
-            });
-            filteredSales.forEach(s => clientIdsFromHistory.add(s.cliente_id));
-        }
+        const filteredSales = sales.filter(s => {
+            return activeFilters.local === 'todos' || s.local_id === activeFilters.local;
+        });
+        filteredSales.forEach(s => clientIdsFromSales.add(s.cliente_id));
         
-        filtered = filtered.filter(client => clientIdsFromHistory.has(client.id));
+        filtered = filtered.filter(client => clientIdsFromSales.has(client.id));
     }
 
 
-    // Search term filter (applied on top of advanced filters)
     if (searchTerm) {
         filtered = filtered.filter(client =>
           (client.nombre?.toLowerCase() + ' ' + client.apellido?.toLowerCase()).includes(searchTerm.toLowerCase()) ||
@@ -284,7 +201,7 @@ export default function ClientsPage() {
     }
     
     return filtered;
-  }, [clients, reservations, sales, searchTerm, activeFilters]);
+  }, [clients, sales, searchTerm, activeFilters]);
 
   const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
   const paginatedClients = filteredClients.slice(
@@ -337,9 +254,9 @@ export default function ClientsPage() {
   const formatDate = (date: any, formatString: string = 'PP') => {
     if (!date) return 'N/A';
     let dateObj: Date;
-    if (date.seconds) { // Firestore Timestamp
+    if (date.seconds) {
       dateObj = new Date(date.seconds * 1000);
-    } else if (typeof date === 'string') { // ISO String
+    } else if (typeof date === 'string') {
       dateObj = parseISO(date);
     } else {
         return 'Fecha inválida';
@@ -398,7 +315,6 @@ export default function ClientsPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
 
-    // Trigger download
     XLSX.writeFile(workbook, `clientes_VATOS_ALFA_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 
     toast({
@@ -453,10 +369,7 @@ export default function ClientsPage() {
                 onReset={handleResetFilters}
                 dateRange={dateRange} setDateRange={setDateRange}
                 localFilter={localFilter} setLocalFilter={setLocalFilter}
-                professionalFilter={professionalFilter} setProfessionalFilter={setProfessionalFilter}
-                serviceFilter={serviceFilter} setServiceFilter={setServiceFilter}
-                productFilter={productFilter} setProductFilter={setProductFilter}
-                locales={locales} professionals={professionals} services={services} products={products}
+                locales={locales}
                 isLoading={isLoading}
                 isLocalAdmin={isLocalAdmin}
             />
@@ -721,4 +634,3 @@ export default function ClientsPage() {
     </>
   );
 }
-

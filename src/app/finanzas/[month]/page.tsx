@@ -140,15 +140,14 @@ export default function FinanzasMensualesPage() {
 
             sales.forEach(sale => {
                 const saleDate = sale.fecha_hora_venta.toDate();
-                const saleSubtotal = sale.subtotal || 1;
-
+                
                 sale.items?.forEach(item => {
                     const professional = professionalMap.get(item.barbero_id);
                     if (!professional) return;
                     
                     const itemSubtotal = item.subtotal || item.precio_unitario || 0;
-                    const proportion = itemSubtotal / saleSubtotal;
-                    const proportionalTotal = proportion * sale.total;
+                    const itemDiscount = item.descuento?.monto || 0;
+                    const finalItemPrice = itemSubtotal - itemDiscount;
 
                     let commissionConfig = null;
                     if (item.tipo === 'servicio') {
@@ -165,7 +164,7 @@ export default function FinanzasMensualesPage() {
 
                     if (commissionConfig) {
                         const commissionAmount = commissionConfig.type === '%'
-                            ? proportionalTotal * (commissionConfig.value / 100)
+                            ? finalItemPrice * (commissionConfig.value / 100)
                             : commissionConfig.value;
                         
                         const key = `${format(saleDate, 'yyyy-MM-dd')}-${professional.id}`;
@@ -235,14 +234,13 @@ export default function FinanzasMensualesPage() {
         let comisionProfesionales = 0;
         
         sales.forEach(sale => {
-            const saleSubtotal = sale.subtotal || 1;
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
                     const itemSubtotal = item.subtotal || item.precio_unitario || 0;
-                    const proportion = itemSubtotal / saleSubtotal;
-                    const proportionalTotal = proportion * sale.total;
+                    const itemDiscount = item.descuento?.monto || 0;
+                    const finalItemPrice = itemSubtotal - itemDiscount;
 
-                    ventaProductos += proportionalTotal;
+                    ventaProductos += finalItemPrice;
                     
                     const product = productMap.get(item.id);
                     if (product && product.purchase_cost) {
@@ -254,7 +252,7 @@ export default function FinanzasMensualesPage() {
                         const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                         if(commissionConfig) {
                             comisionProfesionales += commissionConfig.type === '%'
-                                ? proportionalTotal * (commissionConfig.value / 100)
+                                ? finalItemPrice * (commissionConfig.value / 100)
                                 : commissionConfig.value;
                         }
                     }

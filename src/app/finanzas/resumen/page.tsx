@@ -87,13 +87,13 @@ export default function FinanzasResumenPage() {
 
                     if (commissionConfig) {
                         const itemSubtotal = item.subtotal || item.precio_unitario || 0;
-                        const saleSubtotal = sale.subtotal || 1;
-                        const proportion = itemSubtotal / saleSubtotal;
-                        const proportionalTotal = proportion * sale.total;
-                        
+                        const itemDiscount = item.descuento?.monto || 0;
+                        const finalItemPrice = itemSubtotal - itemDiscount;
+
                         const commissionAmount = commissionConfig.type === '%'
-                            ? proportionalTotal * (commissionConfig.value / 100)
+                            ? finalItemPrice * (commissionConfig.value / 100)
                             : commissionConfig.value;
+                            
                         return { fecha: saleDate, monto: commissionAmount, aQuien: professional.id, concepto: `Comisión ${item.tipo}` };
                     }
                     return null;
@@ -112,13 +112,13 @@ export default function FinanzasResumenPage() {
             const monthlySales = sales.filter(s => s.fecha_hora_venta.toDate().getMonth() === monthIndex);
             
             const ventaProductos = monthlySales.reduce((sum, sale) => {
-                const saleSubtotal = sale.subtotal || 1;
-                const productSubtotal = sale.items
+                return sum + sale.items
                     .filter(i => i.tipo === 'producto')
-                    .reduce((itemSum, i) => itemSum + (i.subtotal || i.precio_unitario || 0), 0);
-                
-                const proportion = productSubtotal / saleSubtotal;
-                return sum + (proportion * sale.total);
+                    .reduce((itemSum, i) => {
+                        const itemSubtotal = i.subtotal || i.precio_unitario || 0;
+                        const itemDiscount = i.descuento?.monto || 0;
+                        return itemSum + (itemSubtotal - itemDiscount);
+                    }, 0);
             }, 0);
 
             const subtotalUtilidad = data.ingresos - data.egresos - ventaProductos;
@@ -150,14 +150,13 @@ export default function FinanzasResumenPage() {
         let comisionProfesionales = 0;
         
         sales.forEach(sale => {
-            const saleSubtotal = sale.subtotal || 1;
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
                     const itemSubtotal = item.subtotal || item.precio_unitario || 0;
-                    const proportion = itemSubtotal / saleSubtotal;
-                    const proportionalTotal = proportion * sale.total;
+                    const itemDiscount = item.descuento?.monto || 0;
+                    const finalItemPrice = itemSubtotal - itemDiscount;
                     
-                    ventaProductos += proportionalTotal;
+                    ventaProductos += finalItemPrice;
                     
                     const product = productMap.get(item.id);
                     if (product && product.purchase_cost) {
@@ -170,7 +169,7 @@ export default function FinanzasResumenPage() {
                             const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                             if(commissionConfig) {
                                 comisionProfesionales += commissionConfig.type === '%'
-                                    ? proportionalTotal * (commissionConfig.value / 100)
+                                    ? finalItemPrice * (commissionConfig.value / 100)
                                     : commissionConfig.value;
                             }
                          }

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -160,6 +159,9 @@ export default function CommissionsPage() {
                 if (!professional) return;
                 
                 const itemPrice = item.subtotal || item.precio || 0;
+                const itemDiscount = item.descuento?.monto || 0;
+                const finalItemPrice = itemPrice - itemDiscount;
+
                 let commissionConfig = null;
                 let itemName = item.nombre;
 
@@ -179,7 +181,7 @@ export default function CommissionsPage() {
                 
                 if (commissionConfig) {
                     const commissionAmount = commissionConfig.type === '%'
-                        ? itemPrice * (commissionConfig.value / 100)
+                        ? finalItemPrice * (commissionConfig.value / 100)
                         : commissionConfig.value;
 
                     commissionRows.push({
@@ -188,9 +190,9 @@ export default function CommissionsPage() {
                         clientName: clientName,
                         itemName: itemName,
                         itemType: item.tipo,
-                        saleAmount: itemPrice,
+                        saleAmount: finalItemPrice,
                         commissionAmount: commissionAmount,
-                        commissionPercentage: commissionConfig.type === '%' ? commissionConfig.value : (itemPrice > 0 ? (commissionAmount / itemPrice) * 100 : 0)
+                        commissionPercentage: commissionConfig.type === '%' ? commissionConfig.value : (finalItemPrice > 0 ? (commissionAmount / finalItemPrice) * 100 : 0)
                     });
                 }
             });

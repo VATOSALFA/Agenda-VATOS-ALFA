@@ -198,51 +198,87 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
   }
   
   const esCostoFijo = conceptosCostoFijo.includes(conceptoSeleccionado);
+  const selectedLocalName = locales.find(l => l.id === selectedLocalId)?.name || 'Cargando...';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <DialogHeader>
+            <DialogHeader className="flex-row items-center justify-between">
               <DialogTitle>{isEditMode ? "Editar Egreso" : "Agregar Egreso Manual"}</DialogTitle>
+                <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isEditMode ? 'Guardar Cambios' : 'Guardar Egreso'}
+                    </Button>
+                </div>
             </DialogHeader>
 
             <div className="space-y-4 px-1 max-h-[70vh] overflow-y-auto">
-              <FormField
-                control={form.control}
-                name="fecha"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
+                <FormField
+                    control={form.control}
+                    name="monto"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Monto</FormLabel>
+                        <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="aQuien"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo}>
                         <FormControl>
-                          <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                            {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
+                            <SelectTrigger>
+                            <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona...')} />
+                            </SelectTrigger>
                         </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="monto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Monto</FormLabel>
-                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                        <SelectContent>
+                            {destinatariosDisponibles.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormItem>
+                    <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Entrega</FormLabel>
+                    <FormControl>
+                        <Input readOnly value={user?.displayName || 'Usuario no identificado'} disabled className="bg-muted"/>
+                    </FormControl>
+                </FormItem>
+                <FormField
+                    control={form.control}
+                    name="fecha"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
+                        <Popover>
+                        <PopoverTrigger asChild>
+                            <FormControl>
+                            <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                            </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                        </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
                <FormField
                 control={form.control}
                 name="concepto"
@@ -288,55 +324,11 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                   />
              )}
                <FormItem>
-                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Entrega</FormLabel>
+                  <FormLabel>Local</FormLabel>
                   <FormControl>
-                    <Input readOnly value={user?.displayName || 'Usuario no identificado'} disabled className="bg-muted"/>
+                    <Input readOnly value={selectedLocalName} disabled className="bg-muted"/>
                   </FormControl>
               </FormItem>
-               <FormField
-                control={form.control}
-                name="aQuien"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona...')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {destinatariosDisponibles.map(p => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="local_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Local</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={localesLoading ? 'Cargando...' : 'Selecciona un local'} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {locales.map(local => (
-                            <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
                <FormField
                 control={form.control}
                 name="comentarios"
@@ -349,14 +341,6 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 )}
               />
             </div>
-
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Egreso
-                </Button>
-            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

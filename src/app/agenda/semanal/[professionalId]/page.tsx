@@ -14,7 +14,7 @@ import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Profesional, Reservation } from '@/lib/types';
+import type { Profesional, Reservation, Local } from '@/lib/types';
 import { where } from 'firebase/firestore';
 
 
@@ -27,6 +27,13 @@ export default function WeeklyAgendaPage() {
 
   const { data: allProfessionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const professional = useMemo(() => allProfessionals.find(b => b.id === professionalId), [professionalId, allProfessionals]);
+  
+  const { data: allLocals, loading: localsLoading } = useFirestoreQuery<Local>('locales');
+  const local = useMemo(() => {
+    if (!professional || !allLocals) return null;
+    return allLocals.find(l => l.id === professional.local_id);
+  }, [professional, allLocals]);
+
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
@@ -44,8 +51,33 @@ export default function WeeklyAgendaPage() {
   }, [currentDate, professionalId]);
 
   const { data: appointmentsForWeek, loading: appointmentsLoading } = useFirestoreQuery<Reservation>('reservas', ...weekRangeQuery);
+  
+  const { hours, startHour, endHour } = useMemo(() => {
+    if (!local || !local.schedule) {
+      // Default hours if no schedule is found
+      const defaultHours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
+      return { hours: defaultHours, startHour: 9, endHour: 21 };
+    }
+    
+    let minHour = 24;
+    let maxHour = 0;
 
-  const hours = Array.from({ length: 13 }, (_, i) => 9 + i); // 9 AM to 9 PM
+    Object.values(local.schedule).forEach(day => {
+        if (day.enabled) {
+            const startH = parseInt(day.start.split(':')[0], 10);
+            const endH = parseInt(day.end.split(':')[0], 10);
+            if (startH < minHour) minHour = startH;
+            if (endH > maxHour) maxHour = endH;
+        }
+    });
+
+    if (minHour === 24) minHour = 9; // Fallback if no enabled days
+    if (maxHour === 0) maxHour = 21; // Fallback
+
+    const hourSlots = Array.from({ length: maxHour - minHour + 1 }, (_, i) => minHour + i);
+    return { hours: hourSlots, startHour: minHour, endHour: maxHour };
+  }, [local]);
+
   const HOURLY_SLOT_HEIGHT = 48;
 
   const handleSetThisWeek = () => setCurrentDate(new Date());
@@ -53,7 +85,7 @@ export default function WeeklyAgendaPage() {
   const handleNextWeek = () => setCurrentDate(d => addDays(d, 7));
   
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
-    const top = (startDecimal - 9) * HOURLY_SLOT_HEIGHT;
+    const top = (startDecimal - startHour) * HOURLY_SLOT_HEIGHT;
     const height = durationDecimal * HOURLY_SLOT_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
@@ -66,7 +98,7 @@ export default function WeeklyAgendaPage() {
 
   const selectedWeekFormatted = `${format(weekDays[0], "d 'de' MMMM", { locale: es })} - ${format(weekDays[6], "d 'de' MMMM 'de' yyyy", { locale: es })}`;
 
-  const isLoading = professionalsLoading || appointmentsLoading;
+  const isLoading = professionalsLoading || appointmentsLoading || localsLoading;
 
   if (isLoading) {
     return (

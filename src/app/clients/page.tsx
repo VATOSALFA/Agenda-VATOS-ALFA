@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit, ChevronLeft, ChevronRight, Cake } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Profesional, Service, Reservation, Product, Sale } from "@/lib/types";
@@ -16,7 +16,7 @@ import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 import { NewReservationForm } from "@/components/reservations/new-reservation-form";
 import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
-import { format, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO, getMonth } from "date-fns";
 import { es } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import {
@@ -40,11 +40,18 @@ import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
 
+const months = Array.from({ length: 12 }, (_, i) => ({
+    value: i.toString(),
+    label: format(new Date(2000, i, 1), 'LLLL', { locale: es })
+}));
+
+
 const FiltersSidebar = ({
     onApply,
     onReset,
     dateRange, setDateRange,
     localFilter, setLocalFilter,
+    birthdayMonthFilter, setBirthdayMonthFilter,
     locales,
     isLoading,
     isLocalAdmin,
@@ -75,6 +82,16 @@ const FiltersSidebar = ({
                             <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
                         </PopoverContent>
                     </Popover>
+                </div>
+                <div className="space-y-1">
+                    <Label>Mes de cumpleaños</Label>
+                    <Select value={birthdayMonthFilter} onValueChange={setBirthdayMonthFilter} disabled={isLoading}>
+                      <SelectTrigger><SelectValue placeholder="Seleccione un mes" /></SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="todos">Todos los meses</SelectItem>
+                          {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                 </div>
                  <div className="space-y-1">
                   <Label>Local/sede</Label>
@@ -115,10 +132,12 @@ export default function ClientsPage() {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [localFilter, setLocalFilter] = useState('todos');
+  const [birthdayMonthFilter, setBirthdayMonthFilter] = useState('todos');
   
   const [activeFilters, setActiveFilters] = useState({
       dateRange: dateRange,
       local: 'todos',
+      birthdayMonth: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
@@ -155,6 +174,7 @@ export default function ClientsPage() {
     setActiveFilters({
       dateRange,
       local: localFilter,
+      birthdayMonth: birthdayMonthFilter,
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -164,9 +184,11 @@ export default function ClientsPage() {
   const handleResetFilters = () => {
     setDateRange(undefined);
     setLocalFilter(user?.local_id || 'todos');
+    setBirthdayMonthFilter('todos');
     setActiveFilters({
         dateRange: undefined,
         local: user?.local_id || 'todos',
+        birthdayMonth: 'todos',
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -178,17 +200,31 @@ export default function ClientsPage() {
 
     const hasAdvancedFilters = 
         activeFilters.local !== 'todos' || 
-        activeFilters.dateRange !== undefined;
+        activeFilters.dateRange !== undefined ||
+        activeFilters.birthdayMonth !== 'todos';
 
     if (hasAdvancedFilters) {
-        let clientIdsFromSales = new Set<string>();
+        if(activeFilters.dateRange) {
+            let clientIdsFromSales = new Set<string>();
 
-        const filteredSales = sales.filter(s => {
-            return activeFilters.local === 'todos' || s.local_id === activeFilters.local;
-        });
-        filteredSales.forEach(s => clientIdsFromSales.add(s.cliente_id));
-        
-        filtered = filtered.filter(client => clientIdsFromSales.has(client.id));
+            const filteredSales = sales.filter(s => {
+                return activeFilters.local === 'todos' || s.local_id === activeFilters.local;
+            });
+            filteredSales.forEach(s => clientIdsFromSales.add(s.cliente_id));
+            
+            filtered = filtered.filter(client => clientIdsFromSales.has(client.id));
+        }
+
+        if (activeFilters.birthdayMonth !== 'todos') {
+            const monthToFilter = parseInt(activeFilters.birthdayMonth, 10);
+            filtered = filtered.filter(client => {
+                if (!client.fecha_nacimiento) return false;
+                const birthDate = typeof client.fecha_nacimiento === 'string' 
+                    ? parseISO(client.fecha_nacimiento)
+                    : new Date(client.fecha_nacimiento.seconds * 1000);
+                return getMonth(birthDate) === monthToFilter;
+            });
+        }
     }
 
 
@@ -369,6 +405,7 @@ export default function ClientsPage() {
                 onReset={handleResetFilters}
                 dateRange={dateRange} setDateRange={setDateRange}
                 localFilter={localFilter} setLocalFilter={setLocalFilter}
+                birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
                 locales={locales}
                 isLoading={isLoading}
                 isLocalAdmin={isLocalAdmin}
@@ -634,3 +671,4 @@ export default function ClientsPage() {
     </>
   );
 }
+

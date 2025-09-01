@@ -87,7 +87,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                         </RechartsPieChart>
                     </ResponsiveContainer>
                     {data.length > 0 && <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-2xl font-bold">${total.toLocaleString('es-MX')}</span>
+                        <span className="text-2xl font-bold">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>}
                 </div>
                  <div className="text-sm">
@@ -570,51 +570,52 @@ export default function InvoicedSalesPage() {
                         )}
                     </Table>
                 </CardContent>
-                 {!salesLoading && populatedSales.length > 0 && (
-                    <div className="flex items-center justify-end space-x-6 p-4 border-t">
-                        <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium">Resultados por página</p>
-                            <Select
-                                value={`${itemsPerPage}`}
-                                onValueChange={(value) => {
-                                    setItemsPerPage(Number(value))
-                                    setCurrentPage(1)
-                                }}
-                            >
-                                <SelectTrigger className="h-8 w-[70px]">
-                                    <SelectValue placeholder={itemsPerPage} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="10">10</SelectItem>
-                                    <SelectItem value="20">20</SelectItem>
-                                    <SelectItem value="50">50</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="text-sm font-medium">
-                        Página {currentPage} de {totalPages}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                disabled={currentPage === 1}
-                            >
-                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                disabled={currentPage === totalPages}
-                            >
-                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
-                            </Button>
-                        </div>
-                    </div>
-                )}
             </Card>
+
+            {!salesLoading && populatedSales.length > 0 && (
+                <div className="flex items-center justify-end space-x-6 p-4">
+                    <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium">Resultados por página</p>
+                        <Select
+                            value={`${itemsPerPage}`}
+                            onValueChange={(value) => {
+                                setItemsPerPage(Number(value))
+                                setCurrentPage(1)
+                            }}
+                        >
+                            <SelectTrigger className="h-8 w-[70px]">
+                                <SelectValue placeholder={itemsPerPage} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="text-sm font-medium">
+                    Página {currentPage} de {totalPages}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
+                </div>
+            )}
 
         </div>
         

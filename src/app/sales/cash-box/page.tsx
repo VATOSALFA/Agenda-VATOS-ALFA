@@ -307,6 +307,15 @@ export default function CashBoxPage() {
         Monto: egreso.monto,
     }));
 
+    if (salesData.length === 0 && egresosData.length === 0) {
+        toast({
+            variant: "destructive",
+            title: "No hay datos para exportar",
+            description: "No hay ventas ni egresos en el período seleccionado.",
+        });
+        return;
+    }
+
     const workbook = XLSX.utils.book_new();
     
     if (salesData.length > 0) {

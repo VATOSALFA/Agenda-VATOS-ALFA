@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -165,6 +166,10 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     const newCount = parseInt(count, 10) || 0;
     setDenominationCounts(prev => ({...prev, [value]: newCount}));
   }
+  
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => u.role === 'Administrador local' || u.role === 'Recepcionista');
+  }, [users]);
 
 
   return (
@@ -253,7 +258,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        {users.map((u) => (
+                                        {filteredUsers.map((u) => (
                                             <SelectItem key={u.id} value={u.name}>
                                                 {u.name}
                                             </SelectItem>

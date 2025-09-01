@@ -64,6 +64,7 @@ import {
   Printer,
   AlertTriangle,
   LogOut,
+  Percent,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -88,6 +89,7 @@ import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
+import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
 
 
 const SummaryCard = ({
@@ -132,6 +134,7 @@ export default function CashBoxPage() {
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
   const [isClientMounted, setIsClientMounted] = useState(false);
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
+  const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
   const [queryKey, setQueryKey] = useState(0);
 
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -375,6 +378,7 @@ export default function CashBoxPage() {
       <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Caja de Ventas</h2>
            <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => setIsCommissionModalOpen(true)}><Percent className="mr-2 h-4 w-4"/>Pago de Comisiones</Button>
             <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4"/>Realizar corte de caja</Button>
             <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
             <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>Agregar Egreso</Button>
@@ -637,6 +641,16 @@ export default function CashBoxPage() {
         }}
         initialCash={efectivoEnCaja}
     />
+    <CommissionPaymentModal
+        isOpen={isCommissionModalOpen}
+        onOpenChange={setIsCommissionModalOpen}
+        onFormSubmit={() => {
+            setIsCommissionModalOpen(false);
+            handleSearch();
+        }}
+        dateRange={activeFilters.dateRange}
+        localId={activeFilters.localId}
+    />
     {selectedSale && (
         <SaleDetailModal
             isOpen={isDetailModalOpen}
@@ -742,4 +756,5 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 

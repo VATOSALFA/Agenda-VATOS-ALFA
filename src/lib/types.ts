@@ -1,5 +1,3 @@
-
-
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -209,6 +207,11 @@ export interface SaleItem {
   subtotal: number;
   tipo: 'servicio' | 'producto';
   servicio?: string;
+  descuento?: {
+    valor: number;
+    tipo: 'fixed' | 'percentage';
+    monto: number;
+  };
 }
 
 export interface Egreso {

@@ -63,7 +63,17 @@ import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 
-interface CartItem { id: string; nombre: string; precio: number; cantidad: number; tipo: 'producto' | 'servicio'; barbero_id?: string; presentation_id?: string;}
+interface CartItem { 
+    id: string; 
+    nombre: string; 
+    precio: number; 
+    cantidad: number; 
+    tipo: 'producto' | 'servicio'; 
+    barbero_id?: string; 
+    presentation_id?: string;
+    discountValue?: number;
+    discountType?: 'fixed' | 'percentage';
+}
 
 const saleSchema = (total: number) => z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
@@ -98,32 +108,6 @@ interface NewSaleSheetProps {
   onSaleComplete?: () => void;
 }
 
-const DiscountInput = ({ value, onChange }: { value: number | '', onChange: (value: number | '') => void }) => {
-    const [inputValue, setInputValue] = useState(value);
-
-    useEffect(() => {
-        setInputValue(value);
-    }, [value]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setInputValue(e.target.value);
-    };
-    
-    const handleBlur = () => {
-        onChange(inputValue === '' ? '' : Number(inputValue));
-    };
-
-    return (
-        <Input
-            placeholder="Descuento"
-            type="number"
-            value={inputValue}
-            onChange={handleChange}
-            onBlur={handleBlur}
-        />
-    )
-}
-
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -136,9 +120,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [clientQueryKey, setClientQueryKey] = useState(0);
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
-
-  const [discountValue, setDiscountValue] = useState<number | ''>('');
-  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
@@ -167,15 +148,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     [cart]
   );
   
-  const discountAmount = useMemo(() => {
-    const numericDiscountValue = Number(discountValue) || 0;
-    if (discountType === 'percentage') {
-      return (subtotal * numericDiscountValue) / 100;
-    }
-    return numericDiscountValue;
-  }, [subtotal, discountValue, discountType]);
+  const totalDiscount = useMemo(() => {
+    return cart.reduce((acc, item) => {
+        const itemTotal = (item.precio || 0) * item.cantidad;
+        const discountValue = Number(item.discountValue) || 0;
+        if (item.discountType === 'percentage') {
+            return acc + (itemTotal * discountValue) / 100;
+        }
+        return acc + discountValue;
+    }, 0);
+  }, [cart]);
 
-  const total = useMemo(() => Math.max(0, subtotal - discountAmount), [subtotal, discountAmount]);
+  const total = useMemo(() => Math.max(0, subtotal - totalDiscount), [subtotal, totalDiscount]);
   
   const form = useForm<SaleFormData>({
     resolver: zodResolver(saleSchema(total)),
@@ -258,6 +242,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     );
   };
 
+  const updateItemDiscount = (itemId: string, value: number | '', type: 'fixed' | 'percentage') => {
+      setCart(prev => prev.map(item => {
+          if (item.id === itemId) {
+              const newDiscountValue = value === '' ? undefined : Number(value);
+              const newDiscountType = type;
+              return {...item, discountValue: newDiscountValue, discountType: newDiscountType};
+          }
+          return item;
+      }));
+  }
+
   
   const paymentMethod = form.watch('metodo_pago');
   const cashAmount = Number(form.watch('pago_efectivo'));
@@ -316,8 +311,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setStep(1);
     form.reset();
     setIsSubmitting(false);
-    setDiscountValue('');
-    setDiscountType('fixed');
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -387,21 +380,38 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
         
         const ventaRef = doc(collection(db, "ventas"));
-        const itemsToSave = cart.map(({ id, nombre, precio, cantidad, tipo, barbero_id }) => ({
-            id, nombre, tipo, 
-            barbero_id: barbero_id || null,
-            precio_unitario: precio || 0,
-            cantidad,
-            subtotal: (precio || 0) * cantidad,
-        }));
+        const itemsToSave = cart.map(item => {
+            const itemSubtotal = (item.precio || 0) * item.cantidad;
+            const itemDiscountValue = Number(item.discountValue) || 0;
+            const itemDiscountType = item.discountType || 'fixed';
+            const itemDiscountAmount = itemDiscountType === 'percentage' 
+                ? (itemSubtotal * itemDiscountValue) / 100 
+                : itemDiscountValue;
+
+            return {
+                id: item.id,
+                nombre: item.nombre,
+                tipo: item.tipo,
+                barbero_id: item.barbero_id || null,
+                precio_unitario: item.precio || 0,
+                cantidad: item.cantidad,
+                subtotal: itemSubtotal,
+                descuento: {
+                    valor: itemDiscountValue,
+                    tipo: itemDiscountType,
+                    monto: itemDiscountAmount
+                }
+            };
+        });
   
         const saleDataToSave: any = {
             ...data,
             items: itemsToSave,
             subtotal: subtotal,
             descuento: {
-                valor: Number(discountValue) || 0,
-                tipo: discountType
+                valor: totalDiscount,
+                tipo: 'fixed',
+                monto: totalDiscount
             },
             total,
             fecha_hora_venta: Timestamp.now(),
@@ -487,6 +497,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </SelectContent>
                       </Select>
                     </div>
+                     <div className="flex items-center gap-2 mt-2">
+                        <Input
+                            placeholder="Desc."
+                            type="number"
+                            value={item.discountValue || ''}
+                            onChange={(e) => updateItemDiscount(item.id, e.target.value === '' ? '' : Number(e.target.value), item.discountType || 'fixed')}
+                            className="h-8 text-xs"
+                        />
+                        <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, item.discountValue || 0, value)}>
+                            <SelectTrigger className="w-[60px] h-8 text-xs">
+                            <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                            <SelectItem value="fixed">$</SelectItem>
+                            <SelectItem value="percentage">%</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</p>
@@ -501,25 +529,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         </div>
         {cart.length > 0 && (
           <div className="p-4 border-t space-y-2 text-sm flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <DiscountInput value={discountValue} onChange={setDiscountValue} />
-              <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => setDiscountType(value)}>
-                <SelectTrigger className="w-[80px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixed"><DollarSign className="h-4 w-4" /></SelectItem>
-                  <SelectItem value="percentage"><Percent className="h-4 w-4" /></SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div className="flex justify-between">
               <span>Subtotal:</span>
               <span>${subtotal.toLocaleString('es-MX')}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between text-destructive">
               <span>Descuento:</span>
-              <span>-${discountAmount.toLocaleString('es-MX')}</span>
+              <span>-${totalDiscount.toLocaleString('es-MX')}</span>
             </div>
             <div className="flex justify-between font-bold text-xl pt-2 border-t">
               <span>Total:</span>
@@ -927,11 +943,4 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </Dialog>
     </>
   );
-
-    
-
-
-
-
-
-
+}

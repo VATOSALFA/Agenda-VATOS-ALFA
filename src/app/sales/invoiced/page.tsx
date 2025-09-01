@@ -1,12 +1,11 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -138,6 +137,8 @@ export default function InvoicedSalesPage() {
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
     const [authCode, setAuthCode] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const [queryKey, setQueryKey] = useState(0);
 
@@ -209,6 +210,13 @@ export default function InvoicedSalesPage() {
         }));
     }, [sales, clientMap, sellerMap]);
 
+    const totalPages = Math.ceil(populatedSales.length / itemsPerPage);
+    const paginatedSales = populatedSales.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+
+
     const salesData = useMemo(() => {
         if (!populatedSales) {
             return {
@@ -265,6 +273,7 @@ export default function InvoicedSalesPage() {
             local: localFilter,
             paymentMethod: paymentMethodFilter
         });
+        setCurrentPage(1);
         setQueryKey(prev => prev + 1);
         toast({
             title: "Filtros aplicados",
@@ -494,8 +503,8 @@ export default function InvoicedSalesPage() {
                                         <TableCell colSpan={9}><Skeleton className="h-6 w-full" /></TableCell>
                                     </TableRow>
                                 ))
-                            ) : populatedSales.length > 0 ? (
-                                populatedSales.map((sale) => (
+                            ) : paginatedSales.length > 0 ? (
+                                paginatedSales.map((sale) => (
                                 <TableRow key={sale.id}>
                                     <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
                                     <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
@@ -561,6 +570,50 @@ export default function InvoicedSalesPage() {
                         )}
                     </Table>
                 </CardContent>
+                 {!salesLoading && populatedSales.length > 0 && (
+                    <div className="flex items-center justify-end space-x-6 p-4 border-t">
+                        <div className="flex items-center space-x-2">
+                            <p className="text-sm font-medium">Resultados por página</p>
+                            <Select
+                                value={`${itemsPerPage}`}
+                                onValueChange={(value) => {
+                                    setItemsPerPage(Number(value))
+                                    setCurrentPage(1)
+                                }}
+                            >
+                                <SelectTrigger className="h-8 w-[70px]">
+                                    <SelectValue placeholder={itemsPerPage} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="20">20</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="text-sm font-medium">
+                        Página {currentPage} de {totalPages}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                            >
+                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                            >
+                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Card>
 
         </div>

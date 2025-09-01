@@ -105,7 +105,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
                                         {item.name}
                                     </TableCell>
-                                    <TableCell className="text-right">${item.value.toLocaleString('es-MX')}</TableCell>
+                                    <TableCell className="text-right">${item.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

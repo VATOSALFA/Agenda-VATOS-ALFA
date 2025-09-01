@@ -108,6 +108,29 @@ interface NewSaleSheetProps {
   onSaleComplete?: () => void;
 }
 
+const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountChange: (itemId: string, value: string, type: 'fixed' | 'percentage') => void }) => {
+    const [internalValue, setInternalValue] = useState<string>(String(item.discountValue || ''));
+
+    useEffect(() => {
+        setInternalValue(String(item.discountValue || ''));
+    }, [item.discountValue]);
+
+    const handleBlur = () => {
+        onDiscountChange(item.id, internalValue, item.discountType || 'fixed');
+    };
+
+    return (
+        <Input
+            placeholder="Desc."
+            type="number"
+            value={internalValue}
+            onChange={(e) => setInternalValue(e.target.value)}
+            onBlur={handleBlur}
+            className="h-8 text-xs"
+        />
+    )
+}
+
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -249,9 +272,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const updateItemDiscount = (itemId: string, value: string, type: 'fixed' | 'percentage') => {
       setCart(prev => prev.map(item => {
           if (item.id === itemId) {
-              const newDiscountValue = value;
-              const newDiscountType = type;
-              return {...item, discountValue: newDiscountValue, discountType: newDiscountType};
+              return {...item, discountValue: value, discountType: type};
           }
           return item;
       }));
@@ -315,6 +336,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setStep(1);
     form.reset();
     setIsSubmitting(false);
+    if(initialData) {
+        onOpenChange(false);
+    }
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -502,13 +526,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                       </Select>
                     </div>
                      <div className="flex items-center gap-2 mt-2">
-                        <Input
-                            placeholder="Desc."
-                            type="number"
-                            value={item.discountValue || ''}
-                            onChange={(e) => updateItemDiscount(item.id, e.target.value, item.discountType || 'fixed')}
-                            className="h-8 text-xs"
-                        />
+                        <DiscountInput item={item} onDiscountChange={updateItemDiscount} />
                         <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, String(item.discountValue || '0'), value)}>
                             <SelectTrigger className="w-[60px] h-8 text-xs">
                             <SelectValue />

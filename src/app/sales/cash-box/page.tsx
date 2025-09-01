@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -71,7 +70,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Local, Client, Egreso, Profesional } from '@/lib/types';
+import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual } from '@/lib/types';
 import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
@@ -156,6 +155,8 @@ export default function CashBoxPage() {
   const [itemsPerPageSales, setItemsPerPageSales] = useState(10);
   const [currentPageEgresos, setCurrentPageEgresos] = useState(1);
   const [itemsPerPageEgresos, setItemsPerPageEgresos] = useState(10);
+  const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
+  const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
 
 
    useEffect(() => {
@@ -196,6 +197,16 @@ export default function CashBoxPage() {
     return constraints;
   }, [activeFilters.dateRange]);
   
+  const ingresosQueryConstraints = useMemo(() => {
+    if (!activeFilters.dateRange?.from) return [];
+    const constraints: QueryConstraint[] = [];
+    constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
+    if (activeFilters.dateRange.to) {
+        constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+    }
+    return constraints;
+  }, [activeFilters.dateRange]);
+
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     `sales-${queryKey}`,
@@ -208,12 +219,25 @@ export default function CashBoxPage() {
     ...egresosQueryConstraints
   );
   
+  const { data: allIngresos, loading: ingresosLoading } = useFirestoreQuery<IngresoManual>(
+    'ingresos_manuales',
+    `ingresos-${queryKey}`,
+    ...ingresosQueryConstraints
+  );
+  
   const egresos = useMemo(() => {
     if (activeFilters.localId === 'todos') {
         return allEgresos;
     }
     return allEgresos.filter(e => e.local_id === activeFilters.localId);
   }, [allEgresos, activeFilters.localId]);
+  
+  const ingresos = useMemo(() => {
+    if (activeFilters.localId === 'todos') {
+        return allIngresos;
+    }
+    return allIngresos.filter(i => i.local_id === activeFilters.localId);
+  }, [allIngresos, activeFilters.localId]);
 
   const clientMap = useMemo(() => {
       if (clientsLoading) return new Map();
@@ -243,6 +267,9 @@ export default function CashBoxPage() {
   
   const handleSearch = () => {
     setActiveFilters({ dateRange, localId: selectedLocalId });
+    setCurrentPageSales(1);
+    setCurrentPageEgresos(1);
+    setCurrentPageIngresos(1);
     setQueryKey(prev => prev + 1);
   };
 
@@ -404,12 +431,13 @@ export default function CashBoxPage() {
   };
 
 
-  const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
+  const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
   const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
   const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-  const efectivoEnCaja = ingresosEfectivo - totalEgresos;
+  const totalOtrosIngresos = useMemo(() => ingresos.reduce((sum, ingreso) => sum + (ingreso.efectivo || 0) + (ingreso.deposito || 0), 0), [ingresos]);
+  const efectivoEnCaja = ingresosEfectivo - totalEgresos + totalOtrosIngresos;
   
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLocalAdmin = user?.role !== 'Administrador general';
@@ -424,6 +452,12 @@ export default function CashBoxPage() {
   const paginatedEgresos = egresosWithData.slice(
     (currentPageEgresos - 1) * itemsPerPageEgresos,
     currentPageEgresos * itemsPerPageEgresos
+  );
+  
+  const totalPagesIngresos = Math.ceil(ingresos.length / itemsPerPageIngresos);
+  const paginatedIngresos = ingresos.slice(
+    (currentPageIngresos - 1) * itemsPerPageIngresos,
+    currentPageIngresos * itemsPerPageIngresos
   );
 
   return (
@@ -521,11 +555,11 @@ export default function CashBoxPage() {
        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-4 items-center">
             <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
             <IconSeparator icon={Plus} />
-            <SummaryCard title="Otros Ingresos" amount={0} />
+            <SummaryCard title="Otros Ingresos" amount={totalOtrosIngresos} />
             <IconSeparator icon={Minus} />
             <SummaryCard title="Egresos" amount={totalEgresos} />
             <IconSeparator icon={Equal} />
-            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas - totalEgresos} />
+            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas + totalOtrosIngresos - totalEgresos} />
         </div>
 
       {/* Main Table */}
@@ -632,9 +666,66 @@ export default function CashBoxPage() {
                     )}
                 </TabsContent>
                 <TabsContent value="otros-ingresos" className="mt-4">
-                    <div className="text-center text-muted-foreground p-12">
-                        <p>No hay otros ingresos registrados para este período.</p>
-                    </div>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Local</TableHead>
+                                <TableHead>Concepto</TableHead>
+                                <TableHead className="text-right">Efectivo</TableHead>
+                                <TableHead className="text-right">Depósito</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {isLoading ? (
+                                Array.from({length: 3}).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell colSpan={6}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
+                                    </TableRow>
+                                ))
+                        ) : paginatedIngresos.length === 0 ? (
+                            <TableRow><TableCell colSpan={6} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
+                        ) : (
+                            paginatedIngresos.map((ingreso) => (
+                                <TableRow key={ingreso.id}>
+                                    <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
+                                    <TableCell>{localMap.get(ingreso.local_id ?? '')}</TableCell>
+                                    <TableCell>{ingreso.concepto}</TableCell>
+                                    <TableCell className="text-right">${(ingreso.efectivo || 0).toLocaleString('es-CL')}</TableCell>
+                                    <TableCell className="text-right">${(ingreso.deposito || 0).toLocaleString('es-CL')}</TableCell>
+                                    <TableCell className="text-right font-medium">${((ingreso.efectivo || 0) + (ingreso.deposito || 0)).toLocaleString('es-CL')}</TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                        </TableBody>
+                    </Table>
+                    {paginatedIngresos.length > 0 && (
+                        <div className="flex items-center justify-end space-x-6 pt-4">
+                            <div className="flex items-center space-x-2">
+                                <p className="text-sm font-medium">Resultados por página</p>
+                                <Select
+                                    value={`${itemsPerPageIngresos}`}
+                                    onValueChange={(value) => {
+                                        setItemsPerPageIngresos(Number(value))
+                                        setCurrentPageIngresos(1)
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={itemsPerPageIngresos} /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="20">20</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="text-sm font-medium">Página {currentPageIngresos} de {totalPagesIngresos}</div>
+                            <div className="flex items-center space-x-2">
+                                <Button variant="outline" size="sm" onClick={() => setCurrentPageIngresos(p => Math.max(p - 1, 1))} disabled={currentPageIngresos === 1}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
+                                <Button variant="outline" size="sm" onClick={() => setCurrentPageIngresos(p => Math.min(p + 1, totalPagesIngresos))} disabled={currentPageIngresos === totalPagesIngresos}>Siguiente <ChevronRight className="h-4 w-4 ml-1" /></Button>
+                            </div>
+                        </div>
+                    )}
                 </TabsContent>
                 <TabsContent value="egresos" className="mt-4">
                     {isLoading ? (
@@ -885,8 +976,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-
-
-
-
-

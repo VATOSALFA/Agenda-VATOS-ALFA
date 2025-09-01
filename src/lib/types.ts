@@ -1,3 +1,4 @@
+
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -223,6 +224,15 @@ export interface Egreso {
   aQuienNombre?: string; // transient
   comentarios?: string;
   local_id?: string;
+}
+
+export interface IngresoManual {
+  id: string;
+  fecha: any; // Firestore Timestamp
+  efectivo: number;
+  deposito: number;
+  concepto: string;
+  local_id: string;
 }
 
 export interface StockMovement {

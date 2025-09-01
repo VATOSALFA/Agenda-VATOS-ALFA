@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -22,22 +22,28 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Calendar as CalendarIcon, DollarSign, Info, Edit } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription } from '../ui/alert';
+import { Textarea } from '../ui/textarea';
+import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { Alert, AlertDescription } from '../ui/alert';
+import { useLocal } from '@/contexts/local-context';
+
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  efectivo: z.coerce.number().min(0, 'El monto debe ser positivo.').optional().default(0),
-  deposito: z.coerce.number().min(0, 'El monto debe ser positivo.').optional().default(0),
+  efectivo: z.coerce.number().optional().default(0),
+  deposito: z.coerce.number().optional().default(0),
   concepto: z.string().min(1, 'Debes seleccionar o ingresar un concepto.'),
   concepto_otro: z.string().optional(),
+  local_id: z.string().min(1, 'Se requiere un local'),
 }).refine(data => data.efectivo > 0 || data.deposito > 0, {
     message: 'Debes ingresar un monto en efectivo o depósito.',
     path: ['efectivo'],
 }).refine(data => {
-    if (data.concepto === 'otro') {
+    if (data.concepto === 'Otro (especificar)') {
         return data.concepto_otro && data.concepto_otro.trim().length > 0;
     }
     return true;
@@ -63,6 +69,7 @@ const conceptosPredefinidos = [
 export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngresoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { selectedLocalId } = useLocal();
 
   const form = useForm<IngresoFormData>({
     resolver: zodResolver(ingresoSchema),
@@ -76,14 +83,31 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
   });
 
   const conceptoSeleccionado = form.watch('concepto');
+  
+  useEffect(() => {
+    if(isOpen) {
+        form.reset({
+            fecha: new Date(),
+            efectivo: 0,
+            deposito: 0,
+            concepto: '',
+            concepto_otro: '',
+            local_id: selectedLocalId || ''
+        })
+    }
+  }, [isOpen, selectedLocalId, form])
 
   async function onSubmit(data: IngresoFormData) {
     setIsSubmitting(true);
-    const finalConcepto = data.concepto === 'otro' ? data.concepto_otro : data.concepto;
-    console.log("Guardando ingreso manual:", { ...data, concepto: finalConcepto });
+    const finalConcepto = data.concepto === 'Otro (especificar)' ? data.concepto_otro : data.concepto;
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await addDoc(collection(db, 'ingresos_manuales'), {
+        fecha: Timestamp.fromDate(data.fecha),
+        efectivo: data.efectivo,
+        deposito: data.deposito,
+        concepto: finalConcepto,
+        local_id: data.local_id
+      });
       toast({
         title: 'Ingreso guardado',
         description: 'El nuevo ingreso ha sido registrado con éxito.',
@@ -91,6 +115,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
       form.reset();
       onFormSubmit();
     } catch (error) {
+        console.error("Error guardando ingreso:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -111,7 +136,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
             </DialogHeader>
 
             <div className="space-y-4 px-1 max-h-[70vh] overflow-y-auto">
-              <Alert>
+               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
                     Este ingreso se sumará a los ingresos automáticos de la caja de ventas.
@@ -140,7 +165,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                   </FormItem>
                 )}
               />
-              <FormField
+               <FormField
                 control={form.control}
                 name="concepto"
                 render={({ field }) => (
@@ -149,7 +174,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                         className="flex flex-col space-y-1"
                       >
                         {conceptosPredefinidos.map(c => (

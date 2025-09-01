@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Profesional, Service, Reservation, Product, Sale } from "@/lib/types";
@@ -143,6 +143,8 @@ export default function ClientsPage() {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const { toast } = useToast();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -212,6 +214,7 @@ export default function ClientsPage() {
       service: serviceFilter,
       product: productFilter,
     });
+    setCurrentPage(1); // Reset to first page on new filter
     setQueryKey(prev => prev + 1);
     toast({ title: "Filtros aplicados" });
   };
@@ -229,6 +232,7 @@ export default function ClientsPage() {
         service: 'todos',
         product: 'todos'
     });
+    setCurrentPage(1);
     setQueryKey(prev => prev + 1);
     toast({ title: "Filtros restablecidos" });
   };
@@ -281,6 +285,13 @@ export default function ClientsPage() {
     
     return filtered;
   }, [clients, reservations, sales, searchTerm, activeFilters]);
+
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
+  const paginatedClients = filteredClients.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
 
   const handleViewDetails = (client: Client) => {
     setSelectedClient(client);
@@ -451,8 +462,8 @@ export default function ClientsPage() {
             />
           </aside>
 
-          <main className="lg:col-span-3">
-             <div className="flex items-center justify-between mb-4 gap-4">
+          <main className="lg:col-span-3 space-y-4">
+             <div className="flex items-center justify-between gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -482,7 +493,7 @@ export default function ClientsPage() {
                   </DropdownMenu>
             </div>
             <Card>
-              <CardContent>
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -496,7 +507,7 @@ export default function ClientsPage() {
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
-                      Array.from({ length: 10 }).map((_, i) => (
+                      Array.from({ length: itemsPerPage }).map((_, i) => (
                         <TableRow key={i}>
                           <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-24" /></TableCell>
@@ -506,7 +517,7 @@ export default function ClientsPage() {
                           <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                         </TableRow>
                       ))
-                    ) : filteredClients.map((client) => (
+                    ) : paginatedClients.map((client) => (
                       <TableRow key={client.id}>
                         <TableCell className="font-medium">{client.nombre}</TableCell>
                         <TableCell>{client.apellido}</TableCell>
@@ -530,13 +541,55 @@ export default function ClientsPage() {
                     ))}
                   </TableBody>
                 </Table>
-                 { !isLoading && filteredClients.length === 0 && (
+                 { !isLoading && paginatedClients.length === 0 && (
                     <p className="text-center py-10 text-muted-foreground">
                         {searchTerm ? "No se encontraron clientes." : "No hay clientes registrados."}
                     </p>
                 )}
               </CardContent>
             </Card>
+            <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
+                <div className="flex items-center space-x-2">
+                    <p className="text-sm font-medium">Resultados por página</p>
+                    <Select
+                        value={`${itemsPerPage}`}
+                        onValueChange={(value) => {
+                            setItemsPerPage(Number(value))
+                            setCurrentPage(1)
+                        }}
+                    >
+                        <SelectTrigger className="h-8 w-[70px]">
+                            <SelectValue placeholder={itemsPerPage} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                    >
+                        <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                    >
+                        Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                </div>
+            </div>
           </main>
         </div>
       </div>
@@ -668,3 +721,4 @@ export default function ClientsPage() {
     </>
   );
 }
+

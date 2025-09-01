@@ -65,6 +65,7 @@ import {
   AlertTriangle,
   LogOut,
   Percent,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -147,6 +148,8 @@ export default function CashBoxPage() {
   const { toast } = useToast();
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authAction, setAuthAction] = useState<(() => void) | null>(null);
 
 
    useEffect(() => {
@@ -265,8 +268,12 @@ export default function CashBoxPage() {
   };
 
   const handleOpenEditEgreso = (egreso: Egreso) => {
-    setEditingEgreso(egreso);
-    setIsEgresoModalOpen(true);
+    const action = () => {
+      setEditingEgreso(egreso);
+      setIsEgresoModalOpen(true);
+    };
+    setAuthAction(() => action);
+    setIsAuthModalOpen(true);
   };
 
   const handleDeleteEgreso = async () => {
@@ -290,6 +297,12 @@ export default function CashBoxPage() {
         setEgresoDeleteConfirmationText('');
     }
   };
+
+  const handleOpenDeleteEgresoModal = (egreso: Egreso) => {
+    const action = () => setEgresoToDelete(egreso);
+    setAuthAction(() => action);
+    setIsAuthModalOpen(true);
+  }
   
   const triggerDownload = () => {
     const salesData = salesWithClientData.map(sale => ({
@@ -360,6 +373,30 @@ export default function CashBoxPage() {
         setAuthCode('');
     }
   };
+  
+   const handleAuthCodeSubmit = async () => {
+    if (!authCode) {
+      toast({ variant: 'destructive', title: 'Código requerido' });
+      return;
+    }
+    const authCodeQuery = query(
+      collection(db, 'codigos_autorizacion'),
+      where('code', '==', authCode),
+      where('active', '==', true),
+      where('cashbox', '==', true) // Check for cashbox permission
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+      toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    } else {
+      toast({ title: 'Código correcto' });
+      authAction?.(); // Execute the stored action
+      setIsAuthModalOpen(false);
+    }
+    setAuthCode('');
+    setAuthAction(null);
+  };
+
 
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
@@ -586,23 +623,24 @@ export default function CashBoxPage() {
                                         <TableCell>{egreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
                                         <TableCell className="text-right">
-                                           <div className="flex items-center justify-end gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleOpenEditEgreso(egreso)}>
-                                                    <Pencil className="mr-2 h-4 w-4" /> Editar
-                                                </Button>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="sm">
-                                                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                    </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                      <DropdownMenuItem onSelect={() => setEgresoToDelete(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                      </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button variant="outline" size="sm">
+                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                              <DropdownMenuItem onSelect={() => handleOpenEditEgreso(egreso)}>
+                                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
+                                                <MessageCircle className="mr-2 h-4 w-4" /> Enviar WhatsApp
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onSelect={() => handleOpenDeleteEgresoModal(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -753,9 +791,32 @@ export default function CashBoxPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+
+    <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para realizar esta acción, es necesario un código con permisos de caja.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code-action">Código de Autorización</Label>
+                <Input id="auth-code-action" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); }}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
+
 
 
 

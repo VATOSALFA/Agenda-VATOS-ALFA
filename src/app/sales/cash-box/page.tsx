@@ -142,6 +142,9 @@ export default function CashBoxPage() {
   const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
   const [egresoDeleteConfirmationText, setEgresoDeleteConfirmationText] = useState('');
   const { toast } = useToast();
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [authCode, setAuthCode] = useState('');
+
 
    useEffect(() => {
     setIsClientMounted(true);
@@ -285,7 +288,7 @@ export default function CashBoxPage() {
     }
   };
   
-  const handleDownload = () => {
+  const triggerDownload = () => {
     const salesData = salesWithClientData.map(sale => ({
         ID: sale.id,
         'Fecha De Pago': sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A',
@@ -323,6 +326,28 @@ export default function CashBoxPage() {
         description: 'La descarga de tu reporte ha comenzado.'
     })
   }
+
+  const handleDownloadRequest = async () => {
+    if (!authCode) {
+        toast({ variant: 'destructive', title: 'Código requerido' });
+        return;
+    }
+    const authCodeQuery = query(
+        collection(db, 'codigos_autorizacion'),
+        where('code', '==', authCode),
+        where('active', '==', true),
+        where('download', '==', true)
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+        toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    } else {
+        toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
+        triggerDownload();
+        setIsDownloadModalOpen(false);
+        setAuthCode('');
+    }
+  };
 
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
@@ -419,7 +444,7 @@ export default function CashBoxPage() {
       </div>
       
       <div className="flex justify-between items-center">
-          <Button variant="ghost" size="sm" onClick={handleDownload}>
+          <Button variant="ghost" size="sm" onClick={() => setIsDownloadModalOpen(true)}>
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
           </Button>
@@ -683,6 +708,29 @@ export default function CashBoxPage() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code">Código de Autorización</Label>
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
+

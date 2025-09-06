@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -234,6 +235,10 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+               <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar Ingreso
+                </Button>
             </DialogFooter>
           </form>
         </Form>

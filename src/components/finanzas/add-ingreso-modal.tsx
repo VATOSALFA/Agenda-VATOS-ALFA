@@ -101,6 +101,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
       }
       
       onFormSubmit();
+      onOpenChange(false);
     } catch (error) {
       console.error('Error al registrar ingreso:', error);
       toast({
@@ -118,15 +119,15 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>Agregar Ingreso Manual</DialogTitle>
+              <DialogTitle>{isEditMode ? 'Editar Ingreso Manual' : 'Agregar Ingreso Manual'}</DialogTitle>
               <DialogDescription>
-                Registra un ingreso de dinero a la caja que no provenga de una venta.
+                {isEditMode ? 'Modifica los detalles del ingreso.' : 'Registra un ingreso de dinero a la caja que no provenga de una venta.'}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 px-1">
+            <div className="space-y-4 px-1 py-6">
               <FormField
                 control={form.control}
                 name="monto"

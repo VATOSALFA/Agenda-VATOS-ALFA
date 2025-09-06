@@ -146,7 +146,9 @@ export default function CashBoxPage() {
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
+  const [editingIngreso, setEditingIngreso] = useState<IngresoManual | null>(null);
   const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
+  const [ingresoToDelete, setIngresoToDelete] = useState<IngresoManual | null>(null);
   const [egresoDeleteConfirmationText, setEgresoDeleteConfirmationText] = useState('');
   const { toast } = useToast();
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
@@ -338,7 +340,32 @@ export default function CashBoxPage() {
     setAuthAction(() => action);
     setIsAuthModalOpen(true);
   }
-  
+
+  const handleOpenEditIngreso = (ingreso: IngresoManual) => {
+    setEditingIngreso(ingreso);
+    setIsIngresoModalOpen(true);
+  };
+
+  const handleDeleteIngreso = async (ingresoId: string) => {
+    try {
+        await deleteDoc(doc(db, 'ingresos_manuales', ingresoId));
+        toast({
+            title: "Ingreso Eliminado",
+            description: "El ingreso ha sido eliminado permanentemente.",
+        });
+        setQueryKey(prevKey => prevKey + 1);
+    } catch (error) {
+        console.error("Error deleting ingreso: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo eliminar el ingreso.",
+        });
+    } finally {
+        setIngresoToDelete(null);
+    }
+  };
+
   const triggerDownload = () => {
     const salesData = salesWithClientData.map(sale => ({
         ID: sale.id,
@@ -470,7 +497,7 @@ export default function CashBoxPage() {
            <div className="flex items-center space-x-2">
             <Button variant="outline" onClick={() => setIsCommissionModalOpen(true)}><Percent className="mr-2 h-4 w-4"/>Pago de Comisiones</Button>
             <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4"/>Realizar corte de caja</Button>
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Agregar Ingreso</Button>
+            <Button variant="outline" onClick={() => { setEditingIngreso(null); setIsIngresoModalOpen(true); }}>Agregar Ingreso</Button>
             <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>Agregar Egreso</Button>
           </div>
       </div>
@@ -676,17 +703,29 @@ export default function CashBoxPage() {
                                     <TableHead>Concepto</TableHead>
                                     <TableHead>Comentarios</TableHead>
                                     <TableHead className="text-right">Monto</TableHead>
+                                    <TableHead className="text-right">Opciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {ingresos.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={5} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
                                 ) : ingresos.map((ingreso) => (
                                     <TableRow key={ingreso.id}>
                                         <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
                                         <TableCell>{ingreso.concepto}</TableCell>
                                         <TableCell>{ingreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-CL')}</TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8"><ChevronDown className="h-4 w-4" /></Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onSelect={() => handleOpenEditIngreso(ingreso)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => setIngresoToDelete(ingreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -795,6 +834,7 @@ export default function CashBoxPage() {
             setIsIngresoModalOpen(false)
             handleSearch()
         }}
+        ingreso={editingIngreso}
     />
     <CashBoxClosingModal
         isOpen={isClosingModalOpen}
@@ -895,6 +935,25 @@ export default function CashBoxPage() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+      
+       {ingresoToDelete && (
+        <AlertDialog open={!!ingresoToDelete} onOpenChange={() => setIngresoToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                       Se eliminará permanentemente el ingreso por "<strong>{ingresoToDelete.concepto}</strong>".
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDeleteIngreso(ingresoToDelete.id)} className="bg-destructive hover:bg-destructive/90">
+                        Sí, eliminar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
         <AlertDialogContent>
@@ -942,3 +1001,4 @@ export default function CashBoxPage() {
     </>
   );
 }
+

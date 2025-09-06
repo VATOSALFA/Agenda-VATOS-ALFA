@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -35,8 +34,8 @@ import { useLocal } from '@/contexts/local-context';
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  efectivo: z.coerce.number().optional(),
-  deposito: z.coerce.number().optional(),
+  efectivo: z.coerce.number().optional().default(0),
+  deposito: z.coerce.number().optional().default(0),
   concepto: z.string().min(1, 'Debes seleccionar o ingresar un concepto.'),
   concepto_otro: z.string().optional(),
   local_id: z.string().min(1, 'Se requiere un local'),
@@ -130,12 +129,11 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Agregar Ingreso Manual</DialogTitle>
+        </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>Agregar Ingreso Manual</DialogTitle>
-            </DialogHeader>
-
+          <form id="add-ingreso-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-4 px-1 py-4 max-h-[70vh] overflow-y-auto">
               <Alert>
                 <Info className="h-4 w-4" />
@@ -235,7 +233,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-               <Button type="submit" disabled={isSubmitting}>
+               <Button type="submit" form="add-ingreso-form" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Guardar Ingreso
                 </Button>
@@ -246,3 +244,4 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     </Dialog>
   );
 }
+

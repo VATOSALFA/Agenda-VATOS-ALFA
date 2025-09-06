@@ -110,7 +110,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     resolver: zodResolver(egresoSchema),
     defaultValues: {
       fecha: new Date(),
-      monto: undefined,
+      monto: '' as any,
       concepto: '',
       aQuien: '',
       local_id: '',
@@ -145,7 +145,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
         } else {
             form.reset({
                 fecha: new Date(),
-                monto: undefined,
+                monto: '' as any,
                 concepto: !isAdmin ? 'Entrega de efectivo' : '',
                 aQuien: '',
                 comentarios: '',
@@ -206,8 +206,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <DialogHeader className="flex-row items-center justify-between">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <DialogHeader className="flex-row items-center justify-between space-y-0">
               <DialogTitle>{isEditMode ? "Editar Egreso" : "Agregar Egreso Manual"}</DialogTitle>
                 <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -218,14 +218,14 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 </div>
             </DialogHeader>
 
-            <div className="space-y-4 px-1 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-4 px-1 py-6 max-h-[70vh] overflow-y-auto">
                 <FormField
                     control={form.control}
                     name="monto"
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Monto</FormLabel>
-                        <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
+                        <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
                         <FormMessage />
                     </FormItem>
                     )}

@@ -71,7 +71,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
   
   const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
-    acc[d.value] = 0;
+    acc[d.value] = '' as any;
     return acc;
   }, {} as Record<string, number>), []);
 

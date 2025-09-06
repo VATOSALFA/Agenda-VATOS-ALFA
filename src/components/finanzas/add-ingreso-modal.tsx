@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -78,8 +77,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
       fecha: new Date(),
       concepto: '',
       concepto_otro: '',
-      efectivo: undefined,
-      deposito: undefined,
+      efectivo: '' as any,
+      deposito: '' as any,
     },
   });
 
@@ -89,8 +88,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     if(isOpen) {
         form.reset({
             fecha: new Date(),
-            efectivo: undefined,
-            deposito: undefined,
+            efectivo: '' as any,
+            deposito: '' as any,
             concepto: '',
             concepto_otro: '',
             local_id: selectedLocalId || ''
@@ -113,8 +112,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
         title: 'Ingreso guardado',
         description: 'El nuevo ingreso ha sido registrado con éxito.',
       });
-      form.reset();
       onFormSubmit();
+      onOpenChange(false);
     } catch (error) {
         console.error("Error guardando ingreso:", error);
       toast({

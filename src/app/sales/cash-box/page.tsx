@@ -342,28 +342,37 @@ export default function CashBoxPage() {
   }
 
   const handleOpenEditIngreso = (ingreso: IngresoManual) => {
-    setEditingIngreso(ingreso);
-    setIsIngresoModalOpen(true);
+    const action = () => {
+        setEditingIngreso(ingreso);
+        setIsIngresoModalOpen(true);
+    };
+    setAuthAction(() => action);
+    setIsAuthModalOpen(true);
   };
 
   const handleDeleteIngreso = async (ingresoId: string) => {
-    try {
-        await deleteDoc(doc(db, 'ingresos_manuales', ingresoId));
-        toast({
-            title: "Ingreso Eliminado",
-            description: "El ingreso ha sido eliminado permanentemente.",
-        });
-        setQueryKey(prevKey => prevKey + 1);
-    } catch (error) {
-        console.error("Error deleting ingreso: ", error);
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "No se pudo eliminar el ingreso.",
-        });
-    } finally {
-        setIngresoToDelete(null);
+    const action = async () => {
+        try {
+            await deleteDoc(doc(db, 'ingresos_manuales', ingresoId));
+            toast({
+                title: "Ingreso Eliminado",
+                description: "El ingreso ha sido eliminado permanentemente.",
+            });
+            setQueryKey(prevKey => prevKey + 1);
+        } catch (error) {
+            console.error("Error deleting ingreso: ", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo eliminar el ingreso.",
+            });
+        } finally {
+            setIngresoToDelete(null);
+        }
     }
+    setIngresoToDelete({ id: ingresoId } as IngresoManual); // just for the modal text
+    setAuthAction(() => action);
+    setIsAuthModalOpen(true);
   };
 
   const triggerDownload = () => {
@@ -716,15 +725,14 @@ export default function CashBoxPage() {
                                         <TableCell>{ingreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-CL')}</TableCell>
                                         <TableCell className="text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8"><ChevronDown className="h-4 w-4" /></Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onSelect={() => handleOpenEditIngreso(ingreso)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                                                    <DropdownMenuItem onSelect={() => setIngresoToDelete(ingreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" /> Eliminar</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenEditIngreso(ingreso)}>
+                                                    <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                </Button>
+                                                <Button variant="destructive" size="sm" onClick={() => handleDeleteIngreso(ingreso.id)}>
+                                                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -947,7 +955,28 @@ export default function CashBoxPage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleDeleteIngreso(ingresoToDelete.id)} className="bg-destructive hover:bg-destructive/90">
+                    <AlertDialogAction onClick={() => {
+                        const action = async () => {
+                            try {
+                                await deleteDoc(doc(db, 'ingresos_manuales', ingresoToDelete.id));
+                                toast({
+                                    title: "Ingreso Eliminado",
+                                    description: "El ingreso ha sido eliminado permanentemente.",
+                                });
+                                setQueryKey(prevKey => prevKey + 1);
+                            } catch (error) {
+                                console.error("Error deleting ingreso: ", error);
+                                toast({
+                                    variant: "destructive",
+                                    title: "Error",
+                                    description: "No se pudo eliminar el ingreso.",
+                                });
+                            } finally {
+                                setIngresoToDelete(null);
+                            }
+                        };
+                        action();
+                    }} className="bg-destructive hover:bg-destructive/90">
                         Sí, eliminar
                     </AlertDialogAction>
                 </AlertDialogFooter>
@@ -1001,4 +1030,5 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 

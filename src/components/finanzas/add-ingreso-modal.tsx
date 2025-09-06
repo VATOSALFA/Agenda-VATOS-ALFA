@@ -78,6 +78,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
       fecha: new Date(),
       concepto: '',
       concepto_otro: '',
+      efectivo: undefined,
+      deposito: undefined,
     },
   });
 
@@ -129,7 +131,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
               <DialogTitle>Agregar Ingreso Manual</DialogTitle>
             </DialogHeader>
@@ -214,7 +216,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Efectivo</FormLabel>
-                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                    <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -225,7 +227,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Depósito</FormLabel>
-                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                    <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''}/></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -73,11 +73,11 @@ interface AddEgresoModalProps {
 }
 
 const adminConcepts = [
-    { id: 'nomina', label: 'Nómina' },
     { id: 'pago_renta', label: 'Pago de renta' },
     { id: 'insumos', label: 'Insumos' },
     { id: 'publicidad', label: 'Publicidad' },
     { id: 'internet', label: 'Internet' },
+    { id: 'nomina', label: 'Nómina' },
     { id: 'otro', label: 'Otro' },
 ];
 
@@ -110,6 +110,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     resolver: zodResolver(egresoSchema),
     defaultValues: {
       fecha: new Date(),
+      monto: undefined,
       concepto: '',
       aQuien: '',
       local_id: '',
@@ -136,6 +137,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
 
             form.reset({
                 ...egreso,
+                monto: egreso.monto,
                 fecha: fechaEgreso,
                 concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
                 concepto_otro: isPredefinedConcept ? '' : egreso.concepto
@@ -223,18 +225,18 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Monto</FormLabel>
-                        <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                        <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
                         <FormMessage />
                     </FormItem>
                     )}
                 />
-                <FormField
+                 <FormField
                     control={form.control}
                     name="aQuien"
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo || usersLoading}>
                         <FormControl>
                             <SelectTrigger>
                             <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona...')} />
@@ -242,7 +244,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                         </FormControl>
                         <SelectContent>
                             {destinatariosDisponibles.map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
                             ))}
                         </SelectContent>
                         </Select>

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -216,7 +215,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Efectivo</FormLabel>
-                    <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
+                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -227,7 +226,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Depósito</FormLabel>
-                    <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''}/></FormControl>
+                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -130,12 +130,12 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
               <DialogTitle>Agregar Ingreso Manual</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 px-1 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-4 px-1 py-4 max-h-[70vh] overflow-y-auto">
                <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>

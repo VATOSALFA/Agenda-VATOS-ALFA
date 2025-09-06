@@ -1,4 +1,5 @@
 
+
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -228,10 +229,10 @@ export interface Egreso {
 
 export interface IngresoManual {
   id: string;
-  fecha: any; // Firestore Timestamp
-  efectivo: number;
-  deposito: number;
+  fecha: Timestamp; // Firestore Timestamp
+  monto: number;
   concepto: string;
+  comentarios?: string;
   local_id: string;
 }
 

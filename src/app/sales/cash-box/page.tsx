@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -70,9 +71,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual } from '@/lib/types';
+import type { Sale, Local, Client, Egreso, Profesional, User } from '@/lib/types';
 import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
-import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -132,7 +132,6 @@ export default function CashBoxPage() {
     localId: 'todos'
   });
   
-  const [isIngresoModalOpen, setIsIngresoModalOpen] = useState(false);
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
   const [isClientMounted, setIsClientMounted] = useState(false);
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
@@ -155,8 +154,7 @@ export default function CashBoxPage() {
   const [itemsPerPageSales, setItemsPerPageSales] = useState(10);
   const [currentPageEgresos, setCurrentPageEgresos] = useState(1);
   const [itemsPerPageEgresos, setItemsPerPageEgresos] = useState(10);
-  const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
-  const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
+  
 
 
    useEffect(() => {
@@ -197,16 +195,7 @@ export default function CashBoxPage() {
     return constraints;
   }, [activeFilters.dateRange]);
   
-  const ingresosQueryConstraints = useMemo(() => {
-    if (!activeFilters.dateRange?.from) return [];
-    const constraints: QueryConstraint[] = [];
-    constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-    if (activeFilters.dateRange.to) {
-        constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-    }
-    return constraints;
-  }, [activeFilters.dateRange]);
-
+  
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
     'ventas',
     `sales-${queryKey}`,
@@ -219,11 +208,6 @@ export default function CashBoxPage() {
     ...egresosQueryConstraints
   );
   
-  const { data: allIngresos, loading: ingresosLoading } = useFirestoreQuery<IngresoManual>(
-    'ingresos_manuales',
-    `ingresos-${queryKey}`,
-    ...ingresosQueryConstraints
-  );
   
   const egresos = useMemo(() => {
     if (activeFilters.localId === 'todos') {
@@ -232,13 +216,6 @@ export default function CashBoxPage() {
     return allEgresos.filter(e => e.local_id === activeFilters.localId);
   }, [allEgresos, activeFilters.localId]);
   
-  const ingresos = useMemo(() => {
-    if (activeFilters.localId === 'todos') {
-        return allIngresos;
-    }
-    return allIngresos.filter(i => i.local_id === activeFilters.localId);
-  }, [allIngresos, activeFilters.localId]);
-
   const clientMap = useMemo(() => {
       if (clientsLoading) return new Map();
       return new Map(clients.map(c => [c.id, c]));
@@ -269,7 +246,7 @@ export default function CashBoxPage() {
     setActiveFilters({ dateRange, localId: selectedLocalId });
     setCurrentPageSales(1);
     setCurrentPageEgresos(1);
-    setCurrentPageIngresos(1);
+    
     setQueryKey(prev => prev + 1);
   };
 
@@ -431,13 +408,12 @@ export default function CashBoxPage() {
   };
 
 
-  const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
+  const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading;
 
   const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0), [salesWithClientData]);
   const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-  const totalOtrosIngresos = useMemo(() => ingresos.reduce((sum, ingreso) => sum + (ingreso.efectivo || 0) + (ingreso.deposito || 0), 0), [ingresos]);
-  const efectivoEnCaja = ingresosEfectivo - totalEgresos + totalOtrosIngresos;
+  const efectivoEnCaja = ingresosEfectivo - totalEgresos;
   
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLocalAdmin = user?.role !== 'Administrador general';
@@ -454,12 +430,6 @@ export default function CashBoxPage() {
     currentPageEgresos * itemsPerPageEgresos
   );
   
-  const totalPagesIngresos = Math.ceil(ingresos.length / itemsPerPageIngresos);
-  const paginatedIngresos = ingresos.slice(
-    (currentPageIngresos - 1) * itemsPerPageIngresos,
-    currentPageIngresos * itemsPerPageIngresos
-  );
-
   return (
     <>
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -468,7 +438,6 @@ export default function CashBoxPage() {
            <div className="flex items-center space-x-2">
             <Button variant="outline" onClick={() => setIsCommissionModalOpen(true)}><Percent className="mr-2 h-4 w-4"/>Pago de Comisiones</Button>
             <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4"/>Realizar corte de caja</Button>
-            <Button variant="outline" onClick={() => setIsIngresoModalOpen(true)}>Otros Ingresos</Button>
             <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>Agregar Egreso</Button>
           </div>
       </div>
@@ -552,14 +521,12 @@ export default function CashBoxPage() {
       </div>
       
       {/* Detailed Summary */}
-       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-4 items-center">
+       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-center">
             <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
-            <IconSeparator icon={Plus} />
-            <SummaryCard title="Otros Ingresos" amount={totalOtrosIngresos} />
             <IconSeparator icon={Minus} />
             <SummaryCard title="Egresos" amount={totalEgresos} />
             <IconSeparator icon={Equal} />
-            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas + totalOtrosIngresos - totalEgresos} />
+            <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas - totalEgresos} />
         </div>
 
       {/* Main Table */}
@@ -568,7 +535,6 @@ export default function CashBoxPage() {
             <Tabs defaultValue="ventas-facturadas">
                 <TabsList>
                     <TabsTrigger value="ventas-facturadas">Flujo de Ventas Facturadas</TabsTrigger>
-                    <TabsTrigger value="otros-ingresos">Otros Ingresos</TabsTrigger>
                     <TabsTrigger value="egresos">Egresos</TabsTrigger>
                 </TabsList>
                 <TabsContent value="ventas-facturadas" className="mt-4">
@@ -665,68 +631,6 @@ export default function CashBoxPage() {
                         </div>
                     )}
                 </TabsContent>
-                <TabsContent value="otros-ingresos" className="mt-4">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Fecha</TableHead>
-                                <TableHead>Local</TableHead>
-                                <TableHead>Concepto</TableHead>
-                                <TableHead className="text-right">Efectivo</TableHead>
-                                <TableHead className="text-right">Depósito</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {isLoading ? (
-                                Array.from({length: 3}).map((_, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell colSpan={6}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
-                                    </TableRow>
-                                ))
-                        ) : paginatedIngresos.length === 0 ? (
-                            <TableRow><TableCell colSpan={6} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
-                        ) : (
-                            paginatedIngresos.map((ingreso) => (
-                                <TableRow key={ingreso.id}>
-                                    <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
-                                    <TableCell>{localMap.get(ingreso.local_id ?? '')}</TableCell>
-                                    <TableCell>{ingreso.concepto}</TableCell>
-                                    <TableCell className="text-right">${(ingreso.efectivo || 0).toLocaleString('es-CL')}</TableCell>
-                                    <TableCell className="text-right">${(ingreso.deposito || 0).toLocaleString('es-CL')}</TableCell>
-                                    <TableCell className="text-right font-medium">${((ingreso.efectivo || 0) + (ingreso.deposito || 0)).toLocaleString('es-CL')}</TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                        </TableBody>
-                    </Table>
-                    {paginatedIngresos.length > 0 && (
-                        <div className="flex items-center justify-end space-x-6 pt-4">
-                            <div className="flex items-center space-x-2">
-                                <p className="text-sm font-medium">Resultados por página</p>
-                                <Select
-                                    value={`${itemsPerPageIngresos}`}
-                                    onValueChange={(value) => {
-                                        setItemsPerPageIngresos(Number(value))
-                                        setCurrentPageIngresos(1)
-                                    }}
-                                >
-                                    <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={itemsPerPageIngresos} /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="20">20</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="text-sm font-medium">Página {currentPageIngresos} de {totalPagesIngresos}</div>
-                            <div className="flex items-center space-x-2">
-                                <Button variant="outline" size="sm" onClick={() => setCurrentPageIngresos(p => Math.max(p - 1, 1))} disabled={currentPageIngresos === 1}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
-                                <Button variant="outline" size="sm" onClick={() => setCurrentPageIngresos(p => Math.min(p + 1, totalPagesIngresos))} disabled={currentPageIngresos === totalPagesIngresos}>Siguiente <ChevronRight className="h-4 w-4 ml-1" /></Button>
-                            </div>
-                        </div>
-                    )}
-                </TabsContent>
                 <TabsContent value="egresos" className="mt-4">
                     {isLoading ? (
                          <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -813,14 +717,6 @@ export default function CashBoxPage() {
       </Card>
     </div>
     
-    <AddIngresoModal 
-        isOpen={isIngresoModalOpen}
-        onOpenChange={setIsIngresoModalOpen}
-        onFormSubmit={() => {
-            setIsIngresoModalOpen(false)
-            handleSearch()
-        }}
-    />
     <AddEgresoModal
         isOpen={isEgresoModalOpen}
         onOpenChange={setIsEgresoModalOpen}

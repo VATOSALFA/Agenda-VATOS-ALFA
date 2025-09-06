@@ -44,6 +44,7 @@ import { Checkbox } from '../ui/checkbox';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
+import { Combobox } from '../ui/combobox';
 
 
 const createReservationSchema = (isEditMode: boolean) => z.object({
@@ -445,6 +446,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
   const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
 
+  const clientOptions = useMemo(() => {
+    return clients.map(client => ({
+      value: client.id,
+      label: `${client.nombre} ${client.apellido}`,
+    }));
+  }, [clients]);
+
   const FormContent = () => (
     <>
     <div className="flex flex-col h-full">
@@ -571,15 +579,18 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 <FormField control={form.control} name="cliente_id" render={({ field }) => (
                     <FormItem>
                         <div className="flex justify-between items-center">
-                            <FormLabel>Cliente</FormLabel>
-                            <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                        <FormLabel>Cliente</FormLabel>
+                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
                                 <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                            </Button>
+                        </Button>
                         </div>
-                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                            <FormControl><SelectTrigger><SelectValue placeholder={clientsLoading ? 'Cargando...' : 'Busca o selecciona un cliente'} /></SelectTrigger></FormControl>
-                            <SelectContent>{clients?.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} {c.apellido}</SelectItem>)}</SelectContent>
-                        </Select>
+                        <Combobox
+                            options={clientOptions}
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Busca o selecciona un cliente..."
+                            loading={clientsLoading}
+                        />
                         <FormMessage />
                     </FormItem>
                 )}/>

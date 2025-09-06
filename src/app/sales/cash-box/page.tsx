@@ -435,11 +435,17 @@ export default function CashBoxPage() {
 
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
-  const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo').reduce((sum, sale) => sum + sale.total, 0), [salesWithClientData]);
+  const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado').reduce((sum, sale) => {
+    if (sale.metodo_pago === 'efectivo') {
+        return sum + sale.total;
+    }
+    return sum + (sale.detalle_pago_combinado?.efectivo || 0);
+  }, 0), [salesWithClientData]);
+  
   const ingresosManuales = useMemo(() => ingresos.reduce((sum, i) => sum + i.monto, 0), [ingresos]);
   const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0) + ingresosManuales, [salesWithClientData, ingresosManuales]);
   const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-  const efectivoEnCaja = ingresosEfectivo - totalEgresos;
+  const efectivoEnCaja = ingresosEfectivo + ingresosManuales - totalEgresos;
   
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLocalAdmin = user?.role !== 'Administrador general';

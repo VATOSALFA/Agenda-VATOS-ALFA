@@ -225,7 +225,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Monto</FormLabel>
-                        <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                        <FormControl><Input type="number" placeholder="0" {...field} value={field.value || ''} /></FormControl>
                         <FormMessage />
                     </FormItem>
                     )}

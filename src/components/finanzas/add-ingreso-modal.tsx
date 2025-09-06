@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -129,12 +130,13 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Agregar Ingreso Manual</DialogTitle>
-        </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="space-y-4 px-1 py-4 max-h-[70vh] overflow-y-auto">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <DialogHeader>
+              <DialogTitle>Agregar Ingreso Manual</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 px-1 py-6 max-h-[70vh] overflow-y-auto">
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>

@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -26,15 +26,26 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { IngresoManual } from '@/lib/types';
+import type { IngresoManual, User } from '@/lib/types';
 import { useLocal } from '@/contexts/local-context';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
   monto: z.coerce.number().min(1, 'El monto debe ser mayor a 0.'),
   concepto: z.string().min(1, 'El concepto es requerido'),
+  concepto_otro: z.string().optional(),
   comentarios: z.string().optional(),
   local_id: z.string().min(1, 'El local es requerido'),
+}).refine(data => {
+    if (data.concepto === 'Otro') {
+        return data.concepto_otro && data.concepto_otro.trim().length > 0;
+    }
+    return true;
+}, {
+    message: 'Por favor, especifica el concepto.',
+    path: ['concepto_otro'],
 });
 
 type IngresoFormData = z.infer<typeof ingresoSchema>;
@@ -51,6 +62,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { selectedLocalId } = useLocal();
   const isEditMode = !!ingreso;
+  
+  const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
 
   const form = useForm<IngresoFormData>({
     resolver: zodResolver(ingresoSchema),
@@ -62,33 +75,64 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
     },
   });
 
+  const localAdmin = useMemo(() => {
+      if (usersLoading || !selectedLocalId) return null;
+      return users.find(u => u.role === 'Administrador local' && u.local_id === selectedLocalId);
+  }, [users, selectedLocalId, usersLoading]);
+
+  const conceptos = useMemo(() => {
+      const baseConcepts = [{ id: 'alejandro', label: 'Lo ingresó Alejandro' }];
+      if (localAdmin) {
+          baseConcepts.push({ id: 'local_admin', label: `Lo ingresó ${localAdmin.name}`});
+      }
+      baseConcepts.push({ id: 'otro', label: 'Otro' });
+      return baseConcepts;
+  }, [localAdmin]);
+
+  const conceptoSeleccionado = form.watch('concepto');
+
   useEffect(() => {
     if (isOpen) {
         if(isEditMode && ingreso) {
+            const isPredefined = conceptos.some(c => c.label === ingreso.concepto);
             form.reset({
                 ...ingreso,
                 fecha: ingreso.fecha.toDate(),
+                concepto: isPredefined ? ingreso.concepto : 'Otro',
+                concepto_otro: isPredefined ? '' : ingreso.concepto,
             });
         } else {
             form.reset({
                 fecha: new Date(),
                 monto: '' as any,
                 concepto: '',
+                concepto_otro: '',
                 comentarios: '',
                 local_id: selectedLocalId || '',
             });
         }
     }
-  }, [isOpen, ingreso, isEditMode, form, selectedLocalId]);
+  }, [isOpen, ingreso, isEditMode, form, selectedLocalId, conceptos]);
 
 
   async function onSubmit(data: IngresoFormData) {
     setIsSubmitting(true);
     
+    let finalConcepto = data.concepto;
+    if (data.concepto === 'Lo ingresó Alejandro') {
+        finalConcepto = 'Lo ingresó Alejandro';
+    } else if (localAdmin && data.concepto === `Lo ingresó ${localAdmin.name}`) {
+        finalConcepto = `Lo ingresó ${localAdmin.name}`;
+    } else if (data.concepto === 'Otro') {
+        finalConcepto = data.concepto_otro || 'Otro';
+    }
+    
     const dataToSave = {
         ...data,
         fecha: Timestamp.fromDate(data.fecha),
+        concepto: finalConcepto,
     };
+    delete (dataToSave as any).concepto_otro;
 
     try {
       if(isEditMode && ingreso) {
@@ -123,7 +167,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
             <DialogHeader>
               <DialogTitle>{isEditMode ? 'Editar Ingreso Manual' : 'Agregar Ingreso Manual'}</DialogTitle>
               <DialogDescription>
-                {isEditMode ? 'Modifica los detalles del ingreso.' : 'Registra un ingreso de dinero a la caja que no provenga de una venta.'}
+                Registra un ingreso de dinero a la caja que no provenga de una venta.
               </DialogDescription>
             </DialogHeader>
 
@@ -143,13 +187,50 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
                 control={form.control}
                 name="concepto"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Edit className="mr-2 h-4 w-4" /> Concepto</FormLabel>
-                    <FormControl><Input placeholder="Ej: Inversión, fondo inicial, etc." {...field} /></FormControl>
+                  <FormItem className="space-y-3">
+                    <FormLabel className="flex items-center"><Edit className="mr-2 h-4 w-4" />Concepto</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="grid grid-cols-1 gap-2"
+                      >
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="Lo ingresó Alejandro" /></FormControl>
+                          <FormLabel className="font-normal">Lo ingresó Alejandro</FormLabel>
+                        </FormItem>
+                        {localAdmin && (
+                            <FormItem className="flex items-center space-x-3 space-y-0">
+                                <FormControl><RadioGroupItem value={`Lo ingresó ${localAdmin.name}`} /></FormControl>
+                                <FormLabel className="font-normal">Lo ingresó {localAdmin.name}</FormLabel>
+                            </FormItem>
+                        )}
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="Otro" /></FormControl>
+                          <FormLabel className="font-normal">Otro</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {conceptoSeleccionado === 'Otro' && (
+                  <FormField
+                    control={form.control}
+                    name="concepto_otro"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input placeholder="Escribe el concepto aquí..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+              )}
+
               <FormField
                 control={form.control}
                 name="fecha"

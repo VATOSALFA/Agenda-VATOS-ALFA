@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit, ChevronLeft, ChevronRight, Cake } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit, ChevronLeft, ChevronRight, Cake, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Profesional, Service, Reservation, Product, Sale } from "@/lib/types";
@@ -67,14 +67,19 @@ const FiltersSidebar = ({
                         <PopoverTrigger asChild>
                         <Button variant={"outline"} className="w-full justify-start text-left font-normal">
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dateRange?.from ? (
-                                dateRange.to ? (
-                                    <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
+                            <span className="flex-grow">
+                                {dateRange?.from ? (
+                                    dateRange.to ? (
+                                        <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
+                                    ) : (
+                                        format(dateRange.from, "LLL dd, y", {locale: es})
+                                    )
                                 ) : (
-                                    format(dateRange.from, "LLL dd, y", {locale: es})
-                                )
-                            ) : (
-                                <span>Desde / hasta</span>
+                                    <span>Desde / hasta</span>
+                                )}
+                            </span>
+                            {dateRange && (
+                                <X className="ml-2 h-4 w-4 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setDateRange(undefined); }} />
                             )}
                         </Button>
                         </PopoverTrigger>
@@ -671,4 +676,3 @@ export default function ClientsPage() {
     </>
   );
 }
-

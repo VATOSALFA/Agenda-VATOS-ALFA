@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -24,13 +23,15 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { where, Timestamp, writeBatch, collection, doc, query, getDocs } from 'firebase/firestore';
+import { where, Timestamp, writeBatch, collection, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Info, Loader2 } from 'lucide-react';
 import type { Sale, Profesional, Service, Product, Egreso } from '@/lib/types';
 import { Checkbox } from '../ui/checkbox';
+import { startOfDay, endOfDay, format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 
 interface CommissionPaymentModalProps {
@@ -46,7 +47,6 @@ interface CommissionRowData {
     professionalName: string;
     totalSales: number;
     totalCommission: number;
-    saleIds: string[];
 }
 
 export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dateRange, localId }: CommissionPaymentModalProps) {
@@ -54,52 +54,41 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
     const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
     const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([]);
-    const [paidSaleIds, setPaidSaleIds] = useState<Set<string>>(new Set());
+
+    const todayStart = startOfDay(new Date());
+    const todayEnd = endOfDay(new Date());
 
     const salesQueryConstraints = useMemo(() => {
-        if (!dateRange?.from) return undefined;
         const constraints = [];
-        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(dateRange.from)));
-        if (dateRange.to) {
-            constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(dateRange.to)));
-        }
+        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(todayStart)));
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(todayEnd)));
         if (localId && localId !== 'todos') {
             constraints.push(where('local_id', '==', localId));
         }
         return constraints;
-    }, [dateRange, localId]);
+    }, [todayStart, todayEnd, localId]);
 
     const egresosQueryConstraints = useMemo(() => {
-        if (!dateRange?.from) return undefined;
         const constraints = [];
-        constraints.push(where('fecha', '>=', Timestamp.fromDate(dateRange.from)));
-        if (dateRange.to) {
-             constraints.push(where('fecha', '<=', Timestamp.fromDate(dateRange.to)));
-        }
+        constraints.push(where('fecha', '>=', Timestamp.fromDate(todayStart)));
+        constraints.push(where('fecha', '<=', Timestamp.fromDate(todayEnd)));
         constraints.push(where('concepto', '==', 'Pago de Comisión'));
         return constraints;
-    }, [dateRange]);
+    }, [todayStart, todayEnd]);
 
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints ? `sales-${JSON.stringify(dateRange)}-${localId}` : undefined, ...(salesQueryConstraints || []));
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints ? `sales-commissions-${format(todayStart, 'yyyy-MM-dd')}-${localId}` : undefined, ...(salesQueryConstraints || []));
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
-    const { data: commissionEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', egresosQueryConstraints ? `egresos-${JSON.stringify(egresosQueryConstraints)}` : undefined, ...(egresosQueryConstraints || []));
+    const { data: commissionEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-commissions-${format(todayStart, 'yyyy-MM-dd')}`, ...(egresosQueryConstraints || []));
     
     const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading || egresosLoading;
     
     useEffect(() => {
-        if (isLoading) return;
+        if (isLoading || !isOpen) return;
 
-        const paidIds = new Set<string>();
-        commissionEgresos.forEach(egreso => {
-            if (egreso.comentarios?.startsWith('Pago de comisión por venta ID:')) {
-                const saleId = egreso.comentarios.split(': ')[1];
-                if(saleId) paidIds.add(saleId);
-            }
-        });
-        setPaidSaleIds(paidIds);
+        const paidProfessionalIds = new Set(commissionEgresos.map(e => e.aQuien));
 
         const professionalMap = new Map(professionals.map(p => [p.id, p]));
         const serviceMap = new Map(services.map(s => [s.id, s]));
@@ -108,9 +97,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
         sales.forEach(sale => {
-            if (paidIds.has(sale.id)) return; // Skip already paid sales
-
             sale.items?.forEach(item => {
+                if (!item.barbero_id || paidProfessionalIds.has(item.barbero_id)) return;
+
                 const professional = professionalMap.get(item.barbero_id);
                 if (!professional) return;
                 
@@ -120,7 +109,6 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         professionalName: professional.name,
                         totalSales: 0,
                         totalCommission: 0,
-                        saleIds: []
                     };
                 }
 
@@ -149,18 +137,15 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     
                     commissionsByProfessional[professional.id].totalSales += finalItemPrice;
                     commissionsByProfessional[professional.id].totalCommission += commissionAmount;
-                    if (!commissionsByProfessional[professional.id].saleIds.includes(sale.id)) {
-                      commissionsByProfessional[professional.id].saleIds.push(sale.id);
-                    }
                 }
             });
         });
         
         const commissionList = Object.values(commissionsByProfessional).filter(c => c.totalCommission > 0);
         setCommissionData(commissionList);
-        setSelectedProfessionals(commissionList.map(c => c.professionalId)); // Select all by default
+        setSelectedProfessionals(commissionList.map(c => c.professionalId));
 
-    }, [sales, professionals, services, products, commissionEgresos, isLoading]);
+    }, [isOpen, sales, professionals, services, products, commissionEgresos, isLoading]);
 
 
     const handlePayCommissions = async () => {
@@ -172,6 +157,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         try {
             const batch = writeBatch(db);
             const now = Timestamp.now();
+            const formattedDate = format(now.toDate(), "dd/MM/yyyy HH:mm", { locale: es });
             
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
 
@@ -184,7 +170,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         concepto: 'Pago de Comisión',
                         aQuien: comm.professionalId,
                         local_id: localId,
-                        comentarios: `Pago de comisión por ventas IDs: ${comm.saleIds.join(', ')}`,
+                        comentarios: `Pago de comisión a ${comm.professionalName} el ${formattedDate}`,
                     });
                 }
             });
@@ -222,9 +208,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>Pago de Comisiones</DialogTitle>
+                    <DialogTitle>Pago de Comisiones del Día</DialogTitle>
                     <DialogDescription>
-                        Calcula y registra el pago de comisiones para los profesionales en el período seleccionado.
+                        Calcula y registra el pago de comisiones para los profesionales para el día de hoy.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
@@ -232,7 +218,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         <Info className="h-4 w-4" />
                         <AlertTitle>Revisión de Comisiones</AlertTitle>
                         <AlertDescription>
-                            El sistema ha calculado las comisiones basadas en las ventas no pagadas. Al presionar "Pagar Comisiones", se generará un egreso por cada profesional seleccionado.
+                            El sistema ha calculado las comisiones pendientes de pago para hoy. Al presionar "Pagar Comisiones", se generará un egreso por cada profesional seleccionado.
                         </AlertDescription>
                     </Alert>
                     
@@ -256,7 +242,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                     {isLoading ? (
                                         <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                     ) : commissionData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={4} className="text-center h-24">No hay comisiones pendientes de pago.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={4} className="text-center h-24">No hay comisiones pendientes de pago para hoy.</TableCell></TableRow>
                                     ) : commissionData.map((row) => (
                                         <TableRow key={row.professionalId}>
                                             <TableCell>

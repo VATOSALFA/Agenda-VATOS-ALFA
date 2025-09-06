@@ -150,6 +150,7 @@ export default function CashBoxPage() {
   const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
   const [ingresoToDelete, setIngresoToDelete] = useState<IngresoManual | null>(null);
   const [egresoDeleteConfirmationText, setEgresoDeleteConfirmationText] = useState('');
+  const [ingresoDeleteConfirmationText, setIngresoDeleteConfirmationText] = useState('');
   const { toast } = useToast();
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
@@ -157,8 +158,10 @@ export default function CashBoxPage() {
   const [authAction, setAuthAction] = useState<(() => void) | null>(null);
   const [currentPageSales, setCurrentPageSales] = useState(1);
   const [itemsPerPageSales, setItemsPerPageSales] = useState(10);
-  const [currentPageEgresos, setCurrentPageEgresos] = useState(1);
+  const [currentPageEgresos, setCurrentPageEgresos] = useState(10);
   const [itemsPerPageEgresos, setItemsPerPageEgresos] = useState(10);
+  const [currentPageIngresos, setCurrentPageIngresos] = useState(10);
+  const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
   
 
 
@@ -273,6 +276,7 @@ export default function CashBoxPage() {
     setActiveFilters({ dateRange, localId: selectedLocalId });
     setCurrentPageSales(1);
     setCurrentPageEgresos(1);
+    setCurrentPageIngresos(1);
     
     setQueryKey(prev => prev + 1);
   };
@@ -350,29 +354,32 @@ export default function CashBoxPage() {
     setIsAuthModalOpen(true);
   };
 
-  const handleDeleteIngreso = async (ingresoId: string) => {
-    const action = async () => {
-        try {
-            await deleteDoc(doc(db, 'ingresos_manuales', ingresoId));
-            toast({
-                title: "Ingreso Eliminado",
-                description: "El ingreso ha sido eliminado permanentemente.",
-            });
-            setQueryKey(prevKey => prevKey + 1);
-        } catch (error) {
-            console.error("Error deleting ingreso: ", error);
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "No se pudo eliminar el ingreso.",
-            });
-        } finally {
-            setIngresoToDelete(null);
-        }
-    }
-    setIngresoToDelete({ id: ingresoId } as IngresoManual); // just for the modal text
+  const handleOpenDeleteIngresoModal = (ingreso: IngresoManual) => {
+    const action = () => setIngresoToDelete(ingreso);
     setAuthAction(() => action);
     setIsAuthModalOpen(true);
+  };
+
+  const handleDeleteIngreso = async () => {
+    if (!ingresoToDelete || ingresoDeleteConfirmationText !== 'ELIMINAR') return;
+     try {
+        await deleteDoc(doc(db, 'ingresos_manuales', ingresoToDelete.id));
+        toast({
+            title: "Ingreso Eliminado",
+            description: "El ingreso ha sido eliminado permanentemente.",
+        });
+        setQueryKey(prevKey => prevKey + 1);
+    } catch (error) {
+        console.error("Error deleting ingreso: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo eliminar el ingreso.",
+        });
+    } finally {
+        setIngresoToDelete(null);
+        setIngresoDeleteConfirmationText('');
+    }
   };
 
   const triggerDownload = () => {
@@ -496,6 +503,12 @@ export default function CashBoxPage() {
   const paginatedEgresos = egresosWithData.slice(
     (currentPageEgresos - 1) * itemsPerPageEgresos,
     currentPageEgresos * itemsPerPageEgresos
+  );
+  
+  const totalPagesIngresos = Math.ceil(ingresos.length / itemsPerPageIngresos);
+  const paginatedIngresos = ingresos.slice(
+    (currentPageIngresos - 1) * itemsPerPageIngresos,
+    currentPageIngresos * itemsPerPageIngresos
   );
   
   return (
@@ -705,6 +718,7 @@ export default function CashBoxPage() {
                     {isLoading ? (
                          <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
                     ) : (
+                        <>
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -716,28 +730,62 @@ export default function CashBoxPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {ingresos.length === 0 ? (
+                                {paginatedIngresos.length === 0 ? (
                                     <TableRow><TableCell colSpan={5} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
-                                ) : ingresos.map((ingreso) => (
+                                ) : paginatedIngresos.map((ingreso) => (
                                     <TableRow key={ingreso.id}>
                                         <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
                                         <TableCell>{ingreso.concepto}</TableCell>
                                         <TableCell>{ingreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-CL')}</TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleOpenEditIngreso(ingreso)}>
-                                                    <Pencil className="mr-2 h-4 w-4" /> Editar
-                                                </Button>
-                                                <Button variant="destructive" size="sm" onClick={() => handleDeleteIngreso(ingreso.id)}>
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                </Button>
-                                            </div>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="sm">
+                                                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem onSelect={() => handleOpenEditIngreso(ingreso)}>
+                                                        <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => handleOpenDeleteIngresoModal(ingreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
+                         {paginatedIngresos.length > 0 && (
+                            <div className="flex items-center justify-end space-x-6 pt-4">
+                                <div className="flex items-center space-x-2">
+                                    <p className="text-sm font-medium">Resultados por página</p>
+                                    <Select
+                                        value={`${itemsPerPageIngresos}`}
+                                        onValueChange={(value) => {
+                                            setItemsPerPageIngresos(Number(value))
+                                            setCurrentPageIngresos(1)
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={itemsPerPageIngresos} /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="text-sm font-medium">Página {currentPageIngresos} de {totalPagesIngresos}</div>
+                                <div className="flex items-center space-x-2">
+                                    <Button variant="outline" size="sm" onClick={() => setCurrentPageIngresos(p => Math.max(p - 1, 1))} disabled={currentPageIngresos === 1}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setCurrentPageIngresos(p => Math.min(p + 1, totalPagesIngresos))} disabled={currentPageIngresos === totalPagesIngresos}>Siguiente <ChevronRight className="h-4 w-4 ml-1" /></Button>
+                                </div>
+                            </div>
+                        )}
+                        </>
                     )}
                 </TabsContent>
                 <TabsContent value="egresos" className="mt-4">
@@ -945,7 +993,12 @@ export default function CashBoxPage() {
       )}
       
        {ingresoToDelete && (
-        <AlertDialog open={!!ingresoToDelete} onOpenChange={() => setIngresoToDelete(null)}>
+        <AlertDialog open={!!ingresoToDelete} onOpenChange={(open) => {
+             if(!open) {
+                setIngresoToDelete(null);
+                setIngresoDeleteConfirmationText('');
+            }
+        }}>
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive"/>¿Estás seguro?</AlertDialogTitle>
@@ -953,30 +1006,22 @@ export default function CashBoxPage() {
                        Se eliminará permanentemente el ingreso por "<strong>{ingresoToDelete.concepto}</strong>".
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                 <div className="space-y-2 py-2">
+                    <Label htmlFor="ingreso-delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                    <Input 
+                        id="ingreso-delete-confirm"
+                        value={ingresoDeleteConfirmationText}
+                        onChange={(e) => setIngresoDeleteConfirmationText(e.target.value)}
+                        placeholder="ELIMINAR"
+                    />
+                </div>
                 <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => {
-                        const action = async () => {
-                            try {
-                                await deleteDoc(doc(db, 'ingresos_manuales', ingresoToDelete.id));
-                                toast({
-                                    title: "Ingreso Eliminado",
-                                    description: "El ingreso ha sido eliminado permanentemente.",
-                                });
-                                setQueryKey(prevKey => prevKey + 1);
-                            } catch (error) {
-                                console.error("Error deleting ingreso: ", error);
-                                toast({
-                                    variant: "destructive",
-                                    title: "Error",
-                                    description: "No se pudo eliminar el ingreso.",
-                                });
-                            } finally {
-                                setIngresoToDelete(null);
-                            }
-                        };
-                        action();
-                    }} className="bg-destructive hover:bg-destructive/90">
+                    <AlertDialogCancel onClick={() => { setIngresoToDelete(null); setIngresoDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={handleDeleteIngreso}
+                        disabled={ingresoDeleteConfirmationText !== 'ELIMINAR'}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
                         Sí, eliminar
                     </AlertDialogAction>
                 </AlertDialogFooter>
@@ -1030,5 +1075,6 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 
 

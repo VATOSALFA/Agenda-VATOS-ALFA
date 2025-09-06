@@ -129,17 +129,16 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Agregar Ingreso Manual</DialogTitle>
+        </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>Agregar Ingreso Manual</DialogTitle>
-            </DialogHeader>
-
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-4 px-1 py-4 max-h-[70vh] overflow-y-auto">
-               <Alert>
+              <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                    Este ingreso se sumará a los ingresos automáticos de la caja de ventas.
+                  Este ingreso se sumará a los ingresos automáticos de la caja de ventas.
                 </AlertDescription>
               </Alert>
               <FormField
@@ -165,7 +164,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                   </FormItem>
                 )}
               />
-               <FormField
+              <FormField
                 control={form.control}
                 name="concepto"
                 render={({ field }) => (
@@ -178,14 +177,14 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                         className="flex flex-col space-y-1"
                       >
                         {conceptosPredefinidos.map(c => (
-                            <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">
-                                <FormControl>
-                                    <RadioGroupItem value={c.label} />
-                                </FormControl>
-                                <FormLabel className="font-normal">
-                                    {c.label}
-                                </FormLabel>
-                            </FormItem>
+                          <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value={c.label} />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {c.label}
+                            </FormLabel>
+                          </FormItem>
                         ))}
                       </RadioGroup>
                     </FormControl>
@@ -194,21 +193,20 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                 )}
               />
 
-             {conceptoSeleccionado === 'Otro (especificar)' && (
-                 <FormField
-                    control={form.control}
-                    name="concepto_otro"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input placeholder="Escribe el concepto aquí..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-             )}
-
+              {conceptoSeleccionado === 'Otro (especificar)' && (
+                <FormField
+                  control={form.control}
+                  name="concepto_otro"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input placeholder="Escribe el concepto aquí..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -233,13 +231,12 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
                 )}
               />
             </div>
-
             <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Ingreso
-                </Button>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar Ingreso
+              </Button>
             </DialogFooter>
           </form>
         </Form>

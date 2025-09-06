@@ -46,7 +46,7 @@ const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'
 
 const egresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  monto: z.number({ coerce: true }).min(1, 'El monto debe ser mayor a 0.'),
+  monto: z.coerce.number().min(1, 'El monto debe ser mayor a 0.'),
   concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
   concepto_otro: z.string().optional(),
   aQuien: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
@@ -143,7 +143,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
         } else {
             form.reset({
                 fecha: new Date(),
-                monto: 0,
+                monto: undefined,
                 concepto: !isAdmin ? 'Entrega de efectivo' : '',
                 aQuien: '',
                 comentarios: '',
@@ -347,4 +347,3 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     </Dialog>
   );
 }
-

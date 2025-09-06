@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -163,8 +164,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   };
 
   const handleDenominationChange = (value: number, count: string) => {
-    const newCount = parseInt(count, 10) || 0;
-    setDenominationCounts(prev => ({...prev, [value]: newCount}));
+    const newCount = parseInt(count, 10);
+    setDenominationCounts(prev => ({...prev, [value]: isNaN(newCount) ? 0 : newCount }));
   }
   
   const filteredUsers = useMemo(() => {

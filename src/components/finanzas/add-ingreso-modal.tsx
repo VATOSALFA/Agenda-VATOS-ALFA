@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -34,12 +35,12 @@ import { useLocal } from '@/contexts/local-context';
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  efectivo: z.coerce.number().optional().default(0),
-  deposito: z.coerce.number().optional().default(0),
+  efectivo: z.coerce.number().optional(),
+  deposito: z.coerce.number().optional(),
   concepto: z.string().min(1, 'Debes seleccionar o ingresar un concepto.'),
   concepto_otro: z.string().optional(),
   local_id: z.string().min(1, 'Se requiere un local'),
-}).refine(data => data.efectivo > 0 || data.deposito > 0, {
+}).refine(data => (data.efectivo || 0) > 0 || (data.deposito || 0) > 0, {
     message: 'Debes ingresar un monto en efectivo o depósito.',
     path: ['efectivo'],
 }).refine(data => {
@@ -75,8 +76,6 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     resolver: zodResolver(ingresoSchema),
     defaultValues: {
       fecha: new Date(),
-      efectivo: 0,
-      deposito: 0,
       concepto: '',
       concepto_otro: '',
     },
@@ -88,8 +87,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     if(isOpen) {
         form.reset({
             fecha: new Date(),
-            efectivo: 0,
-            deposito: 0,
+            efectivo: undefined,
+            deposito: undefined,
             concepto: '',
             concepto_otro: '',
             local_id: selectedLocalId || ''
@@ -103,8 +102,8 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     try {
       await addDoc(collection(db, 'ingresos_manuales'), {
         fecha: Timestamp.fromDate(data.fecha),
-        efectivo: data.efectivo,
-        deposito: data.deposito,
+        efectivo: data.efectivo || 0,
+        deposito: data.deposito || 0,
         concepto: finalConcepto,
         local_id: data.local_id
       });
@@ -129,11 +128,12 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Agregar Ingreso Manual</DialogTitle>
-        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <DialogHeader>
+              <DialogTitle>Agregar Ingreso Manual</DialogTitle>
+            </DialogHeader>
+
             <div className="space-y-4 px-1 py-4 max-h-[70vh] overflow-y-auto">
               <Alert>
                 <Info className="h-4 w-4" />

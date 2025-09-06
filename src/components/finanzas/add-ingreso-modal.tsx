@@ -133,7 +133,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
           <DialogTitle>Agregar Ingreso Manual</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form id="add-ingreso-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-4 px-1 py-4 max-h-[70vh] overflow-y-auto">
               <Alert>
                 <Info className="h-4 w-4" />
@@ -233,7 +233,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-               <Button type="submit" form="add-ingreso-form" disabled={isSubmitting}>
+               <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Guardar Ingreso
                 </Button>
@@ -244,4 +244,3 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit }: AddIngre
     </Dialog>
   );
 }
-

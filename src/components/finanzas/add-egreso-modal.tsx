@@ -118,14 +118,22 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
   const destinatariosDisponibles = useMemo(() => {
     if (usersLoading || professionalsLoading) return [];
     
-    let personal = [...professionals, ...users]
-      .filter(p => p.local_id === localSeleccionadoId)
-      .filter((value, index, self) => index === self.findIndex((t) => (t.id === value.id))); // Remove duplicates
+    const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
+    
+    professionals.forEach(p => staffMap.set(p.userId || p.id, { ...p, role: p.role || 'Staff (Sin edición)' }));
+    users.forEach(u => {
+        if (!staffMap.has(u.id)) {
+            staffMap.set(u.id, u);
+        }
+    });
+
+    let personal = Array.from(staffMap.values())
+        .filter(p => p.local_id === localSeleccionadoId);
 
     if (isAdmin) return personal;
     
-    // For non-admins, filter to only show admins
     return personal.filter(u => u.role === 'Administrador general' || u.role === 'Administrador local');
+
   }, [isAdmin, professionals, users, localSeleccionadoId, usersLoading, professionalsLoading]);
 
   useEffect(() => {

@@ -161,7 +161,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
     if (users) {
       users.forEach(u => {
-        // Avoid duplicating if a professional is also a user
         if (!allSellers.has(u.id)) {
           allSellers.set(u.id, { id: u.id, name: u.name });
         }
@@ -490,11 +489,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
   }
 
-  const ResumenCarrito = () => (
-    <div className="bg-card/50 rounded-lg flex flex-col shadow-lg h-full">
+  const ResumenCarrito = ({ isDialogTrigger }: { isDialogTrigger?: boolean }) => (
+    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg h-full">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
-            {step === 2 && (
+            {isDialogTrigger && (
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
             </DialogTrigger>
@@ -649,7 +648,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </Tabs>
                     </div>
                     {/* Cart */}
-                    <ResumenCarrito />
+                    <ResumenCarrito isDialogTrigger={false} />
                 </div>
             )}
 
@@ -830,7 +829,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </div>
                         {/* Order Summary */}
                         <Dialog>
-                            <ResumenCarrito />
+                            <ResumenCarrito isDialogTrigger={true}/>
                              <DialogContent className="sm:max-w-2xl">
                                 <DialogHeader>
                                 <DialogTitle>Agregar Ítem a la Venta</DialogTitle>

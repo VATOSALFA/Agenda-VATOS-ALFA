@@ -284,6 +284,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const cardAmount = Number(form.watch('pago_tarjeta'));
   const combinedTotal = cashAmount + cardAmount;
   const remainingAmount = total - combinedTotal;
+  const isCombinedPaymentInvalid = paymentMethod === 'combinado' && combinedTotal !== total;
 
 
   useEffect(() => {

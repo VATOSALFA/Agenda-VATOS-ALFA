@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -49,7 +47,7 @@ const egresoSchema = z.object({
   monto: z.coerce.number().min(1, 'El monto debe ser mayor a 0.'),
   concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
   concepto_otro: z.string().optional(),
-  aQuien: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
+  aQuienId: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
   local_id: z.string().min(1, 'Debes seleccionar un local.'),
   comentarios: z.string().optional(),
 }).refine(data => {
@@ -106,7 +104,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
       fecha: new Date(),
       monto: '' as any,
       concepto: '',
-      aQuien: '',
+      aQuienId: '',
       local_id: '',
       comentarios: '',
     },
@@ -120,13 +118,12 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     
     const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
     
-    // Combine users and professionals, ensuring uniqueness based on ID
-    const allStaff = [...users, ...professionals];
+    const allStaff = [...(users || []), ...(professionals || [])];
     
     allStaff.forEach(p => {
-        const userId = (p as Profesional).userId || p.id;
-        if (!staffMap.has(userId)) {
-             staffMap.set(userId, { ...p, id: userId, name: p.name, role: (p as User).role || 'Staff (Sin edición)' });
+        const userId = (p as AppUser).id || (p as Profesional).id;
+        if (!staffMap.has(userId) && p.name) {
+             staffMap.set(userId, { ...p, id: userId, name: p.name, role: (p as AppUser).role || 'Staff (Sin edición)' });
         }
     });
 
@@ -139,11 +136,22 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
 
   }, [isAdmin, professionals, users, localSeleccionadoId, usersLoading, professionalsLoading]);
 
-  useEffect(() => {
-    if (conceptosCostoFijo.includes(conceptoSeleccionado)) {
-        form.setValue('aQuien', 'Costos fijos');
-    }
-  }, [conceptoSeleccionado, form]);
+ useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'concepto') {
+        const esCostoFijo = conceptosCostoFijo.includes(value.concepto!);
+        if (esCostoFijo) {
+            form.setValue('aQuienId', 'costos_fijos');
+        } else {
+            // Reset if it was previously set to costos_fijos or on any other change
+            if (form.getValues('aQuienId') === 'costos_fijos') {
+                form.setValue('aQuienId', '');
+            }
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   useEffect(() => {
     if (isOpen) {
@@ -154,47 +162,45 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
 
             const isPredefinedConcept = conceptosDisponibles.some(c => c.label === egreso.concepto);
             
-            const aQuienId = destinatariosDisponibles.find(d => d.name === egreso.aQuien)?.id || egreso.aQuien;
-
             form.reset({
                 ...egreso,
                 monto: egreso.monto,
                 fecha: fechaEgreso,
                 concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
                 concepto_otro: isPredefinedConcept ? '' : egreso.concepto,
-                aQuien: aQuienId,
+                aQuienId: egreso.aQuienId || '',
             });
         } else {
             form.reset({
                 fecha: new Date(),
                 monto: '' as any,
                 concepto: !isAdmin ? 'Entrega de efectivo' : '',
-                aQuien: '',
+                aQuienId: '',
                 comentarios: '',
                 concepto_otro: '',
                 local_id: selectedLocalId || (locales.length > 0 ? locales[0].id : ''),
             });
         }
     }
-  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles, destinatariosDisponibles]);
+  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
 
 
   async function onSubmit(data: EgresoFormData) {
     setIsSubmitting(true);
     const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
     
-    const destinatarioSeleccionado = destinatariosDisponibles.find(d => d.id === data.aQuien);
+    const destinatarioSeleccionado = destinatariosDisponibles.find(d => d.id === data.aQuienId);
     
-    const aQuienValue = isAdmin && conceptosCostoFijo.includes(finalConcepto as string) 
+    const aQuienValue = data.aQuienId === 'costos_fijos'
         ? 'Costos fijos' 
-        : (destinatarioSeleccionado ? destinatarioSeleccionado.name : data.aQuien);
+        : (destinatarioSeleccionado ? destinatarioSeleccionado.name : 'Desconocido');
 
     const dataToSave = {
         fecha: Timestamp.fromDate(data.fecha),
         monto: data.monto,
         concepto: finalConcepto,
         aQuien: aQuienValue, // Guardamos el nombre
-        aQuienId: data.aQuien, // Guardamos el ID por referencia
+        aQuienId: data.aQuienId, // Guardamos el ID por referencia
         local_id: data.local_id,
         comentarios: data.comentarios,
         persona_entrega_id: user?.uid,
@@ -256,7 +262,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 />
                  <FormField
                     control={form.control}
-                    name="aQuien"
+                    name="aQuienId"
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>

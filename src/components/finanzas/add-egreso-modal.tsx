@@ -120,10 +120,15 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     
     const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
     
-    professionals.forEach(p => staffMap.set(p.userId || p.id, { ...p, role: p.role || 'Staff (Sin edición)' }));
+    // Use user.id as the primary key since it's unique across the system
     users.forEach(u => {
-        if (!staffMap.has(u.id)) {
-            staffMap.set(u.id, u);
+        staffMap.set(u.id, u);
+    });
+
+    professionals.forEach(p => {
+        const userId = p.userId || p.id; // Use userId if available, otherwise fall back to professional id
+        if (!staffMap.has(userId)) {
+             staffMap.set(userId, { ...p, id: userId, role: p.role || 'Staff (Sin edición)' });
         }
     });
 
@@ -216,7 +221,6 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
   }
   
   const esCostoFijo = conceptosCostoFijo.includes(conceptoSeleccionado);
-  const selectedLocalName = locales.find(l => l.id === selectedLocalId)?.name || 'Cargando...';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -260,7 +264,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                         </FormControl>
                         <SelectContent>
                             {destinatariosDisponibles.map(p => (
-                                <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                             ))}
                         </SelectContent>
                         </Select>

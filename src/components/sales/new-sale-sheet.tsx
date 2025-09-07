@@ -652,7 +652,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                         <div className="relative mt-4 mb-4">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Buscar por nombre..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                            <Input placeholder="Buscar servicio o producto..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
                         <Tabs defaultValue="servicios" className="flex-grow flex flex-col">
                             <TabsList>
@@ -1020,4 +1020,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </>
   );
 }
-

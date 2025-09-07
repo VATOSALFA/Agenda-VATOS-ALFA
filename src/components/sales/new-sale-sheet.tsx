@@ -133,7 +133,7 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
 }
 
 const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }) => (
-  <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
+  <div className="bg-card/50 rounded-lg flex flex-col shadow-lg h-full">
     <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
       <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
       {step === 2 && (
@@ -759,7 +759,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Local</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={user?.role !== 'Administrador general'}>
                                         <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Selecciona un local" />

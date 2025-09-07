@@ -109,7 +109,7 @@ const SummaryCard = ({
     <CardContent className="p-4 text-center">
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="text-2xl font-bold text-primary">
-        ${amount.toLocaleString('es-CL')}
+        ${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </p>
     </CardContent>
   </Card>
@@ -590,7 +590,7 @@ export default function CashBoxPage() {
         <Card className="flex-shrink-0 w-full md:w-auto h-full">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
-                <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-CL')}</p>
+                <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </CardContent>
         </Card>
       </div>
@@ -653,8 +653,8 @@ export default function CashBoxPage() {
                             <TableCell>{localMap.get(sale.local_id ?? '') || sale.local_id}</TableCell>
                             <TableCell>{sale.client?.nombre} {sale.client?.apellido}</TableCell>
                             <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
-                            <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-CL')}</TableCell>
-                            <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-CL')}</TableCell>
+                            <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                            <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                             <TableCell className="text-right">
                                <div className="flex items-center justify-end gap-2">
                                 <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
@@ -737,7 +737,7 @@ export default function CashBoxPage() {
                                         <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
                                         <TableCell>{ingreso.concepto}</TableCell>
                                         <TableCell>{ingreso.comentarios}</TableCell>
-                                        <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-CL')}</TableCell>
+                                        <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -815,7 +815,7 @@ export default function CashBoxPage() {
                                         <TableCell>{egreso.concepto}</TableCell>
                                         <TableCell>{egreso.aQuien}</TableCell>
                                         <TableCell>{egreso.comentarios}</TableCell>
-                                        <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
+                                        <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">
                                           <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -1075,6 +1075,7 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 
 
 

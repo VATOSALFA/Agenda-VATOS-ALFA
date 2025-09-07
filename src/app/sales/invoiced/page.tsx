@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -136,6 +137,8 @@ export default function InvoicedSalesPage() {
     const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [authAction, setAuthAction] = useState<(() => void) | null>(null);
     const [authCode, setAuthCode] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -380,6 +383,39 @@ export default function InvoicedSalesPage() {
         }
     };
 
+    const handleOpenDeleteModal = (sale: Sale) => {
+        const action = () => setSaleToDelete(sale);
+        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
+            action();
+        } else {
+            setAuthAction(() => action);
+            setIsAuthModalOpen(true);
+        }
+    }
+
+    const handleAuthCodeSubmit = async () => {
+        if (!authCode) {
+            toast({ variant: 'destructive', title: 'Código requerido' });
+            return;
+        }
+        const authCodeQuery = firestoreQuery(
+            collection(db, 'codigos_autorizacion'),
+            where('code', '==', authCode),
+            where('active', '==', true),
+            where('cashbox', '==', true)
+        );
+        const querySnapshot = await getDocs(authCodeQuery);
+        if (querySnapshot.empty) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        } else {
+            toast({ title: 'Código correcto' });
+            authAction?.();
+            setIsAuthModalOpen(false);
+        }
+        setAuthCode('');
+        setAuthAction(null);
+    };
+
     const getSaleConcept = (sale: Sale) => {
         if (!sale.items || sale.items.length === 0) return 'N/A';
         const hasService = sale.items.some(item => item.tipo === 'servicio');
@@ -539,7 +575,7 @@ export default function InvoicedSalesPage() {
                                                         <Printer className="mr-2 h-4 w-4 text-yellow-500" />
                                                         <span className="text-yellow-500">Imprimir</span>
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onSelect={() => setSaleToDelete(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                    <DropdownMenuItem onSelect={() => handleOpenDeleteModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                         <Trash2 className="mr-2 h-4 w-4" />
                                                         Eliminar
                                                     </DropdownMenuItem>
@@ -684,7 +720,28 @@ export default function InvoicedSalesPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
-
-        </>
-    );
+    
+    <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    Requiere Autorización
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para realizar esta acción, es necesario un código con permisos de caja.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+                <Label htmlFor="auth-code-action">Código de Autorización</Label>
+                <Input id="auth-code-action" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); }}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
+  );
 }

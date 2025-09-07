@@ -100,12 +100,6 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
 
   const conceptosDisponibles = isAdmin ? adminConcepts : cashierConcepts;
 
-  const destinatariosDisponibles = useMemo(() => {
-    if (isAdmin) return professionals;
-    return users.filter(u => u.role === 'Administrador general' || u.role === 'Administrador local');
-  }, [isAdmin, professionals, users]);
-  
-
   const form = useForm<EgresoFormData>({
     resolver: zodResolver(egresoSchema),
     defaultValues: {
@@ -119,6 +113,20 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
   });
 
   const conceptoSeleccionado = form.watch('concepto');
+  const localSeleccionadoId = form.watch('local_id');
+
+  const destinatariosDisponibles = useMemo(() => {
+    if (usersLoading || professionalsLoading) return [];
+    
+    let personal = [...professionals, ...users]
+      .filter(p => p.local_id === localSeleccionadoId)
+      .filter((value, index, self) => index === self.findIndex((t) => (t.id === value.id))); // Remove duplicates
+
+    if (isAdmin) return personal;
+    
+    // For non-admins, filter to only show admins
+    return personal.filter(u => u.role === 'Administrador general' || u.role === 'Administrador local');
+  }, [isAdmin, professionals, users, localSeleccionadoId, usersLoading, professionalsLoading]);
 
   useEffect(() => {
     if (conceptosCostoFijo.includes(conceptoSeleccionado)) {
@@ -325,12 +333,26 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     )}
                   />
              )}
-               <FormItem>
-                  <FormLabel>Local</FormLabel>
-                  <FormControl>
-                    <Input readOnly value={selectedLocalName} disabled className="bg-muted"/>
-                  </FormControl>
-              </FormItem>
+               <FormField
+                  control={form.control}
+                  name="local_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Local</FormLabel>
+                       <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading || !isAdmin}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar local..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {locales.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                <FormField
                 control={form.control}
                 name="comentarios"

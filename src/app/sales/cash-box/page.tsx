@@ -396,7 +396,7 @@ export default function CashBoxPage() {
         Fecha: format(egreso.fecha.toDate(), 'dd-MM-yyyy'),
         Local: localMap.get(egreso.local_id ?? ''),
         Concepto: egreso.concepto,
-        'A quién se entrega': egreso.aQuienNombre,
+        'A quién se entrega': egreso.aQuien,
         Comentarios: egreso.comentarios,
         Monto: egreso.monto,
     }));
@@ -813,7 +813,7 @@ export default function CashBoxPage() {
                                         <TableCell>{format(egreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
                                         <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
                                         <TableCell>{egreso.concepto}</TableCell>
-                                        <TableCell>{egreso.aQuienNombre}</TableCell>
+                                        <TableCell>{egreso.aQuien}</TableCell>
                                         <TableCell>{egreso.comentarios}</TableCell>
                                         <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-CL')}</TableCell>
                                         <TableCell className="text-right">
@@ -1075,6 +1075,7 @@ export default function CashBoxPage() {
     </>
   );
 }
+
 
 
 

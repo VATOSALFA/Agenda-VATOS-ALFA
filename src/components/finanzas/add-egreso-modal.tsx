@@ -30,7 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
@@ -120,15 +120,13 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     
     const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
     
-    // Use user.id as the primary key since it's unique across the system
-    users.forEach(u => {
-        staffMap.set(u.id, u);
-    });
-
-    professionals.forEach(p => {
-        const userId = p.userId || p.id; // Use userId if available, otherwise fall back to professional id
+    // Combine users and professionals, ensuring uniqueness based on ID
+    const allStaff = [...users, ...professionals];
+    
+    allStaff.forEach(p => {
+        const userId = (p as Profesional).userId || p.id;
         if (!staffMap.has(userId)) {
-             staffMap.set(userId, { ...p, id: userId, role: p.role || 'Staff (Sin edición)' });
+             staffMap.set(userId, { ...p, id: userId, name: p.name, role: (p as User).role || 'Staff (Sin edición)' });
         }
     });
 
@@ -155,13 +153,16 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 : (egreso.fecha instanceof Date ? egreso.fecha : new Date());
 
             const isPredefinedConcept = conceptosDisponibles.some(c => c.label === egreso.concepto);
+            
+            const aQuienId = destinatariosDisponibles.find(d => d.name === egreso.aQuien)?.id || egreso.aQuien;
 
             form.reset({
                 ...egreso,
                 monto: egreso.monto,
                 fecha: fechaEgreso,
                 concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
-                concepto_otro: isPredefinedConcept ? '' : egreso.concepto
+                concepto_otro: isPredefinedConcept ? '' : egreso.concepto,
+                aQuien: aQuienId,
             });
         } else {
             form.reset({
@@ -175,22 +176,25 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             });
         }
     }
-  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
+  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles, destinatariosDisponibles]);
 
 
   async function onSubmit(data: EgresoFormData) {
     setIsSubmitting(true);
     const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
     
+    const destinatarioSeleccionado = destinatariosDisponibles.find(d => d.id === data.aQuien);
+    
     const aQuienValue = isAdmin && conceptosCostoFijo.includes(finalConcepto as string) 
         ? 'Costos fijos' 
-        : data.aQuien;
+        : (destinatarioSeleccionado ? destinatarioSeleccionado.name : data.aQuien);
 
     const dataToSave = {
         fecha: Timestamp.fromDate(data.fecha),
         monto: data.monto,
         concepto: finalConcepto,
-        aQuien: aQuienValue,
+        aQuien: aQuienValue, // Guardamos el nombre
+        aQuienId: data.aQuien, // Guardamos el ID por referencia
         local_id: data.local_id,
         comentarios: data.comentarios,
         persona_entrega_id: user?.uid,

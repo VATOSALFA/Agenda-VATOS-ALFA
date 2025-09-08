@@ -3,12 +3,13 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
-import { storage } from '@/lib/firebase'; // Import the initialized storage instance
+import { storage } from '@/lib/firebase';
+import { Progress } from '../ui/progress';
 
 interface ImageUploaderProps {
   folder: string;
@@ -19,6 +20,7 @@ interface ImageUploaderProps {
 
 export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -35,27 +37,49 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
     }
     
     setIsUploading(true);
+    setUploadProgress(0);
 
-    try {
-        const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(snapshot.ref);
-        onUploadEnd(downloadURL);
-        toast({
-          title: "¡Éxito!",
-          description: "La imagen se ha subido correctamente.",
-        });
-    } catch (error) {
-        console.error("Upload error:", error);
-        toast({
-            variant: "destructive",
-            title: "Error al subir",
-            description: "Hubo un problema al subir la imagen. Revisa la consola para más detalles.",
-        });
-        onUploadEnd(null);
-    } finally {
-        setIsUploading(false);
-    }
+    const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on('state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+        }, 
+        (error) => {
+            console.error("Upload error:", error);
+            let description = "Hubo un problema al subir la imagen.";
+            switch (error.code) {
+                case 'storage/unauthorized':
+                    description = "No tienes permiso para subir archivos.";
+                    break;
+                case 'storage/canceled':
+                    description = "La subida fue cancelada.";
+                    break;
+                case 'storage/unknown':
+                    description = "Ocurrió un error desconocido.";
+                    break;
+            }
+            toast({
+                variant: "destructive",
+                title: "Error al subir",
+                description: description,
+            });
+            setIsUploading(false);
+            onUploadEnd(null);
+        }, 
+        () => {
+            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                onUploadEnd(downloadURL);
+                toast({
+                    title: "¡Éxito!",
+                    description: "La imagen se ha subido correctamente.",
+                });
+                setIsUploading(false);
+            });
+        }
+    );
 
   }, [folder, onUploadEnd, toast]);
 
@@ -78,13 +102,15 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
             toast({
               title: "Imagen eliminada",
             });
-          } catch (error) {
+          } catch (error: any) {
             console.error("Error removing image from Firebase Storage: ", error);
-             toast({
-              variant: "destructive",
-              title: "Error al eliminar",
-              description: "No se pudo eliminar la imagen del almacenamiento.",
-            });
+             if (error.code !== 'storage/object-not-found') {
+                toast({
+                  variant: "destructive",
+                  title: "Error al eliminar",
+                  description: "No se pudo eliminar la imagen del almacenamiento.",
+                });
+             }
           }
       }
       
@@ -94,7 +120,8 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
   if (isUploading) {
     return (
       <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
-        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+        <p className="text-sm mb-2">{Math.round(uploadProgress)}%</p>
+        <Progress value={uploadProgress} className="w-full" />
       </div>
     );
   }

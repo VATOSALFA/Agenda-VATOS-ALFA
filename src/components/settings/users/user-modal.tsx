@@ -217,7 +217,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     <FormItem className="flex justify-center">
                       <FormControl>
                         <ImageUploader
-                          folder="user_avatars"
+                          folder="profesionales"
                           currentImageUrl={field.value}
                           onUpload={(url) => field.onChange(url)}
                           onRemove={() => field.onChange('')}

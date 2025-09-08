@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -20,31 +22,16 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { signIn } = useAuth();
-
+    
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
 
-        if (!signIn) {
-             toast({
-                variant: "destructive",
-                title: "Error de configuración",
-                description: "El servicio de autenticación no está disponible.",
-            });
-            setIsLoading(false);
-            return;
-        }
-
         try {
-            const user = await signIn(email, password);
-            if (user) {
-                toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
-                router.push('/');
-            } else {
-                 setError("Ocurrió un error inesperado durante el inicio de sesión.");
-            }
+            await signInWithEmailAndPassword(auth, email, password);
+            toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
+            router.push('/');
         } catch (err: any) {
             console.error("Error de inicio de sesión:", err);
             if (err instanceof FirebaseError) {

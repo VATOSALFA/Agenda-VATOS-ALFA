@@ -16,7 +16,6 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   authInstance: Auth;
-  signIn: (email: string, pass: string) => Promise<CustomUser | null>;
   signOut: () => Promise<void>;
 }
 
@@ -51,21 +50,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const signIn = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    if (userCredential.user) {
-        const userDocRef = doc(db, 'usuarios', userCredential.user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-            const customData = userDocSnap.data();
-            const loggedInUser: CustomUser = { ...userCredential.user, ...customData };
-            setUser(loggedInUser);
-            return loggedInUser;
-        }
-    }
-    return null;
-  }
-
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
@@ -75,7 +59,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     loading,
     authInstance: auth,
-    signIn,
     signOut,
   };
 

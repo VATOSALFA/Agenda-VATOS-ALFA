@@ -9,7 +9,7 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { storage } from '@/lib/firebase'; // Importar la instancia de storage
+import { storage } from '@/lib/firebase';
 
 interface ImageUploaderProps {
   folder: string;
@@ -71,7 +71,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
         });
       }
     );
-  }, [folder, onUpload, storage, toast]);
+  }, [folder, onUpload, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

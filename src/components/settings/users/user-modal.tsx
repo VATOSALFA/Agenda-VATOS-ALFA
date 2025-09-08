@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { ImageUploader } from '@/components/shared/image-uploader';
 
@@ -152,21 +152,31 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
-            // Password update logic should be handled with a call to a backend function for security
-            // For now, we'll just show a toast.
-            if (data.newPassword) {
-                toast({ title: "Contraseña actualizada (simulado)" });
+            
+            if (data.newPassword && data.currentPassword) {
+                const currentUser = auth.currentUser;
+                if(currentUser && currentUser.email) {
+                    const credential = EmailAuthProvider.credential(currentUser.email, data.currentPassword);
+                    await reauthenticateWithCredential(currentUser, credential);
+                    await updatePassword(currentUser, data.newPassword);
+                    toast({ title: "Contraseña actualizada" });
+                } else {
+                   throw new Error("No hay un usuario activo para reautenticar.");
+                }
+            } else if (data.newPassword && !data.currentPassword) {
+                 toast({ variant: 'destructive', title: "Error", description: "Debes ingresar tu contraseña actual para cambiarla." });
+                 setIsSubmitting(false);
+                 return;
             }
+
             toast({ title: "Usuario actualizado" });
         } else {
-            // Create user in Firebase Auth
             if (!data.password) {
                 throw new Error("La contraseña es requerida para nuevos usuarios.");
             }
             const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
             const newFirebaseUser = userCredential.user;
 
-            // Create user profile in Firestore with the same UID
             const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
             await setDoc(userRef, dataToSave);
             toast({ title: "Usuario creado con éxito" });
@@ -181,6 +191,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             description = "Este correo electrónico ya está registrado. Por favor, utiliza otro.";
         } else if (error.code === 'auth/weak-password') {
             description = "La contraseña es demasiado débil. Debe tener al menos 6 caracteres.";
+        } else if (error.code === 'auth/wrong-password') {
+            description = "La contraseña actual es incorrecta.";
         }
         toast({ variant: 'destructive', title: "Error", description });
     } finally {
@@ -188,8 +200,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     }
   };
   
-  const availableRoles = isEditMode ? roles : roles.filter(r => r.title !== 'Administrador general');
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-2xl">
@@ -261,7 +271,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           render={({ field }) => (
                               <FormItem>
                                   <FormLabel>Contraseña actual</FormLabel>
-                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormControl><Input type="password" {...field} autoComplete="current-password" /></FormControl>
                                   <FormMessage />
                               </FormItem>
                           )}
@@ -272,7 +282,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           render={({ field }) => (
                               <FormItem>
                                   <FormLabel>Nueva contraseña</FormLabel>
-                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormControl><Input type="password" {...field} autoComplete="new-password"/></FormControl>
                                   <FormMessage />
                               </FormItem>
                           )}
@@ -283,7 +293,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           render={({ field }) => (
                               <FormItem>
                                   <FormLabel>Confirmar nueva contraseña</FormLabel>
-                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormControl><Input type="password" {...field} autoComplete="new-password"/></FormControl>
                                   <FormMessage />
                               </FormItem>
                           )}
@@ -307,11 +317,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Rol</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode && user?.role === 'Administrador general'}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
                               {roles.map(role => (
-                                  <SelectItem key={role.title} value={role.title}>{role.title}</SelectItem>
+                                  <SelectItem key={role.title} value={role.title} disabled={!isEditMode && role.title === 'Administrador general'}>{role.title}</SelectItem>
                               ))}
                           </SelectContent>
                       </Select>

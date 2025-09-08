@@ -3,25 +3,21 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
-import { app } from '@/lib/firebase'; // Import the initialized app
-
-// Get a reference to the storage service, which is used to create references in your storage bucket
-const storage = getStorage(app);
+import { storage } from '@/lib/firebase'; // Import the initialized storage instance
 
 interface ImageUploaderProps {
   folder: string;
   imageUrl?: string | null;
-  onUploadStart?: () => void;
   onUploadEnd: (url: string | null) => void;
   className?: string;
 }
 
-export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, className }: ImageUploaderProps) {
+export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
@@ -39,7 +35,6 @@ export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, cl
     }
     
     setIsUploading(true);
-    if(onUploadStart) onUploadStart();
 
     try {
         const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
@@ -57,12 +52,12 @@ export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, cl
             title: "Error al subir",
             description: "Hubo un problema al subir la imagen. Revisa la consola para más detalles.",
         });
-        onUploadEnd(null); // Notify parent of failure
+        onUploadEnd(null);
     } finally {
         setIsUploading(false);
     }
 
-  }, [folder, onUploadEnd, onUploadStart, toast]);
+  }, [folder, onUploadEnd, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -75,23 +70,19 @@ export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, cl
       if (!imageUrl) return;
 
       try {
-        // Create a reference to the file to delete
         const imageRef = ref(storage, imageUrl);
-        // Delete the file
         await deleteObject(imageRef);
         onUploadEnd(null);
         toast({
           title: "Imagen eliminada",
-          description: "La imagen ha sido eliminada del almacenamiento."
         });
       } catch (error) {
         console.error("Error removing image: ", error);
-        // If the image doesn't exist in storage (e.g., broken link), allow removal from UI anyway
         onUploadEnd(null);
         toast({
           variant: "destructive",
           title: "Error al eliminar",
-          description: "No se pudo eliminar la imagen del almacenamiento, pero se ha quitado la referencia.",
+          description: "No se pudo eliminar la imagen del almacenamiento.",
         });
       }
   }

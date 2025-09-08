@@ -331,7 +331,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                     const currentValue = field.value || [];
                                                                     return checked
                                                                         ? field.onChange([...currentValue, service.id])
-                                                                        : field.onChange(currentValue.filter((value) => value !== service.id))
+                                                                        : field.onChange(currentValue.filter((value: string) => value !== service.id))
                                                                 }}
                                                             />
                                                             <Label htmlFor={service.id} className="font-normal">{service.name}</Label>

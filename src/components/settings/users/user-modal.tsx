@@ -44,7 +44,6 @@ const userSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido.'),
   email: z.string().email('El email no es válido.'),
   celular: z.string().optional(),
-  password: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
   permissions: z.array(z.string()).optional(),
@@ -61,7 +60,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: { name: '', email: '', celular: '', password: '', role: '', permissions: [] },
+    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [] },
   });
 
   const selectedRoleName = form.watch('role');
@@ -79,11 +78,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             role: user.role, 
             local_id: user.local_id,
             celular: user.celular || '', 
-            password: user.password || '',
             permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
           });
         } else {
-          form.reset({ name: '', email: '', celular: '', password: '', role: '', permissions: [] });
+          form.reset({ name: '', email: '', celular: '', role: '', permissions: [] });
         }
     }
   }, [user, isOpen, form, roles]);
@@ -105,10 +103,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     setIsSubmitting(true);
     try {
         const dataToSave: any = { ...data };
-        if (!data.password || data.password === '') {
-            delete dataToSave.password;
-        }
-
+        
         if(data.role === 'Administrador general') {
           dataToSave.local_id = null;
         }
@@ -118,8 +113,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             await updateDoc(userRef, dataToSave);
             toast({ title: "Usuario actualizado" });
         } else {
+            // Note: Creating a user here would ideally also create them in Firebase Auth.
+            // This form currently only handles Firestore data.
             await addDoc(collection(db, 'usuarios'), dataToSave);
-            toast({ title: "Usuario creado" });
+            toast({ title: "Usuario creado en la base de datos" });
         }
         onDataSaved();
         onClose();
@@ -171,17 +168,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     <FormItem>
                       <FormLabel>Celular</FormLabel>
                       <FormControl><Input type="tel" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contraseña</FormLabel>
-                      <FormControl><Input type="text" {...field} placeholder={isEditMode ? 'Dejar en blanco para no cambiar' : ''} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

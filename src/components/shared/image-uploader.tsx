@@ -3,12 +3,11 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
-import { Progress } from '../ui/progress';
 import { app } from '@/lib/firebase';
 
 const storage = getStorage(app);
@@ -25,7 +24,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
 
@@ -40,27 +39,25 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     
     setIsUploading(true);
 
-    const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.then((snapshot) => {
-      getDownloadURL(snapshot.ref).then((downloadURL) => {
+    try {
+        const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
         onUpload(downloadURL);
-        setIsUploading(false);
         toast({
           title: "¡Éxito!",
           description: "La imagen se ha subido correctamente.",
         });
-      });
-    }).catch((error) => {
-      console.error("Upload error:", error);
-      toast({
-          variant: "destructive",
-          title: "Error al subir",
-          description: "Hubo un problema al subir la imagen. Revisa la consola para más detalles.",
-      });
-      setIsUploading(false);
-    });
+    } catch (error) {
+        console.error("Upload error:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al subir",
+            description: "Hubo un problema al subir la imagen. Revisa la consola para más detalles.",
+        });
+    } finally {
+        setIsUploading(false);
+    }
 
   }, [folder, onUpload, toast]);
 

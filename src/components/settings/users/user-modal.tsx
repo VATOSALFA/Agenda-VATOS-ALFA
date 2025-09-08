@@ -25,19 +25,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 
-const userSchema = z.object({
-  uid: z.string().min(1, 'El UID de autenticación es requerido.'),
+const userSchema = (isEditMode: boolean) => z.object({
   name: z.string().min(1, 'El nombre es requerido.'),
   email: z.string().email('El email no es válido.'),
+  password: z.string().optional().refine(password => isEditMode ? true : !!password && password.length >= 6, {
+      message: 'La contraseña debe tener al menos 6 caracteres.',
+  }),
   celular: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
   permissions: z.array(z.string()).optional(),
 });
 
-type UserFormData = z.infer<typeof userSchema>;
+type UserFormData = z.infer<ReturnType<typeof userSchema>>;
 
 
 interface RoleData {
@@ -63,8 +67,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
   const form = useForm<UserFormData>({
-    resolver: zodResolver(userSchema),
-    defaultValues: { uid: '', name: '', email: '', celular: '', role: '', permissions: [] },
+    resolver: zodResolver(userSchema(isEditMode)),
+    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [], password: '' },
   });
 
   const selectedRoleName = form.watch('role');
@@ -77,16 +81,16 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     if (isOpen) {
         if (user) {
           form.reset({ 
-            uid: user.id, // In edit mode, uid is the document id
             name: user.name, 
             email: user.email, 
             role: user.role, 
             local_id: user.local_id,
             celular: user.celular || '', 
+            password: '',
             permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
           });
         } else {
-          form.reset({ uid: '', name: '', email: '', celular: '', role: '', permissions: [] });
+          form.reset({ name: '', email: '', celular: '', role: '', permissions: [], password: '' });
         }
     }
   }, [user, isOpen, form, roles]);
@@ -113,21 +117,36 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             local_id: data.role === 'Administrador general' ? null : data.local_id,
         };
         
-        const userRef = doc(db, 'usuarios', data.uid);
-        
-        if (isEditMode) {
+        if (isEditMode && user) {
+            const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
+            // Password update should be handled separately for existing users
             toast({ title: "Usuario actualizado" });
         } else {
+            // Create user in Firebase Auth
+            if (!data.password) {
+                throw new Error("La contraseña es requerida para nuevos usuarios.");
+            }
+            const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+            const newFirebaseUser = userCredential.user;
+
+            // Create user profile in Firestore with the same UID
+            const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
             await setDoc(userRef, dataToSave);
-            toast({ title: "Usuario creado" });
+            toast({ title: "Usuario creado con éxito en Auth y Firestore" });
         }
         
         onDataSaved();
         onClose();
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving user:", error);
-        toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar el usuario. Asegúrate de que el UID es correcto y no existe ya." });
+        let description = "No se pudo guardar el usuario. Inténtalo de nuevo.";
+        if (error.code === 'auth/email-already-in-use') {
+            description = "Este correo electrónico ya está registrado. Por favor, utiliza otro.";
+        } else if (error.code === 'auth/weak-password') {
+            description = "La contraseña es demasiado débil. Debe tener al menos 6 caracteres.";
+        }
+        toast({ variant: 'destructive', title: "Error", description });
     } finally {
         setIsSubmitting(false);
     }
@@ -145,17 +164,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             </DialogHeader>
             <div className="py-6 px-1 max-h-[70vh] overflow-y-auto">
               <div className="px-4 space-y-4">
-                 <FormField
-                  control={form.control}
-                  name="uid"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>UID de Autenticación</FormLabel>
-                      <FormControl><Input {...field} placeholder="Pega el UID de Firebase Auth" disabled={isEditMode} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <FormField
                   control={form.control}
                   name="name"
@@ -173,11 +181,24 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
-                      <FormControl><Input type="email" {...field} /></FormControl>
+                      <FormControl><Input type="email" {...field} disabled={isEditMode} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                 {!isEditMode && (
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contraseña</FormLabel>
+                        <FormControl><Input type="password" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                 )}
                 <FormField
                   control={form.control}
                   name="celular"

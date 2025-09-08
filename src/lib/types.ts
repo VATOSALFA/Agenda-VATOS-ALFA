@@ -254,12 +254,10 @@ export interface StockMovement {
 
 export interface User {
   id: string;
-  uid?: string; // This will hold the auth UID
   name: string;
   email: string;
   role: string;
   celular?: string;
-  password?: string;
   permissions?: string[];
   local_id?: string;
 }

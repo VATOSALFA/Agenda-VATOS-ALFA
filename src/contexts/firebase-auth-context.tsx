@@ -2,9 +2,9 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 interface CustomUser extends FirebaseUser {
@@ -32,18 +32,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Query the 'usuarios' collection by the email field
-        const usersRef = collection(db, 'usuarios');
-        const q = query(usersRef, where("email", "==", firebaseUser.email));
-        const querySnapshot = await getDocs(q);
+        // Fetch user data from Firestore using UID
+        const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
 
-        if (!querySnapshot.empty) {
-            // Assume the first document found is the correct one
-            const userDoc = querySnapshot.docs[0];
-            const customData = userDoc.data();
+        if (userDocSnap.exists()) {
+            const customData = userDocSnap.data();
             setUser({ ...firebaseUser, ...customData });
         } else {
             // Fallback or handle cases where user is in Auth but not in Firestore
+            console.warn(`No user document found in Firestore for UID: ${firebaseUser.uid}`);
             setUser(firebaseUser);
         }
       } else {

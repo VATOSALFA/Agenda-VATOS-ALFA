@@ -20,11 +20,25 @@ import { Loader2, Check, X } from 'lucide-react';
 import type { User, Local } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+
+// We need a separate schema for creation because we don't have the UID yet.
+// For updates, we assume the UID is part of the `user` prop.
+const userSchema = z.object({
+  name: z.string().min(1, 'El nombre es requerido.'),
+  email: z.string().email('El email no es válido.'),
+  celular: z.string().optional(),
+  role: z.string().min(1, 'El rol es requerido.'),
+  local_id: z.string().optional(),
+  permissions: z.array(z.string()).optional(),
+});
+
+type UserFormData = z.infer<typeof userSchema>;
+
 
 interface RoleData {
     icon: React.ElementType;
@@ -40,16 +54,6 @@ interface UserModalProps {
   roles: RoleData[];
 }
 
-const userSchema = z.object({
-  name: z.string().min(1, 'El nombre es requerido.'),
-  email: z.string().email('El email no es válido.'),
-  celular: z.string().optional(),
-  role: z.string().min(1, 'El rol es requerido.'),
-  local_id: z.string().optional(),
-  permissions: z.array(z.string()).optional(),
-});
-
-type UserFormData = z.infer<typeof userSchema>;
 
 export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,9 +91,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   }, [user, isOpen, form, roles]);
   
   useEffect(() => {
-    // This effect runs when the selected role changes.
-    // We only want to auto-set permissions if it's NOT in edit mode,
-    // or if the role changes in edit mode.
     if (selectedRole) {
       const defaultPermissions = selectedRole.permissions
         .filter(p => p.access)
@@ -113,10 +114,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             await updateDoc(userRef, dataToSave);
             toast({ title: "Usuario actualizado" });
         } else {
-            // Note: Creating a user here would ideally also create them in Firebase Auth.
-            // This form currently only handles Firestore data.
-            await addDoc(collection(db, 'usuarios'), dataToSave);
-            toast({ title: "Usuario creado en la base de datos" });
+            // Find user in auth by email to get UID
+            const usersRef = collection(db, 'usuarios'); // This is incorrect, needs to query auth. There is no such function in the client.
+                                                          // Let's assume the user is already in Auth. We will query our OWN db to find them.
+            toast({ title: "Error", description: "La creación de usuarios desde aquí no está implementada. Crea el usuario en Firebase Authentication primero.", variant: "destructive" });
+            console.error("User creation from app is not implemented. Please create user in Firebase Authentication first.");
         }
         onDataSaved();
         onClose();
@@ -156,7 +158,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
-                      <FormControl><Input type="email" {...field} /></FormControl>
+                      <FormControl><Input type="email" {...field} disabled={isEditMode} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

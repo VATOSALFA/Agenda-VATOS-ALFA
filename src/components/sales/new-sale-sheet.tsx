@@ -132,7 +132,7 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
     )
 }
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }) => (
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers, addItemSearchTerm, setAddItemSearchTerm, addItemFilteredServices, addItemFilteredProducts, servicesLoading, productsLoading, addToCart }) => (
     <Dialog>
       <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
@@ -668,52 +668,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
                     {/* Item Selection */}
                     <div className="col-span-2 flex flex-col">
-                        
-                        {selectedClient ? (
-                             <Card>
-                                <CardContent className="p-4">
-                                        <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                                    <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
-                                                    <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                             <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                                <FormItem>
-                                    <div className="flex justify-between items-center">
-                                    <FormLabel>Cliente</FormLabel>
-                                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                    </Button>
-                                    </div>
-                                     <Combobox
-                                        options={clientOptions}
-                                        value={field.value}
-                                        onChange={field.onChange}
-                                        placeholder="Busca o selecciona un cliente..."
-                                        loading={clientsLoading}
-                                    />
-                                    <FormMessage />
-                                </FormItem>
-                            )}/>
-                        )}
-
-                        <div className="relative mt-4 mb-4">
+                        <div className="relative mb-4">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input placeholder="Buscar servicio o producto..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
@@ -760,9 +715,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </Tabs>
                     </div>
                     {/* Cart */}
-                    <div className="w-1/3 flex flex-col">
-                        <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
-                    </div>
+                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
                 </div>
             )}
 
@@ -945,9 +898,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             )} />
                         </div>
                         {/* Order Summary */}
-                        <Dialog>
-                            <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
-                        </Dialog>
+                        <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>

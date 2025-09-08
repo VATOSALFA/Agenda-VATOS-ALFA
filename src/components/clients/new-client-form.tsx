@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -36,7 +35,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 const clientSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
   apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
-  telefono: z.string().min(8, 'El número de teléfono es requerido.'),
+  telefono: z.string()
+    .transform(val => val.replace(/\D/g, ''))
+    .pipe(z.string().length(10, 'El teléfono debe tener exactamente 10 dígitos.')),
   correo: z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
   fecha_nacimiento: z.date().optional(),
   notas: z.string().optional(),

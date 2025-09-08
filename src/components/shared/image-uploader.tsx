@@ -14,13 +14,13 @@ const storage = getStorage(app);
 
 interface ImageUploaderProps {
   folder: string;
-  currentImageUrl?: string | null;
-  onUpload: (url: string) => void;
-  onRemove?: () => void;
+  imageUrl?: string | null;
+  onUploadStart?: () => void;
+  onUploadEnd: (url: string | null) => void;
   className?: string;
 }
 
-export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, className }: ImageUploaderProps) {
+export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, className }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
@@ -38,12 +38,13 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     }
     
     setIsUploading(true);
+    if(onUploadStart) onUploadStart();
 
     try {
         const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, file);
         const downloadURL = await getDownloadURL(snapshot.ref);
-        onUpload(downloadURL);
+        onUploadEnd(downloadURL);
         toast({
           title: "¡Éxito!",
           description: "La imagen se ha subido correctamente.",
@@ -55,11 +56,12 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
             title: "Error al subir",
             description: "Hubo un problema al subir la imagen. Revisa la consola para más detalles.",
         });
+        onUploadEnd(null); // Notify parent of failure
     } finally {
         setIsUploading(false);
     }
 
-  }, [folder, onUpload, toast]);
+  }, [folder, onUploadEnd, onUploadStart, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -69,21 +71,21 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
   
   const handleRemoveImage = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if(onRemove) {
-        onRemove();
-      } else {
-        onUpload('');
-      }
+      onUploadEnd(null);
   }
 
-  if (currentImageUrl) {
+  if (imageUrl) {
     return (
-      <div className={`relative w-48 h-48 rounded-lg overflow-hidden group ${className}`}>
-        <Image src={currentImageUrl} alt="Preview" layout="fill" objectFit="cover" />
+      <div className={`relative w-32 h-32 rounded-full overflow-hidden group ${className}`}>
+        <Image src={imageUrl} alt="Preview" layout="fill" objectFit="cover" />
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Button variant="destructive" size="icon" onClick={handleRemoveImage}>
-            <X className="h-4 w-4" />
-          </Button>
+          {isUploading ? (
+              <Loader2 className="h-6 w-6 text-white animate-spin" />
+          ) : (
+            <Button variant="destructive" size="icon" className="h-8 w-8" onClick={handleRemoveImage}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -91,9 +93,8 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
 
   if (isUploading) {
     return (
-      <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-48 w-48 ${className}`}>
-        <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
-        <p className="text-sm text-muted-foreground mb-3">Subiendo...</p>
+      <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
     );
   }
@@ -101,11 +102,11 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
   return (
     <div
       {...getRootProps()}
-      className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-48 w-48 cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/10' : ''} ${className}`}
+      className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/10' : ''} ${className}`}
     >
       <input {...getInputProps()} />
-      <UploadCloud className="h-10 w-10 text-muted-foreground" />
-      <p className="mt-2 text-sm text-muted-foreground">Arrastra o selecciona la imagen</p>
+      <UploadCloud className="h-8 w-8 text-muted-foreground" />
+      <p className="mt-2 text-xs text-muted-foreground">Subir foto</p>
     </div>
   );
 }

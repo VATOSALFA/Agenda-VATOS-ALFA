@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import type { Profesional, Schedule, Service, ServiceCategory } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Copy, UploadCloud, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Copy, Plus, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { db } from '@/lib/firebase';
@@ -40,7 +40,7 @@ interface EditProfesionalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: () => void;
-  local: Local | null; // This might be deprecated if we fetch all locales
+  local: Local | null;
 }
 
 const daysOfWeek = [
@@ -402,11 +402,11 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                             name="avatar"
                             control={form.control}
                             render={({ field }) => (
-                                <ImageUploader
-                                    folder="profesionales"
-                                    currentImageUrl={field.value}
-                                    onUpload={(url) => field.onChange(url)}
-                                />
+                               <ImageUploader 
+                                folder="profesionales"
+                                imageUrl={field.value}
+                                onUploadEnd={(url) => field.onChange(url || '')}
+                               />
                             )}
                          />
                       </div>

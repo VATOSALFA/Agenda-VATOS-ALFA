@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -216,13 +217,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem className="flex justify-center">
                       <FormControl>
-                        <ImageUploader
-                          folder="profesionales"
-                          currentImageUrl={field.value}
-                          onUpload={(url) => field.onChange(url)}
-                          onRemove={() => field.onChange('')}
-                          className="w-24 h-24"
-                        />
+                          <ImageUploader 
+                            folder="profesionales"
+                            imageUrl={field.value}
+                            onUploadEnd={(url) => field.onChange(url || '')}
+                          />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

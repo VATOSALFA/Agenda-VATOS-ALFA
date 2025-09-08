@@ -214,6 +214,7 @@ export interface SaleItem {
     tipo: 'fixed' | 'percentage';
     monto: number;
   };
+  commissionPaid?: boolean;
 }
 
 export interface Egreso {
@@ -223,6 +224,7 @@ export interface Egreso {
   concepto: string;
   aQuien: string; // professional ID
   aQuienNombre?: string; // transient
+  aQuienId?: string; // transient
   comentarios?: string;
   local_id?: string;
 }

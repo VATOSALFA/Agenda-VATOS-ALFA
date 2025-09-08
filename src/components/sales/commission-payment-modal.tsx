@@ -23,12 +23,12 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { where, Timestamp, writeBatch, collection, doc } from 'firebase/firestore';
+import { where, Timestamp, writeBatch, collection, doc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Info, Loader2 } from 'lucide-react';
-import type { Sale, Profesional, Service, Product, Egreso } from '@/lib/types';
+import type { Sale, Profesional, Service, Product, Egreso, SaleItem } from '@/lib/types';
 import { Checkbox } from '../ui/checkbox';
 import { startOfDay, endOfDay, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -47,6 +47,7 @@ interface CommissionRowData {
     professionalName: string;
     totalSales: number;
     totalCommission: number;
+    saleItemIds: { saleId: string; itemIndex: number }[];
 }
 
 export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dateRange, localId }: CommissionPaymentModalProps) {
@@ -67,28 +68,16 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         }
         return constraints;
     }, [todayStart, todayEnd, localId]);
-
-    const egresosQueryConstraints = useMemo(() => {
-        const constraints = [];
-        constraints.push(where('fecha', '>=', Timestamp.fromDate(todayStart)));
-        constraints.push(where('fecha', '<=', Timestamp.fromDate(todayEnd)));
-        constraints.push(where('concepto', '==', 'Pago de Comisión'));
-        return constraints;
-    }, [todayStart, todayEnd]);
-
-
+    
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints ? `sales-commissions-${format(todayStart, 'yyyy-MM-dd')}-${localId}` : undefined, ...(salesQueryConstraints || []));
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
-    const { data: commissionEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-commissions-${format(todayStart, 'yyyy-MM-dd')}`, ...(egresosQueryConstraints || []));
     
-    const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading || egresosLoading;
+    const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
     
     useEffect(() => {
         if (isLoading || !isOpen) return;
-
-        const paidProfessionalIds = new Set(commissionEgresos.map(e => e.aQuien));
 
         const professionalMap = new Map(professionals.map(p => [p.id, p]));
         const serviceMap = new Map(services.map(s => [s.id, s]));
@@ -97,8 +86,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
         sales.forEach(sale => {
-            sale.items?.forEach(item => {
-                if (!item.barbero_id || paidProfessionalIds.has(item.barbero_id)) return;
+            sale.items?.forEach((item, itemIndex) => {
+                if (!item.barbero_id || item.commissionPaid) return;
 
                 const professional = professionalMap.get(item.barbero_id);
                 if (!professional) return;
@@ -109,6 +98,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         professionalName: professional.name,
                         totalSales: 0,
                         totalCommission: 0,
+                        saleItemIds: [],
                     };
                 }
 
@@ -137,6 +127,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     
                     commissionsByProfessional[professional.id].totalSales += finalItemPrice;
                     commissionsByProfessional[professional.id].totalCommission += commissionAmount;
+                    commissionsByProfessional[professional.id].saleItemIds.push({ saleId: sale.id, itemIndex });
                 }
             });
         });
@@ -145,7 +136,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setCommissionData(commissionList);
         setSelectedProfessionals(commissionList.map(c => c.professionalId));
 
-    }, [isOpen, sales, professionals, services, products, commissionEgresos, isLoading]);
+    }, [isOpen, sales, professionals, services, products, isLoading]);
 
 
     const handlePayCommissions = async () => {
@@ -161,8 +152,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
 
-            professionalsToPay.forEach(comm => {
+            for(const comm of professionalsToPay) {
                 if (comm.totalCommission > 0) {
+                    // Create expense record
                     const egresoRef = doc(collection(db, 'egresos'));
                     batch.set(egresoRef, {
                         fecha: now,
@@ -172,8 +164,29 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         local_id: localId,
                         comentarios: `Pago de comisión a ${comm.professionalName} el ${formattedDate}`,
                     });
+
+                    // Mark items as paid
+                    const salesToUpdate = new Map<string, Sale>();
+                    comm.saleItemIds.forEach(idPair => {
+                        if (!salesToUpdate.has(idPair.saleId)) {
+                            const originalSale = sales.find(s => s.id === idPair.saleId);
+                            if (originalSale) {
+                                // Deep copy to avoid modifying original state
+                                salesToUpdate.set(idPair.saleId, JSON.parse(JSON.stringify(originalSale)));
+                            }
+                        }
+                        const saleToUpdate = salesToUpdate.get(idPair.saleId);
+                        if (saleToUpdate && saleToUpdate.items[idPair.itemIndex]) {
+                            saleToUpdate.items[idPair.itemIndex].commissionPaid = true;
+                        }
+                    });
+
+                    salesToUpdate.forEach((updatedSale, saleId) => {
+                        const saleRef = doc(db, 'ventas', saleId);
+                        batch.update(saleRef, { items: updatedSale.items });
+                    });
                 }
-            });
+            }
 
             await batch.commit();
 

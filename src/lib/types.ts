@@ -1,6 +1,5 @@
 
 
-
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -260,6 +259,7 @@ export interface User {
   celular?: string;
   permissions?: string[];
   local_id?: string;
+  avatarUrl?: string;
 }
 
 export interface AuthCode {

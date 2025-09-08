@@ -27,6 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { ImageUploader } from '@/components/shared/image-uploader';
 
 
 const userSchema = (isEditMode: boolean) => z.object({
@@ -47,6 +48,7 @@ const userSchema = (isEditMode: boolean) => z.object({
   role: z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
   permissions: z.array(z.string()).optional(),
+  avatarUrl: z.string().optional(),
 }).refine(data => {
     if (data.newPassword || data.confirmPassword) {
         return !!data.currentPassword;
@@ -93,7 +95,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema(isEditMode)),
-    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '' },
+    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' },
   });
 
   const selectedRoleName = form.watch('role');
@@ -115,10 +117,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             currentPassword: '',
             newPassword: '',
             confirmPassword: '',
-            permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
+            permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || [],
+            avatarUrl: user.avatarUrl || ''
           });
         } else {
-          form.reset({ name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '' });
+          form.reset({ name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' });
         }
     }
   }, [user, isOpen, form, roles]);
@@ -143,6 +146,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             role: data.role,
             permissions: data.permissions,
             local_id: data.role === 'Administrador general' ? null : data.local_id,
+            avatarUrl: data.avatarUrl,
         };
         
         if (isEditMode && user) {
@@ -188,7 +192,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
@@ -196,6 +200,24 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             </DialogHeader>
             <div className="py-6 px-1 max-h-[70vh] overflow-y-auto">
               <div className="px-4 space-y-4">
+                <FormField
+                  name="avatarUrl"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="flex justify-center">
+                      <FormControl>
+                        <ImageUploader
+                          folder="user_avatars"
+                          currentImageUrl={field.value}
+                          onUpload={(url) => field.onChange(url)}
+                          onRemove={() => field.onChange('')}
+                          className="w-24 h-24"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="name"

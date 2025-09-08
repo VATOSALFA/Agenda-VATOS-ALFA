@@ -11,6 +11,7 @@ interface CustomUser extends FirebaseUser {
     role?: string;
     permissions?: string[];
     local_id?: string;
+    avatarUrl?: string;
 }
 interface AuthContextType {
   user: CustomUser | null;

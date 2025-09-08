@@ -69,7 +69,6 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
       e.stopPropagation();
       if (!imageUrl) return;
       
-      // Check if the URL is a Firebase Storage URL before trying to delete
       const isFirebaseUrl = imageUrl.includes('firebasestorage.googleapis.com');
 
       if (isFirebaseUrl) {
@@ -81,7 +80,6 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
             });
           } catch (error) {
             console.error("Error removing image from Firebase Storage: ", error);
-            // Don't show a scary error if it's just a stale URL, but log it.
              toast({
               variant: "destructive",
               title: "Error al eliminar",
@@ -90,7 +88,6 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
           }
       }
       
-      // Always clear the image from the component's state
       onUploadEnd(null);
   }
 

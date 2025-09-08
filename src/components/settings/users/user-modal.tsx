@@ -34,16 +34,36 @@ const userSchema = (isEditMode: boolean) => z.object({
   email: z.string().email('El email no es válido.'),
   password: z.string().optional().refine(password => {
     if (isEditMode) {
-      return !password || password.length >= 6; // Optional, but if present, must be valid
+      return true;
     }
-    return !!password && password.length >= 6; // Required for new users
+    return !!password && password.length >= 6;
   }, {
       message: 'La contraseña debe tener al menos 6 caracteres.',
   }),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().optional(),
+  confirmPassword: z.string().optional(),
   celular: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
   permissions: z.array(z.string()).optional(),
+}).refine(data => {
+    if (data.newPassword || data.confirmPassword) {
+        return !!data.currentPassword;
+    }
+    return true;
+}, {
+    message: "Debes ingresar tu contraseña actual para establecer una nueva.",
+    path: ["currentPassword"],
+})
+.refine(data => {
+    if (data.newPassword || data.currentPassword) {
+        return data.newPassword === data.confirmPassword;
+    }
+    return true;
+}, {
+    message: "Las contraseñas nuevas no coinciden.",
+    path: ["confirmPassword"],
 });
 
 type UserFormData = z.infer<ReturnType<typeof userSchema>>;
@@ -73,7 +93,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema(isEditMode)),
-    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [], password: '' },
+    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '' },
   });
 
   const selectedRoleName = form.watch('role');
@@ -92,10 +112,13 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             local_id: user.local_id,
             celular: user.celular || '', 
             password: '',
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: '',
             permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
           });
         } else {
-          form.reset({ name: '', email: '', celular: '', role: '', permissions: [], password: '' });
+          form.reset({ name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '' });
         }
     }
   }, [user, isOpen, form, roles]);
@@ -125,7 +148,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
-            // Password update is not handled here. You would need a separate admin SDK function for that.
+            // Password update logic should be handled with a call to a backend function for security
+            // For now, we'll just show a toast.
+            if (data.newPassword) {
+                toast({ title: "Contraseña actualizada (simulado)" });
+            }
             toast({ title: "Usuario actualizado" });
         } else {
             // Create user in Firebase Auth
@@ -191,17 +218,56 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
-                 <FormField
+                {!isEditMode ? (
+                  <FormField
                     control={form.control}
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}</FormLabel>
-                        <FormControl><Input type="password" {...field} placeholder={isEditMode ? 'Dejar en blanco para no cambiar' : ''} /></FormControl>
+                        <FormLabel>Contraseña</FormLabel>
+                        <FormControl><Input type="password" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                ) : (
+                  <div className="space-y-4 pt-4 border-t">
+                      <h4 className="text-sm font-medium">Cambiar Contraseña</h4>
+                      <FormField
+                          control={form.control}
+                          name="currentPassword"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Contraseña actual</FormLabel>
+                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="newPassword"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Nueva contraseña</FormLabel>
+                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="confirmPassword"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Confirmar nueva contraseña</FormLabel>
+                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                  </div>
+                )}
                 <FormField
                   control={form.control}
                   name="celular"

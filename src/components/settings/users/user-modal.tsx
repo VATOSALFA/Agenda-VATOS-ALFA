@@ -26,9 +26,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 
-// We need a separate schema for creation because we don't have the UID yet.
-// For updates, we assume the UID is part of the `user` prop.
+
 const userSchema = z.object({
+  uid: z.string().min(1, 'El UID de autenticación es requerido.'),
   name: z.string().min(1, 'El nombre es requerido.'),
   email: z.string().email('El email no es válido.'),
   celular: z.string().optional(),
@@ -64,7 +64,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [] },
+    defaultValues: { uid: '', name: '', email: '', celular: '', role: '', permissions: [] },
   });
 
   const selectedRoleName = form.watch('role');
@@ -77,6 +77,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     if (isOpen) {
         if (user) {
           form.reset({ 
+            uid: user.id, // In edit mode, uid is the document id
             name: user.name, 
             email: user.email, 
             role: user.role, 
@@ -85,7 +86,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || []
           });
         } else {
-          form.reset({ name: '', email: '', celular: '', role: '', permissions: [] });
+          form.reset({ uid: '', name: '', email: '', celular: '', role: '', permissions: [] });
         }
     }
   }, [user, isOpen, form, roles]);
@@ -103,27 +104,30 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const onSubmit = async (data: UserFormData) => {
     setIsSubmitting(true);
     try {
-        const dataToSave: any = { ...data };
+        const dataToSave: any = { 
+            name: data.name,
+            email: data.email,
+            celular: data.celular,
+            role: data.role,
+            permissions: data.permissions,
+            local_id: data.role === 'Administrador general' ? null : data.local_id,
+        };
         
-        if(data.role === 'Administrador general') {
-          dataToSave.local_id = null;
-        }
+        const userRef = doc(db, 'usuarios', data.uid);
         
-        if (isEditMode && user) {
-            const userRef = doc(db, 'usuarios', user.id);
+        if (isEditMode) {
             await updateDoc(userRef, dataToSave);
             toast({ title: "Usuario actualizado" });
         } else {
-            // Find user in auth by email to get UID
-            const usersRef = collection(db, 'usuarios'); // This is incorrect, needs to query auth. There is no such function in the client.
-                                                          // Let's assume the user is already in Auth. We will query our OWN db to find them.
-            toast({ title: "Error", description: "La creación de usuarios desde aquí no está implementada. Crea el usuario en Firebase Authentication primero.", variant: "destructive" });
-            console.error("User creation from app is not implemented. Please create user in Firebase Authentication first.");
+            await setDoc(userRef, dataToSave);
+            toast({ title: "Usuario creado" });
         }
+        
         onDataSaved();
         onClose();
     } catch (error) {
-        toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar el usuario." });
+        console.error("Error saving user:", error);
+        toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar el usuario. Asegúrate de que el UID es correcto y no existe ya." });
     } finally {
         setIsSubmitting(false);
     }
@@ -141,6 +145,17 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             </DialogHeader>
             <div className="py-6 px-1 max-h-[70vh] overflow-y-auto">
               <div className="px-4 space-y-4">
+                 <FormField
+                  control={form.control}
+                  name="uid"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UID de Autenticación</FormLabel>
+                      <FormControl><Input {...field} placeholder="Pega el UID de Firebase Auth" disabled={isEditMode} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="name"
@@ -158,7 +173,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
-                      <FormControl><Input type="email" {...field} disabled={isEditMode} /></FormControl>
+                      <FormControl><Input type="email" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -183,7 +198,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
-                              {availableRoles.map(role => (
+                              {roles.map(role => (
                                   <SelectItem key={role.title} value={role.title}>{role.title}</SelectItem>
                               ))}
                           </SelectContent>

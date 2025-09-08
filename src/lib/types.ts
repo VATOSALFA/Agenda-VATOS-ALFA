@@ -1,5 +1,6 @@
 
 
+
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -253,6 +254,7 @@ export interface StockMovement {
 
 export interface User {
   id: string;
+  uid?: string; // This will hold the auth UID
   name: string;
   email: string;
   role: string;

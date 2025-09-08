@@ -68,23 +68,30 @@ export function ImageUploader({ folder, imageUrl, onUploadEnd, className }: Imag
   const handleRemoveImage = async (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!imageUrl) return;
+      
+      // Check if the URL is a Firebase Storage URL before trying to delete
+      const isFirebaseUrl = imageUrl.includes('firebasestorage.googleapis.com');
 
-      try {
-        const imageRef = ref(storage, imageUrl);
-        await deleteObject(imageRef);
-        onUploadEnd(null);
-        toast({
-          title: "Imagen eliminada",
-        });
-      } catch (error) {
-        console.error("Error removing image: ", error);
-        onUploadEnd(null);
-        toast({
-          variant: "destructive",
-          title: "Error al eliminar",
-          description: "No se pudo eliminar la imagen del almacenamiento.",
-        });
+      if (isFirebaseUrl) {
+          try {
+            const imageRef = ref(storage, imageUrl);
+            await deleteObject(imageRef);
+            toast({
+              title: "Imagen eliminada",
+            });
+          } catch (error) {
+            console.error("Error removing image from Firebase Storage: ", error);
+            // Don't show a scary error if it's just a stale URL, but log it.
+             toast({
+              variant: "destructive",
+              title: "Error al eliminar",
+              description: "No se pudo eliminar la imagen del almacenamiento.",
+            });
+          }
       }
+      
+      // Always clear the image from the component's state
+      onUploadEnd(null);
   }
 
   if (isUploading) {

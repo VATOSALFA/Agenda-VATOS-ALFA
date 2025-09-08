@@ -32,7 +32,12 @@ import { auth } from '@/lib/firebase';
 const userSchema = (isEditMode: boolean) => z.object({
   name: z.string().min(1, 'El nombre es requerido.'),
   email: z.string().email('El email no es válido.'),
-  password: z.string().optional().refine(password => isEditMode ? true : !!password && password.length >= 6, {
+  password: z.string().optional().refine(password => {
+    if (isEditMode) {
+      return !password || password.length >= 6; // Optional, but if present, must be valid
+    }
+    return !!password && password.length >= 6; // Required for new users
+  }, {
       message: 'La contraseña debe tener al menos 6 caracteres.',
   }),
   celular: z.string().optional(),
@@ -120,7 +125,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
-            // Password update should be handled separately for existing users
+            // Password update is not handled here. You would need a separate admin SDK function for that.
             toast({ title: "Usuario actualizado" });
         } else {
             // Create user in Firebase Auth
@@ -133,7 +138,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             // Create user profile in Firestore with the same UID
             const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
             await setDoc(userRef, dataToSave);
-            toast({ title: "Usuario creado con éxito en Auth y Firestore" });
+            toast({ title: "Usuario creado con éxito" });
         }
         
         onDataSaved();
@@ -186,19 +191,17 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
-                 {!isEditMode && (
-                  <FormField
+                 <FormField
                     control={form.control}
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Contraseña</FormLabel>
-                        <FormControl><Input type="password" {...field} /></FormControl>
+                        <FormLabel>{isEditMode ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}</FormLabel>
+                        <FormControl><Input type="password" {...field} placeholder={isEditMode ? 'Dejar en blanco para no cambiar' : ''} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                 )}
                 <FormField
                   control={form.control}
                   name="celular"

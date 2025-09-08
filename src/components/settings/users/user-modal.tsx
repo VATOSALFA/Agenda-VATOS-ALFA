@@ -219,8 +219,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                         <ImageUploader
                           folder="profesionales"
                           currentImageUrl={field.value}
-                          onUpload={(url) => field.onChange(url)}
-                          onRemove={() => field.onChange('')}
+                          onUpload={(url) => {
+                              field.onChange(url);
+                              form.handleSubmit(onSubmit)();
+                          }}
+                          onRemove={() => {
+                              field.onChange('');
+                              form.handleSubmit(onSubmit)();
+                          }}
                           className="w-24 h-24"
                         />
                       </FormControl>

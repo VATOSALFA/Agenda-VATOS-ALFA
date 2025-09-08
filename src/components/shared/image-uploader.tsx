@@ -3,7 +3,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, UploadTask } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,7 @@ interface ImageUploaderProps {
 export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, className }: ImageUploaderProps) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadTask, setUploadTask] = useState<UploadTask | null>(null);
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -41,9 +42,10 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    const task = uploadBytesResumable(storageRef, file);
+    setUploadTask(task);
 
-    uploadTask.on(
+    task.on(
       'state_changed',
       (snapshot) => {
         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -58,12 +60,14 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
         });
         setIsUploading(false);
         setUploadProgress(null);
+        setUploadTask(null);
       },
       () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+        getDownloadURL(task.snapshot.ref).then((downloadURL) => {
           onUpload(downloadURL);
           setIsUploading(false);
           setUploadProgress(null);
+          setUploadTask(null);
           toast({
             title: "¡Éxito!",
             description: "La imagen se ha subido correctamente.",

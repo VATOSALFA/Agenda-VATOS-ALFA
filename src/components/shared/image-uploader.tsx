@@ -3,13 +3,14 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
-import { app } from '@/lib/firebase';
+import { app } from '@/lib/firebase'; // Import the initialized app
 
+// Get a reference to the storage service, which is used to create references in your storage bucket
 const storage = getStorage(app);
 
 interface ImageUploaderProps {
@@ -69,9 +70,38 @@ export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, cl
     multiple: false,
   });
   
-  const handleRemoveImage = (e: React.MouseEvent) => {
+  const handleRemoveImage = async (e: React.MouseEvent) => {
       e.stopPropagation();
-      onUploadEnd(null);
+      if (!imageUrl) return;
+
+      try {
+        // Create a reference to the file to delete
+        const imageRef = ref(storage, imageUrl);
+        // Delete the file
+        await deleteObject(imageRef);
+        onUploadEnd(null);
+        toast({
+          title: "Imagen eliminada",
+          description: "La imagen ha sido eliminada del almacenamiento."
+        });
+      } catch (error) {
+        console.error("Error removing image: ", error);
+        // If the image doesn't exist in storage (e.g., broken link), allow removal from UI anyway
+        onUploadEnd(null);
+        toast({
+          variant: "destructive",
+          title: "Error al eliminar",
+          description: "No se pudo eliminar la imagen del almacenamiento, pero se ha quitado la referencia.",
+        });
+      }
+  }
+
+  if (isUploading) {
+    return (
+      <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+    );
   }
 
   if (imageUrl) {
@@ -79,22 +109,10 @@ export function ImageUploader({ folder, imageUrl, onUploadStart, onUploadEnd, cl
       <div className={`relative w-32 h-32 rounded-full overflow-hidden group ${className}`}>
         <Image src={imageUrl} alt="Preview" layout="fill" objectFit="cover" />
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          {isUploading ? (
-              <Loader2 className="h-6 w-6 text-white animate-spin" />
-          ) : (
             <Button variant="destructive" size="icon" className="h-8 w-8" onClick={handleRemoveImage}>
               <X className="h-4 w-4" />
             </Button>
-          )}
         </div>
-      </div>
-    );
-  }
-
-  if (isUploading) {
-    return (
-      <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
-        <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
     );
   }

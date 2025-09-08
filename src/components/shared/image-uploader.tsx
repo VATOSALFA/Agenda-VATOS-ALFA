@@ -21,7 +21,6 @@ interface ImageUploaderProps {
 export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, className }: ImageUploaderProps) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadTask, setUploadTask] = useState<UploadTask | null>(null);
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -42,10 +41,9 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    const task = uploadBytesResumable(storageRef, file);
-    setUploadTask(task);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-    task.on(
+    uploadTask.on(
       'state_changed',
       (snapshot) => {
         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -60,14 +58,12 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
         });
         setIsUploading(false);
         setUploadProgress(null);
-        setUploadTask(null);
       },
       () => {
-        getDownloadURL(task.snapshot.ref).then((downloadURL) => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
           onUpload(downloadURL);
           setIsUploading(false);
           setUploadProgress(null);
-          setUploadTask(null);
           toast({
             title: "¡Éxito!",
             description: "La imagen se ha subido correctamente.",

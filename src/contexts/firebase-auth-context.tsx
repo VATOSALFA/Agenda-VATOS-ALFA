@@ -31,33 +31,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // For development, we are mocking an admin user to avoid logging in every time.
-    const mockAdminUser: CustomUser = {
-        uid: 'mock-admin-uid',
-        email: 'admin@vatosalfa.com',
-        displayName: 'Alejandro Pacheco',
-        role: 'Administrador general',
-        permissions: [],
-        local_id: undefined,
-        emailVerified: true,
-        isAnonymous: false,
-        metadata: {},
-        providerData: [],
-        providerId: 'password',
-        tenantId: null,
-        delete: async () => {},
-        getIdToken: async () => '',
-        getIdTokenResult: async () => ({} as any),
-        reload: async () => {},
-        toJSON: () => ({}),
-        phoneNumber: null,
-        photoURL: null,
-    };
-    setUser(mockAdminUser);
-    setLoading(false);
-
-    // This is the original logic. We can switch back to it when needed.
-    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -66,6 +39,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const customData = userDocSnap.data();
             setUser({ ...firebaseUser, ...customData });
         } else {
+            // This might happen if a user exists in Auth but not in 'usuarios' collection.
+            // For this app's logic, we assume they must exist in 'usuarios' to have roles.
             setUser(firebaseUser);
         }
       } else {
@@ -74,60 +49,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
     return () => unsubscribe();
-    */
   }, []);
 
   const signIn = async (email: string, pass: string) => {
-    const usersRef = collection(db, "usuarios");
-    const q = query(usersRef, where("email", "==", email));
-    
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-        return null;
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    if (userCredential.user) {
+        const userDocRef = doc(db, 'usuarios', userCredential.user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+            const customData = userDocSnap.data();
+            const loggedInUser: CustomUser = { ...userCredential.user, ...customData };
+            setUser(loggedInUser);
+            return loggedInUser;
+        }
     }
-    
-    let userData: any = null;
-    let userDoc = null;
-    querySnapshot.forEach((doc) => {
-        userData = doc.data();
-        userDoc = doc;
-    });
-
-    if (!userData.password || userData.password !== pass) {
-        return null;
-    }
-    
-    const loggedInUser: CustomUser = {
-        uid: userDoc!.id,
-        email: userData.email,
-        displayName: userData.name,
-        role: userData.role,
-        permissions: userData.permissions,
-        local_id: userData.local_id,
-        emailVerified: true,
-        isAnonymous: false,
-        metadata: {},
-        providerData: [],
-        providerId: 'password',
-        tenantId: null,
-        delete: async () => {},
-        getIdToken: async () => '',
-        getIdTokenResult: async () => ({} as any),
-        reload: async () => {},
-        toJSON: () => ({}),
-        phoneNumber: null,
-        photoURL: null,
-    };
-    
-    setUser(loggedInUser);
-    return loggedInUser;
+    return null;
   }
 
-  const signOut = () => {
-    // In dev mode, we just clear the user state.
-    setUser(null); 
-    return Promise.resolve();
+  const signOut = async () => {
+    await firebaseSignOut(auth);
+    setUser(null);
   }
 
   const value = {

@@ -11,13 +11,13 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { FirebaseError } from "firebase/app";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [loginAttempts, setLoginAttempts] = useState(0);
     const router = useRouter();
     const { toast } = useToast();
     const { signIn } = useAuth();
@@ -43,16 +43,26 @@ export default function LoginPage() {
                 toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
                 router.push('/');
             } else {
-                setLoginAttempts(prev => prev + 1);
-                if (loginAttempts + 1 >= 3) {
-                     setError("Has superado el número de intentos. Por favor, contacta a tu gerente para recuperar el acceso.");
-                } else {
-                     setError("El correo o la contraseña son incorrectos.");
-                }
+                 setError("Ocurrió un error inesperado durante el inicio de sesión.");
             }
-        } catch (error: any) {
-            console.error("Error de inicio de sesión:", error);
-            setError("Ocurrió un error inesperado. Por favor, inténtalo de nuevo.");
+        } catch (err: any) {
+            console.error("Error de inicio de sesión:", err);
+            if (err instanceof FirebaseError) {
+                switch (err.code) {
+                    case 'auth/user-not-found':
+                    case 'auth/wrong-password':
+                    case 'auth/invalid-credential':
+                        setError("El correo o la contraseña son incorrectos.");
+                        break;
+                    case 'auth/too-many-requests':
+                        setError("Demasiados intentos fallidos. Por favor, inténtalo más tarde.");
+                        break;
+                    default:
+                        setError("Ocurrió un error inesperado. Por favor, inténtalo de nuevo.");
+                }
+            } else {
+                setError("Ocurrió un error inesperado. Por favor, inténtalo de nuevo.");
+            }
         } finally {
             setIsLoading(false);
         }

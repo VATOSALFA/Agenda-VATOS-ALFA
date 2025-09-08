@@ -32,14 +32,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-            const customData = userDocSnap.data();
+        // Query the 'usuarios' collection by the email field
+        const usersRef = collection(db, 'usuarios');
+        const q = query(usersRef, where("email", "==", firebaseUser.email));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            // Assume the first document found is the correct one
+            const userDoc = querySnapshot.docs[0];
+            const customData = userDoc.data();
             setUser({ ...firebaseUser, ...customData });
         } else {
-            // This might happen if a user exists in Auth but not in 'usuarios' collection.
-            // For this app's logic, we assume they must exist in 'usuarios' to have roles.
+            // Fallback or handle cases where user is in Auth but not in Firestore
             setUser(firebaseUser);
         }
       } else {

@@ -9,9 +9,8 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { app } from '@/lib/firebase'; // Import the initialized app
+import { app } from '@/lib/firebase';
 
-// Get a reference to the storage service using the initialized app
 const storage = getStorage(app);
 
 interface ImageUploaderProps {
@@ -23,7 +22,6 @@ interface ImageUploaderProps {
 }
 
 export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, className }: ImageUploaderProps) {
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
@@ -41,39 +39,29 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     }
     
     setIsUploading(true);
-    setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      },
-      (error) => {
-        console.error("Upload error:", error);
-        toast({
-            variant: "destructive",
-            title: "Error al subir",
-            description: "Hubo un problema al subir la imagen. Inténtalo de nuevo.",
-        });
+    uploadTask.then((snapshot) => {
+      getDownloadURL(snapshot.ref).then((downloadURL) => {
+        onUpload(downloadURL);
         setIsUploading(false);
-        setUploadProgress(null);
-      },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          onUpload(downloadURL);
-          setIsUploading(false);
-          setUploadProgress(null);
-          toast({
-            title: "¡Éxito!",
-            description: "La imagen se ha subido correctamente.",
-          });
+        toast({
+          title: "¡Éxito!",
+          description: "La imagen se ha subido correctamente.",
         });
-      }
-    );
+      });
+    }).catch((error) => {
+      console.error("Upload error:", error);
+      toast({
+          variant: "destructive",
+          title: "Error al subir",
+          description: "Hubo un problema al subir la imagen. Revisa la consola para más detalles.",
+      });
+      setIsUploading(false);
+    });
+
   }, [folder, onUpload, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -109,7 +97,6 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
       <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-48 w-48 ${className}`}>
         <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
         <p className="text-sm text-muted-foreground mb-3">Subiendo...</p>
-        <Progress value={uploadProgress} className="w-full" />
       </div>
     );
   }

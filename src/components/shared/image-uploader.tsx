@@ -9,8 +9,9 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { app } from '@/lib/firebase';
+import { app } from '@/lib/firebase'; // Import the initialized app
 
+// Get a reference to the storage service using the initialized app
 const storage = getStorage(app);
 
 interface ImageUploaderProps {

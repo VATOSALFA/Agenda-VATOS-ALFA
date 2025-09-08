@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
+import { storage } from '@/lib/firebase'; // Importar la instancia de storage
 
 interface ImageUploaderProps {
   folder: string;
@@ -22,7 +23,6 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
-  const storage = getStorage();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];

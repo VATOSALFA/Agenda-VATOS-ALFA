@@ -95,7 +95,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         services: [],
         schedule: defaultSchedule,
         biography: '',
-        avatar: 'https://placehold.co/100x100',
+        avatar: '',
         local_id: '',
     },
   });
@@ -136,7 +136,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             : {
                 name: '', email: '', active: true, acceptsOnline: true, services: [],
                 schedule: defaultSchedule,
-                biography: '', avatar: 'https://placehold.co/100x100', order: 0,
+                biography: '', avatar: '', order: 0,
                 local_id: locales.length > 0 ? locales[0].id : ''
             };
         form.reset(defaultValues);
@@ -460,4 +460,3 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     </>
   );
 }
-

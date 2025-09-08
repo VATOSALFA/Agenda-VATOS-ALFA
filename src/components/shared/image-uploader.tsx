@@ -3,13 +3,15 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, UploadTask } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { storage } from '@/lib/firebase';
+import { app } from '@/lib/firebase';
+
+const storage = getStorage(app);
 
 interface ImageUploaderProps {
   folder: string;

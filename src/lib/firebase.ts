@@ -3,6 +3,7 @@ import { getApps, initializeApp, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -18,6 +19,19 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// Initialize App Check
+if (typeof window !== 'undefined') {
+  try {
+    const appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6Ld-i_spAAAAANd2JwA4h0c0eXmhS3F5_dbsS5B_'), // Replace with your reCAPTCHA v3 site key
+      isTokenAutoRefreshEnabled: true
+    });
+    console.log("Firebase App Check initialized");
+  } catch (error) {
+    console.error("Error initializing Firebase App Check:", error);
+  }
+}
 
 const db = getFirestore(app);
 const auth = getAuth(app);

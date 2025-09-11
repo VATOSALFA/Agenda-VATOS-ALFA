@@ -219,8 +219,9 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       <FormControl>
                           <ImageUploader 
                             folder="profesionales"
-                            imageUrl={field.value}
-                            onUploadEnd={(url) => field.onChange(url || '')}
+                            currentImageUrl={field.value}
+                            onUpload={(url) => form.setValue('avatarUrl', url)}
+                            onRemove={() => form.setValue('avatarUrl', '')}
                           />
                       </FormControl>
                       <FormMessage />

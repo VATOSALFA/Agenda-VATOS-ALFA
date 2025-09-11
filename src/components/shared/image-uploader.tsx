@@ -34,24 +34,27 @@ export function ImageUploader({
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!currentImageUrl) return;
+
+    // Immediately update UI
+    onRemove(); 
     
-    onRemove(); // Optimistically remove from UI
-    
+    // Check if it's a Firebase URL before trying to delete
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
+    
     if (isFirebaseUrl) {
         try {
             const imageRef = ref(storage, currentImageUrl);
             await deleteObject(imageRef);
             toast({ title: "Imagen eliminada" });
         } catch (error: any) {
-            console.error("Error eliminando imagen de Firebase Storage: ", error);
+            // If the object doesn't exist, it's not a critical error.
             if (error.code !== 'storage/object-not-found') {
                  toast({
                     variant: "destructive",
                     title: "Error al eliminar",
                     description: "No se pudo eliminar la imagen del almacenamiento.",
                 });
-                // Revert if deletion fails for a real object
+                // Revert UI change if deletion fails for a real object
                 onUploadEnd(currentImageUrl);
             }
         }

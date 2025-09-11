@@ -408,7 +408,6 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                 onUploadStateChange={setIsUploading}
                                 onUploadEnd={(url) => {
                                     form.setValue('avatar', url, { shouldDirty: true });
-                                    toast({title: "Imagen subida", description: "La nueva imagen del profesional ha sido guardada."});
                                 }}
                                 onRemove={() => form.setValue('avatar', '', { shouldDirty: true })}
                                />

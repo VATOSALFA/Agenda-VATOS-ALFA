@@ -223,7 +223,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                             onUploadStateChange={setIsUploading}
                             onUploadEnd={(url) => {
                                 form.setValue('avatarUrl', url, { shouldDirty: true });
-                                toast({title: "Imagen subida", description: "La nueva imagen del usuario ha sido guardada."});
                             }}
                             onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}
                           />

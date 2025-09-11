@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -89,6 +88,7 @@ interface UserModalProps {
 
 export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const isEditMode = !!user;
   const { toast } = useToast();
 
@@ -220,8 +220,12 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           <ImageUploader 
                             folder="profesionales"
                             currentImageUrl={field.value}
-                            onUpload={(url) => form.setValue('avatarUrl', url)}
-                            onRemove={() => form.setValue('avatarUrl', '')}
+                            onUploadStateChange={setIsUploading}
+                            onUploadEnd={(url) => {
+                                form.setValue('avatarUrl', url, { shouldDirty: true });
+                                toast({title: "Imagen subida", description: "La nueva imagen del usuario ha sido guardada."});
+                            }}
+                            onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}
                           />
                       </FormControl>
                       <FormMessage />
@@ -407,8 +411,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             </div>
             <DialogFooter className="border-t pt-6">
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={isSubmitting || isUploading}>
+                {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar
               </Button>
             </DialogFooter>

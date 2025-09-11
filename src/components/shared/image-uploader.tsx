@@ -14,13 +14,20 @@ import { Progress } from '../ui/progress';
 interface ImageUploaderProps {
   folder: string;
   currentImageUrl?: string | null;
-  onUpload: (url: string) => void;
+  onUploadStateChange: (isUploading: boolean) => void;
+  onUploadEnd: (url: string) => void;
   onRemove: () => void;
   className?: string;
 }
 
-export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, className }: ImageUploaderProps) {
-  const [isUploading, setIsUploading] = useState(false);
+export function ImageUploader({ 
+  folder, 
+  currentImageUrl, 
+  onUploadStateChange, 
+  onUploadEnd,
+  onRemove,
+  className 
+}: ImageUploaderProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
@@ -28,7 +35,8 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     e?.stopPropagation();
     if (!currentImageUrl) return;
     
-    // Check if the URL is a Firebase Storage URL. Don't try to delete placeholders.
+    onRemove(); // Optimistically remove from UI
+    
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
     if (isFirebaseUrl) {
         try {
@@ -37,22 +45,18 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
             toast({ title: "Imagen eliminada" });
         } catch (error: any) {
             console.error("Error eliminando imagen de Firebase Storage: ", error);
-            // It's possible the object doesn't exist, so we can ignore that error.
             if (error.code !== 'storage/object-not-found') {
                  toast({
                     variant: "destructive",
                     title: "Error al eliminar",
                     description: "No se pudo eliminar la imagen del almacenamiento.",
                 });
-                // Don't clear the image if deletion fails for a real object
-                return;
+                // Revert if deletion fails for a real object
+                onUploadEnd(currentImageUrl);
             }
         }
     }
-    
-    onRemove();
-
-  }, [currentImageUrl, onRemove, toast]);
+  }, [currentImageUrl, onRemove, onUploadEnd, toast]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -66,12 +70,8 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
         });
         return;
     }
-
-    if (currentImageUrl) {
-        await handleRemoveImage();
-    }
     
-    setIsUploading(true);
+    onUploadStateChange(true);
     setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
@@ -89,21 +89,17 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
             title: "Error al subir",
             description: `Hubo un problema al subir la imagen. Código: ${error.code}`,
         });
-        setIsUploading(false);
+        onUploadStateChange(false);
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          onUpload(downloadURL);
-          toast({
-              title: "¡Éxito!",
-              description: "La imagen se ha subido correctamente.",
-          });
-          setIsUploading(false);
+          onUploadEnd(downloadURL);
+          onUploadStateChange(false);
         });
       }
     );
 
-  }, [folder, onUpload, toast, currentImageUrl, handleRemoveImage]);
+  }, [folder, onUploadEnd, onUploadStateChange, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -111,7 +107,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
     multiple: false,
   });
   
-  if (isUploading) {
+  if (uploadProgress > 0 && uploadProgress < 100) {
     return (
       <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

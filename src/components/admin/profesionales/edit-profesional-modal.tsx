@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -68,6 +67,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
@@ -405,8 +405,12 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                <ImageUploader 
                                 folder="profesionales"
                                 currentImageUrl={field.value}
-                                onUpload={(url) => form.setValue('avatar', url)}
-                                onRemove={() => form.setValue('avatar', '')}
+                                onUploadStateChange={setIsUploading}
+                                onUploadEnd={(url) => {
+                                    form.setValue('avatar', url, { shouldDirty: true });
+                                    toast({title: "Imagen subida", description: "La nueva imagen del profesional ha sido guardada."});
+                                }}
+                                onRemove={() => form.setValue('avatar', '', { shouldDirty: true })}
                                />
                             )}
                          />
@@ -431,8 +435,8 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
                 <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                <Button type="submit" disabled={isSubmitting || isUploading}>
+                    {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Guardar
                 </Button>
             </DialogFooter>

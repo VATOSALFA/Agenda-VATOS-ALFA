@@ -27,27 +27,31 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!currentImageUrl) return;
-
+    
+    // Check if the URL is a Firebase Storage URL. Don't try to delete placeholders.
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
     if (isFirebaseUrl) {
-      try {
-        const imageRef = ref(storage, currentImageUrl);
-        await deleteObject(imageRef);
-        toast({ title: "Imagen eliminada" });
-      } catch (error: any) {
-        console.error("Error eliminando imagen de Firebase Storage: ", error);
-        if (error.code !== 'storage/object-not-found') {
-          toast({
-            variant: "destructive",
-            title: "Error al eliminar",
-            description: "No se pudo eliminar la imagen del almacenamiento.",
-          });
-          // Do not proceed with state update if deletion fails for a real object
-          return;
+        try {
+            const imageRef = ref(storage, currentImageUrl);
+            await deleteObject(imageRef);
+            toast({ title: "Imagen eliminada" });
+        } catch (error: any) {
+            console.error("Error eliminando imagen de Firebase Storage: ", error);
+            // It's possible the object doesn't exist, so we can ignore that error.
+            if (error.code !== 'storage/object-not-found') {
+                 toast({
+                    variant: "destructive",
+                    title: "Error al eliminar",
+                    description: "No se pudo eliminar la imagen del almacenamiento.",
+                });
+                // Don't clear the image if deletion fails for a real object
+                return;
+            }
         }
-      }
     }
+    
     onRemove();
+
   }, [currentImageUrl, onRemove, toast]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -61,6 +65,10 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
             description: "El tamaño máximo de la imagen es de 3MB.",
         });
         return;
+    }
+
+    if (currentImageUrl) {
+        await handleRemoveImage();
     }
     
     setIsUploading(true);
@@ -79,7 +87,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
         toast({
             variant: "destructive",
             title: "Error al subir",
-            description: "Hubo un problema al subir la imagen. Revisa los permisos de almacenamiento y tu conexión a internet.",
+            description: `Hubo un problema al subir la imagen. Código: ${error.code}`,
         });
         setIsUploading(false);
       },
@@ -95,7 +103,7 @@ export function ImageUploader({ folder, currentImageUrl, onUpload, onRemove, cla
       }
     );
 
-  }, [folder, onUpload, toast]);
+  }, [folder, onUpload, toast, currentImageUrl, handleRemoveImage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

@@ -26,7 +26,7 @@ if (typeof window !== 'undefined') {
   // Pass your reCAPTCHA v3 site key (public key) to activate(). Make sure this
   // key is the counterpart to the secret key you set in the Firebase console.
   const appCheck = initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'),
+    provider: new ReCaptchaV3Provider('6Lfz6MYrAAAAAF7ot53vtfilzMpAF2U0AO1R8I3Z'),
 
     // Optional argument. If true, the SDK automatically refreshes App Check
     // tokens as needed.

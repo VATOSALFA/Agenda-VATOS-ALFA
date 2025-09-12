@@ -22,6 +22,7 @@ const firebaseConfig = {
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize App Check
+/*
 if (typeof window !== 'undefined') {
   (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   
@@ -40,6 +41,7 @@ if (typeof window !== 'undefined') {
     isTokenAutoRefreshEnabled: true,
   });
 }
+*/
 
 
 const db = getFirestore(app);

@@ -4,7 +4,7 @@ import { getApps, initializeApp, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from 'firebase/app-check';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -23,10 +23,11 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
+  // Pass the debug token to the provider.
+  (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   try {
-    // IMPORTANT: Replace with your actual reCAPTCHA v3 site key from the Google Cloud console.
     const appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'), 
+      provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'),
       isTokenAutoRefreshEnabled: true
     });
     console.log("Firebase App Check initialized.");

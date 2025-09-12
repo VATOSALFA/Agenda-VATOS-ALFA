@@ -4,7 +4,7 @@ import { getApps, initializeApp, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -22,26 +22,17 @@ const firebaseConfig = {
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize App Check
-/*
 if (typeof window !== 'undefined') {
-  (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-  
+  // Pass your reCAPTCHA v3 site key (public key) to activate(). Make sure this
+  // key is the counterpart to the secret key you set in the Firebase console.
   const appCheck = initializeAppCheck(app, {
-    provider: new CustomProvider({
-      getToken: () => {
-        // Mock token for development.
-        // In a real scenario, you might fetch this from a secure server.
-        const mockAppCheckToken = {
-          token: "mock-app-check-token",
-          expireTimeMillis: Date.now() + 60 * 60 * 1000, // 1 hour
-        };
-        return Promise.resolve(mockAppCheckToken);
-      },
-    }),
-    isTokenAutoRefreshEnabled: true,
+    provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'),
+
+    // Optional argument. If true, the SDK automatically refreshes App Check
+    // tokens as needed.
+    isTokenAutoRefreshEnabled: true
   });
 }
-*/
 
 
 const db = getFirestore(app);

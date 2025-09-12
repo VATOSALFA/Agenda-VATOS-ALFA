@@ -23,18 +23,24 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  // Pass the debug token to the provider.
   (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-  try {
-    const appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'),
-      isTokenAutoRefreshEnabled: true
-    });
-    console.log("Firebase App Check initialized.");
-  } catch (error) {
-    console.error("Error initializing Firebase App Check:", error);
-  }
+  
+  const appCheck = initializeAppCheck(app, {
+    provider: new CustomProvider({
+      getToken: () => {
+        // Mock token for development.
+        // In a real scenario, you might fetch this from a secure server.
+        const mockAppCheckToken = {
+          token: "mock-app-check-token",
+          expireTimeMillis: Date.now() + 60 * 60 * 1000, // 1 hour
+        };
+        return Promise.resolve(mockAppCheckToken);
+      },
+    }),
+    isTokenAutoRefreshEnabled: true,
+  });
 }
+
 
 const db = getFirestore(app);
 const auth = getAuth(app);

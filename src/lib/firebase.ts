@@ -23,18 +23,15 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  // Only initialize App Check on localhost to avoid reCAPTCHA errors in production
-  // The long term solution is to properly configure reCAPTCHA for the production domains in the Google Cloud Console.
-  if (window.location.hostname === "localhost") {
-    try {
-      initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider('6Ld-i_spAAAAANd2JwA4h0c0eXmhS3F5_dbsS5B_'), // Replace with your reCAPTCHA v3 site key
-        isTokenAutoRefreshEnabled: true
-      });
-      console.log("Firebase App Check initialized for localhost");
-    } catch (error) {
-      console.error("Error initializing Firebase App Check:", error);
-    }
+  try {
+    // IMPORTANT: Replace with your actual reCAPTCHA v3 site key from the Google Cloud console.
+    const appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'), 
+      isTokenAutoRefreshEnabled: true
+    });
+    console.log("Firebase App Check initialized.");
+  } catch (error) {
+    console.error("Error initializing Firebase App Check:", error);
   }
 }
 

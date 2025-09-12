@@ -21,7 +21,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// App Check initialization
+// App Check initialization (Temporarily disabled for development)
 // if (typeof window !== 'undefined') {
 //   try {
 //     // Set the debug token in development. This will be used by the CustomProvider.
@@ -30,42 +30,7 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 //     }
     
 //     const appCheck = initializeAppCheck(app, {
-//       provider: new CustomProvider({
-//         getToken: () => {
-//           return new Promise((resolve, reject) => {
-//             // Check if the reCAPTCHA script is already loaded
-//             if ((window as any).grecaptcha?.enterprise) {
-//               (window as any).grecaptcha.enterprise.ready(async () => {
-//                 try {
-//                   const token = await (window as any).grecaptcha.enterprise.execute('6Lfz6MYrAAAAAF7ot53vtfilzMpAF2U0AO1R8I3Z', { action: 'LOGIN' });
-//                   resolve({ token });
-//                 } catch (e) {
-//                   reject(e);
-//                 }
-//               });
-//             } else {
-//               // Load the reCAPTCHA script if it's not already there
-//               const script = document.createElement('script');
-//               script.src = 'https://www.google.com/recaptcha/enterprise.js?render=6Lfz6MYrAAAAAF7ot53vtfilzMpAF2U0AO1R8I3Z';
-//               script.async = true;
-//               script.onload = () => {
-//                 (window as any).grecaptcha.enterprise.ready(async () => {
-//                   try {
-//                     const token = await (window as any).grecaptcha.enterprise.execute('6Lfz6MYrAAAAAF7ot53vtfilzMpAF2U0AO1R8I3Z', { action: 'LOGIN' });
-//                     resolve({ token });
-//                   } catch (e) {
-//                     reject(e);
-//                   }
-//                 });
-//               };
-//               script.onerror = (e) => {
-//                 reject(e);
-//               };
-//               document.head.appendChild(script);
-//             }
-//           });
-//         }
-//       }),
+//       provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'),
 //       isTokenAutoRefreshEnabled: true
 //     });
 //   } catch (e) {

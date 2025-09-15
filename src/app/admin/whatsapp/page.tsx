@@ -30,7 +30,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, PlusCircle, Trash2, MessageCircle, Edit } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, MessageCircle, Edit, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Local } from '@/lib/types';
@@ -49,6 +49,8 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { TemplateSelectionModal, type Template } from '@/components/admin/whatsapp/template-selection-modal';
 import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
+import { sendTestTwilioMessage } from '@/ai/flows/send-twilio-whatsapp-flow';
+
 
 interface WhatsappConfig {
     id: string;
@@ -82,6 +84,7 @@ export default function WhatsappPage() {
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   const form = useForm<WhatsappFormData>({
     resolver: zodResolver(whatsappSchema),
@@ -133,6 +136,17 @@ export default function WhatsappPage() {
     }
     setIsEditorModalOpen(false);
   }
+
+  const handleSendTest = async () => {
+    setIsSendingTest(true);
+    const result = await sendTestTwilioMessage();
+    if ('sid' in result) {
+      toast({ title: '¡Mensaje de prueba enviado!', description: `SID del mensaje: ${result.sid}` });
+    } else {
+      toast({ variant: 'destructive', title: 'Error al enviar mensaje', description: result.error });
+    }
+    setIsSendingTest(false);
+  };
 
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLoading = localesLoading || configsLoading;
@@ -252,6 +266,12 @@ export default function WhatsappPage() {
                                     ))}
                                 </TableBody>
                             </Table>
+                            <div className="mt-4">
+                                <Button onClick={handleSendTest} disabled={isSendingTest}>
+                                    {isSendingTest && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    <Send className="mr-2 h-4 w-4" /> Probar Envío a Twilio
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>

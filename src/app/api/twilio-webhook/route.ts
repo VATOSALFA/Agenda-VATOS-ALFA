@@ -10,9 +10,16 @@ export async function POST(request: NextRequest) {
   const messageBody = params.get('Body');
   const messageSid = params.get('MessageSid');
 
+  // Log para depuración
+  console.log("--- INCOMING TWILIO WEBHOOK ---");
+  console.log("From:", from);
+  console.log("Body:", messageBody);
+  console.log("Message SID:", messageSid);
+  console.log("-------------------------------");
+
+
   if (!from || !messageBody || !messageSid) {
     console.error("Webhook de Twilio: Faltan datos en la carga útil.");
-    // Aunque falten datos, respondemos a Twilio para que no siga intentando.
     return new NextResponse('<Response></Response>', {
       status: 200,
       headers: { 'Content-Type': 'text/xml' },

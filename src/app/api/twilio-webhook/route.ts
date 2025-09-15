@@ -5,16 +5,24 @@ import { db } from '@/lib/firebase';
 import twilio from 'twilio';
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const from = formData.get('From') as string;
-  const body = formData.get('Body') as string;
-  const messageSid = formData.get('MessageSid') as string;
+  // Twilio sends data as 'application/x-www-form-urlencoded'
+  // We need to parse it correctly.
+  const body = await request.text();
+  const params = new URLSearchParams(body);
+  const from = params.get('From');
+  const messageBody = params.get('Body');
+  const messageSid = params.get('MessageSid');
+
+  if (!from || !messageBody || !messageSid) {
+      console.error("Missing Twilio data in webhook payload");
+      return new NextResponse('Missing data', { status: 400 });
+  }
 
   try {
     // Guarda el mensaje entrante en Firestore
     await addDoc(collection(db, 'conversaciones'), {
       from: from,
-      body: body,
+      body: messageBody,
       messageSid: messageSid,
       timestamp: Timestamp.now(),
       direction: 'inbound', // Para identificar que es un mensaje entrante

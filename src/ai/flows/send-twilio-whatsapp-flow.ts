@@ -29,7 +29,7 @@ export async function sendTestTwilioMessage(): Promise<{ sid: string } | { error
     const message = await client.messages.create({
       body: '¡Hola Mundo desde mi plataforma!',
       from: 'whatsapp:+14155238886', // Twilio's Sandbox number
-      to: twilioSandboxPhoneNumber,
+      to: `whatsapp:${twilioSandboxPhoneNumber}`,
     });
 
     console.log('Twilio message sent with SID:', message.sid);

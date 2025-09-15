@@ -34,11 +34,20 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
 
   const reservationDateTime = parseISO(`${input.reservationDate}T${input.reservationTime}:00`);
   const formattedDateTime = format(reservationDateTime, "EEEE, dd 'de' MMMM 'a las' HH:mm 'hrs.'", { locale: es });
+  
+  // Normalize client phone number
+  let clientPhone = input.clientPhone.replace(/\D/g, '');
+  if (clientPhone.length === 10) { // Assume it's a Mexican number without country code
+      clientPhone = `+521${clientPhone}`;
+  } else if (clientPhone.length === 12 && clientPhone.startsWith('521')) { // Already has 521
+      clientPhone = `+${clientPhone}`;
+  }
+
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json`;
   
   const body = new URLSearchParams();
-  body.append('To', `whatsapp:${input.clientPhone}`);
+  body.append('To', `whatsapp:${clientPhone}`);
   body.append('From', FROM_NUMBER);
   
   // Use the approved template SID for appointment confirmation

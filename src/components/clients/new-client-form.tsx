@@ -36,8 +36,8 @@ const clientSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
   apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
   telefono: z.string()
-    .transform(val => val.replace(/\D/g, ''))
-    .pipe(z.string().length(10, 'El teléfono debe tener exactamente 10 dígitos.')),
+    .min(10, 'El teléfono debe tener al menos 10 dígitos.')
+    .transform(val => val.replace(/\D/g, '')),
   correo: z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
   fecha_nacimiento: z.date().optional(),
   notas: z.string().optional(),
@@ -251,7 +251,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               <FormItem>
                 <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono</FormLabel>
                 <FormControl>
-                  <Input placeholder="+56 9 1234 5678" {...field} />
+                  <Input placeholder="Ej: +521234567890 (10 dígitos)" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

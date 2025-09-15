@@ -2,7 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import twilio from 'twilio';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -13,8 +12,11 @@ export async function POST(request: NextRequest) {
 
   if (!from || !messageBody || !messageSid) {
     console.error("Webhook de Twilio: Faltan datos en la carga útil.");
-    // Aún así, responde a Twilio para evitar reintentos.
-    return new NextResponse('Missing data', { status: 400 });
+    // Aunque falten datos, respondemos a Twilio para que no siga intentando.
+    return new NextResponse('<Response></Response>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' },
+    });
   }
 
   try {
@@ -27,26 +29,18 @@ export async function POST(request: NextRequest) {
       direction: 'inbound', 
     });
 
-    // 2. LUEGO, crea una respuesta vacía para confirmar a Twilio.
-    const twiml = new twilio.twiml.MessagingResponse();
-    
-    // 3. FINALMENTE, envía la respuesta de confirmación.
-    return new NextResponse(twiml.toString(), {
-      headers: {
-        'Content-Type': 'text/xml',
-      },
+    // 2. LUEGO, envía una respuesta de confirmación simple a Twilio.
+    return new NextResponse('<Response></Response>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' },
     });
 
   } catch (error) {
     console.error('Error al procesar el webhook de Twilio:', error);
     // En caso de error en la base de datos, aún intentamos responder a Twilio.
-    const twiml = new twilio.twiml.MessagingResponse();
-    
-    return new NextResponse(twiml.toString(), {
-      status: 500,
-      headers: {
-        'Content-Type': 'text/xml',
-      },
+    return new NextResponse('<Response></Response>', {
+      status: 500, // Informamos a Twilio de un error del servidor.
+      headers: { 'Content-Type': 'text/xml' },
     });
   }
 }

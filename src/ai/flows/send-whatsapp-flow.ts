@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to send WhatsApp notifications for appointments using Twilio templates.
@@ -51,7 +50,7 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
   body.append('From', FROM_NUMBER);
   
   // Use the approved template SID for appointment confirmation
-  body.append('ContentSid', 'HX80c44a78ec1b3ba62786665088632a10');
+  body.append('ContentSid', 'HX1e40bcd671b58667c8d2c5e33ae660b6');
 
   // Provide the variables for the template
   // Twilio uses {{1}}, {{2}}, etc. as placeholders.

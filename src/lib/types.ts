@@ -54,6 +54,7 @@ export interface Reservation {
     items: { servicio: string; barbero_id: string; nombre?: string; }[];
     cliente_id: string;
     servicio: string; // Concatenated services for simple display
+    barbero_id: string; // Added for single professional reservations
     hora_inicio: string;
     hora_fin: string;
     fecha: string;

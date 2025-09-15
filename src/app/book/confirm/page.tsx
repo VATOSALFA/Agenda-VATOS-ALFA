@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { User, Calendar, Clock, Scissors, CheckCircle, Loader2 } from 'lucide-react';
+import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 
 
 const confirmSchema = z.object({
@@ -93,6 +94,8 @@ function ConfirmPageContent() {
             const newReservationRef = doc(collection(db, 'reservas'));
             batch.set(newReservationRef, {
                 cliente_id: clientId,
+                barbero_id: professionalId,
+                servicio: selectedServices.map(s => s.name).join(', '),
                 items: selectedServices.map(s => ({
                     servicio: s.name,
                     barbero_id: professionalId,
@@ -110,6 +113,27 @@ function ConfirmPageContent() {
             });
 
             await batch.commit();
+            
+            // Send WhatsApp notification
+            if (data.telefono) {
+                sendWhatsappConfirmation({
+                    clientName: `${data.nombre} ${data.apellido}`,
+                    clientPhone: data.telefono,
+                    serviceName: selectedServices.map(s => s.name).join(', '),
+                    reservationDate: dateStr,
+                    reservationTime: time,
+                }).then(messageId => {
+                    if(messageId.startsWith('Error:')) {
+                       toast({ variant: 'destructive', title: 'Error de WhatsApp', description: messageId });
+                    } else {
+                       toast({ title: 'Notificación de WhatsApp enviada.' });
+                    }
+                }).catch(err => {
+                    console.error("WhatsApp send failed:", err);
+                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: 'No se pudo enviar la notificación.'})
+                });
+            }
+
 
             toast({
                 title: '¡Reserva Confirmada!',

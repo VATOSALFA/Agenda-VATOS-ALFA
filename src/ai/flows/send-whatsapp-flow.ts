@@ -47,48 +47,51 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
   
   // 1. Obtén tus credenciales desde un lugar seguro (variables de entorno es lo ideal).
   //    NUNCA las escribas directamente en el código.
-  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; // Debes configurar esta variable de entorno
-  const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID; // Y esta también
+  const WHATSAPP_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+  const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+  const FROM_NUMBER = 'whatsapp:+14155238886'; // Twilio Sandbox Number
+  
+  if (!ACCOUNT_SID || !WHATSAPP_TOKEN) {
+      console.error("Twilio credentials are not set.");
+      return "Error: Faltan credenciales de Twilio en el servidor.";
+  }
 
-  // 2. Construye la URL de la API de Meta.
-  const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+  // 2. Construye la URL de la API de Twilio.
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json`;
+  
+  // 3. Prepara el cuerpo del mensaje según la especificación de la API de Twilio.
+  const body = new URLSearchParams();
+  body.append('To', `whatsapp:${input.clientPhone}`);
+  body.append('From', FROM_NUMBER);
+  body.append('Body', message);
 
-  // 3. Prepara el cuerpo del mensaje según la especificación de la API.
-  const body = {
-    messaging_product: "whatsapp",
-    to: input.clientPhone, // Asegúrate que el número incluya el código de país.
-    type: "text",
-    text: {
-      preview_url: false,
-      body: message,
-    },
-  };
 
   // 4. Realiza la llamada a la API.
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-        'Content-Type': 'application/json'
+        'Authorization': 'Basic ' + btoa(`${ACCOUNT_SID}:${WHATSAPP_TOKEN}`),
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify(body)
+      body: body.toString()
     });
 
     const responseData = await response.json();
 
     if (!response.ok) {
-        console.error("Error al enviar mensaje de WhatsApp:", responseData);
-        throw new Error(`Error de la API de WhatsApp: ${responseData.error?.message || response.statusText}`);
+        console.error("Error al enviar mensaje de Twilio:", responseData);
+        throw new Error(`Error de la API de Twilio: ${responseData.message || response.statusText}`);
     }
 
-    console.log("Mensaje de WhatsApp enviado con éxito:", responseData);
-    return responseData.messages[0].id; // Retorna el ID del mensaje enviado.
+    console.log("Mensaje de Twilio enviado con éxito:", responseData);
+    return responseData.sid; // Retorna el SID del mensaje enviado.
 
   } catch(error) {
-      console.error("Fallo en la llamada a la API de WhatsApp:", error);
+      console.error("Fallo en la llamada a la API de Twilio:", error);
       // Aquí puedes manejar el error, quizás intentar de nuevo o notificar a un administrador.
       return `Error: ${error instanceof Error ? error.message : 'Error desconocido'}`;
   }
   // --- FIN DE LA INTEGRACIÓN REAL CON WHATSAPP ---
 }
+

@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Header from './header';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
@@ -29,6 +29,13 @@ export default function MainLayout({ children }: Props) {
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Pre-cargar el audio en el lado del cliente
+    audioRef.current = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
+  }, []);
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
@@ -78,6 +85,10 @@ export default function MainLayout({ children }: Props) {
                 duration: 10000, 
                 onClick: () => router.push('/admin/conversations'),
                 className: 'cursor-pointer hover:bg-muted',
+              });
+              // Reproducir sonido de notificación
+              audioRef.current?.play().catch(error => {
+                  console.log("La reproducción automática del audio fue bloqueada por el navegador.", error);
               });
             }
           }

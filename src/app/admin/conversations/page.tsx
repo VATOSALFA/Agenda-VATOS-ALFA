@@ -180,7 +180,7 @@ export default function ConversationsPage() {
 
     try {
         if (selectedFile) {
-            const uniqueFileName = `${Date.now()}-${selectedFile.name.replace(/\s+/g, '_')}`;
+            const uniqueFileName = `${crypto.randomUUID()}-${selectedFile.name.replace(/\s+/g, '_')}`;
             const storageRef = ref(storage, `whatsapp_media/${uniqueFileName}`);
             const snapshot = await uploadBytes(storageRef, selectedFile);
             mediaUrl = await getDownloadURL(snapshot.ref);
@@ -322,13 +322,11 @@ export default function ConversationsPage() {
   }
 
   const renderMedia = (msg: Message) => {
-    const hasMedia = !!msg.mediaUrl;
-    if (!hasMedia) {
+    if (!msg.mediaUrl) {
       return <p className="text-sm">{msg.body}</p>;
     }
   
-    // If there is media, prioritize showing it.
-    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
+    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl;
     const mediaType = msg.mediaContentType;
     const hasBody = !!msg.body && msg.body.trim().length > 0;
   
@@ -358,11 +356,11 @@ export default function ConversationsPage() {
       );
     }
   
-    // Fallback for other media types (documents, etc.) or if body is the only thing
+    // Fallback for other media types (documents, etc.)
     return (
       <div className="space-y-2">
         <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
-          <Paperclip className="h-4 w-4" /> Ver archivo adjunto
+          <Paperclip className="h-4 w-4" /> Ver archivo adjunto: {msg.mediaContentType || 'desconocido'}
         </a>
         {hasBody && <p className="text-sm">{msg.body}</p>}
       </div>

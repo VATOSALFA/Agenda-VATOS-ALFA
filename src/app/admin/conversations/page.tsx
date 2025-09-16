@@ -4,7 +4,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { Loader2, MessageSquareText, User, Send, ChevronLeft, Paperclip, X, Mic } from 'lucide-react';
+import { Loader2, MessageSquareText, User, Send, ChevronLeft, Paperclip, X, Mic, Square } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -48,6 +48,12 @@ export default function ConversationsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [fileType, setFileType] = useState<'image' | 'audio' | null>(null);
+  
+  // Audio Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
 
   const conversations = useMemo(() => {
@@ -171,6 +177,7 @@ export default function ConversationsPage() {
     setIsSending(true);
 
     let mediaUrl: string | undefined = undefined;
+    let mediaType: string | undefined = selectedFile?.type;
 
     try {
         if (selectedFile) {
@@ -191,7 +198,7 @@ export default function ConversationsPage() {
                 to: selectedConversation.contactId,
                 body: replyMessage,
                 mediaUrl: mediaUrl,
-                mediaContentType: selectedFile?.type,
+                mediaContentType: mediaType,
                 messageSid: result.sid,
                 timestamp: Timestamp.now(),
                 direction: 'outbound',
@@ -254,6 +261,63 @@ export default function ConversationsPage() {
         fileInputRef.current.value = "";
     }
   }
+
+  // Audio Recording Logic
+  const startRecording = async () => {
+    if (hasMicPermission === null) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        setHasMicPermission(true);
+      } catch (err) {
+        console.error("Microphone permission denied:", err);
+        setHasMicPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Permiso de micrófono denegado',
+          description: 'Por favor, habilita el acceso al micrófono en tu navegador.',
+        });
+        return;
+      }
+    }
+    if(hasMicPermission) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = event => {
+        audioChunksRef.current.push(event.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
+        setSelectedFile(audioFile);
+        setFileType('audio');
+        setFilePreview('Mensaje de voz grabado');
+        stream.getTracks().forEach(track => track.stop()); // Stop mic access
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
 
   const isLoading = messagesLoading || clientsLoading;
   
@@ -406,7 +470,7 @@ export default function ConversationsPage() {
                 )}
                 <div className="relative">
                     <Textarea 
-                        placeholder="Escribe un mensaje..." 
+                        placeholder={isRecording ? "Grabando mensaje de voz..." : "Escribe un mensaje..."} 
                         className="pr-28 resize-none"
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
@@ -416,21 +480,22 @@ export default function ConversationsPage() {
                                 handleSendMessage();
                             }
                         }}
+                        disabled={isRecording}
                     />
                     <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden"/>
                     <div className="absolute left-1 bottom-2 flex items-center">
                         <Button size="icon" variant="ghost" className="h-10 w-10 text-muted-foreground" onClick={() => openFilePicker('image/*')}>
                             <Paperclip className="h-5 w-5" />
                         </Button>
-                         <Button size="icon" variant="ghost" className="h-10 w-10 text-muted-foreground" onClick={() => openFilePicker('audio/*')}>
-                            <Mic className="h-5 w-5" />
+                         <Button size="icon" variant={isRecording ? "destructive" : "ghost"} className="h-10 w-10 text-muted-foreground" onClick={handleMicClick}>
+                            {isRecording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                         </Button>
                     </div>
                     <Button 
                         size="icon" 
                         className="absolute right-2 bottom-2 h-10 w-10 rounded-full"
                         onClick={handleSendMessage}
-                        disabled={isSending || (!replyMessage.trim() && !selectedFile)}
+                        disabled={isSending || isRecording || (!replyMessage.trim() && !selectedFile)}
                     >
                         {isSending ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
                     </Button>

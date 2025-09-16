@@ -93,7 +93,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && !messagesLoading && conversations) {
+    if (phoneParam && !messagesLoading && conversations !== undefined) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;

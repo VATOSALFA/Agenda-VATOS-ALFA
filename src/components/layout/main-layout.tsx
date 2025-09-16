@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -32,7 +33,27 @@ export default function MainLayout({ children }: Props) {
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
-  // Sound unlock effect - no longer needed for sound
+  // Sound unlock effect
+  useEffect(() => {
+    const unlockAudio = () => {
+      // Create a dummy audio context
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const buffer = audioCtx.createBuffer(1, 1, 22050);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.start(0);
+      // We only need to do this once
+      document.removeEventListener('click', unlockAudio);
+    };
+
+    document.addEventListener('click', unlockAudio);
+
+    return () => {
+      document.removeEventListener('click', unlockAudio);
+    };
+  }, []);
+
   useEffect(() => {
     const handleNewReservation = () => {
         setReservationInitialData(null);
@@ -73,7 +94,14 @@ export default function MainLayout({ children }: Props) {
         if (change.type === 'added') {
           const message = change.doc.data();
           if (message.direction === 'inbound') {
-            if (pathname !== '/admin/conversations') {
+              try {
+                  const sound = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
+                  sound.play().catch(e => console.warn("Error playing sound, user interaction might be needed.", e));
+              } catch (e) {
+                  console.error("Failed to play notification sound.", e);
+              }
+              
+              if (pathname !== '/admin/conversations') {
               toast({
                 title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
                 description: message.body,

@@ -222,7 +222,8 @@ export default function ConversationsPage() {
 
       {/* Panel de Mensajes */}
       <main className={cn(
-        "flex-1 flex flex-col h-screen bg-gray-100",
+        "flex-1 flex flex-col bg-gray-100",
+        "h-screen", // Asegura que el main ocupe toda la altura
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (
@@ -240,8 +241,8 @@ export default function ConversationsPage() {
                 </div>
             </header>
             
-            <div className="flex-1 overflow-y-auto p-4">
-                 <div className="space-y-4">
+            <ScrollArea className="flex-1" ref={scrollAreaRef}>
+                 <div className="p-4 space-y-4">
                     {selectedConversation.messages.map(msg => (
                         <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                              <div className={cn(
@@ -256,7 +257,7 @@ export default function ConversationsPage() {
                         </div>
                     ))}
                 </div>
-            </div>
+            </ScrollArea>
             
              <footer className="p-4 border-t bg-background flex-shrink-0">
                 <div className="relative">

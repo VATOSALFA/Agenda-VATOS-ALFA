@@ -222,7 +222,7 @@ export default function ConversationsPage() {
 
       {/* Panel de Mensajes */}
       <main className={cn(
-        "flex-1 flex flex-col bg-gray-100",
+        "flex-1 flex-col bg-gray-100",
         "h-screen", // Asegura que el main ocupe toda la altura
         selectedConversation ? "flex" : "hidden md:flex"
       )}>

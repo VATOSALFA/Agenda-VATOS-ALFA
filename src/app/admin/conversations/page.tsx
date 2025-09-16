@@ -168,7 +168,7 @@ export default function ConversationsPage() {
   const isLoading = messagesLoading || clientsLoading;
 
   return (
-    <div className="flex h-screen bg-muted/40">
+    <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
       {/* Sidebar de Conversaciones */}
       <aside className={cn(
         "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
@@ -223,7 +223,6 @@ export default function ConversationsPage() {
       {/* Panel de Mensajes */}
       <main className={cn(
         "flex-1 flex-col bg-gray-100",
-        "h-screen", // Asegura que el main ocupe toda la altura
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (

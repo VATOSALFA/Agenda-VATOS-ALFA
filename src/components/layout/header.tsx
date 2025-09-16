@@ -356,17 +356,6 @@ export default function Header() {
 
           </nav>
           <div className="ml-auto flex items-center space-x-2">
-            <Link href="/admin/conversations" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
-                    <MessagesSquare className="h-5 w-5" />
-                    {unreadMessages && unreadMessages.length > 0 && (
-                      <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-                      </span>
-                    )}
-                </Button>
-            </Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="bg-[#314177] hover:bg-[#40538a] text-white">
@@ -388,6 +377,18 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+             <Link href="/admin/conversations" passHref>
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
+                    <MessageCircle className="h-5 w-5" />
+                    {unreadMessages && unreadMessages.length > 0 && (
+                      <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                      </span>
+                    )}
+                </Button>
+            </Link>
             
             {canSee('settings') && (
               <DropdownMenu>

@@ -180,7 +180,7 @@ export default function ConversationsPage() {
 
     try {
         if (selectedFile) {
-            const storageRef = ref(storage, `whatsapp_media/${selectedFile.name}_${Date.now()}`);
+            const storageRef = ref(storage, `whatsapp_media/${selectedFile.name}`);
             const snapshot = await uploadBytes(storageRef, selectedFile);
             mediaUrl = await getDownloadURL(snapshot.ref);
         }
@@ -275,7 +275,9 @@ export default function ConversationsPage() {
       
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
+        // Use a unique name for the file to avoid collisions in storage
+        const uniqueFileName = `voice-message-${Date.now()}.webm`;
+        const audioFile = new File([audioBlob], uniqueFileName, { type: 'audio/webm' });
         setSelectedFile(audioFile);
         setFileType('audio');
         setFilePreview('Mensaje de voz grabado');
@@ -318,30 +320,34 @@ export default function ConversationsPage() {
   }
 
   const renderMedia = (msg: Message) => {
-    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
+    if (!msg.mediaUrl) {
+      return <p className="text-sm">{msg.body}</p>;
+    }
+    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl;
     const mediaType = msg.mediaContentType;
-
+  
     if (mediaType?.startsWith('image/')) {
       return (
         <Image
-            src={url}
-            alt="Imagen adjunta"
-            width={300}
-            height={300}
-            className="rounded-lg object-cover"
+          src={url}
+          alt="Imagen adjunta"
+          width={300}
+          height={300}
+          className="rounded-lg object-cover"
         />
       );
     }
-
+  
     if (mediaType?.startsWith('audio/')) {
       return (
         <audio controls src={url} className="w-full">
-            Tu navegador no soporta el elemento de audio.
+          Tu navegador no soporta el elemento de audio.
         </audio>
       );
     }
-
-    return <p className="text-sm">{msg.body || 'Archivo multimedia no soportado'}</p>;
+  
+    // Fallback for media without a specific renderer, can also include a link
+    return msg.body ? <p className="text-sm">{msg.body}</p> : <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline">Ver archivo adjunto</a>;
   }
 
   return (
@@ -435,7 +441,7 @@ export default function ConversationsPage() {
                                     ? "bg-blue-500 text-white rounded-br-none" 
                                     : "bg-white text-gray-800 rounded-bl-none"
                             )}>
-                                {msg.mediaUrl ? renderMedia(msg) : <p className="text-sm">{msg.body}</p>}
+                                {renderMedia(msg)}
                                 <p className="text-xs opacity-75 mt-1 text-right">{format(new Date(msg.timestamp.seconds * 1000), 'HH:mm')}</p>
                             </div>
                         </div>
@@ -475,7 +481,7 @@ export default function ConversationsPage() {
                     />
                     <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden"/>
                     <div className="absolute left-1 bottom-2 flex items-center">
-                        <Button size="icon" variant="ghost" className="h-10 w-10 text-muted-foreground" onClick={() => openFilePicker('image/*')}>
+                        <Button size="icon" variant="ghost" className="h-10 w-10 text-muted-foreground" onClick={() => openFilePicker('image/*,audio/*')}>
                             <Paperclip className="h-5 w-5" />
                         </Button>
                          <Button size="icon" variant={isRecording ? "destructive" : "ghost"} className="h-10 w-10 text-muted-foreground" onClick={handleMicClick}>

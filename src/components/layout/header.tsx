@@ -118,6 +118,7 @@ export default function Header() {
   
   const { data: unreadMessages } = useFirestoreQuery<Message>(
     'conversaciones',
+    'unread',
     where('read', '==', false),
     where('direction', '==', 'inbound')
   );
@@ -383,7 +384,7 @@ export default function Header() {
                     <MessageCircle className="h-5 w-5" />
                     {unreadMessages && unreadMessages.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                       </span>
                     )}

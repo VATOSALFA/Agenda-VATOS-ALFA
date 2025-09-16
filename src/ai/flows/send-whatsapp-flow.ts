@@ -18,8 +18,15 @@ const WhatsappConfirmationInputSchema = z.object({
 
 type WhatsappConfirmationInput = z.infer<typeof WhatsappConfirmationInputSchema>;
 
+interface WhatsappConfirmationOutput {
+    sid?: string;
+    from?: string;
+    to?: string;
+    body?: string;
+    error?: string;
+}
 
-export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput): Promise<string> {
+export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput): Promise<WhatsappConfirmationOutput> {
   
   // --- Twilio API Integration using Approved Templates ---
   
@@ -29,7 +36,7 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
   
   if (!ACCOUNT_SID || !WHATSAPP_TOKEN) {
       console.error("Twilio credentials are not set.");
-      return "Error: Faltan credenciales de Twilio en el servidor.";
+      return { error: "Faltan credenciales de Twilio en el servidor." };
   }
 
   const reservationDateTime = parseISO(`${input.reservationDate}T${input.reservationTime}:00`);
@@ -42,26 +49,28 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
   } else if (clientPhone.length === 12 && clientPhone.startsWith('521')) { // Already has 521
       clientPhone = `+${clientPhone}`;
   }
-
+  const toPhoneNumber = `whatsapp:${clientPhone}`;
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json`;
   
   const body = new URLSearchParams();
-  body.append('To', `whatsapp:${clientPhone}`);
+  body.append('To', toPhoneNumber);
   body.append('From', FROM_NUMBER);
   
   // Use the approved template SID for appointment confirmation
   body.append('ContentSid', 'HX18fff4936a83e0ec91cd5bf3099efaa9');
 
   // Provide the variables for the template
-  // Twilio uses {{1}}, {{2}}, etc. as placeholders.
-  // We need to map our data to these placeholders.
-  // Assuming: {{1}} -> clientName, {{2}} -> serviceName, {{3}} -> formattedDateTime
-  body.append('ContentVariables', JSON.stringify({
+  const contentVariables = JSON.stringify({
       '1': input.clientName,
       '2': input.serviceName,
       '3': formattedDateTime,
-  }));
+  });
+  body.append('ContentVariables', contentVariables);
+
+  // We need to construct the message body ourselves to save it.
+  // This is a template string that matches the Twilio template.
+  const messageBody = `¡Hola, ${input.clientName}! Tu cita para ${input.serviceName} ha sido confirmada para el ${formattedDateTime}. ¡Te esperamos!`;
 
 
   try {
@@ -82,10 +91,15 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
     }
 
     console.log("Mensaje de Twilio enviado con éxito:", responseData);
-    return responseData.sid; // Returns the Message SID.
+    return { 
+        sid: responseData.sid,
+        from: FROM_NUMBER,
+        to: toPhoneNumber,
+        body: messageBody,
+    };
 
   } catch(error) {
       console.error("Fallo en la llamada a la API de Twilio:", error);
-      return `Error: ${error instanceof Error ? error.message : 'Error desconocido'}`;
+      return { error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }

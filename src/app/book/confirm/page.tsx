@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, writeBatch, Timestamp, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, Timestamp, doc, addDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { addMinutes, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -116,17 +116,29 @@ function ConfirmPageContent() {
             
             // Send WhatsApp notification
             if (data.telefono) {
+                const serviceNames = selectedServices.map(s => s.name).join(', ');
+                
                 sendWhatsappConfirmation({
                     clientName: `${data.nombre} ${data.apellido}`,
                     clientPhone: data.telefono,
-                    serviceName: selectedServices.map(s => s.name).join(', '),
+                    serviceName: serviceNames,
                     reservationDate: dateStr,
                     reservationTime: time,
-                }).then(messageId => {
-                    if(messageId.startsWith('Error:')) {
-                       toast({ variant: 'destructive', title: 'Error de WhatsApp', description: messageId });
-                    } else {
-                       toast({ title: 'Notificación de WhatsApp enviada.' });
+                }).then(async (result) => {
+                    if (result.sid && result.from && result.body) {
+                        toast({ title: 'Notificación de WhatsApp enviada.' });
+                        // Save outbound message to Firestore
+                        await addDoc(collection(db, 'conversaciones'), {
+                            from: result.from,
+                            to: result.to,
+                            body: result.body,
+                            messageSid: result.sid,
+                            timestamp: Timestamp.now(),
+                            direction: 'outbound',
+                            read: true,
+                        });
+                    } else if (result.error) {
+                        toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });
                     }
                 }).catch(err => {
                     console.error("WhatsApp send failed:", err);

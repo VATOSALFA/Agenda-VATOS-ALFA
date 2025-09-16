@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -19,6 +20,7 @@ import { sendWhatsappReply } from '@/ai/flows/send-whatsapp-reply-flow';
 import { addDoc, collection, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 interface Conversation {
     contactId: string;
@@ -31,6 +33,8 @@ interface Conversation {
 
 export default function ConversationsPage() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const phoneParam = searchParams.get('phone');
   const [queryKey, setQueryKey] = useState(0);
   const { data: messages, loading: messagesLoading } = useFirestoreQuery<Message>('conversaciones', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
@@ -85,6 +89,21 @@ export default function ConversationsPage() {
       })
       .sort((a, b) => b.lastMessageTimestamp.getTime() - a.lastMessageTimestamp.getTime());
   }, [messages, clients, messagesLoading, clientsLoading]);
+  
+  useEffect(() => {
+    if (phoneParam && conversations.length > 0) {
+      let normalizedPhone = phoneParam.replace(/\D/g, '');
+      if (normalizedPhone.length === 10) {
+          normalizedPhone = `521${normalizedPhone}`;
+      }
+      const fullNormalizedPhone = `whatsapp:+${normalizedPhone}`;
+      const conversationToSelect = conversations.find(c => c.contactId === fullNormalizedPhone);
+      if (conversationToSelect) {
+        handleSelectConversation(conversationToSelect);
+      }
+    }
+  }, [phoneParam, conversations]);
+
 
   const markAsRead = async (conversation: Conversation) => {
     const unreadMessages = conversation.messages.filter(m => m.direction === 'inbound' && !m.read);

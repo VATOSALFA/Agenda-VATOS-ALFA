@@ -30,6 +30,7 @@ import {
   Trash2,
   Send,
   Eye,
+  MessageCircle,
 } from 'lucide-react';
 import type { Reservation, Sale } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
@@ -43,6 +44,7 @@ import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
+import Link from 'next/link';
 
 
 interface ReservationDetailModalProps {
@@ -173,9 +175,11 @@ export function ReservationDetailModal({
                         <span>{reservation.customer?.telefono || 'No registrado'}</span>
                     </div>
                     {reservation.customer?.telefono && (
-                        <a href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
-                            <Button variant="outline" size="sm"><Send className="w-4 h-4 mr-2"/> Enviar WhatsApp</Button>
-                        </a>
+                        <Link href={`/admin/conversations?phone=${reservation.customer.telefono}`} passHref>
+                            <Button variant="outline" size="sm">
+                                <MessageCircle className="w-4 h-4 mr-2"/> Ver Conversación
+                            </Button>
+                        </Link>
                     )}
                 </div>
             </div>

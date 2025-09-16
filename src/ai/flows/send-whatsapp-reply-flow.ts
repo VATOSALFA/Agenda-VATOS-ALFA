@@ -11,7 +11,13 @@ interface ReplyInput {
     body: string;
 }
 
-export async function sendWhatsappReply(input: ReplyInput): Promise<{ sid: string } | { error: string }> {
+interface ReplyOutput {
+    sid: string;
+    from: string; // We'll return the 'from' number to be stored in the DB
+    error?: string;
+}
+
+export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<ReplyOutput>> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER; 
@@ -35,7 +41,7 @@ export async function sendWhatsappReply(input: ReplyInput): Promise<{ sid: strin
     });
 
     console.log('Twilio reply sent with SID:', message.sid);
-    return { sid: message.sid };
+    return { sid: message.sid, from: fromNumber };
   } catch (error) {
     console.error('Error sending Twilio reply:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';

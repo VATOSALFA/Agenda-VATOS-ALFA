@@ -121,10 +121,10 @@ export default function ConversationsPage() {
             body: replyMessage,
         });
 
-        if (result.sid) {
+        if (result.sid && result.from) {
             // Save outbound message to Firestore to display it in the chat
             await addDoc(collection(db, 'conversaciones'), {
-                from: process.env.NEXT_PUBLIC_TWILIO_WHATSAPP_NUMBER, // Your Twilio number
+                from: result.from, // Your Twilio number, now returned from the flow
                 to: selectedConversation.contactId,
                 body: replyMessage,
                 messageSid: result.sid,
@@ -136,7 +136,7 @@ export default function ConversationsPage() {
             setReplyMessage('');
             setQueryKey(prev => prev + 1); // Refresh messages
         } else {
-            throw new Error(result.error || 'Error desconocido');
+            throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
         }
 
     } catch (error: any) {

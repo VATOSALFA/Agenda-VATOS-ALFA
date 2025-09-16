@@ -240,8 +240,8 @@ export default function ConversationsPage() {
                 </div>
             </header>
             
-            <div className="flex-1 overflow-hidden">
-                <div className="h-full p-4 space-y-4">
+            <ScrollArea className="flex-1" ref={scrollAreaRef}>
+                <div className="p-4 space-y-4">
                     {selectedConversation.messages.map(msg => (
                         <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                             <div className={cn(
@@ -256,7 +256,7 @@ export default function ConversationsPage() {
                         </div>
                     ))}
                 </div>
-            </div>
+            </ScrollArea>
             
              <footer className="p-4 border-t bg-background flex-shrink-0">
                 <div className="relative">

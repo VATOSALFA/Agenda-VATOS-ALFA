@@ -4,7 +4,14 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import {
   Scissors,
@@ -60,7 +67,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import type { Message } from '@/lib/types';
-import { where } from 'firebase/firestore';
 
 
 const mainNavLinks = [
@@ -115,13 +121,22 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
   const { user, signOut } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
   
-  const { data: unreadMessages } = useFirestoreQuery<Message>(
-    'conversaciones',
-    'unread',
-    where('read', '==', false),
-    where('direction', '==', 'inbound')
-  );
+  useEffect(() => {
+    const q = query(
+      collection(db, 'conversaciones'),
+      where('read', '==', false),
+      where('direction', '==', 'inbound')
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      setUnreadCount(querySnapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
 
@@ -382,10 +397,10 @@ export default function Header() {
              <Link href="/admin/conversations" passHref>
                 <Button variant="ghost" size="icon" className={cn(
                     "hover:bg-white/10 hover:text-white relative",
-                    unreadMessages && unreadMessages.length > 0 ? "text-red-500 hover:text-red-400" : "text-gray-300"
+                    unreadCount > 0 ? "text-red-500 hover:text-red-400" : "text-gray-300"
                 )}>
                     <MessageCircle className="h-5 w-5" />
-                    {unreadMessages && unreadMessages.length > 0 && (
+                    {unreadCount > 0 && (
                       <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>

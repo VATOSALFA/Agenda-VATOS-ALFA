@@ -102,7 +102,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && !messagesLoading && conversations) {
+    if (phoneParam && !messagesLoading && conversations.length > 0) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;
@@ -180,6 +180,7 @@ export default function ConversationsPage() {
 
     try {
         if (selectedFile) {
+            // Use a unique name for all uploads to avoid conflicts
             const uniqueFileName = `${crypto.randomUUID()}-${selectedFile.name.replace(/\s+/g, '_')}`;
             const storageRef = ref(storage, `whatsapp_media/${uniqueFileName}`);
             const snapshot = await uploadBytes(storageRef, selectedFile);
@@ -323,6 +324,7 @@ export default function ConversationsPage() {
 
   const renderMedia = (msg: Message) => {
     const hasMedia = !!msg.mediaUrl;
+    // Condition to check if body has meaningful content, not just whitespace.
     const hasBody = msg.body && msg.body.trim().length > 0;
   
     if (!hasMedia) {
@@ -332,6 +334,7 @@ export default function ConversationsPage() {
     const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
     const mediaType = msg.mediaContentType;
   
+    // Always show media if it exists. Show body text underneath if it also exists.
     if (mediaType?.startsWith('image/')) {
       return (
         <div className="space-y-2">

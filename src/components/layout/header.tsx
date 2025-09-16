@@ -368,6 +368,12 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Link href="/admin/conversations" passHref>
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                    <MessageCircle className="h-5 w-5" />
+                </Button>
+            </Link>
             
             {canSee('settings') && (
               <DropdownMenu>

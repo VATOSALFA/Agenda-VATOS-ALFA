@@ -179,7 +179,7 @@ export default function ConversationsPage() {
                 to: selectedConversation.contactId,
                 body: replyMessage,
                 messageSid: result.sid,
-                timestamp: new Date(),
+                timestamp: Timestamp.now(),
                 direction: 'outbound',
                 read: true,
             });
@@ -204,6 +204,11 @@ export default function ConversationsPage() {
   };
 
   const isLoading = messagesLoading || clientsLoading;
+  
+  const getMediaProxyUrl = (mediaUrl: string, messageSid: string) => {
+    const mediaSid = mediaUrl.split('/').pop();
+    return `/api/twilio-media/${messageSid}/${mediaSid}`;
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
@@ -300,7 +305,7 @@ export default function ConversationsPage() {
                             )}>
                                 {msg.mediaUrl ? (
                                     <Image
-                                        src={msg.mediaUrl}
+                                        src={getMediaProxyUrl(msg.mediaUrl, msg.messageSid)}
                                         alt="Imagen adjunta"
                                         width={300}
                                         height={300}

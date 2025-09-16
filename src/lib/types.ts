@@ -293,6 +293,8 @@ export interface Message {
     from: string;
     to?: string;
     body: string;
+    mediaUrl?: string;
+    mediaContentType?: string;
     timestamp: {
         seconds: number;
         nanoseconds: number;

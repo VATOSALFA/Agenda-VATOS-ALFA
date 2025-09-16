@@ -21,6 +21,7 @@ import { addDoc, collection, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 
 interface Conversation {
     contactId: string;
@@ -92,7 +93,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && !messagesLoading) {
+    if (phoneParam && !messagesLoading && conversations) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;
@@ -297,7 +298,17 @@ export default function ConversationsPage() {
                                     ? "bg-blue-500 text-white rounded-br-none" 
                                     : "bg-white text-gray-800 rounded-bl-none"
                             )}>
-                                <p className="text-sm">{msg.body}</p>
+                                {msg.mediaUrl ? (
+                                    <Image
+                                        src={msg.mediaUrl}
+                                        alt="Imagen adjunta"
+                                        width={300}
+                                        height={300}
+                                        className="rounded-lg object-cover"
+                                    />
+                                ) : (
+                                    <p className="text-sm">{msg.body}</p>
+                                )}
                                 <p className="text-xs opacity-75 mt-1 text-right">{format(new Date(msg.timestamp.seconds * 1000), 'HH:mm')}</p>
                             </div>
                         </div>

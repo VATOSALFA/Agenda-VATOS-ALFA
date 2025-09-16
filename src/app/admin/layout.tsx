@@ -45,6 +45,15 @@ export default function AdminLayout({ children }: Props) {
   const pathname = usePathname();
   const { user } = useAuth();
   
+  // If the current page is the conversations page, render it without the admin sidebar.
+  if (pathname === '/admin/conversations') {
+    return (
+        <div className="flex-1 overflow-y-auto">
+            {children}
+        </div>
+    );
+  }
+
   const canSeeConfiguracion = user?.role === 'Administrador general';
 
   return (

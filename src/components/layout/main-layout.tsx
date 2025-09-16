@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Header from './header';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
@@ -32,27 +32,7 @@ export default function MainLayout({ children }: Props) {
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
-  // Sound unlock effect
-  useEffect(() => {
-    const unlockAudio = () => {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (audioContext.state === 'suspended') {
-        audioContext.resume();
-      }
-      // Remove the event listener after the first interaction
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-    };
-
-    document.addEventListener('click', unlockAudio);
-    document.addEventListener('touchstart', unlockAudio);
-
-    return () => {
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-    };
-  }, []);
-
+  // Sound unlock effect - no longer needed for sound
   useEffect(() => {
     const handleNewReservation = () => {
         setReservationInitialData(null);
@@ -84,6 +64,8 @@ export default function MainLayout({ children }: Props) {
     const q = query(
       collection(db, 'conversaciones'),
       where('timestamp', '>', mountTime),
+      orderBy('timestamp', 'desc'),
+      limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -95,20 +77,10 @@ export default function MainLayout({ children }: Props) {
               toast({
                 title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
                 description: message.body,
-                duration: 10000, 
+                duration: Infinity, // This makes the toast persistent
                 onClick: () => router.push('/admin/conversations'),
                 className: 'cursor-pointer hover:bg-muted',
               });
-              
-              // Play notification sound
-              try {
-                const audio = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
-                audio.play().catch(error => {
-                  console.log("La reproducción del audio requiere interacción del usuario.", error);
-                });
-              } catch (e) {
-                console.error("Error al reproducir el sonido de notificación:", e);
-              }
             }
           }
         }

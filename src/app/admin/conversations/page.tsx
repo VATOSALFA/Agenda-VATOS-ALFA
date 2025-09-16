@@ -96,7 +96,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && !messagesLoading) {
+    if (phoneParam && !messagesLoading && conversations) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;
@@ -335,7 +335,7 @@ export default function ConversationsPage() {
                                     ? "bg-blue-500 text-white rounded-br-none" 
                                     : "bg-white text-gray-800 rounded-bl-none"
                             )}>
-                                {msg.mediaUrl ? (
+                                {msg.mediaUrl && !msg.body.startsWith('Archivo adjunto:') ? (
                                     <Image
                                         src={msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl}
                                         alt="Imagen adjunta"
@@ -356,7 +356,7 @@ export default function ConversationsPage() {
              <footer className="p-4 border-t bg-background flex-shrink-0">
                 {filePreview && (
                   <div className="relative w-24 h-24 mb-2 p-1 border rounded-md">
-                    <Image src={filePreview} alt="Vista previa" layout="fill" objectFit="cover" className="rounded"/>
+                    <Image src={filePreview} alt="Vista previa" fill objectFit="cover" className="rounded"/>
                     <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 rounded-full bg-gray-600/50 hover:bg-gray-800/80 text-white" onClick={clearSelectedFile}>
                         <X className="h-4 w-4"/>
                     </Button>
@@ -401,3 +401,4 @@ export default function ConversationsPage() {
     </div>
   );
 }
+

@@ -30,10 +30,12 @@ export async function POST(request: NextRequest) {
 
   const messageData: Partial<Message> = {
     from: from,
+    to: params.get('To') || undefined,
     messageSid: messageSid,
     timestamp: Timestamp.now(),
     direction: 'inbound',
     read: false,
+    body: messageBody || '',
   };
   
   if (numMedia > 0) {
@@ -42,17 +44,17 @@ export async function POST(request: NextRequest) {
       console.log("MediaUrl0:", mediaUrl);
       console.log("MediaContentType0:", mediaContentType);
 
-      messageData.mediaUrl = mediaUrl!;
-      messageData.mediaContentType = mediaContentType!;
-      // Si hay una imagen pero no hay texto, usamos un cuerpo de texto predeterminado.
-      messageData.body = messageBody || `Archivo adjunto: ${mediaContentType}`;
+      if (mediaUrl) {
+        messageData.mediaUrl = mediaUrl;
+        messageData.mediaContentType = mediaContentType!;
+      }
+      // If there's no text body but there is media, the body will just be an empty string.
   } else {
-      // Si no hay multimedia, el cuerpo del mensaje es obligatorio.
+      // If there's no media, the message body is required.
       if (!messageBody) {
         console.error("Webhook de Twilio: El mensaje no tiene cuerpo ni multimedia.");
         return new NextResponse('<Response></Response>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
       }
-      messageData.body = messageBody;
   }
   
   console.log("-------------------------------");
@@ -77,3 +79,4 @@ export async function POST(request: NextRequest) {
     });
   }
 }
+

@@ -5,8 +5,6 @@
 
 import { ai } from '@/ai/genkit';
 import twilio from 'twilio';
-import 'dotenv/config';
-
 
 export async function sendTestTwilioMessage(): Promise<{ sid: string } | { error: string }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -19,7 +17,7 @@ export async function sendTestTwilioMessage(): Promise<{ sid: string } | { error
   }
   
   if (accountSid === 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' || authToken === 'your_auth_token') {
-      return { error: 'Estás usando las credenciales de ejemplo. Por favor, actualiza el archivo .env con tus claves de Twilio.'}
+      return { error: 'Estás usando las credenciales de ejemplo. Por favor, actualiza las credenciales de Twilio en la configuración de tu backend de Firebase.'}
   }
 
   try {

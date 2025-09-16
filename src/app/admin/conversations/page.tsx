@@ -358,14 +358,14 @@ export default function ConversationsPage() {
       );
     }
   
-    // Fallback for other media types (documents, etc.) or if body is the main content
+    // Fallback for other media types (documents, etc.)
     return (
-      <div className="space-y-2">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
-          <Paperclip className="h-4 w-4" /> Ver archivo adjunto
-        </a>
-        {hasBody && <p className="text-sm mt-1">{msg.body}</p>}
-      </div>
+        <div className="space-y-2">
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
+            <Paperclip className="h-4 w-4" /> Ver archivo adjunto
+            </a>
+            {hasBody && <p className="text-sm mt-1">{msg.body}</p>}
+        </div>
     );
   }
 
@@ -529,5 +529,3 @@ export default function ConversationsPage() {
     </div>
   );
 }
-
-    

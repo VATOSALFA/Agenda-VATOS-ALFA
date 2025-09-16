@@ -180,7 +180,6 @@ export default function ConversationsPage() {
 
     try {
         if (selectedFile) {
-            // Use a unique name for the file to avoid collisions in storage
             const uniqueFileName = `${Date.now()}-${selectedFile.name.replace(/\s+/g, '_')}`;
             const storageRef = ref(storage, `whatsapp_media/${uniqueFileName}`);
             const snapshot = await uploadBytes(storageRef, selectedFile);
@@ -266,36 +265,36 @@ export default function ConversationsPage() {
   // Audio Recording Logic
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = event => {
-        audioChunksRef.current.push(event.data);
-      };
-      
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const uniqueFileName = `voice-message-${Date.now()}.webm`;
-        const audioFile = new File([audioBlob], uniqueFileName, { type: 'audio/webm' });
-        
-        setSelectedFile(audioFile);
-        setFileType('audio');
-        setFilePreview('Mensaje de voz grabado');
-        
-        stream.getTracks().forEach(track => track.stop()); // Stop mic access
-      };
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
 
-      mediaRecorder.start();
-      setIsRecording(true);
+        mediaRecorder.ondataavailable = event => {
+            audioChunksRef.current.push(event.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            const uniqueFileName = `voice-message-${crypto.randomUUID()}.webm`;
+            const audioFile = new File([audioBlob], uniqueFileName, { type: 'audio/webm' });
+            
+            setSelectedFile(audioFile);
+            setFileType('audio');
+            setFilePreview('Mensaje de voz grabado');
+            
+            stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
     } catch (err) {
-      console.error("Microphone permission denied:", err);
-      toast({
-        variant: 'destructive',
-        title: 'Permiso de micrófono denegado',
-        description: 'Por favor, habilita el acceso al micrófono en la configuración de tu navegador.',
-      });
+        console.error("Microphone permission denied:", err);
+        toast({
+            variant: 'destructive',
+            title: 'Permiso de micrófono denegado',
+            description: 'Por favor, habilita el acceso al micrófono en la configuración de tu navegador.',
+        });
     }
   };
 
@@ -324,55 +323,50 @@ export default function ConversationsPage() {
 
   const renderMedia = (msg: Message) => {
     const hasMedia = !!msg.mediaUrl;
-    const hasBody = !!msg.body && msg.body.trim().length > 0;
-
-    if (!hasMedia && hasBody) {
+    if (!hasMedia) {
       return <p className="text-sm">{msg.body}</p>;
     }
   
-    if (hasMedia) {
-        const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
-        const mediaType = msg.mediaContentType;
-      
-        if (mediaType?.startsWith('image/')) {
-          return (
-            <div className="space-y-2">
-              <Image
-                src={url}
-                alt="Imagen adjunta"
-                width={300}
-                height={300}
-                className="rounded-lg object-cover"
-              />
-              {hasBody && <p className="text-sm">{msg.body}</p>}
-            </div>
-          );
-        }
-      
-        if (mediaType?.startsWith('audio/')) {
-          return (
-             <div className="space-y-2">
-                <audio controls src={url} className="w-full">
-                  Tu navegador no soporta el elemento de audio.
-                </audio>
-                {hasBody && <p className="text-sm">{msg.body}</p>}
-             </div>
-          );
-        }
-
-        // Fallback for other media types (documents, etc.)
-         return (
-            <div className="space-y-2">
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
-                <Paperclip className="h-4 w-4" /> Ver archivo adjunto
-              </a>
-              {hasBody && <p className="text-sm">{msg.body}</p>}
-            </div>
-        );
+    // If there is media, prioritize showing it.
+    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
+    const mediaType = msg.mediaContentType;
+    const hasBody = !!msg.body && msg.body.trim().length > 0;
+  
+    if (mediaType?.startsWith('image/')) {
+      return (
+        <div className="space-y-2">
+          <Image
+            src={url}
+            alt="Imagen adjunta"
+            width={300}
+            height={300}
+            className="rounded-lg object-cover"
+          />
+          {hasBody && <p className="text-sm">{msg.body}</p>}
+        </div>
+      );
     }
-
-    // Default case if no media and no body (should be rare)
-    return null;
+  
+    if (mediaType?.startsWith('audio/')) {
+      return (
+        <div className="space-y-2 w-64">
+          <audio controls src={url} className="w-full">
+            Tu navegador no soporta el elemento de audio.
+          </audio>
+          {hasBody && <p className="text-sm">{msg.body}</p>}
+        </div>
+      );
+    }
+  
+    // Fallback for other media types (documents, etc.) or if body is the only thing
+    return (
+      <div className="space-y-2">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
+          <Paperclip className="h-4 w-4" /> Ver archivo adjunto
+        </a>
+        {hasBody && <p className="text-sm">{msg.body}</p>}
+      </div>
+    );
   }
 
   return (

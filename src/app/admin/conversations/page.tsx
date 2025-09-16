@@ -335,7 +335,7 @@ export default function ConversationsPage() {
                                     ? "bg-blue-500 text-white rounded-br-none" 
                                     : "bg-white text-gray-800 rounded-bl-none"
                             )}>
-                                {msg.mediaUrl && !msg.body.startsWith('Archivo adjunto:') ? (
+                                {msg.mediaUrl ? (
                                     <Image
                                         src={msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl}
                                         alt="Imagen adjunta"

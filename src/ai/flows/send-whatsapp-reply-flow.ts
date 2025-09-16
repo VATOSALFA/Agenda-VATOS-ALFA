@@ -5,6 +5,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { getSecret } from '@genkit-ai/googleai';
 import twilio from 'twilio';
 
 interface ReplyInput {
@@ -19,10 +20,26 @@ interface ReplyOutput {
     error?: string;
 }
 
+async function getTwilioCredentials() {
+  if (process.env.NODE_ENV === 'production') {
+    const [accountSid, authToken, fromNumber] = await Promise.all([
+      getSecret('TWILIO_ACCOUNT_SID'),
+      getSecret('TWILIO_AUTH_TOKEN'),
+      getSecret('TWILIO_WHATSAPP_NUMBER')
+    ]);
+    return { accountSid, authToken, fromNumber };
+  } else {
+    return {
+      accountSid: process.env.TWILIO_ACCOUNT_SID,
+      authToken: process.env.TWILIO_AUTH_TOKEN,
+      fromNumber: process.env.TWILIO_WHATSAPP_NUMBER
+    };
+  }
+}
+
 export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<ReplyOutput>> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER; 
+  
+  const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
 
   if (!accountSid || !authToken || !fromNumber) {
     console.error('Twilio environment variables are not fully set for replies.');
@@ -68,3 +85,4 @@ export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<Repl
     return { error: `Fallo al enviar respuesta de Twilio: ${errorMessage}` };
   }
 }
+

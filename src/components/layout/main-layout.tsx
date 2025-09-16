@@ -62,23 +62,24 @@ export default function MainLayout({ children }: Props) {
 
     const q = query(
       collection(db, 'conversaciones'),
-      where('direction', '==', 'inbound'),
       orderBy('timestamp', 'desc'),
       limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        const message = change.doc.data();
-        if (change.type === 'added' && message.timestamp.toMillis() > mountTime.toMillis()) {
-          if (pathname !== '/admin/conversations') {
-            toast({
-              title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
-              description: message.body,
-              duration: 10000, 
-              onClick: () => router.push('/admin/conversations'),
-              className: 'cursor-pointer hover:bg-muted',
-            });
+        if (change.type === 'added') {
+          const message = change.doc.data();
+          if (message.timestamp.toMillis() > mountTime.toMillis() && message.direction === 'inbound') {
+            if (pathname !== '/admin/conversations') {
+              toast({
+                title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
+                description: message.body,
+                duration: 10000, 
+                onClick: () => router.push('/admin/conversations'),
+                className: 'cursor-pointer hover:bg-muted',
+              });
+            }
           }
         }
       });
@@ -86,6 +87,7 @@ export default function MainLayout({ children }: Props) {
 
     return () => unsubscribe();
   }, [pathname, router, toast]);
+
 
   // Don't render header on login page
   if (pathname === '/login') {

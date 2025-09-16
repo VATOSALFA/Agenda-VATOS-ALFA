@@ -323,6 +323,7 @@ export default function ConversationsPage() {
   
   const getMediaProxyUrl = (mediaUrl: string, messageSid: string) => {
     const mediaSid = mediaUrl.split('/').pop();
+    if (!mediaSid) return mediaUrl; // Fallback to direct url if SID can't be parsed
     return `/api/twilio-media/${messageSid}/${mediaSid}`;
   }
 
@@ -334,6 +335,7 @@ export default function ConversationsPage() {
         return <p className="text-sm">{msg.body}</p>;
     }
     
+    // For inbound messages, use the proxy URL. For outbound (our own uploads), use direct URL.
     const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
     const mediaType = msg.mediaContentType;
     

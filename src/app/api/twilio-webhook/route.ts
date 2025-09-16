@@ -20,9 +20,17 @@ export async function POST(request: NextRequest) {
   console.log("Message SID:", messageSid);
   console.log("NumMedia:", numMedia);
   
+  if (!from || !messageSid) {
+    console.error("Webhook de Twilio: Faltan datos esenciales (From o MessageSid).");
+    return new NextResponse('<Response></Response>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' },
+    });
+  }
+
   const messageData: Partial<Message> = {
-    from: from!,
-    messageSid: messageSid!,
+    from: from,
+    messageSid: messageSid,
     timestamp: Timestamp.now(),
     direction: 'inbound',
     read: false,
@@ -36,21 +44,19 @@ export async function POST(request: NextRequest) {
 
       messageData.mediaUrl = mediaUrl!;
       messageData.mediaContentType = mediaContentType!;
-      messageData.body = messageBody || `Archivo ${mediaContentType} adjunto`; // Fallback body
+      // Si hay una imagen pero no hay texto, usamos un cuerpo de texto predeterminado.
+      messageData.body = messageBody || `Archivo adjunto: ${mediaContentType}`;
   } else {
-      messageData.body = messageBody!;
+      // Si no hay multimedia, el cuerpo del mensaje es obligatorio.
+      if (!messageBody) {
+        console.error("Webhook de Twilio: El mensaje no tiene cuerpo ni multimedia.");
+        return new NextResponse('<Response></Response>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
+      }
+      messageData.body = messageBody;
   }
   
   console.log("-------------------------------");
 
-
-  if (!from || !messageSid || (!messageBody && numMedia === 0)) {
-    console.error("Webhook de Twilio: Faltan datos en la carga útil.");
-    return new NextResponse('<Response></Response>', {
-      status: 200,
-      headers: { 'Content-Type': 'text/xml' },
-    });
-  }
 
   try {
     // 1. PRIMERO, guarda el mensaje entrante en Firestore.

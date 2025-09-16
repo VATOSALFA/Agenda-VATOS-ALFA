@@ -9,6 +9,10 @@ import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { onSnapshot, collection, query, where, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 type Props = {
   children: ReactNode;
@@ -16,6 +20,8 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
+  const { toast } = useToast();
+  const router = useRouter();
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
@@ -51,6 +57,34 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    // Escuchar solo los mensajes que llegan después de que el componente se monta
+    const q = query(
+      collection(db, 'conversaciones'),
+      where('direction', '==', 'inbound'),
+      where('timestamp', '>', Timestamp.now())
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const message = change.doc.data();
+          // No mostrar notificaciones si ya estamos en la página de conversaciones
+          if (pathname !== '/admin/conversations') {
+            toast({
+              title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
+              description: message.body,
+              duration: 10000, // 10 segundos
+              onClick: () => router.push('/admin/conversations'),
+              className: 'cursor-pointer hover:bg-muted',
+            });
+          }
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [pathname, router, toast]);
 
   // Don't render header on login page
   if (pathname === '/login') {

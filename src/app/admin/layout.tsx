@@ -48,7 +48,7 @@ export default function AdminLayout({ children }: Props) {
   // If the current page is the conversations page, render it without the admin sidebar.
   if (pathname === '/admin/conversations') {
     return (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 h-screen overflow-y-auto">
             {children}
         </div>
     );

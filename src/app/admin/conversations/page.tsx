@@ -222,12 +222,12 @@ export default function ConversationsPage() {
 
       {/* Panel de Mensajes */}
       <div className={cn(
-        "flex-1 flex-col",
+        "flex-1 flex-col h-screen",
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (
           <>
-            <div className="p-4 border-b flex items-center gap-4 bg-background">
+            <div className="p-4 border-b flex items-center gap-4 bg-background flex-shrink-0">
                 <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedConversation(null)}>
                     <ChevronLeft className="h-6 w-6" />
                 </Button>
@@ -256,7 +256,7 @@ export default function ConversationsPage() {
                     ))}
                 </div>
             </ScrollArea>
-             <div className="p-4 border-t bg-background">
+             <div className="p-4 border-t bg-background flex-shrink-0">
                 <div className="relative">
                     <Textarea 
                         placeholder="Escribe un mensaje..." 

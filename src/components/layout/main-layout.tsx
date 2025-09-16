@@ -35,15 +35,21 @@ export default function MainLayout({ children }: Props) {
   // Sound unlock effect
   useEffect(() => {
     const unlockAudio = () => {
-      const audio = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
-      audio.volume = 0;
-      audio.play().catch(() => {});
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      // Remove the event listener after the first interaction
       document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
     };
+
     document.addEventListener('click', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
 
     return () => {
       document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
     };
   }, []);
 

@@ -32,6 +32,21 @@ export default function MainLayout({ children }: Props) {
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
+  // Sound unlock effect
+  useEffect(() => {
+    const unlockAudio = () => {
+      const audio = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
+      audio.volume = 0;
+      audio.play().catch(() => {});
+      document.removeEventListener('click', unlockAudio);
+    };
+    document.addEventListener('click', unlockAudio);
+
+    return () => {
+      document.removeEventListener('click', unlockAudio);
+    };
+  }, []);
+
   useEffect(() => {
     const handleNewReservation = () => {
         setReservationInitialData(null);
@@ -63,8 +78,6 @@ export default function MainLayout({ children }: Props) {
     const q = query(
       collection(db, 'conversaciones'),
       where('timestamp', '>', mountTime),
-      orderBy('timestamp', 'desc'),
-      limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

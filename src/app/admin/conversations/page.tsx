@@ -336,7 +336,7 @@ export default function ConversationsPage() {
     }
     
     // For inbound messages, use the proxy URL. For outbound (our own uploads), use direct URL.
-    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
+    const url = msg.direction === 'inbound' && msg.messageSid ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
     const mediaType = msg.mediaContentType;
     
     if (mediaType?.startsWith('image/')) {
@@ -528,3 +528,4 @@ export default function ConversationsPage() {
     </div>
   );
 }
+

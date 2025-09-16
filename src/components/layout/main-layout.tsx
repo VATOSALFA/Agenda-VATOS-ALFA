@@ -9,7 +9,7 @@ import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { onSnapshot, collection, query, where, Timestamp } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -58,23 +58,24 @@ export default function MainLayout({ children }: Props) {
   }, []);
 
   useEffect(() => {
-    // Escuchar solo los mensajes que llegan después de que el componente se monta
+    const mountTime = Timestamp.now();
+
     const q = query(
       collection(db, 'conversaciones'),
       where('direction', '==', 'inbound'),
-      where('timestamp', '>', Timestamp.now())
+      orderBy('timestamp', 'desc'),
+      limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const message = change.doc.data();
-          // No mostrar notificaciones si ya estamos en la página de conversaciones
+        const message = change.doc.data();
+        if (change.type === 'added' && message.timestamp.toMillis() > mountTime.toMillis()) {
           if (pathname !== '/admin/conversations') {
             toast({
               title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
               description: message.body,
-              duration: 10000, // 10 segundos
+              duration: 10000, 
               onClick: () => router.push('/admin/conversations'),
               className: 'cursor-pointer hover:bg-muted',
             });

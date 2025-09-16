@@ -11,27 +11,14 @@ import { format, isToday, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import type { Client } from '@/lib/types';
+import type { Client, Message } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { sendWhatsappReply } from '@/ai/flows/send-whatsapp-reply-flow';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
-
-
-interface Message {
-    id: string;
-    from: string;
-    to?: string;
-    body: string;
-    timestamp: {
-        seconds: number;
-        nanoseconds: number;
-    };
-    direction: 'inbound' | 'outbound';
-}
 
 interface Conversation {
     contactId: string;
@@ -39,6 +26,7 @@ interface Conversation {
     messages: Message[];
     lastMessageTimestamp: Date;
     client?: Client;
+    unreadCount: number;
 }
 
 export default function ConversationsPage() {
@@ -80,6 +68,7 @@ export default function ConversationsPage() {
       .map(([contactNumber, messages]) => {
         const sortedMessages = messages.sort((a, b) => a.timestamp.seconds - b.timestamp.seconds);
         const client = clientMap.get(contactNumber);
+        const unreadCount = messages.filter(m => m.direction === 'inbound' && !m.read).length;
         
         return {
           contactId: contactNumber,
@@ -87,10 +76,34 @@ export default function ConversationsPage() {
           messages: sortedMessages,
           lastMessageTimestamp: new Date(sortedMessages[sortedMessages.length - 1].timestamp.seconds * 1000),
           client: client,
+          unreadCount: unreadCount,
         };
       })
       .sort((a, b) => b.lastMessageTimestamp.getTime() - a.lastMessageTimestamp.getTime());
   }, [messages, clients, messagesLoading, clientsLoading]);
+
+  const markAsRead = async (conversation: Conversation) => {
+    const unreadMessages = conversation.messages.filter(m => m.direction === 'inbound' && !m.read);
+    if (unreadMessages.length === 0) return;
+
+    try {
+      const batch = writeBatch(db);
+      unreadMessages.forEach(msg => {
+        const msgRef = doc(db, 'conversaciones', msg.id);
+        batch.update(msgRef, { read: true });
+      });
+      await batch.commit();
+      // Optimistically update the UI, or let the real-time listener handle it
+      setQueryKey(prev => prev + 1); 
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+    }
+  };
+
+  const handleSelectConversation = (conversation: Conversation) => {
+    setSelectedConversation(conversation);
+    markAsRead(conversation);
+  };
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -130,6 +143,7 @@ export default function ConversationsPage() {
                 messageSid: result.sid,
                 timestamp: new Date(),
                 direction: 'outbound',
+                read: true,
             });
 
             toast({ title: "Mensaje enviado" });
@@ -161,7 +175,7 @@ export default function ConversationsPage() {
         selectedConversation && "hidden md:flex"
       )}>
         <div className="p-4 border-b flex items-center gap-2">
-           <Link href="/admin/profesionales">
+           <Link href="/">
                 <Button variant="ghost" size="icon" className="h-9 w-9">
                     <ChevronLeft className="h-6 w-6"/>
                 </Button>
@@ -181,7 +195,7 @@ export default function ConversationsPage() {
               {conversations.map(convo => (
                 <button
                   key={convo.contactId}
-                  onClick={() => setSelectedConversation(convo)}
+                  onClick={() => handleSelectConversation(convo)}
                   className={cn(
                     "w-full text-left p-3 rounded-lg hover:bg-muted transition-colors",
                     selectedConversation?.contactId === convo.contactId && "bg-primary/10"
@@ -189,7 +203,14 @@ export default function ConversationsPage() {
                 >
                   <div className="flex justify-between items-center">
                     <p className="font-semibold text-sm truncate">{convo.displayName}</p>
-                    <p className="text-xs text-muted-foreground flex-shrink-0">{formatMessageTimestamp(convo.lastMessageTimestamp)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-muted-foreground flex-shrink-0">{formatMessageTimestamp(convo.lastMessageTimestamp)}</p>
+                      {convo.unreadCount > 0 && (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
+                              {convo.unreadCount}
+                          </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{convo.messages[convo.messages.length - 1].body}</p>
                 </button>

@@ -41,6 +41,7 @@ import {
   Share2,
   Landmark,
   LogOut,
+  MessagesSquare,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -58,6 +59,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import type { Message } from '@/lib/types';
+import { where } from 'firebase/firestore';
 
 
 const mainNavLinks = [
@@ -112,6 +115,12 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
   const { user, signOut } = useAuth();
+  
+  const { data: unreadMessages } = useFirestoreQuery<Message>(
+    'conversaciones',
+    where('read', '==', false),
+    where('direction', '==', 'inbound')
+  );
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
 
@@ -333,7 +342,7 @@ export default function Header() {
 
             {canSee('admin') && (
               <Link
-                href="/admin/profesionales"
+                href="/admin"
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                   pathname.startsWith('/admin')
@@ -347,6 +356,17 @@ export default function Header() {
 
           </nav>
           <div className="ml-auto flex items-center space-x-2">
+            <Link href="/admin/conversations" passHref>
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
+                    <MessagesSquare className="h-5 w-5" />
+                    {unreadMessages && unreadMessages.length > 0 && (
+                      <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                      </span>
+                    )}
+                </Button>
+            </Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="bg-[#314177] hover:bg-[#40538a] text-white">
@@ -368,12 +388,6 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Link href="/admin/conversations" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
-                    <MessageCircle className="h-5 w-5" />
-                </Button>
-            </Link>
             
             {canSee('settings') && (
               <DropdownMenu>

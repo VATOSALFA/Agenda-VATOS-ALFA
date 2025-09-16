@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
       body: messageBody,
       messageSid: messageSid,
       timestamp: Timestamp.now(),
-      direction: 'inbound', 
+      direction: 'inbound',
+      read: false, // Marcar como no leído por defecto
     });
 
     // 2. LUEGO, envía una respuesta de confirmación simple a Twilio.

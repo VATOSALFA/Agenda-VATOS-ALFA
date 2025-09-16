@@ -287,3 +287,16 @@ export interface CashClosing {
     comentarios?: string;
     detalle_conteo: Record<string, number>;
 }
+
+export interface Message {
+    id: string;
+    from: string;
+    to?: string;
+    body: string;
+    timestamp: {
+        seconds: number;
+        nanoseconds: number;
+    };
+    direction: 'inbound' | 'outbound';
+    read?: boolean;
+}

@@ -127,6 +127,7 @@ export function ReservationDetailModal({
     }
   };
 
+  const clientNameParam = encodeURIComponent(`${reservation.customer?.nombre} ${reservation.customer?.apellido}`);
 
   return (
     <>
@@ -175,7 +176,7 @@ export function ReservationDetailModal({
                         <span>{reservation.customer?.telefono || 'No registrado'}</span>
                     </div>
                     {reservation.customer?.telefono && (
-                        <Link href={`/admin/conversations?phone=${reservation.customer.telefono}`} passHref>
+                        <Link href={`/admin/conversations?phone=${reservation.customer.telefono}&name=${clientNameParam}`} passHref>
                             <Button variant="outline" size="sm">
                                 <MessageCircle className="w-4 h-4 mr-2"/> Ver Conversación
                             </Button>

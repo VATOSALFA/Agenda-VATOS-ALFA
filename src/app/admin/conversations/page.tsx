@@ -35,6 +35,7 @@ export default function ConversationsPage() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const phoneParam = searchParams.get('phone');
+  const nameParam = searchParams.get('name');
   const [queryKey, setQueryKey] = useState(0);
   const { data: messages, loading: messagesLoading } = useFirestoreQuery<Message>('conversaciones', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
@@ -98,11 +99,22 @@ export default function ConversationsPage() {
       }
       const fullNormalizedPhone = `whatsapp:+${normalizedPhone}`;
       const conversationToSelect = conversations.find(c => c.contactId === fullNormalizedPhone);
+      
       if (conversationToSelect) {
         handleSelectConversation(conversationToSelect);
+      } else if (nameParam) {
+        // Create a "phantom" conversation for a new chat
+        const phantomConversation: Conversation = {
+          contactId: fullNormalizedPhone,
+          displayName: nameParam,
+          messages: [],
+          lastMessageTimestamp: new Date(),
+          unreadCount: 0,
+        };
+        setSelectedConversation(phantomConversation);
       }
     }
-  }, [phoneParam, conversations]);
+  }, [phoneParam, nameParam, conversations]);
 
 
   const markAsRead = async (conversation: Conversation) => {
@@ -125,7 +137,9 @@ export default function ConversationsPage() {
 
   const handleSelectConversation = (conversation: Conversation) => {
     setSelectedConversation(conversation);
-    markAsRead(conversation);
+    if(conversation.messages.length > 0) {
+        markAsRead(conversation);
+    }
   };
 
   useEffect(() => {
@@ -235,7 +249,7 @@ export default function ConversationsPage() {
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{convo.messages[convo.messages.length - 1].body}</p>
+                  <p className="text-xs text-muted-foreground truncate">{convo.messages.length > 0 ? convo.messages[convo.messages.length - 1].body : 'Sin mensajes aún'}</p>
                 </button>
               ))}
             </div>
@@ -259,12 +273,22 @@ export default function ConversationsPage() {
                 </Avatar>
                 <div>
                     <h3 className="font-semibold">{selectedConversation.displayName}</h3>
-                    <p className="text-xs text-muted-foreground">Último mensaje: {format(selectedConversation.lastMessageTimestamp, "Pp", { locale: es })}</p>
+                    <p className="text-xs text-muted-foreground">
+                        {selectedConversation.messages.length > 0
+                            ? `Último mensaje: ${format(selectedConversation.lastMessageTimestamp, "Pp", { locale: es })}`
+                            : 'Inicia la conversación'
+                        }
+                    </p>
                 </div>
             </header>
             
             <ScrollArea className="flex-1" ref={scrollAreaRef}>
                 <div className="p-4 space-y-4">
+                    {selectedConversation.messages.length === 0 && (
+                        <div className="text-center text-muted-foreground p-8 text-sm">
+                            No hay mensajes en esta conversación. ¡Envía el primero!
+                        </div>
+                    )}
                     {selectedConversation.messages.map(msg => (
                         <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                             <div className={cn(

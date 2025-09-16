@@ -241,23 +241,25 @@ export default function ConversationsPage() {
                 </div>
             </header>
             
-            <ScrollArea className="flex-1" ref={scrollAreaRef}>
-                 <div className="p-4 space-y-4">
-                    {selectedConversation.messages.map(msg => (
-                        <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
-                             <div className={cn(
-                                "max-w-md p-3 rounded-2xl shadow-sm",
-                                msg.direction === 'outbound' 
-                                    ? "bg-blue-500 text-white rounded-br-none" 
-                                    : "bg-white text-gray-800 rounded-bl-none"
-                            )}>
-                                <p className="text-sm">{msg.body}</p>
-                                <p className="text-xs opacity-75 mt-1 text-right">{format(new Date(msg.timestamp.seconds * 1000), 'HH:mm')}</p>
+            <div className="flex-1 overflow-y-auto">
+                <ScrollArea className="h-full" ref={scrollAreaRef}>
+                    <div className="p-4 space-y-4">
+                        {selectedConversation.messages.map(msg => (
+                            <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
+                                <div className={cn(
+                                    "max-w-md p-3 rounded-2xl shadow-sm",
+                                    msg.direction === 'outbound' 
+                                        ? "bg-blue-500 text-white rounded-br-none" 
+                                        : "bg-white text-gray-800 rounded-bl-none"
+                                )}>
+                                    <p className="text-sm">{msg.body}</p>
+                                    <p className="text-xs opacity-75 mt-1 text-right">{format(new Date(msg.timestamp.seconds * 1000), 'HH:mm')}</p>
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            </ScrollArea>
+                        ))}
+                    </div>
+                </ScrollArea>
+            </div>
             
              <footer className="p-4 border-t bg-background flex-shrink-0">
                 <div className="relative">

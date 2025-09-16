@@ -47,8 +47,12 @@ export default function ConversationsPage() {
     clients.forEach(client => {
       if (client.telefono) {
         // Normalize phone number to match Twilio's format (e.g., whatsapp:+521XXXXXXXXXX)
-        const normalizedPhone = `whatsapp:+${client.telefono.replace(/\D/g, '')}`;
-        clientMap.set(normalizedPhone, client);
+        let normalizedPhone = client.telefono.replace(/\D/g, '');
+        if (normalizedPhone.length === 10) {
+            normalizedPhone = `521${normalizedPhone}`;
+        }
+        const fullNormalizedPhone = `whatsapp:+${normalizedPhone}`;
+        clientMap.set(fullNormalizedPhone, client);
       }
     });
 

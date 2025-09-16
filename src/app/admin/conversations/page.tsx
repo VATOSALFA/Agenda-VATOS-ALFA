@@ -51,7 +51,6 @@ export default function ConversationsPage() {
   
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
-  const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -264,24 +263,9 @@ export default function ConversationsPage() {
 
   // Audio Recording Logic
   const startRecording = async () => {
-    if (hasMicPermission === null) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        setHasMicPermission(true);
-      } catch (err) {
-        console.error("Microphone permission denied:", err);
-        setHasMicPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Permiso de micrófono denegado',
-          description: 'Por favor, habilita el acceso al micrófono en tu navegador.',
-        });
-        return;
-      }
-    }
-    if(hasMicPermission) {
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
@@ -300,6 +284,13 @@ export default function ConversationsPage() {
 
       mediaRecorder.start();
       setIsRecording(true);
+    } catch (err) {
+      console.error("Microphone permission denied:", err);
+      toast({
+        variant: 'destructive',
+        title: 'Permiso de micrófono denegado',
+        description: 'Por favor, habilita el acceso al micrófono en la configuración de tu navegador.',
+      });
     }
   };
 

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -192,17 +193,22 @@ export default function ConversationsPage() {
         });
 
         if (result.sid && result.from) {
-            await addDoc(collection(db, 'conversaciones'), {
+            const messageData: any = {
                 from: result.from,
                 to: selectedConversation.contactId,
                 body: replyMessage,
-                mediaUrl: mediaUrl,
-                mediaContentType: mediaType,
                 messageSid: result.sid,
                 timestamp: Timestamp.now(),
                 direction: 'outbound',
                 read: true,
-            });
+            };
+            
+            if (mediaUrl) {
+                messageData.mediaUrl = mediaUrl;
+                messageData.mediaContentType = mediaType;
+            }
+            
+            await addDoc(collection(db, 'conversaciones'), messageData);
 
             toast({ title: "Mensaje enviado" });
             setReplyMessage('');

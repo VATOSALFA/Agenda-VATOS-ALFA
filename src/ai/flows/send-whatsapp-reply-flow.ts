@@ -4,6 +4,7 @@
  * @fileOverview Flow to send a WhatsApp reply message via Twilio.
  */
 
+import { ai } from '@/ai/genkit';
 import twilio from 'twilio';
 
 interface ReplyInput {
@@ -29,7 +30,7 @@ export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<Repl
   }
   
   // Prevent using placeholder credentials
-  if (accountSid === 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' || authToken === 'your_auth_token') {
+  if (accountSid.startsWith('ACxxx') || authToken === 'your_auth_token') {
       return { error: 'Estás usando las credenciales de ejemplo. Por favor, actualiza las credenciales de Twilio en la configuración de tu backend de Firebase.'}
   }
 

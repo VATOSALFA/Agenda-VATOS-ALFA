@@ -193,7 +193,7 @@ export default function ConversationsPage() {
         });
 
         if (result.sid && result.from) {
-            const messageData: any = {
+            const messageData: Partial<Message> = {
                 from: result.from,
                 to: selectedConversation.contactId,
                 body: replyMessage,
@@ -361,7 +361,7 @@ export default function ConversationsPage() {
     return (
         <div className="space-y-2">
             <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
-                <Paperclip className="h-4 w-4" /> Ver archivo adjunto
+                <Paperclip className="h-4 w-4" /> Ver archivo adjunto ({mediaType || 'tipo desconocido'})
             </a>
             {hasBody && <p className="text-sm mt-1">{msg.body}</p>}
         </div>

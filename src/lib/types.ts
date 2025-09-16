@@ -293,12 +293,10 @@ export interface Message {
     from: string;
     to?: string;
     body: string;
+    messageSid: string;
     mediaUrl?: string;
     mediaContentType?: string;
-    timestamp: {
-        seconds: number;
-        nanoseconds: number;
-    };
+    timestamp: Timestamp;
     direction: 'inbound' | 'outbound';
     read?: boolean;
 }

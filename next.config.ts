@@ -23,6 +23,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'media.twiliocdn.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };

@@ -48,13 +48,10 @@ export async function POST(request: NextRequest) {
         messageData.mediaUrl = mediaUrl;
         messageData.mediaContentType = mediaContentType!;
       }
-      // If there's no text body but there is media, the body will just be an empty string.
-  } else {
-      // If there's no media, the message body is required.
-      if (!messageBody) {
-        console.error("Webhook de Twilio: El mensaje no tiene cuerpo ni multimedia.");
-        return new NextResponse('<Response></Response>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
-      }
+  } else if (!messageBody) {
+    // If there's no media and no body, we don't need to store it.
+    console.log("Webhook de Twilio: Mensaje vacío (sin cuerpo ni multimedia). Ignorando.");
+    return new NextResponse('<Response></Response>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
   }
   
   console.log("-------------------------------");
@@ -79,5 +76,3 @@ export async function POST(request: NextRequest) {
     });
   }
 }
-
-

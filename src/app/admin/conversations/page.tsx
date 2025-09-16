@@ -320,7 +320,7 @@ export default function ConversationsPage() {
   }
 
   const renderMedia = (msg: Message) => {
-    if (!msg.mediaUrl) {
+    if (!msg.mediaUrl || msg.body) {
       return <p className="text-sm">{msg.body}</p>;
     }
     const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl;
@@ -347,7 +347,7 @@ export default function ConversationsPage() {
     }
   
     // Fallback for media without a specific renderer, can also include a link
-    return msg.body ? <p className="text-sm">{msg.body}</p> : <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline">Ver archivo adjunto</a>;
+    return <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline">Ver archivo adjunto</a>;
   }
 
   return (
@@ -453,7 +453,7 @@ export default function ConversationsPage() {
                 {filePreview && (
                   <div className="relative w-full mb-2 p-2 border rounded-md">
                     {fileType === 'image' ? (
-                        <Image src={filePreview} alt="Vista previa" width={96} height={96} objectFit="cover" className="rounded"/>
+                        <Image src={filePreview} alt="Vista previa" width={96} height={96} style={{objectFit: 'cover'}} className="rounded"/>
                     ) : (
                         <div className="flex items-center gap-2">
                             <Mic className="h-5 w-5 text-muted-foreground"/>

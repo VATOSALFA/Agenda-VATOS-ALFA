@@ -138,11 +138,6 @@ function ConfirmPageContent() {
                             read: true,
                         };
                         
-                        // This check avoids saving an `undefined` mediaUrl
-                        if (result.mediaUrl) {
-                            messageData.mediaUrl = result.mediaUrl;
-                        }
-                        
                         await addDoc(collection(db, 'conversaciones'), messageData);
                     } else if (result.error) {
                         toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });

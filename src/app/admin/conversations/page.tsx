@@ -192,7 +192,7 @@ export default function ConversationsPage() {
             mediaUrl: mediaUrl,
         });
 
-        if (result.sid && result.from) {
+        if (result && result.sid && result.from) {
             const messageData: Partial<Message> = {
                 from: result.from,
                 to: selectedConversation.contactId,
@@ -215,7 +215,7 @@ export default function ConversationsPage() {
             clearSelectedFile();
             setQueryKey(prev => prev + 1);
         } else {
-            throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
+            throw new Error(result?.error || 'Error desconocido al enviar el mensaje.');
         }
 
     } catch (error: any) {

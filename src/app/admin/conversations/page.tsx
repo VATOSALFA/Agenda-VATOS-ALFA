@@ -174,7 +174,7 @@ export default function ConversationsPage() {
         "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
         selectedConversation && "hidden md:flex"
       )}>
-        <div className="p-4 border-b flex items-center gap-2">
+        <div className="p-4 border-b flex items-center gap-2 flex-shrink-0">
            <Link href="/">
                 <Button variant="ghost" size="icon" className="h-9 w-9">
                     <ChevronLeft className="h-6 w-6"/>
@@ -222,12 +222,12 @@ export default function ConversationsPage() {
 
       {/* Panel de Mensajes */}
       <div className={cn(
-        "flex-1 flex-col h-screen",
+        "flex-1 flex flex-col h-screen bg-gray-100",
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (
           <>
-            <div className="p-4 border-b flex items-center gap-4 bg-background flex-shrink-0">
+            <header className="p-4 border-b flex items-center gap-4 bg-background flex-shrink-0">
                 <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedConversation(null)}>
                     <ChevronLeft className="h-6 w-6" />
                 </Button>
@@ -238,9 +238,9 @@ export default function ConversationsPage() {
                     <h3 className="font-semibold">{selectedConversation.displayName}</h3>
                     <p className="text-xs text-muted-foreground">Último mensaje: {format(selectedConversation.lastMessageTimestamp, "Pp", { locale: es })}</p>
                 </div>
-            </div>
-            <ScrollArea className="flex-1 p-4 bg-gray-100" ref={scrollAreaRef}>
-                <div className="space-y-4">
+            </header>
+            <main className="flex-1 overflow-y-auto p-4">
+                 <div className="space-y-4">
                     {selectedConversation.messages.map(msg => (
                         <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                              <div className={cn(
@@ -255,8 +255,8 @@ export default function ConversationsPage() {
                         </div>
                     ))}
                 </div>
-            </ScrollArea>
-             <div className="p-4 border-t bg-background flex-shrink-0">
+            </main>
+             <footer className="p-4 border-t bg-background flex-shrink-0">
                 <div className="relative">
                     <Textarea 
                         placeholder="Escribe un mensaje..." 
@@ -279,7 +279,7 @@ export default function ConversationsPage() {
                         {isSending ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
                     </Button>
                 </div>
-            </div>
+            </footer>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">

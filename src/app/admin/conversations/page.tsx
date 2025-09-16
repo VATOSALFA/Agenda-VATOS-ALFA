@@ -4,7 +4,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { Loader2, MessageSquareText, User, Send, ChevronLeft, Paperclip, X } from 'lucide-react';
+import { Loader2, MessageSquareText, User, Send, ChevronLeft, Paperclip, X, Mic } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -47,6 +47,7 @@ export default function ConversationsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<'image' | 'audio' | null>(null);
 
 
   const conversations = useMemo(() => {
@@ -190,6 +191,7 @@ export default function ConversationsPage() {
                 to: selectedConversation.contactId,
                 body: replyMessage,
                 mediaUrl: mediaUrl,
+                mediaContentType: selectedFile?.type,
                 messageSid: result.sid,
                 timestamp: Timestamp.now(),
                 direction: 'outbound',
@@ -198,8 +200,7 @@ export default function ConversationsPage() {
 
             toast({ title: "Mensaje enviado" });
             setReplyMessage('');
-            setSelectedFile(null);
-            setFilePreview(null);
+            clearSelectedFile();
             setQueryKey(prev => prev + 1);
         } else {
             throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
@@ -221,17 +222,34 @@ export default function ConversationsPage() {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFilePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      if (file.type.startsWith('image/')) {
+        setFileType('image');
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFilePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else if (file.type.startsWith('audio/')) {
+        setFileType('audio');
+        setFilePreview(file.name); // Just show the file name for audio
+      } else {
+        setFileType(null);
+        setFilePreview(null);
+      }
+    }
+  };
+
+  const openFilePicker = (accept: string) => {
+    if (fileInputRef.current) {
+        fileInputRef.current.accept = accept;
+        fileInputRef.current.click();
     }
   };
 
   const clearSelectedFile = () => {
     setSelectedFile(null);
     setFilePreview(null);
+    setFileType(null);
     if (fileInputRef.current) {
         fileInputRef.current.value = "";
     }
@@ -242,6 +260,33 @@ export default function ConversationsPage() {
   const getMediaProxyUrl = (mediaUrl: string, messageSid: string) => {
     const mediaSid = mediaUrl.split('/').pop();
     return `/api/twilio-media/${messageSid}/${mediaSid}`;
+  }
+
+  const renderMedia = (msg: Message) => {
+    const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
+    const mediaType = msg.mediaContentType;
+
+    if (mediaType?.startsWith('image/')) {
+      return (
+        <Image
+            src={url}
+            alt="Imagen adjunta"
+            width={300}
+            height={300}
+            className="rounded-lg object-cover"
+        />
+      );
+    }
+
+    if (mediaType?.startsWith('audio/')) {
+      return (
+        <audio controls src={url} className="w-full">
+            Tu navegador no soporta el elemento de audio.
+        </audio>
+      );
+    }
+
+    return <p className="text-sm">{msg.body || 'Archivo multimedia no soportado'}</p>;
   }
 
   return (
@@ -288,7 +333,7 @@ export default function ConversationsPage() {
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{convo.messages.length > 0 ? convo.messages[convo.messages.length - 1].body : 'Sin mensajes aún'}</p>
+                  <p className="text-xs text-muted-foreground truncate">{convo.messages.length > 0 ? convo.messages[convo.messages.length - 1].body || '[Archivo adjunto]' : 'Sin mensajes aún'}</p>
                 </button>
               ))}
             </div>
@@ -335,17 +380,7 @@ export default function ConversationsPage() {
                                     ? "bg-blue-500 text-white rounded-br-none" 
                                     : "bg-white text-gray-800 rounded-bl-none"
                             )}>
-                                {msg.mediaUrl ? (
-                                    <Image
-                                        src={msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl}
-                                        alt="Imagen adjunta"
-                                        width={300}
-                                        height={300}
-                                        className="rounded-lg object-cover"
-                                    />
-                                ) : (
-                                    <p className="text-sm">{msg.body}</p>
-                                )}
+                                {msg.mediaUrl ? renderMedia(msg) : <p className="text-sm">{msg.body}</p>}
                                 <p className="text-xs opacity-75 mt-1 text-right">{format(new Date(msg.timestamp.seconds * 1000), 'HH:mm')}</p>
                             </div>
                         </div>
@@ -355,8 +390,15 @@ export default function ConversationsPage() {
             
              <footer className="p-4 border-t bg-background flex-shrink-0">
                 {filePreview && (
-                  <div className="relative w-24 h-24 mb-2 p-1 border rounded-md">
-                    <Image src={filePreview} alt="Vista previa" fill objectFit="cover" className="rounded"/>
+                  <div className="relative w-full mb-2 p-2 border rounded-md">
+                    {fileType === 'image' ? (
+                        <Image src={filePreview} alt="Vista previa" width={96} height={96} objectFit="cover" className="rounded"/>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <Mic className="h-5 w-5 text-muted-foreground"/>
+                            <p className="text-sm text-muted-foreground truncate">{filePreview}</p>
+                        </div>
+                    )}
                     <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 rounded-full bg-gray-600/50 hover:bg-gray-800/80 text-white" onClick={clearSelectedFile}>
                         <X className="h-4 w-4"/>
                     </Button>
@@ -365,7 +407,7 @@ export default function ConversationsPage() {
                 <div className="relative">
                     <Textarea 
                         placeholder="Escribe un mensaje..." 
-                        className="pr-20 resize-none"
+                        className="pr-28 resize-none"
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         onKeyDown={(e) => {
@@ -375,10 +417,15 @@ export default function ConversationsPage() {
                             }
                         }}
                     />
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden"/>
-                    <Button size="icon" variant="ghost" className="absolute left-1 bottom-2 h-10 w-10 text-muted-foreground" onClick={() => fileInputRef.current?.click()}>
-                        <Paperclip className="h-5 w-5" />
-                    </Button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden"/>
+                    <div className="absolute left-1 bottom-2 flex items-center">
+                        <Button size="icon" variant="ghost" className="h-10 w-10 text-muted-foreground" onClick={() => openFilePicker('image/*')}>
+                            <Paperclip className="h-5 w-5" />
+                        </Button>
+                         <Button size="icon" variant="ghost" className="h-10 w-10 text-muted-foreground" onClick={() => openFilePicker('audio/*')}>
+                            <Mic className="h-5 w-5" />
+                        </Button>
+                    </div>
                     <Button 
                         size="icon" 
                         className="absolute right-2 bottom-2 h-10 w-10 rounded-full"
@@ -401,4 +448,3 @@ export default function ConversationsPage() {
     </div>
   );
 }
-

@@ -33,8 +33,9 @@ export default function MainLayout({ children }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Pre-cargar el audio en el lado del cliente
-    audioRef.current = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
+    // El elemento de audio ahora está en RootLayout, así que lo buscamos en el DOM.
+    const audio = document.getElementById('notification-sound') as HTMLAudioElement;
+    audioRef.current = audio;
   }, []);
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
@@ -69,15 +70,14 @@ export default function MainLayout({ children }: Props) {
 
     const q = query(
       collection(db, 'conversaciones'),
-      orderBy('timestamp', 'desc'),
-      limit(1)
+      where('timestamp', '>', mountTime)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const message = change.doc.data();
-          if (message.timestamp.toMillis() > mountTime.toMillis() && message.direction === 'inbound') {
+          if (message.direction === 'inbound') {
             if (pathname !== '/admin/conversations') {
               toast({
                 title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
@@ -88,7 +88,7 @@ export default function MainLayout({ children }: Props) {
               });
               // Reproducir sonido de notificación
               audioRef.current?.play().catch(error => {
-                  console.log("La reproducción automática del audio fue bloqueada por el navegador.", error);
+                  console.log("La reproducción automática del audio fue bloqueada por el navegador. El usuario debe interactuar con la página primero.", error);
               });
             }
           }

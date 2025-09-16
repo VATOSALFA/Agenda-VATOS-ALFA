@@ -27,6 +27,7 @@ export default function RootLayout({
           </LocalProvider>
         </AuthProvider>
         <Toaster />
+        <audio id="notification-sound" src="https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3" preload="auto"></audio>
       </body>
     </html>
   );

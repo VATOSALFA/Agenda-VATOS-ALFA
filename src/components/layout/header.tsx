@@ -380,11 +380,14 @@ export default function Header() {
             </DropdownMenu>
 
              <Link href="/admin/conversations" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
+                <Button variant="ghost" size="icon" className={cn(
+                    "hover:bg-white/10 hover:text-white relative",
+                    unreadMessages && unreadMessages.length > 0 ? "text-red-500 hover:text-red-400" : "text-gray-300"
+                )}>
                     <MessageCircle className="h-5 w-5" />
                     {unreadMessages && unreadMessages.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                       </span>
                     )}

@@ -11,6 +11,7 @@ import { format, isToday, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import type { Client } from '@/lib/types';
 
 interface Message {
     id: string;
@@ -24,38 +25,55 @@ interface Message {
 }
 
 interface Conversation {
-    contact: string;
+    contactId: string;
+    displayName: string;
     messages: Message[];
     lastMessageTimestamp: Date;
+    client?: Client;
 }
 
 export default function ConversationsPage() {
-  const { data: messages, loading } = useFirestoreQuery<Message>('conversaciones');
+  const { data: messages, loading: messagesLoading } = useFirestoreQuery<Message>('conversaciones');
+  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
   const conversations = useMemo(() => {
-    if (!messages) return [];
+    if (messagesLoading || clientsLoading) return [];
+
+    const clientMap = new Map<string, Client>();
+    clients.forEach(client => {
+      if (client.telefono) {
+        // Normalize phone number to match Twilio's format (e.g., +521XXXXXXXXXX)
+        const normalizedPhone = `+${client.telefono.replace(/\D/g, '')}`;
+        clientMap.set(normalizedPhone, client);
+      }
+    });
 
     const groupedByContact = messages.reduce((acc, msg) => {
-      const contact = msg.from;
-      if (!acc[contact]) {
-        acc[contact] = [];
+      // The 'from' number from Twilio is like 'whatsapp:+521...'
+      const contactNumber = msg.from.replace('whatsapp:', '');
+      if (!acc[contactNumber]) {
+        acc[contactNumber] = [];
       }
-      acc[contact].push(msg);
+      acc[contactNumber].push(msg);
       return acc;
     }, {} as Record<string, Message[]>);
 
     return Object.entries(groupedByContact)
-      .map(([contact, messages]) => {
+      .map(([contactNumber, messages]) => {
         const sortedMessages = messages.sort((a, b) => a.timestamp.seconds - b.timestamp.seconds);
+        const client = clientMap.get(contactNumber);
+        
         return {
-          contact,
+          contactId: contactNumber,
+          displayName: client ? `${client.nombre} ${client.apellido}` : contactNumber,
           messages: sortedMessages,
-          lastMessageTimestamp: new Date(sortedMessages[sortedMessages.length - 1].timestamp.seconds * 1000)
+          lastMessageTimestamp: new Date(sortedMessages[sortedMessages.length - 1].timestamp.seconds * 1000),
+          client: client,
         };
       })
       .sort((a, b) => b.lastMessageTimestamp.getTime() - a.lastMessageTimestamp.getTime());
-  }, [messages]);
+  }, [messages, clients, messagesLoading, clientsLoading]);
 
   const formatMessageTimestamp = (date: Date) => {
     if (isToday(date)) {
@@ -67,6 +85,8 @@ export default function ConversationsPage() {
     return format(date, 'dd/MM/yy', { locale: es });
   };
 
+  const isLoading = messagesLoading || clientsLoading;
+
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
       {/* Sidebar de Conversaciones */}
@@ -76,7 +96,7 @@ export default function ConversationsPage() {
           <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
         </div>
         <ScrollArea className="flex-1">
-          {loading ? (
+          {isLoading ? (
             <div className="flex justify-center items-center h-full">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
@@ -84,15 +104,15 @@ export default function ConversationsPage() {
             <div className="p-2 space-y-1">
               {conversations.map(convo => (
                 <button
-                  key={convo.contact}
+                  key={convo.contactId}
                   onClick={() => setSelectedConversation(convo)}
                   className={cn(
                     "w-full text-left p-3 rounded-lg hover:bg-muted transition-colors",
-                    selectedConversation?.contact === convo.contact && "bg-primary/10"
+                    selectedConversation?.contactId === convo.contactId && "bg-primary/10"
                   )}
                 >
                   <div className="flex justify-between items-center">
-                    <p className="font-semibold text-sm">{convo.contact.replace('whatsapp:', '')}</p>
+                    <p className="font-semibold text-sm">{convo.displayName}</p>
                     <p className="text-xs text-muted-foreground">{formatMessageTimestamp(convo.lastMessageTimestamp)}</p>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{convo.messages[convo.messages.length - 1].body}</p>
@@ -112,7 +132,7 @@ export default function ConversationsPage() {
                     <AvatarFallback><User className="h-5 w-5"/></AvatarFallback>
                 </Avatar>
                 <div>
-                    <h3 className="font-semibold">{selectedConversation.contact.replace('whatsapp:', '')}</h3>
+                    <h3 className="font-semibold">{selectedConversation.displayName}</h3>
                     <p className="text-xs text-muted-foreground">Último mensaje: {format(selectedConversation.lastMessageTimestamp, "Pp", { locale: es })}</p>
                 </div>
             </div>

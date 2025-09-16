@@ -48,11 +48,12 @@ export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<Repl
     };
 
     if (input.mediaUrl) {
+      // The mediaUrl needs to be an array of strings
       messageOptions.mediaUrl = [input.mediaUrl];
     }
     
     // The message body is required, even if sending media.
-    if (!messageOptions.body && messageOptions.mediaUrl) {
+    if (!messageOptions.body && messageOptions.mediaUrl?.length) {
         messageOptions.body = " "; // Send a space if body is empty but media is present
     }
 

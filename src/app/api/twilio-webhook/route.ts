@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { adminDb } from '@/lib/firebase-admin'; // Usamos adminDb del nuevo archivo
 import type { Message } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
 
 
   try {
-    // 1. PRIMERO, guarda el mensaje entrante en Firestore.
-    await addDoc(collection(db, 'conversaciones'), messageData);
+    // 1. PRIMERO, guarda el mensaje entrante en Firestore usando el SDK de Admin.
+    await adminDb.collection('conversaciones').add(messageData);
 
     // 2. LUEGO, envía una respuesta de confirmación simple a Twilio.
     return new NextResponse('<Response></Response>', {

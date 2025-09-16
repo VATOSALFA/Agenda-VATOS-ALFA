@@ -19,28 +19,12 @@ const firebaseConfig = {
   measurementId: "G-MZC8TZBYFL"
 };
 
-// Initialize Firebase
+// Initialize Firebase for the client
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-
-// App Check initialization (Temporarily disabled for development)
-// if (typeof window !== 'undefined') {
-//   try {
-//     // Set the debug token in development. This will be used by the CustomProvider.
-//     if (process.env.NODE_ENV === 'development') {
-//       (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-//     }
-    
-//     const appCheck = initializeAppCheck(app, {
-//       provider: new ReCaptchaV3Provider('6LcMPcYrAAAAANsqhsBgm9ja0C8mJ7Mh8WN8TcTo'),
-//       isTokenAutoRefreshEnabled: true
-//     });
-//   } catch (e) {
-//     console.error("Error initializing Firebase App Check:", e);
-//   }
-// }
 
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+
 
 export { db, auth, storage, app };

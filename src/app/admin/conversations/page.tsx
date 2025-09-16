@@ -221,8 +221,8 @@ export default function ConversationsPage() {
       </aside>
 
       {/* Panel de Mensajes */}
-      <div className={cn(
-        "flex-1 flex-col h-screen bg-gray-100",
+      <main className={cn(
+        "flex-1 flex flex-col h-screen bg-gray-100",
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (
@@ -239,7 +239,8 @@ export default function ConversationsPage() {
                     <p className="text-xs text-muted-foreground">Último mensaje: {format(selectedConversation.lastMessageTimestamp, "Pp", { locale: es })}</p>
                 </div>
             </header>
-            <main className="flex-1 overflow-y-auto p-4">
+            
+            <div className="flex-1 overflow-y-auto p-4">
                  <div className="space-y-4">
                     {selectedConversation.messages.map(msg => (
                         <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
@@ -255,7 +256,8 @@ export default function ConversationsPage() {
                         </div>
                     ))}
                 </div>
-            </main>
+            </div>
+            
              <footer className="p-4 border-t bg-background flex-shrink-0">
                 <div className="relative">
                     <Textarea 
@@ -288,7 +290,7 @@ export default function ConversationsPage() {
             <p className="mt-1 text-muted-foreground">Elige un chat de la lista para ver los mensajes y responder.</p>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

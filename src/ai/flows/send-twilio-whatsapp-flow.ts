@@ -6,9 +6,8 @@
 
 import { ai } from '@/ai/genkit';
 import twilio from 'twilio';
+import 'dotenv/config';
 
-// This flow is defined outside the normal defineFlow for simplicity,
-// as it's a direct API call without AI generation.
 
 export async function sendTestTwilioMessage(): Promise<{ sid: string } | { error: string }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;

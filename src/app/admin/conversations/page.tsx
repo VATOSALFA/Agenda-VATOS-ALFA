@@ -5,7 +5,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { Loader2, MessageSquareText, User, Send, ChevronLeft } from 'lucide-react';
+import { Loader2, MessageSquareText, User, Send, ChevronLeft, Paperclip, X } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -17,8 +17,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { sendWhatsappReply } from '@/ai/flows/send-whatsapp-reply-flow';
-import { addDoc, collection, writeBatch, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { addDoc, collection, writeBatch, doc, Timestamp } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
@@ -44,6 +45,9 @@ export default function ConversationsPage() {
   const [replyMessage, setReplyMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
 
 
   const conversations = useMemo(() => {
@@ -93,7 +97,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && !messagesLoading && conversations !== undefined) {
+    if (phoneParam && conversations !== undefined) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;
@@ -163,21 +167,30 @@ export default function ConversationsPage() {
   };
   
   const handleSendMessage = async () => {
-    if (!replyMessage.trim() || !selectedConversation) return;
+    if ((!replyMessage.trim() && !selectedFile) || !selectedConversation) return;
     setIsSending(true);
 
+    let mediaUrl: string | undefined = undefined;
+
     try {
+        if (selectedFile) {
+            const storageRef = ref(storage, `whatsapp_media/${selectedFile.name}_${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, selectedFile);
+            mediaUrl = await getDownloadURL(snapshot.ref);
+        }
+
         const result = await sendWhatsappReply({
             to: selectedConversation.contactId,
             body: replyMessage,
+            mediaUrl: mediaUrl,
         });
 
         if (result.sid && result.from) {
-            // Save outbound message to Firestore to display it in the chat
             await addDoc(collection(db, 'conversaciones'), {
-                from: result.from, // Your Twilio number, now returned from the flow
+                from: result.from,
                 to: selectedConversation.contactId,
                 body: replyMessage,
+                mediaUrl: mediaUrl,
                 messageSid: result.sid,
                 timestamp: Timestamp.now(),
                 direction: 'outbound',
@@ -186,7 +199,9 @@ export default function ConversationsPage() {
 
             toast({ title: "Mensaje enviado" });
             setReplyMessage('');
-            setQueryKey(prev => prev + 1); // Refresh messages
+            setSelectedFile(null);
+            setFilePreview(null);
+            setQueryKey(prev => prev + 1);
         } else {
             throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
         }
@@ -202,6 +217,26 @@ export default function ConversationsPage() {
         setIsSending(false);
     }
   };
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+    }
+  }
 
   const isLoading = messagesLoading || clientsLoading;
   
@@ -212,7 +247,6 @@ export default function ConversationsPage() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
-      {/* Sidebar de Conversaciones */}
       <aside className={cn(
         "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
         selectedConversation && "hidden md:flex"
@@ -263,7 +297,6 @@ export default function ConversationsPage() {
         </ScrollArea>
       </aside>
 
-      {/* Panel de Mensajes */}
       <main className={cn(
         "flex-1 flex-col bg-gray-100",
         selectedConversation ? "flex" : "hidden md:flex"
@@ -305,7 +338,7 @@ export default function ConversationsPage() {
                             )}>
                                 {msg.mediaUrl ? (
                                     <Image
-                                        src={getMediaProxyUrl(msg.mediaUrl, msg.messageSid)}
+                                        src={msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl, msg.messageSid) : msg.mediaUrl}
                                         alt="Imagen adjunta"
                                         width={300}
                                         height={300}
@@ -322,10 +355,18 @@ export default function ConversationsPage() {
             </ScrollArea>
             
              <footer className="p-4 border-t bg-background flex-shrink-0">
+                {filePreview && (
+                  <div className="relative w-24 h-24 mb-2 p-1 border rounded-md">
+                    <Image src={filePreview} alt="Vista previa" layout="fill" objectFit="cover" className="rounded"/>
+                    <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 rounded-full bg-gray-600/50 hover:bg-gray-800/80 text-white" onClick={clearSelectedFile}>
+                        <X className="h-4 w-4"/>
+                    </Button>
+                  </div>
+                )}
                 <div className="relative">
                     <Textarea 
                         placeholder="Escribe un mensaje..." 
-                        className="pr-16 resize-none"
+                        className="pr-20 resize-none"
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         onKeyDown={(e) => {
@@ -335,11 +376,15 @@ export default function ConversationsPage() {
                             }
                         }}
                     />
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden"/>
+                    <Button size="icon" variant="ghost" className="absolute left-1 bottom-2 h-10 w-10 text-muted-foreground" onClick={() => fileInputRef.current?.click()}>
+                        <Paperclip className="h-5 w-5" />
+                    </Button>
                     <Button 
                         size="icon" 
                         className="absolute right-2 bottom-2 h-10 w-10 rounded-full"
                         onClick={handleSendMessage}
-                        disabled={isSending || !replyMessage.trim()}
+                        disabled={isSending || (!replyMessage.trim() && !selectedFile)}
                     >
                         {isSending ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
                     </Button>

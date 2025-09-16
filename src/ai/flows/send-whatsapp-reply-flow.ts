@@ -9,6 +9,7 @@ import twilio from 'twilio';
 interface ReplyInput {
     to: string; // The full 'whatsapp:+...' number
     body: string;
+    mediaUrl?: string; // Optional media URL
 }
 
 interface ReplyOutput {
@@ -34,11 +35,28 @@ export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<Repl
 
   try {
     const client = twilio(accountSid, authToken);
-    const message = await client.messages.create({
+    
+    const messageOptions: {
+        body: string;
+        from: string;
+        to: string;
+        mediaUrl?: string[];
+    } = {
       body: input.body,
       from: fromNumber, // Your Twilio WhatsApp number
       to: input.to,     // The client's WhatsApp number
-    });
+    };
+
+    if (input.mediaUrl) {
+      messageOptions.mediaUrl = [input.mediaUrl];
+    }
+    
+    // The message body is required, even if sending media.
+    if (!messageOptions.body && messageOptions.mediaUrl) {
+        messageOptions.body = " "; // Send a space if body is empty but media is present
+    }
+
+    const message = await client.messages.create(messageOptions);
 
     console.log('Twilio reply sent with SID:', message.sid);
     return { sid: message.sid, from: fromNumber };

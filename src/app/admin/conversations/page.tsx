@@ -92,7 +92,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && conversations.length > 0) {
+    if (phoneParam && !messagesLoading) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;
@@ -114,7 +114,7 @@ export default function ConversationsPage() {
         setSelectedConversation(phantomConversation);
       }
     }
-  }, [phoneParam, nameParam, conversations]);
+  }, [phoneParam, nameParam, conversations, messagesLoading]);
 
 
   const markAsRead = async (conversation: Conversation) => {

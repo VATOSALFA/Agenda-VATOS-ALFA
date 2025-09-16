@@ -35,6 +35,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'vatos-alfa-barbershop.web.app',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };

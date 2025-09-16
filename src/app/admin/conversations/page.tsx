@@ -180,7 +180,6 @@ export default function ConversationsPage() {
 
     try {
         if (selectedFile) {
-            // Use a unique name for all uploads to avoid conflicts
             const uniqueFileName = `${crypto.randomUUID()}-${selectedFile.name.replace(/\s+/g, '_')}`;
             const storageRef = ref(storage, `whatsapp_media/${uniqueFileName}`);
             const snapshot = await uploadBytes(storageRef, selectedFile);
@@ -324,48 +323,38 @@ export default function ConversationsPage() {
 
   const renderMedia = (msg: Message) => {
     const hasMedia = !!msg.mediaUrl;
-    // Condition to check if body has meaningful content, not just whitespace.
     const hasBody = msg.body && msg.body.trim().length > 0;
-  
+
     if (!hasMedia) {
-      return <p className="text-sm">{msg.body}</p>;
+        return <p className="text-sm">{msg.body}</p>;
     }
-  
+    
     const url = msg.direction === 'inbound' ? getMediaProxyUrl(msg.mediaUrl!, msg.messageSid) : msg.mediaUrl!;
     const mediaType = msg.mediaContentType;
-  
-    // Always show media if it exists. Show body text underneath if it also exists.
+    
     if (mediaType?.startsWith('image/')) {
-      return (
-        <div className="space-y-2">
-          <Image
-            src={url}
-            alt="Imagen adjunta"
-            width={300}
-            height={300}
-            className="rounded-lg object-cover"
-          />
-          {hasBody && <p className="text-sm mt-2">{msg.body}</p>}
-        </div>
-      );
+        return (
+            <div className="space-y-2">
+                <Image src={url} alt="Imagen adjunta" width={300} height={300} className="rounded-lg object-cover" />
+                {hasBody && <p className="text-sm mt-2">{msg.body}</p>}
+            </div>
+        );
     }
-  
+    
     if (mediaType?.startsWith('audio/')) {
-      return (
-        <div className="space-y-2 w-64">
-          <audio controls src={url} className="w-full h-10">
-            Tu navegador no soporta el elemento de audio.
-          </audio>
-          {hasBody && <p className="text-sm mt-1">{msg.body}</p>}
-        </div>
-      );
+        return (
+            <div className="space-y-2 w-64">
+                <audio controls src={url} className="w-full h-10">Tu navegador no soporta el elemento de audio.</audio>
+                {hasBody && <p className="text-sm mt-1">{msg.body}</p>}
+            </div>
+        );
     }
-  
-    // Fallback for other media types (documents, etc.)
+    
+    // Fallback for other media types or when media is present but type is unknown
     return (
         <div className="space-y-2">
             <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm underline flex items-center gap-2">
-            <Paperclip className="h-4 w-4" /> Ver archivo adjunto
+                <Paperclip className="h-4 w-4" /> Ver archivo adjunto
             </a>
             {hasBody && <p className="text-sm mt-1">{msg.body}</p>}
         </div>
@@ -532,3 +521,5 @@ export default function ConversationsPage() {
     </div>
   );
 }
+
+    

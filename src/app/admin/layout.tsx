@@ -16,7 +16,8 @@ import {
   KeyRound,
   Store,
   School,
-  Settings
+  Settings,
+  MessagesSquare
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -26,6 +27,7 @@ const adminLinks = [
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
+  { href: '/admin/conversations', label: 'Conversaciones', icon: MessagesSquare },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
 ];
 

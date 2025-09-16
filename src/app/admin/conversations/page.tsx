@@ -222,7 +222,7 @@ export default function ConversationsPage() {
 
       {/* Panel de Mensajes */}
       <div className={cn(
-        "flex-1 flex flex-col h-screen bg-gray-100",
+        "flex-1 flex-col h-screen bg-gray-100",
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (

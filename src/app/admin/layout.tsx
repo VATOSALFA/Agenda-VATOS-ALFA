@@ -45,12 +45,12 @@ export default function AdminLayout({ children }: Props) {
   const pathname = usePathname();
   const { user } = useAuth();
   
-  // If the current page is the conversations page, render it without the admin sidebar.
+  // If the current page is the conversations page, render it without the admin sidebar and scrolling parent.
   if (pathname === '/admin/conversations') {
     return (
-        <div className="flex-1 h-screen overflow-y-auto">
+        <>
             {children}
-        </div>
+        </>
     );
   }
 

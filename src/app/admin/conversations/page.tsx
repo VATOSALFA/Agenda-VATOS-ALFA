@@ -1,10 +1,10 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { Loader2, MessageSquareText, User } from 'lucide-react';
+import { Loader2, MessageSquareText, User, Send, ChevronLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -12,10 +12,19 @@ import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import type { Client } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { sendWhatsappReply } from '@/ai/flows/send-whatsapp-reply-flow';
+import { addDoc, collection } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import Link from 'next/link';
+
 
 interface Message {
     id: string;
     from: string;
+    to?: string;
     body: string;
     timestamp: {
         seconds: number;
@@ -33,9 +42,15 @@ interface Conversation {
 }
 
 export default function ConversationsPage() {
-  const { data: messages, loading: messagesLoading } = useFirestoreQuery<Message>('conversaciones');
+  const { toast } = useToast();
+  const [queryKey, setQueryKey] = useState(0);
+  const { data: messages, loading: messagesLoading } = useFirestoreQuery<Message>('conversaciones', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
 
   const conversations = useMemo(() => {
     if (messagesLoading || clientsLoading) return [];
@@ -43,15 +58,17 @@ export default function ConversationsPage() {
     const clientMap = new Map<string, Client>();
     clients.forEach(client => {
       if (client.telefono) {
-        // Normalize phone number to match Twilio's format (e.g., +521XXXXXXXXXX)
-        const normalizedPhone = `+${client.telefono.replace(/\D/g, '')}`;
+        // Normalize phone number to match Twilio's format (e.g., whatsapp:+521XXXXXXXXXX)
+        const normalizedPhone = `whatsapp:+${client.telefono.replace(/\D/g, '')}`;
         clientMap.set(normalizedPhone, client);
       }
     });
 
     const groupedByContact = messages.reduce((acc, msg) => {
-      // The 'from' number from Twilio is like 'whatsapp:+521...'
-      const contactNumber = msg.from.replace('whatsapp:', '');
+      // Determine contact number based on direction
+      const contactNumber = msg.direction === 'inbound' ? msg.from : msg.to;
+      if (!contactNumber) return acc;
+      
       if (!acc[contactNumber]) {
         acc[contactNumber] = [];
       }
@@ -66,7 +83,7 @@ export default function ConversationsPage() {
         
         return {
           contactId: contactNumber,
-          displayName: client ? `${client.nombre} ${client.apellido}` : contactNumber,
+          displayName: client ? `${client.nombre} ${client.apellido}` : contactNumber.replace('whatsapp:', ''),
           messages: sortedMessages,
           lastMessageTimestamp: new Date(sortedMessages[sortedMessages.length - 1].timestamp.seconds * 1000),
           client: client,
@@ -74,6 +91,15 @@ export default function ConversationsPage() {
       })
       .sort((a, b) => b.lastMessageTimestamp.getTime() - a.lastMessageTimestamp.getTime());
   }, [messages, clients, messagesLoading, clientsLoading]);
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+        const scrollContainer = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+        if (scrollContainer) {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        }
+    }
+  }, [selectedConversation, messages]);
 
   const formatMessageTimestamp = (date: Date) => {
     if (isToday(date)) {
@@ -84,20 +110,70 @@ export default function ConversationsPage() {
     }
     return format(date, 'dd/MM/yy', { locale: es });
   };
+  
+  const handleSendMessage = async () => {
+    if (!replyMessage.trim() || !selectedConversation) return;
+    setIsSending(true);
+
+    try {
+        const result = await sendWhatsappReply({
+            to: selectedConversation.contactId,
+            body: replyMessage,
+        });
+
+        if (result.sid) {
+            // Save outbound message to Firestore to display it in the chat
+            await addDoc(collection(db, 'conversaciones'), {
+                from: process.env.NEXT_PUBLIC_TWILIO_WHATSAPP_NUMBER, // Your Twilio number
+                to: selectedConversation.contactId,
+                body: replyMessage,
+                messageSid: result.sid,
+                timestamp: new Date(),
+                direction: 'outbound',
+            });
+
+            toast({ title: "Mensaje enviado" });
+            setReplyMessage('');
+            setQueryKey(prev => prev + 1); // Refresh messages
+        } else {
+            throw new Error(result.error || 'Error desconocido');
+        }
+
+    } catch (error: any) {
+        console.error("Error sending reply:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al enviar mensaje",
+            description: error.message || "No se pudo enviar el mensaje.",
+        });
+    } finally {
+        setIsSending(false);
+    }
+  };
 
   const isLoading = messagesLoading || clientsLoading;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
+    <div className="flex h-screen bg-muted/40">
       {/* Sidebar de Conversaciones */}
-      <div className="w-80 border-r bg-background flex flex-col">
-        <div className="p-4 border-b">
-          <h2 className="text-xl font-bold">Conversaciones</h2>
-          <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
+      <aside className={cn(
+        "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
+        selectedConversation && "hidden md:flex"
+      )}>
+        <div className="p-4 border-b flex items-center gap-2">
+           <Link href="/admin/profesionales">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                    <ChevronLeft className="h-6 w-6"/>
+                </Button>
+            </Link>
+          <div>
+            <h2 className="text-xl font-bold">Conversaciones</h2>
+            <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
+          </div>
         </div>
         <ScrollArea className="flex-1">
           {isLoading ? (
-            <div className="flex justify-center items-center h-full">
+            <div className="flex justify-center items-center h-full p-8">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : (
@@ -112,8 +188,8 @@ export default function ConversationsPage() {
                   )}
                 >
                   <div className="flex justify-between items-center">
-                    <p className="font-semibold text-sm">{convo.displayName}</p>
-                    <p className="text-xs text-muted-foreground">{formatMessageTimestamp(convo.lastMessageTimestamp)}</p>
+                    <p className="font-semibold text-sm truncate">{convo.displayName}</p>
+                    <p className="text-xs text-muted-foreground flex-shrink-0">{formatMessageTimestamp(convo.lastMessageTimestamp)}</p>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{convo.messages[convo.messages.length - 1].body}</p>
                 </button>
@@ -121,13 +197,19 @@ export default function ConversationsPage() {
             </div>
           )}
         </ScrollArea>
-      </div>
+      </aside>
 
       {/* Panel de Mensajes */}
-      <div className="flex-1 flex flex-col">
+      <div className={cn(
+        "flex-1 flex-col",
+        selectedConversation ? "flex" : "hidden md:flex"
+      )}>
         {selectedConversation ? (
           <>
             <div className="p-4 border-b flex items-center gap-4 bg-background">
+                <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedConversation(null)}>
+                    <ChevronLeft className="h-6 w-6" />
+                </Button>
                 <Avatar>
                     <AvatarFallback><User className="h-5 w-5"/></AvatarFallback>
                 </Avatar>
@@ -136,15 +218,15 @@ export default function ConversationsPage() {
                     <p className="text-xs text-muted-foreground">Último mensaje: {format(selectedConversation.lastMessageTimestamp, "Pp", { locale: es })}</p>
                 </div>
             </div>
-            <ScrollArea className="flex-1 p-4 bg-gray-100">
+            <ScrollArea className="flex-1 p-4 bg-gray-100" ref={scrollAreaRef}>
                 <div className="space-y-4">
                     {selectedConversation.messages.map(msg => (
                         <div key={msg.id} className={cn("flex", msg.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                              <div className={cn(
-                                "max-w-md p-3 rounded-2xl",
+                                "max-w-md p-3 rounded-2xl shadow-sm",
                                 msg.direction === 'outbound' 
                                     ? "bg-blue-500 text-white rounded-br-none" 
-                                    : "bg-white text-gray-800 rounded-bl-none shadow-sm"
+                                    : "bg-white text-gray-800 rounded-bl-none"
                             )}>
                                 <p className="text-sm">{msg.body}</p>
                                 <p className="text-xs opacity-75 mt-1 text-right">{format(new Date(msg.timestamp.seconds * 1000), 'HH:mm')}</p>
@@ -154,14 +236,35 @@ export default function ConversationsPage() {
                 </div>
             </ScrollArea>
              <div className="p-4 border-t bg-background">
-                <p className="text-center text-sm text-muted-foreground">La funcionalidad para responder estará disponible aquí.</p>
+                <div className="relative">
+                    <Textarea 
+                        placeholder="Escribe un mensaje..." 
+                        className="pr-16 resize-none"
+                        value={replyMessage}
+                        onChange={(e) => setReplyMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendMessage();
+                            }
+                        }}
+                    />
+                    <Button 
+                        size="icon" 
+                        className="absolute right-2 bottom-2 h-10 w-10 rounded-full"
+                        onClick={handleSendMessage}
+                        disabled={isSending || !replyMessage.trim()}
+                    >
+                        {isSending ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
+                    </Button>
+                </div>
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <MessageSquareText className="h-16 w-16 text-muted-foreground/50" />
             <h3 className="mt-4 text-xl font-semibold">Selecciona una conversación</h3>
-            <p className="mt-1 text-muted-foreground">Elige un chat de la lista para ver los mensajes.</p>
+            <p className="mt-1 text-muted-foreground">Elige un chat de la lista para ver los mensajes y responder.</p>
           </div>
         )}
       </div>

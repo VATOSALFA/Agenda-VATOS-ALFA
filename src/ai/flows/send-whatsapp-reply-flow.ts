@@ -1,0 +1,44 @@
+
+'use server';
+/**
+ * @fileOverview Flow to send a WhatsApp reply message via Twilio.
+ */
+
+import twilio from 'twilio';
+
+interface ReplyInput {
+    to: string; // The full 'whatsapp:+...' number
+    body: string;
+}
+
+export async function sendWhatsappReply(input: ReplyInput): Promise<{ sid: string } | { error: string }> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER; 
+
+  if (!accountSid || !authToken || !fromNumber) {
+    console.error('Twilio environment variables are not fully set for replies.');
+    return { error: 'Las credenciales de Twilio no están configuradas en el servidor.' };
+  }
+  
+  // Prevent using placeholder credentials
+  if (accountSid === 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' || authToken === 'your_auth_token') {
+      return { error: 'Estás usando las credenciales de ejemplo. Por favor, actualiza el archivo .env con tus claves de Twilio.'}
+  }
+
+  try {
+    const client = twilio(accountSid, authToken);
+    const message = await client.messages.create({
+      body: input.body,
+      from: fromNumber, // Your Twilio WhatsApp number
+      to: input.to,     // The client's WhatsApp number
+    });
+
+    console.log('Twilio reply sent with SID:', message.sid);
+    return { sid: message.sid };
+  } catch (error) {
+    console.error('Error sending Twilio reply:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    return { error: `Fallo al enviar respuesta de Twilio: ${errorMessage}` };
+  }
+}

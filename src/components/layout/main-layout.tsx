@@ -30,14 +30,6 @@ export default function MainLayout({ children }: Props) {
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    // El elemento de audio ahora está en RootLayout, así que lo buscamos en el DOM.
-    const audio = document.getElementById('notification-sound') as HTMLAudioElement;
-    audioRef.current = audio;
-  }, []);
-
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
   useEffect(() => {
@@ -70,7 +62,9 @@ export default function MainLayout({ children }: Props) {
 
     const q = query(
       collection(db, 'conversaciones'),
-      where('timestamp', '>', mountTime)
+      where('timestamp', '>', mountTime),
+      orderBy('timestamp', 'desc'),
+      limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -86,10 +80,16 @@ export default function MainLayout({ children }: Props) {
                 onClick: () => router.push('/admin/conversations'),
                 className: 'cursor-pointer hover:bg-muted',
               });
-              // Reproducir sonido de notificación
-              audioRef.current?.play().catch(error => {
-                  console.log("La reproducción automática del audio fue bloqueada por el navegador. El usuario debe interactuar con la página primero.", error);
-              });
+              
+              // Play notification sound
+              try {
+                const audio = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
+                audio.play().catch(error => {
+                  console.log("La reproducción del audio requiere interacción del usuario.", error);
+                });
+              } catch (e) {
+                console.error("Error al reproducir el sonido de notificación:", e);
+              }
             }
           }
         }

@@ -23,11 +23,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 const adminLinks = [
+  { href: '/admin/conversations', label: 'Conversaciones', icon: MessagesSquare },
   { href: '/admin/locales', label: 'Locales', icon: Store },
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
-  { href: '/admin/conversations', label: 'Conversaciones', icon: MessagesSquare },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
 ];
 

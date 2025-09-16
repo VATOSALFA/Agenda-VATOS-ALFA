@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -97,7 +96,7 @@ export default function ConversationsPage() {
   }, [messages, clients, messagesLoading, clientsLoading]);
   
   useEffect(() => {
-    if (phoneParam && conversations !== undefined) {
+    if (phoneParam && !messagesLoading) {
       let normalizedPhone = phoneParam.replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
           normalizedPhone = `521${normalizedPhone}`;

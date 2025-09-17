@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/lib/firebase-admin';
-import { collection, doc, serverTimestamp, runTransaction, increment, setDoc } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
 import twilio from 'twilio';
 
 // Helper function to download media from Twilio and upload to Firebase Storage
@@ -33,7 +33,12 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         },
     });
 
-    const publicUrl = await getDownloadURL(fileRef);
+    // Use getSignedUrl for server-side URL generation, valid for a long time
+    const [publicUrl] = await fileRef.getSignedUrl({
+        action: 'read',
+        expires: '03-09-2491', // A very distant future date
+    });
+    
     return publicUrl;
 }
 
@@ -46,6 +51,7 @@ export async function POST(req: NextRequest) {
     const numMedia = parseInt(body.get('NumMedia') as string || '0', 10);
     
     if (!from) {
+        console.error('No "From" number in webhook payload');
         return NextResponse.json({ error: 'No "From" number in webhook payload' }, { status: 400 });
     }
     

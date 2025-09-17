@@ -137,7 +137,10 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
 // Wrapper for booking confirmations
 export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string, professionalId: string }): Promise<WhatsAppMessageOutput> {
-    const to = `whatsapp:${input.clientPhone}`;
+    
+    // Normalize the phone number
+    const cleanedPhone = input.clientPhone.replace(/\D/g, '');
+    const to = `whatsapp:+52${cleanedPhone}`;
 
     let professionalName = 'El de tu preferencia';
     if(input.professionalId && input.professionalId !== 'any') {
@@ -173,3 +176,4 @@ Si necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondi
     
     return sendWhatsAppMessage({ to, text: filledBody });
 }
+

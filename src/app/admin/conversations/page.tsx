@@ -174,18 +174,22 @@ export default function ConversationsPage() {
   const handleSendMessage = async () => {
     if ((!replyMessage.trim() && !selectedFile) || !selectedConversation) return;
     setIsSending(true);
+    toast({ title: 'Paso 1: Iniciando envío...', description: 'Tu mensaje se está procesando.' });
 
     let mediaUrl: string | undefined = undefined;
     let mediaType: string | undefined = selectedFile?.type;
 
     try {
         if (selectedFile) {
+            toast({ title: 'Paso 2: Subiendo archivo...', description: 'El archivo adjunto se está subiendo al servidor.' });
             const uniqueFileName = `${crypto.randomUUID()}-${selectedFile.name.replace(/\s+/g, '_')}`;
             const storageRef = ref(storage, `whatsapp_media/${uniqueFileName}`);
             const snapshot = await uploadBytes(storageRef, selectedFile);
             mediaUrl = await getDownloadURL(snapshot.ref);
+            toast({ title: 'Paso 2.1: Archivo subido.', description: 'El archivo se ha subido con éxito.' });
         }
 
+        toast({ title: 'Paso 3: Enviando a Twilio...', description: 'Contactando con la API de Twilio.' });
         const result = await sendWhatsappReply({
             to: selectedConversation.contactId,
             body: replyMessage,
@@ -193,6 +197,8 @@ export default function ConversationsPage() {
         });
 
         if (result && result.sid && result.from) {
+            toast({ title: 'Paso 4: Confirmado por Twilio', description: `Mensaje enviado. SID: ${result.sid}` });
+            
             const messageData: Partial<Message> = {
                 from: result.from,
                 to: selectedConversation.contactId,
@@ -208,22 +214,24 @@ export default function ConversationsPage() {
                 messageData.mediaContentType = mediaType;
             }
             
+            toast({ title: 'Paso 5: Guardando en base de datos...', description: 'Almacenando el mensaje enviado.' });
             await addDoc(collection(db, 'conversaciones'), messageData);
-
-            toast({ title: "Mensaje enviado" });
+            
+            toast({ title: '¡Éxito!', description: 'El mensaje ha sido enviado y registrado.', className: 'bg-green-100' });
+            
             setReplyMessage('');
             clearSelectedFile();
             setQueryKey(prev => prev + 1);
         } else {
-            throw new Error(result?.error || 'Error desconocido al enviar el mensaje.');
+            throw new Error(result?.error || 'Respuesta desconocida del servidor.');
         }
 
     } catch (error: any) {
         console.error("Error sending reply:", error);
         toast({
             variant: "destructive",
-            title: "Error al enviar mensaje",
-            description: error.message || "No se pudo enviar el mensaje.",
+            title: "Error en el Proceso de Envío",
+            description: error.message || "No se pudo completar el envío del mensaje.",
         });
     } finally {
         setIsSending(false);

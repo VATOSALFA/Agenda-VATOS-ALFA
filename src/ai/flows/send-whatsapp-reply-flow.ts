@@ -21,34 +21,43 @@ interface ReplyOutput {
 }
 
 async function getTwilioCredentials() {
-  if (process.env.NODE_ENV === 'production') {
-    const [accountSid, authToken, fromNumber] = await Promise.all([
-      getSecret('TWILIO_ACCOUNT_SID'),
-      getSecret('TWILIO_AUTH_TOKEN'),
-      getSecret('TWILIO_WHATSAPP_NUMBER')
-    ]);
-    return { accountSid, authToken, fromNumber };
-  } else {
-    return {
-      accountSid: process.env.TWILIO_ACCOUNT_SID,
-      authToken: process.env.TWILIO_AUTH_TOKEN,
-      fromNumber: process.env.TWILIO_WHATSAPP_NUMBER
-    };
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      const [accountSid, authToken, fromNumber] = await Promise.all([
+        getSecret('TWILIO_ACCOUNT_SID'),
+        getSecret('TWILIO_AUTH_TOKEN'),
+        getSecret('TWILIO_WHATSAPP_NUMBER')
+      ]);
+      return { accountSid, authToken, fromNumber };
+    } else {
+      return {
+        accountSid: process.env.TWILIO_ACCOUNT_SID,
+        authToken: process.env.TWILIO_AUTH_TOKEN,
+        fromNumber: process.env.TWILIO_WHATSAPP_NUMBER
+      };
+    }
+  } catch (error) {
+    console.error("Error fetching Twilio credentials from Secret Manager:", error);
+    return { error: 'No se pudieron obtener las credenciales de Twilio desde Secret Manager.' };
   }
 }
 
 export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<ReplyOutput>> {
   
-  const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
+  const credentials = await getTwilioCredentials();
 
-  if (!accountSid || !authToken || !fromNumber) {
-    console.error('Twilio environment variables are not fully set for replies.');
-    return { error: 'Las credenciales de Twilio no están configuradas en el servidor.' };
+  if ('error' in credentials) {
+      return { error: credentials.error };
   }
   
-  // Prevent using placeholder credentials
+  const { accountSid, authToken, fromNumber } = credentials;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    return { error: 'Una o más credenciales de Twilio no están configuradas en el servidor.' };
+  }
+  
   if (accountSid.startsWith('ACxxx') || authToken === 'your_auth_token') {
-      return { error: 'Estás usando las credenciales de ejemplo. Por favor, actualiza las credenciales de Twilio en la configuración de tu backend de Firebase.'}
+      return { error: 'Estás usando las credenciales de ejemplo. Por favor, actualiza las credenciales de Twilio.'};
   }
 
   try {
@@ -61,27 +70,26 @@ export async function sendWhatsappReply(input: ReplyInput): Promise<Partial<Repl
         mediaUrl?: string[];
     } = {
       body: input.body,
-      from: fromNumber, // Your Twilio WhatsApp number
-      to: input.to,     // The client's WhatsApp number
+      from: fromNumber,
+      to: input.to,
     };
 
     if (input.mediaUrl) {
-      // The mediaUrl needs to be an array of strings
       messageOptions.mediaUrl = [input.mediaUrl];
     }
     
-    // The message body is required, even if sending media.
     if (!messageOptions.body && messageOptions.mediaUrl?.length) {
-        messageOptions.body = " "; // Send a space if body is empty but media is present
+        messageOptions.body = " ";
     }
 
     const message = await client.messages.create(messageOptions);
 
     console.log('Twilio reply sent with SID:', message.sid);
     return { sid: message.sid, from: fromNumber };
-  } catch (error) {
-    console.error('Error sending Twilio reply:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    return { error: `Fallo al enviar respuesta de Twilio: ${errorMessage}` };
+    
+  } catch (error: any) {
+    console.error('Error sending Twilio API request:', error);
+    const errorMessage = error.message || 'Error desconocido en la API de Twilio.';
+    return { error: `Fallo al enviar la solicitud a Twilio: ${errorMessage}` };
   }
 }

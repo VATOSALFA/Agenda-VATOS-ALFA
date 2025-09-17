@@ -125,7 +125,7 @@ function ConfirmPageContent() {
                     reservationDate: dateStr,
                     reservationTime: time,
                 }).then(async (result) => {
-                    if (result.sid && result.from && result.body) {
+                    if (result.success && result.sid && result.from && result.body) {
                         toast({ title: 'Notificación de WhatsApp enviada.' });
                         // Save outbound message to Firestore
                         const messageData: any = {
@@ -138,7 +138,7 @@ function ConfirmPageContent() {
                             read: true,
                         };
                         
-                        await addDoc(collection(db, 'conversaciones'), messageData);
+                        await addDoc(collection(db, 'conversaciones', result.to.replace('whatsapp:', ''), 'messages'), messageData);
                     } else if (result.error) {
                         toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });
                     }

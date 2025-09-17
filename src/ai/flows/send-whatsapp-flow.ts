@@ -11,17 +11,15 @@ import { db } from '@/lib/firebase';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const WhatsAppConfirmationInputSchema = z.object({
-  clientName: z.string().describe("Client's full name."),
-  clientPhone: z.string().describe("Client's phone number, without the 'whatsapp:' prefix."),
-  serviceName: z.string().describe("Name of the service(s) booked."),
-  reservationDate: z.string().describe("Date of the reservation in yyyy-MM-dd format."),
-  reservationTime: z.string().describe("Time of the reservation in HH:mm format."),
+const WhatsAppMessageInputSchema = z.object({
+  to: z.string().describe("Recipient's phone number, with the 'whatsapp:' prefix."),
+  text: z.string().optional().describe("The text content of the message."),
+  mediaUrl: z.string().optional().describe("URL of media to be sent."),
 });
 
-type WhatsAppConfirmationInput = z.infer<typeof WhatsAppConfirmationInputSchema>;
+type WhatsAppMessageInput = z.infer<typeof WhatsAppMessageInputSchema>;
 
-interface WhatsAppConfirmationOutput {
+interface WhatsAppMessageOutput {
     success: boolean;
     sid?: string;
     from?: string;
@@ -47,7 +45,7 @@ async function getTwilioCredentials() {
   }
 }
 
-export async function sendWhatsappConfirmation(input: WhatsAppConfirmationInput): Promise<WhatsAppConfirmationOutput> {
+export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<WhatsAppMessageOutput> {
   const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
 
   if (!accountSid || !authToken || !fromNumber) {
@@ -62,19 +60,22 @@ export async function sendWhatsappConfirmation(input: WhatsAppConfirmationInput)
      return { success: false, error: errorMsg };
   }
 
-  const to = `whatsapp:${input.clientPhone}`;
+  const to = input.to;
   
-  const parsedDate = parseISO(input.reservationDate);
-  const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM 'del' yyyy", { locale: es });
-  
-  const bodyText = `¡Hola, ${input.clientName}! Tu cita para ${input.serviceName} ha sido confirmada para el ${formattedDate} a las ${input.reservationTime}hs. ¡Te esperamos en VATOS ALFA Barber Shop!`;
+  const bodyText = input.text || '';
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const body = new URLSearchParams();
   body.append('To', to);
   body.append('From', fromNumber);
-  body.append('Body', bodyText);
+  
+  if (bodyText) {
+    body.append('Body', bodyText);
+  }
+  if (input.mediaUrl) {
+    body.append('MediaUrl', input.mediaUrl);
+  }
   
 
   try {
@@ -94,7 +95,31 @@ export async function sendWhatsappConfirmation(input: WhatsAppConfirmationInput)
         throw new Error(`Error de la API de Twilio: ${responseData.message || response.statusText}`);
     }
 
-    console.log("Mensaje de confirmación de Twilio enviado con éxito:", responseData.sid);
+    console.log("Mensaje de WhatsApp enviado con éxito:", responseData.sid);
+
+    // Save the sent message to Firestore
+    try {
+        const conversationRef = doc(db, 'conversations', to);
+        const newMessageRef = doc(collection(conversationRef, 'messages'));
+        const batch = runTransaction(db, async (transaction) => {
+            transaction.set(newMessageRef, {
+                senderId: 'vatosalfa',
+                text: bodyText,
+                mediaUrl: input.mediaUrl,
+                timestamp: serverTimestamp(),
+                messageSid: responseData.sid
+            });
+            transaction.set(conversationRef, {
+                lastMessageText: bodyText || '[Archivo multimedia]',
+                lastMessageTimestamp: serverTimestamp(),
+            }, { merge: true });
+        });
+        await batch;
+        console.log('Outbound message saved to Firestore');
+    } catch(dbError) {
+        console.error("Error saving outbound message to Firestore:", dbError);
+        // Do not block the flow if DB write fails, but log it.
+    }
     
     return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: bodyText };
 
@@ -103,4 +128,14 @@ export async function sendWhatsappConfirmation(input: WhatsAppConfirmationInput)
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido al contactar a Twilio.';
       return { success: false, error: errorMessage };
   }
+}
+
+// Wrapper for booking confirmations for backwards compatibility
+export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string }): Promise<WhatsAppMessageOutput> {
+    const to = `whatsapp:${input.clientPhone}`;
+    const parsedDate = parseISO(input.reservationDate);
+    const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM 'del' yyyy", { locale: es });
+    const bodyText = `¡Hola, ${input.clientName}! Tu cita para ${input.serviceName} ha sido confirmada para el ${formattedDate} a las ${input.reservationTime}hs. ¡Te esperamos en VATOS ALFA Barber Shop!`;
+    
+    return sendWhatsAppMessage({ to, text: bodyText });
 }

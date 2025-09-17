@@ -140,7 +140,7 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
     
     // Normalize the phone number
     const cleanedPhone = input.clientPhone.replace(/\D/g, '');
-    const to = `whatsapp:+52${cleanedPhone}`;
+    const to = `whatsapp:+521${cleanedPhone}`;
 
     let professionalName = 'El de tu preferencia';
     if(input.professionalId && input.professionalId !== 'any') {
@@ -176,4 +176,5 @@ Si necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondi
     
     return sendWhatsAppMessage({ to, text: filledBody });
 }
+
 

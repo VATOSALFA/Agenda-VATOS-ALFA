@@ -49,7 +49,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { TemplateSelectionModal, type Template } from '@/components/admin/whatsapp/template-selection-modal';
 import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
-import { sendTestTwilioMessage } from '@/ai/flows/send-twilio-whatsapp-flow';
+import { sendTestTwilioMessage } from '@/ai/flows/send-whatsapp-flow';
 
 
 interface WhatsappConfig {

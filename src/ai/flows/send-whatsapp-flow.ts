@@ -82,7 +82,10 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     }
   } else if (input.text) {
     body.append('Body', input.text);
+  } else if (!input.mediaUrl) {
+    return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
   }
+
 
   if (input.mediaUrl) {
     body.append('MediaUrl', input.mediaUrl);
@@ -118,13 +121,13 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
 // Wrapper for booking confirmations using a Twilio Template
 export async function sendWhatsappConfirmation(input: { 
-    clientName: string, 
-    clientPhone: string, 
-    serviceName: string, 
-    reservationDate: string, 
-    reservationTime: string, 
-    professionalName: string,
-    templateSid: string,
+    clientName: string;
+    clientPhone: string;
+    serviceName: string;
+    reservationDate: string;
+    reservationTime: string;
+    professionalName: string;
+    templateSid: string;
 }): Promise<WhatsAppMessageOutput> {
     
     // {{1}}: Nombre del cliente
@@ -155,4 +158,18 @@ export async function sendWhatsappConfirmation(input: {
             '4': professionalName
         }
     });
+}
+
+// Wrapper for sending a test message
+export async function sendTestTwilioMessage(): Promise<Partial<WhatsAppMessageOutput>> {
+  // Hardcoded test phone number. Replace with a real number for testing.
+  const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314';
+  if (!testPhoneNumber) {
+    return { success: false, error: 'No test phone number configured.' };
+  }
+  const result = await sendWhatsAppMessage({
+    to: testPhoneNumber,
+    text: 'Este es un mensaje de prueba de Agenda VATOS ALFA.',
+  });
+  return result;
 }

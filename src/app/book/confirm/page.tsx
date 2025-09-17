@@ -123,7 +123,7 @@ function ConfirmPageContent() {
                     clientPhone: data.telefono,
                     serviceName: serviceNames,
                     reservationDate: dateStr,
-                    reservationTime: time,
+                    professionalId: professionalId,
                 }).then(async (result) => {
                     if (result.success && result.sid && result.from && result.body) {
                         toast({ title: 'Notificación de WhatsApp enviada.' });
@@ -138,7 +138,7 @@ function ConfirmPageContent() {
                             read: true,
                         };
                         
-                        await addDoc(collection(db, 'conversaciones', result.to.replace('whatsapp:', ''), 'messages'), messageData);
+                        await addDoc(collection(db, 'conversaciones', result.to as string, 'messages'), messageData);
                     } else if (result.error) {
                         toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });
                     }

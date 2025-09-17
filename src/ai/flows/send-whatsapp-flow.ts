@@ -6,10 +6,11 @@
 
 import { z } from 'zod';
 import { getSecret } from '@genkit-ai/googleai';
-import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, runTransaction, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import type { Profesional } from '@/lib/types';
 
 const WhatsAppMessageInputSchema = z.object({
   to: z.string().describe("Recipient's phone number, with the 'whatsapp:' prefix."),
@@ -131,11 +132,28 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 }
 
 // Wrapper for booking confirmations for backwards compatibility
-export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string }): Promise<WhatsAppMessageOutput> {
+export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, professionalId: string }): Promise<WhatsAppMessageOutput> {
     const to = `whatsapp:${input.clientPhone}`;
+
+    let professionalName = 'El de tu preferencia';
+    if(input.professionalId !== 'any') {
+      const profDoc = await getDoc(doc(db, 'profesionales', input.professionalId));
+      if(profDoc.exists()){
+        professionalName = (profDoc.data() as Profesional).name;
+      }
+    }
+    
     const parsedDate = parseISO(input.reservationDate);
-    const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM 'del' yyyy", { locale: es });
-    const bodyText = `¡Hola, ${input.clientName}! Tu cita para ${input.serviceName} ha sido confirmada para el ${formattedDate} a las ${input.reservationTime}hs. ¡Te esperamos en VATOS ALFA Barber Shop!`;
+    const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
+
+    const bodyText = `Hola ${input.clientName}
+¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!
+
+Servicio: ${input.serviceName}
+Día: ${formattedDate}
+Con: ${professionalName}
+
+Si necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
     return sendWhatsAppMessage({ to, text: bodyText });
 }

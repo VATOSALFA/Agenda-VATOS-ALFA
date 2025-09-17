@@ -5,7 +5,6 @@
  */
 
 import { z } from 'zod';
-import { getSecret } from '@genkit-ai/googleai';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
@@ -33,60 +32,53 @@ interface WhatsAppMessageOutput {
 }
 
 async function getTwilioCredentials() {
-  // This function will now always prioritize environment variables.
-  // Next.js automatically loads .env files into process.env in development.
-  // In production (Firebase App Hosting), these must be set as secrets.
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+  
+  if (!accountSid || !authToken || !fromNumber) {
+    throw new Error("Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).");
+  }
+  
+  if (accountSid.startsWith('ACxxx')) {
+     throw new Error("Las credenciales de Twilio no están configuradas. Por favor, configúralas en tu archivo .env");
+  }
   
   return { accountSid, authToken, fromNumber };
 }
 
 export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<WhatsAppMessageOutput> {
-  const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
-
-  if (!accountSid || !authToken || !fromNumber) {
-    const errorMsg = "Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).";
-    console.error(errorMsg);
-    return { success: false, error: errorMsg };
-  }
-  
-  if (accountSid.startsWith('ACxxx')) {
-     const errorMsg = "Las credenciales de Twilio no están configuradas. Por favor, configúralas en tu archivo .env";
-     console.error(errorMsg);
-     return { success: false, error: errorMsg };
-  }
-
-  // Normalize phone numbers to be compatible with Twilio
-  const cleanedToPhone = input.to.replace(/\D/g, '');
-  const to = `whatsapp:+52${cleanedToPhone}`; // Assuming MX country code
-  const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
-
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-  
-  const body = new URLSearchParams();
-  body.append('To', to);
-  body.append('From', from);
-  
-  if (input.contentSid) {
-    body.append('ContentSid', input.contentSid);
-    if (input.contentVariables) {
-        body.append('ContentVariables', JSON.stringify(input.contentVariables));
-    }
-  } else if (input.text) {
-    body.append('Body', input.text);
-  }
-  
-  if (input.mediaUrl) {
-    body.append('MediaUrl', input.mediaUrl);
-  }
-
-  if (!input.contentSid && !input.text && !input.mediaUrl) {
-      return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
-  }
-
   try {
+    const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
+    
+    // Normalize phone numbers to be compatible with Twilio
+    const cleanedToPhone = input.to.replace(/\D/g, '');
+    const to = `whatsapp:+52${cleanedToPhone}`; // Assuming MX country code
+    const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
+
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    
+    const body = new URLSearchParams();
+    body.append('To', to);
+    body.append('From', from);
+    
+    if (input.contentSid) {
+      body.append('ContentSid', input.contentSid);
+      if (input.contentVariables) {
+          body.append('ContentVariables', JSON.stringify(input.contentVariables));
+      }
+    } else if (input.text) {
+      body.append('Body', input.text);
+    }
+    
+    if (input.mediaUrl) {
+      body.append('MediaUrl', input.mediaUrl);
+    }
+
+    if (!input.contentSid && !input.text && !input.mediaUrl) {
+        return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -100,7 +92,6 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
     if (!response.ok) {
         console.error("Error from Twilio API:", responseData);
-        // Provide a more specific error message from Twilio if available
         const twilioError = responseData.message || 'Error desconocido de Twilio.';
         const moreInfo = responseData.more_info || '';
         throw new Error(`Error de la API de Twilio: ${twilioError} ${moreInfo}`);
@@ -127,24 +118,14 @@ export async function sendWhatsappConfirmation(input: {
     templateSid: string;
 }): Promise<WhatsAppMessageOutput> {
     
-    // {{1}}: Nombre del cliente
     const clientName = input.clientName;
-    
-    // {{2}}: Nombre del servicio
     const serviceName = input.serviceName;
-
-    // {{3}}: Fecha y hora.
     const parsedDate = parseISO(input.reservationDate);
     const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
-    
-    // {{4}}: Nombre del profesional.
     const professionalName = input.professionalName || 'El de tu preferencia';
-
-    // El número se pasa directamente, la función genérica se encarga de limpiarlo y añadir prefijo.
     const to = input.clientPhone;
     
-    // Se llama a la función genérica para enviar la plantilla con sus variables.
     return sendWhatsAppMessage({
         to,
         contentSid: input.templateSid,
@@ -159,7 +140,6 @@ export async function sendWhatsappConfirmation(input: {
 
 // Wrapper for sending a test message
 export async function sendTestTwilioMessage(): Promise<Partial<WhatsAppMessageOutput>> {
-  // Hardcoded test phone number. Replace with a real number for testing.
   const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314';
   if (!testPhoneNumber) {
     return { success: false, error: 'No test phone number configured in .env file.' };

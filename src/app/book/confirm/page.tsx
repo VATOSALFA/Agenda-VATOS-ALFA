@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Suspense } from 'react';
@@ -119,6 +120,7 @@ function ConfirmPageContent() {
                 const clientName = `${data.nombre} ${data.apellido}`;
                 const serviceNames = selectedServices.map(s => s.name).join(', ');
                 const professionalName = selectedProfessional?.name || 'El de tu preferencia';
+                // This is your official Twilio Template SID
                 const TWILIO_CONFIRMATION_SID = 'HX18fff4936a83e0ec91cd5bf3099efaa9';
                 
                 sendWhatsappConfirmation({

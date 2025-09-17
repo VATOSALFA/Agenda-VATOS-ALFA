@@ -8,8 +8,6 @@ import { z } from 'zod';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
-import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 
 
 const WhatsAppMessageInputSchema = z.object({
@@ -31,7 +29,7 @@ interface WhatsAppMessageOutput {
     error?: string;
 }
 
-async function getTwilioCredentials() {
+function getTwilioCredentials() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
@@ -49,11 +47,11 @@ async function getTwilioCredentials() {
 
 export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<WhatsAppMessageOutput> {
   try {
-    const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
+    const { accountSid, authToken, fromNumber } = getTwilioCredentials();
     
     // Normalize phone numbers to be compatible with Twilio
     const cleanedToPhone = input.to.replace(/\D/g, '');
-    const to = `whatsapp:+52${cleanedToPhone}`; // Assuming MX country code
+    const to = `whatsapp:+521${cleanedToPhone}`; // Assuming MX country code with '1' for mobile
     const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
 
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
@@ -76,7 +74,7 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     }
 
     if (!input.contentSid && !input.text && !input.mediaUrl) {
-        return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
+        return { success: false, error: 'Se requiere un cuerpo de mensaje, URL de medios o SID de contenido.' };
     }
 
     const response = await fetch(url, {
@@ -114,7 +112,7 @@ export async function sendWhatsappConfirmation(input: {
     serviceName: string;
     reservationDate: string;
     reservationTime: string;
-    professionalName: string;
+    professionalName?: string; // Made optional to handle 'any' professional
     templateSid: string;
 }): Promise<WhatsAppMessageOutput> {
     
@@ -123,6 +121,7 @@ export async function sendWhatsappConfirmation(input: {
     const parsedDate = parseISO(input.reservationDate);
     const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
+    // Provide a default if the professional name is not available
     const professionalName = input.professionalName || 'El de tu preferencia';
     const to = input.clientPhone;
     
@@ -140,9 +139,9 @@ export async function sendWhatsappConfirmation(input: {
 
 // Wrapper for sending a test message
 export async function sendTestTwilioMessage(): Promise<Partial<WhatsAppMessageOutput>> {
-  const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314';
+  const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314'; // Ensure your test number is in .env
   if (!testPhoneNumber) {
-    return { success: false, error: 'No test phone number configured in .env file.' };
+    return { success: false, error: 'No se ha configurado un número de teléfono de prueba en el archivo .env (TEST_PHONE_NUMBER).' };
   }
   const result = await sendWhatsAppMessage({
     to: testPhoneNumber,

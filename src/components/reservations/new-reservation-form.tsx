@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -402,20 +403,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
         
-        if (dataToSave.notifications?.whatsapp_notification) {
+        if (data.notifications?.whatsapp_notification) {
             const client = clients.find(c => c.id === data.cliente_id);
+            const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
+
             if (client && client.telefono) {
+                const TWILIO_CONFIRMATION_SID = 'HX18fff4936a83e0ec91cd5bf3099efaa9';
                 sendWhatsappConfirmation({
                     clientName: `${client.nombre} ${client.apellido}`,
                     clientPhone: client.telefono,
                     serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
                     reservationDate: formattedDate,
                     reservationTime: hora_inicio,
-                }).then(() => {
-                    toast({ title: 'Notificación de WhatsApp enviada.' });
+                    professionalName: professional?.name || 'El de tu preferencia',
+                    templateSid: TWILIO_CONFIRMATION_SID,
+                }).then((result) => {
+                     if (result.success) {
+                        toast({ title: 'Notificación de WhatsApp enviada.' });
+                    } else {
+                         throw new Error(result.error || 'Error desconocido al enviar la notificación de WhatsApp.');
+                    }
                 }).catch(err => {
                     console.error("WhatsApp send failed:", err);
-                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: 'No se pudo enviar la notificación.'})
+                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: err.message })
                 });
             }
         }
@@ -584,7 +594,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                 <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                         </Button>
                         </div>
-                        <Combobox
+                         <Combobox
                             options={clientOptions}
                             value={field.value}
                             onChange={field.onChange}

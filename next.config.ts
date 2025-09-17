@@ -29,22 +29,8 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'api.twilio.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'vatos-alfa-barbershop.web.app',
-        port: '',
-        pathname: '/**',
-      },
     ],
   },
 };
 
 export default nextConfig;
-
-    

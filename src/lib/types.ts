@@ -1,5 +1,4 @@
 
-
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -286,17 +285,4 @@ export interface CashClosing {
     diferencia: number;
     comentarios?: string;
     detalle_conteo: Record<string, number>;
-}
-
-export interface Message {
-    id: string;
-    from: string;
-    to?: string;
-    body: string;
-    messageSid: string;
-    mediaUrl?: string;
-    mediaContentType?: string;
-    timestamp: Timestamp;
-    direction: 'inbound' | 'outbound';
-    read?: boolean;
 }

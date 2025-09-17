@@ -1,29 +1,25 @@
 
 'use server';
 /**
- * @fileOverview A flow to send WhatsApp notifications for appointments using Twilio templates.
+ * @fileOverview Flow to send an outbound WhatsApp message via Twilio.
  */
 
 import { z } from 'zod';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { getSecret } from '@genkit-ai/googleai';
+import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
-const WhatsappConfirmationInputSchema = z.object({
-  clientName: z.string(),
-  clientPhone: z.string(),
-  serviceName: z.string(),
-  reservationDate: z.string(), // YYYY-MM-DD
-  reservationTime: z.string(), // HH:mm
+const WhatsAppInputSchema = z.object({
+  to: z.string().describe("Recipient's phone number in E.164 format with whatsapp: prefix."),
+  text: z.string().optional().describe("The text content of the message."),
+  mediaUrl: z.string().optional().describe("The URL of the media to send."),
 });
 
-type WhatsappConfirmationInput = z.infer<typeof WhatsappConfirmationInputSchema>;
+type WhatsAppInput = z.infer<typeof WhatsAppInputSchema>;
 
-interface WhatsappConfirmationOutput {
+interface WhatsAppOutput {
+    success: boolean;
     sid?: string;
-    from?: string;
-    to?: string;
-    body?: string;
     error?: string;
 }
 
@@ -36,6 +32,7 @@ async function getTwilioCredentials() {
     ]);
     return { accountSid, authToken, fromNumber };
   } else {
+    // For local development, ensure these are set in your .env file
     return {
       accountSid: process.env.TWILIO_ACCOUNT_SID,
       authToken: process.env.TWILIO_AUTH_TOKEN,
@@ -44,47 +41,37 @@ async function getTwilioCredentials() {
   }
 }
 
-export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput): Promise<WhatsappConfirmationOutput> {
-  
+export async function sendWhatsAppMessage(input: WhatsAppInput): Promise<WhatsAppOutput> {
   const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
-  
+
   if (!accountSid || !authToken || !fromNumber) {
-      console.error("Twilio credentials are not set.");
-      return { error: "Faltan credenciales de Twilio en el servidor." };
+    const errorMsg = "Faltan las credenciales de Twilio en el servidor.";
+    console.error(errorMsg);
+    return { success: false, error: errorMsg };
   }
   
   if (accountSid.startsWith('ACxxx')) {
-     return { error: "Credenciales de Twilio no configuradas." };
+     const errorMsg = "Las credenciales de Twilio no están configuradas. Por favor, configúralas.";
+     console.error(errorMsg);
+     return { success: false, error: errorMsg };
   }
-
-  const reservationDateTime = parseISO(`${input.reservationDate}T${input.reservationTime}:00`);
-  const formattedDateTime = format(reservationDateTime, "EEEE, dd 'de' MMMM 'a las' HH:mm 'hrs.'", { locale: es });
-  
-  let clientPhone = input.clientPhone.replace(/\D/g, '');
-  if (clientPhone.length === 10) { 
-      clientPhone = `+521${clientPhone}`;
-  } else if (clientPhone.length === 12 && clientPhone.startsWith('521')) {
-      clientPhone = `+${clientPhone}`;
-  }
-  const toPhoneNumber = `whatsapp:${clientPhone}`;
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const body = new URLSearchParams();
-  body.append('To', toPhoneNumber);
+  body.append('To', input.to);
   body.append('From', fromNumber);
   
-  body.append('ContentSid', 'HX18fff4936a83e0ec91cd5bf3099efaa9');
-
-  const contentVariables = JSON.stringify({
-      '1': input.clientName,
-      '2': input.serviceName,
-      '3': formattedDateTime,
-  });
-  body.append('ContentVariables', contentVariables);
-
-  const messageBody = `¡Hola, ${input.clientName}! Tu cita para ${input.serviceName} ha sido confirmada para el ${formattedDateTime}. ¡Te esperamos!`;
-
+  if (input.text) {
+      body.append('Body', input.text);
+  }
+  if (input.mediaUrl) {
+      body.append('MediaUrl', input.mediaUrl);
+  }
+  
+  if (!input.text && !input.mediaUrl) {
+    return { success: false, error: "El mensaje debe tener texto o un archivo adjunto."};
+  }
 
   try {
     const response = await fetch(url, {
@@ -99,20 +86,46 @@ export async function sendWhatsappConfirmation(input: WhatsappConfirmationInput)
     const responseData = await response.json();
 
     if (!response.ok) {
-        console.error("Error al enviar mensaje de Twilio:", responseData);
+        console.error("Error from Twilio API:", responseData);
         throw new Error(`Error de la API de Twilio: ${responseData.message || response.statusText}`);
     }
 
-    console.log("Mensaje de Twilio enviado con éxito:", responseData);
-    return { 
-        sid: responseData.sid,
-        from: fromNumber,
-        to: toPhoneNumber,
-        body: messageBody,
-    };
+    console.log("Mensaje de Twilio enviado con éxito:", responseData.sid);
+    
+    // Save outbound message to Firestore
+    const conversationRef = doc(db, 'conversations', input.to);
+    
+    await runTransaction(db, async (transaction) => {
+        const messageData: any = {
+            senderId: 'vatosalfa',
+            text: input.text,
+            timestamp: serverTimestamp(),
+            messageSid: responseData.sid,
+            read: true, // Outbound messages are always "read"
+        };
+
+        if (input.mediaUrl) {
+            messageData.mediaUrl = input.mediaUrl;
+            // You might need to determine mediaType based on the URL or another input param
+            if(input.mediaUrl.includes('.pdf')) messageData.mediaType = 'document';
+            else if(input.mediaUrl.includes('audio')) messageData.mediaType = 'audio';
+            else messageData.mediaType = 'image';
+        }
+
+        const newMessageRef = doc(collection(conversationRef, 'messages'));
+        transaction.set(newMessageRef, messageData);
+        
+        transaction.update(conversationRef, {
+            lastMessageText: input.text || `[${messageData.mediaType}]`,
+            lastMessageTimestamp: serverTimestamp(),
+        });
+    });
+
+    return { success: true, sid: responseData.sid };
 
   } catch(error) {
-      console.error("Fallo en la llamada a la API de Twilio:", error);
-      return { error: error instanceof Error ? error.message : 'Error desconocido' };
+      console.error("Fallo al llamar a la API de Twilio:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al contactar a Twilio.';
+      return { success: false, error: errorMessage };
   }
 }

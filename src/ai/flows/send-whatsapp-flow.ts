@@ -97,34 +97,6 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     }
 
     console.log("Mensaje de WhatsApp enviado con éxito:", responseData.sid);
-
-    // Save the sent message to Firestore
-    try {
-        const conversationId = to;
-        if (!conversationId) {
-             throw new Error("Cannot save message to DB without a conversationId (recipient 'to' number).");
-        }
-        const conversationRef = doc(db, 'conversations', conversationId);
-        const newMessageRef = doc(collection(conversationRef, 'messages'));
-        const batch = runTransaction(db, async (transaction) => {
-            transaction.set(newMessageRef, {
-                senderId: 'vatosalfa',
-                text: bodyText,
-                mediaUrl: input.mediaUrl,
-                timestamp: serverTimestamp(),
-                messageSid: responseData.sid
-            });
-            transaction.set(conversationRef, {
-                lastMessageText: bodyText || '[Archivo multimedia]',
-                lastMessageTimestamp: serverTimestamp(),
-            }, { merge: true });
-        });
-        await batch;
-        console.log('Outbound message saved to Firestore');
-    } catch(dbError) {
-        console.error("Error saving outbound message to Firestore:", dbError);
-        // Do not block the flow if DB write fails, but log it.
-    }
     
     return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: bodyText };
 
@@ -142,6 +114,7 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
     const cleanedPhone = input.clientPhone.replace(/\D/g, '');
     const to = `whatsapp:+52${cleanedPhone}`;
 
+    // Obtener el nombre del profesional. Dato para {{4}}
     let professionalName = 'El de tu preferencia';
     if(input.professionalId && input.professionalId !== 'any') {
       try {
@@ -154,22 +127,24 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
       }
     }
     
+    // Formatear la fecha y hora. Dato para {{3}}
     const parsedDate = parseISO(input.reservationDate);
     const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
 
-    // Using numbered placeholders as requested for Twilio templates
+    // Esta es la plantilla que se enviará a Twilio.
+    // {{1}} es el nombre del cliente
+    // {{2}} es el nombre del servicio
+    // {{3}} es la fecha y hora completas
+    // {{4}} es el nombre del profesional
     const bodyText = `Hola {{1}}\n¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!\n\nServicio: {{2}}\nDía: {{3}}\nCon: {{4}}\n\nSi necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
+    // Aquí se reemplazan las variables de la plantilla con los datos reales
     const filledBody = bodyText
-        .replace('{{1}}', input.clientName)
-        .replace('{{2}}', input.serviceName)
-        .replace('{{3}}', fullDateTime)
-        .replace('{{4}}', professionalName);
+        .replace('{{1}}', input.clientName) // Dato {{1}}
+        .replace('{{2}}', input.serviceName) // Dato {{2}}
+        .replace('{{3}}', fullDateTime) // Dato {{3}}
+        .replace('{{4}}', professionalName); // Dato {{4}}
     
     return sendWhatsAppMessage({ to, text: filledBody });
 }
-
-
-
-

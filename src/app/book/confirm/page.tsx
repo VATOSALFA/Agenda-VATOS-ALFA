@@ -116,36 +116,18 @@ function ConfirmPageContent() {
             
             // Send WhatsApp notification
             if (data.telefono) {
+                // Se recopilan los datos para la plantilla
                 const serviceNames = selectedServices.map(s => s.name).join(', ');
                 
                 sendWhatsappConfirmation({
-                    clientName: `${data.nombre} ${data.apellido}`,
+                    clientName: `${data.nombre} ${data.apellido}`, // Origen del dato {{1}}
                     clientPhone: data.telefono,
-                    serviceName: serviceNames,
-                    reservationDate: dateStr,
-                    reservationTime: time, // Pass reservation time
-                    professionalId: professionalId,
-                }).then(async (result) => {
-                    if (result.success && result.sid && result.from && result.body) {
-                        toast({ title: 'Notificación de WhatsApp enviada.' });
-                        // Save outbound message to Firestore
-                        const messageData: any = {
-                            from: result.from,
-                            to: result.to,
-                            body: result.body,
-                            messageSid: result.sid,
-                            timestamp: Timestamp.now(),
-                            direction: 'outbound',
-                            read: true,
-                        };
-                        
-                        const conversationId = result.to;
-                        if (conversationId) {
-                            await addDoc(collection(db, 'conversations', conversationId, 'messages'), messageData);
-                        }
-                    } else if (result.error) {
-                        toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });
-                    }
+                    serviceName: serviceNames, // Origen del dato {{2}}
+                    reservationDate: dateStr, // Parte del dato {{3}}
+                    reservationTime: time, // Parte del dato {{3}}
+                    professionalId: professionalId, // Origen del dato para buscar {{4}}
+                }).then(() => {
+                    toast({ title: 'Notificación de WhatsApp enviada.' });
                 }).catch(err => {
                     console.error("WhatsApp send failed:", err);
                     toast({ variant: 'destructive', title: 'Error de WhatsApp', description: 'No se pudo enviar la notificación.'})

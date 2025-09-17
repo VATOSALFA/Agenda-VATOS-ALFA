@@ -33,27 +33,21 @@ interface WhatsAppMessageOutput {
 }
 
 async function getTwilioCredentials() {
-  if (process.env.NODE_ENV === 'production') {
-    const [accountSid, authToken, fromNumber] = await Promise.all([
-      getSecret('TWILIO_ACCOUNT_SID'),
-      getSecret('TWILIO_AUTH_TOKEN'),
-      getSecret('TWILIO_WHATSAPP_NUMBER')
-    ]);
-    return { accountSid, authToken, fromNumber };
-  } else {
-    return {
-      accountSid: process.env.TWILIO_ACCOUNT_SID,
-      authToken: process.env.TWILIO_AUTH_TOKEN,
-      fromNumber: process.env.TWILIO_WHATSAPP_NUMBER
-    };
-  }
+  // This function will now always prioritize environment variables.
+  // Next.js automatically loads .env files into process.env in development.
+  // In production (Firebase App Hosting), these must be set as secrets.
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+  
+  return { accountSid, authToken, fromNumber };
 }
 
 export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<WhatsAppMessageOutput> {
   const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
 
   if (!accountSid || !authToken || !fromNumber) {
-    const errorMsg = "Faltan las credenciales de Twilio en el servidor.";
+    const errorMsg = "Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).";
     console.error(errorMsg);
     return { success: false, error: errorMsg };
   }

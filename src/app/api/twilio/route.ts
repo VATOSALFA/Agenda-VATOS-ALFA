@@ -43,7 +43,9 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
 }
 
 export async function POST(req: NextRequest) {
-    const body = await req.formData();
+    const bodyText = await req.text();
+    const body = new URLSearchParams(bodyText);
+    
     const from = body.get('From') as string; // e.g., whatsapp:+5214428133314
     const to = body.get('To') as string;
     const messageBody = (body.get('Body') as string) || '';

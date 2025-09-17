@@ -8,6 +8,10 @@ import { z } from 'zod';
 import { getSecret } from '@genkit-ai/googleai';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import type { Profesional } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
 
 const WhatsAppMessageInputSchema = z.object({
   to: z.string().describe("Recipient's phone number, with the 'whatsapp:' prefix."),
@@ -58,7 +62,10 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
      return { success: false, error: errorMsg };
   }
 
-  const to = input.to;
+  // Normaliza el número de teléfono para que sea compatible con Twilio
+  const cleanedPhone = input.to.replace(/\D/g, '');
+  const to = `whatsapp:+52${cleanedPhone}`;
+
   
   const bodyText = input.text || '';
 
@@ -121,12 +128,11 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
     // {{4}}: Nombre del profesional.
     const professionalName = input.professionalName;
 
-    // Se normaliza el número de teléfono para que sea compatible con Twilio
-    const cleanedPhone = input.clientPhone.replace(/\D/g, '');
-    const to = `whatsapp:+52${cleanedPhone}`;
+    // El número se pasa directamente, la función genérica se encarga de limpiarlo y añadir prefijo.
+    const to = input.clientPhone;
 
     // Esta es la plantilla que se enviará a Twilio.
-    const bodyText = `Hola {{1}}\n¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!\n\nServicio: {{2}}\nDía: {{3}}\nCon: {{4}}\n\nSi necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
+    const bodyText = `Hola {{1}},\n¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada! 💈\n\nServicio: {{2}}\nDía: {{3}}\nCon: {{4}}\n\nSi necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
     // Aquí se reemplazan las variables de la plantilla con los datos reales
     const filledBody = bodyText
@@ -138,3 +144,4 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
     // Se llama a la función genérica para enviar el mensaje ya construido.
     return sendWhatsAppMessage({ to, text: filledBody });
 }
+

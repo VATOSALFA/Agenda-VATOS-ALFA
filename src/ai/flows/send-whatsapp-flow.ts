@@ -1,16 +1,13 @@
 
 'use server';
 /**
- * @fileOverview Flow to send an outbound WhatsApp message via Twilio for confirmation.
+ * @fileOverview Flow to send an outbound WhatsApp message via Twilio.
  */
 
 import { z } from 'zod';
 import { getSecret } from '@genkit-ai/googleai';
-import { collection, doc, runTransaction, serverTimestamp, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Profesional } from '@/lib/types';
 
 const WhatsAppMessageInputSchema = z.object({
   to: z.string().describe("Recipient's phone number, with the 'whatsapp:' prefix."),
@@ -110,21 +107,21 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 // Wrapper for booking confirmations
 export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string, professionalName: string }): Promise<WhatsAppMessageOutput> {
     
-    // Dato {{1}}: Nombre del cliente. Origen: `input.clientName` del formulario.
+    // {{1}}: Nombre del cliente
     const clientName = input.clientName;
     
-    // Dato {{2}}: Nombre del servicio. Origen: `input.serviceName` del formulario.
+    // {{2}}: Nombre del servicio
     const serviceName = input.serviceName;
 
-    // Dato {{3}}: Fecha y hora. Origen: `input.reservationDate` y `input.reservationTime` del formulario.
+    // {{3}}: Fecha y hora.
     const parsedDate = parseISO(input.reservationDate);
     const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
     
-    // Dato {{4}}: Nombre del profesional. Origen: `input.professionalName` del formulario.
+    // {{4}}: Nombre del profesional.
     const professionalName = input.professionalName;
 
-    // Se normaliza el número de teléfono
+    // Se normaliza el número de teléfono para que sea compatible con Twilio
     const cleanedPhone = input.clientPhone.replace(/\D/g, '');
     const to = `whatsapp:+52${cleanedPhone}`;
 

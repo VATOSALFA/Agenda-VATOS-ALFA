@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -45,6 +44,7 @@ import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
 import Link from 'next/link';
+import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 
 
 interface ReservationDetailModalProps {
@@ -77,6 +77,7 @@ export function ReservationDetailModal({
   const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
   const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const { toast } = useToast();
 
@@ -126,6 +127,30 @@ export function ReservationDetailModal({
         setIsLoadingSale(false);
     }
   };
+  
+  const handleSendReminder = async () => {
+    if (!reservation.customer?.telefono) {
+        toast({ variant: 'destructive', title: 'Sin teléfono', description: 'El cliente no tiene un número de teléfono registrado.'});
+        return;
+    }
+    setIsSending(true);
+    try {
+        await sendWhatsappConfirmation({
+            clientName: `${reservation.customer.nombre} ${reservation.customer.apellido}`,
+            clientPhone: reservation.customer.telefono,
+            serviceName: reservation.items.map(i => i.servicio || i.nombre).join(', '),
+            reservationDate: reservation.fecha,
+            reservationTime: reservation.hora_inicio,
+            professionalName: reservation.professionalNames || 'El de tu preferencia',
+        });
+        toast({ title: 'Recordatorio enviado', description: 'El mensaje de WhatsApp ha sido enviado con éxito.' });
+    } catch (error) {
+        console.error("Error sending reminder:", error);
+        toast({ variant: 'destructive', title: 'Error al enviar', description: 'No se pudo enviar el recordatorio.' });
+    } finally {
+        setIsSending(false);
+    }
+  }
 
   const clientNameParam = encodeURIComponent(`${reservation.customer?.nombre} ${reservation.customer?.apellido}`);
 
@@ -135,9 +160,15 @@ export function ReservationDetailModal({
       <DialogContent className="max-w-xl">
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
-              <Button variant="outline" size="sm" onClick={onEdit}>
-                  <Pencil className="mr-2 h-4 w-4" /> Editar
-              </Button>
+              <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleSendReminder} disabled={isSending}>
+                      {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                      Enviar Recordatorio
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onEdit}>
+                      <Pencil className="mr-2 h-4 w-4" /> Editar
+                  </Button>
+              </div>
           </DialogHeader>
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-start">

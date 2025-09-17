@@ -14,9 +14,11 @@ import { doc, getDoc } from 'firebase/firestore';
 
 
 const WhatsAppMessageInputSchema = z.object({
-  to: z.string().describe("Recipient's phone number, with the 'whatsapp:' prefix."),
-  text: z.string().optional().describe("The text content of the message."),
+  to: z.string().describe("Recipient's phone number, without any special prefixes."),
+  text: z.string().optional().describe("The text content of the message. Used if not sending a template."),
   mediaUrl: z.string().optional().describe("URL of media to be sent."),
+  contentSid: z.string().optional().describe("The SID of the Content Template to send."),
+  contentVariables: z.record(z.string()).optional().describe("Variables for the Content Template."),
 });
 
 type WhatsAppMessageInput = z.infer<typeof WhatsAppMessageInputSchema>;
@@ -67,21 +69,24 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
   const to = `whatsapp:+52${cleanedPhone}`;
 
   
-  const bodyText = input.text || '';
-
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const body = new URLSearchParams();
   body.append('To', to);
   body.append('From', fromNumber);
   
-  if (bodyText) {
-    body.append('Body', bodyText);
+  if (input.contentSid) {
+    body.append('ContentSid', input.contentSid);
+    if (input.contentVariables) {
+        body.append('ContentVariables', JSON.stringify(input.contentVariables));
+    }
+  } else if (input.text) {
+    body.append('Body', input.text);
   }
+
   if (input.mediaUrl) {
     body.append('MediaUrl', input.mediaUrl);
   }
-  
 
   try {
     const response = await fetch(url, {
@@ -102,7 +107,7 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
     console.log("Mensaje de WhatsApp enviado con éxito:", responseData.sid);
     
-    return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: bodyText };
+    return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: responseData.body };
 
   } catch(error) {
       console.error("Fallo al llamar a la API de Twilio:", error);
@@ -111,8 +116,16 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
   }
 }
 
-// Wrapper for booking confirmations
-export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string, professionalName: string }): Promise<WhatsAppMessageOutput> {
+// Wrapper for booking confirmations using a Twilio Template
+export async function sendWhatsappConfirmation(input: { 
+    clientName: string, 
+    clientPhone: string, 
+    serviceName: string, 
+    reservationDate: string, 
+    reservationTime: string, 
+    professionalName: string,
+    templateSid: string,
+}): Promise<WhatsAppMessageOutput> {
     
     // {{1}}: Nombre del cliente
     const clientName = input.clientName;
@@ -130,18 +143,16 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
 
     // El número se pasa directamente, la función genérica se encarga de limpiarlo y añadir prefijo.
     const to = input.clientPhone;
-
-    // Esta es la plantilla que se enviará a Twilio.
-    const bodyText = `Hola {{1}},\n¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada! 💈\n\nServicio: {{2}}\nDía: {{3}}\nCon: {{4}}\n\nSi necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
-    // Aquí se reemplazan las variables de la plantilla con los datos reales
-    const filledBody = bodyText
-        .replace('{{1}}', clientName)
-        .replace('{{2}}', serviceName)
-        .replace('{{3}}', fullDateTime)
-        .replace('{{4}}', professionalName);
-    
-    // Se llama a la función genérica para enviar el mensaje ya construido.
-    return sendWhatsAppMessage({ to, text: filledBody });
+    // Se llama a la función genérica para enviar la plantilla con sus variables.
+    return sendWhatsAppMessage({
+        to,
+        contentSid: input.templateSid,
+        contentVariables: {
+            '1': clientName,
+            '2': serviceName,
+            '3': fullDateTime,
+            '4': professionalName
+        }
+    });
 }
-

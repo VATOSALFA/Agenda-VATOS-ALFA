@@ -136,6 +136,8 @@ export function ReservationDetailModal({
     }
     setIsSending(true);
     try {
+        const TWILIO_CONFIRMATION_SID = 'HXe8b59526715f16040e3a65243179549f'; // Your template SID
+
         await sendWhatsappConfirmation({
             clientName: `${reservation.customer.nombre} ${reservation.customer.apellido}`,
             clientPhone: reservation.customer.telefono,
@@ -143,6 +145,7 @@ export function ReservationDetailModal({
             reservationDate: reservation.fecha,
             reservationTime: reservation.hora_inicio,
             professionalName: reservation.professionalNames || 'El de tu preferencia',
+            templateSid: TWILIO_CONFIRMATION_SID
         });
         toast({ title: 'Recordatorio enviado', description: 'El mensaje de WhatsApp ha sido enviado con éxito.' });
     } catch (error) {

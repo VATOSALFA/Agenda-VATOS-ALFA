@@ -116,19 +116,18 @@ function ConfirmPageContent() {
             
             // Send WhatsApp notification
             if (data.telefono) {
-                // Se recopilan los datos para la plantilla
+                const TWILIO_CONFIRMATION_SID = 'HXe8b59526715f16040e3a65243179549f';
                 const serviceNames = selectedServices.map(s => s.name).join(', ');
-                
-                // Origen del dato {{4}}
                 const professionalName = selectedProfessional?.name || 'El de tu preferencia';
                 
                 sendWhatsappConfirmation({
-                    clientName: `${data.nombre} ${data.apellido}`, // Origen del dato {{1}}
+                    clientName: `${data.nombre} ${data.apellido}`,
                     clientPhone: data.telefono,
-                    serviceName: serviceNames, // Origen del dato {{2}}
-                    reservationDate: dateStr, // Origen del dato {{3}}
-                    reservationTime: time, // Origen del dato {{3}}
-                    professionalName: professionalName, // Origen del dato {{4}}
+                    serviceName: serviceNames,
+                    reservationDate: dateStr,
+                    reservationTime: time,
+                    professionalName: professionalName,
+                    templateSid: TWILIO_CONFIRMATION_SID,
                 }).then(() => {
                     toast({ title: 'Notificación de WhatsApp enviada.' });
                 }).catch(err => {

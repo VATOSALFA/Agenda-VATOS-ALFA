@@ -159,14 +159,7 @@ export async function sendWhatsappConfirmation(input: { clientName: string, clie
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
 
     // Using numbered placeholders as requested for Twilio templates
-    const bodyText = `Hola {{1}}
-¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!
-
-Servicio: {{2}}
-Día: {{3}}
-Con: {{4}}
-
-Si necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
+    const bodyText = `Hola {{1}}\n¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!\n\nServicio: {{2}}\nDía: {{3}}\nCon: {{4}}\n\nSi necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
     const filledBody = bodyText
         .replace('{{1}}', input.clientName)
@@ -176,6 +169,7 @@ Si necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondi
     
     return sendWhatsAppMessage({ to, text: filledBody });
 }
+
 
 
 

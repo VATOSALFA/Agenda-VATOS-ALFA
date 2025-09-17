@@ -5,7 +5,7 @@ if (admin.apps.length === 0) {
   try {
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      storageBucket: "vatos-alfa-barbershop.appspot.com",
+      storageBucket: "agenda-1ae08.appspot.com",
     });
   } catch (error: any) {
     console.error("Firebase Admin Initialization Error: ", error.message);

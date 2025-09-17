@@ -108,43 +108,36 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 }
 
 // Wrapper for booking confirmations
-export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string, professionalId: string }): Promise<WhatsAppMessageOutput> {
+export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string, professionalName: string }): Promise<WhatsAppMessageOutput> {
     
-    // Normalize the phone number
-    const cleanedPhone = input.clientPhone.replace(/\D/g, '');
-    const to = `whatsapp:+52${cleanedPhone}`;
+    // Dato {{1}}: Nombre del cliente. Origen: `input.clientName` del formulario.
+    const clientName = input.clientName;
+    
+    // Dato {{2}}: Nombre del servicio. Origen: `input.serviceName` del formulario.
+    const serviceName = input.serviceName;
 
-    // Obtener el nombre del profesional. Dato para {{4}}
-    let professionalName = 'El de tu preferencia';
-    if(input.professionalId && input.professionalId !== 'any') {
-      try {
-        const profDoc = await getDoc(doc(db, 'profesionales', input.professionalId));
-        if(profDoc.exists()){
-          professionalName = (profDoc.data() as Profesional).name;
-        }
-      } catch (e) {
-        console.error("Could not fetch professional name, using default.", e)
-      }
-    }
-    
-    // Formatear la fecha y hora. Dato para {{3}}
+    // Dato {{3}}: Fecha y hora. Origen: `input.reservationDate` y `input.reservationTime` del formulario.
     const parsedDate = parseISO(input.reservationDate);
     const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
+    
+    // Dato {{4}}: Nombre del profesional. Origen: `input.professionalName` del formulario.
+    const professionalName = input.professionalName;
+
+    // Se normaliza el número de teléfono
+    const cleanedPhone = input.clientPhone.replace(/\D/g, '');
+    const to = `whatsapp:+52${cleanedPhone}`;
 
     // Esta es la plantilla que se enviará a Twilio.
-    // {{1}} es el nombre del cliente
-    // {{2}} es el nombre del servicio
-    // {{3}} es la fecha y hora completas
-    // {{4}} es el nombre del profesional
     const bodyText = `Hola {{1}}\n¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!\n\nServicio: {{2}}\nDía: {{3}}\nCon: {{4}}\n\nSi necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
     // Aquí se reemplazan las variables de la plantilla con los datos reales
     const filledBody = bodyText
-        .replace('{{1}}', input.clientName) // Dato {{1}}
-        .replace('{{2}}', input.serviceName) // Dato {{2}}
-        .replace('{{3}}', fullDateTime) // Dato {{3}}
-        .replace('{{4}}', professionalName); // Dato {{4}}
+        .replace('{{1}}', clientName)
+        .replace('{{2}}', serviceName)
+        .replace('{{3}}', fullDateTime)
+        .replace('{{4}}', professionalName);
     
+    // Se llama a la función genérica para enviar el mensaje ya construido.
     return sendWhatsAppMessage({ to, text: filledBody });
 }

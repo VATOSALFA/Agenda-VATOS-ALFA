@@ -118,6 +118,7 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 // Se recopilan los datos para la plantilla
                 const serviceNames = selectedServices.map(s => s.name).join(', ');
+                const professionalName = selectedProfessional?.name || 'El de tu preferencia';
                 
                 sendWhatsappConfirmation({
                     clientName: `${data.nombre} ${data.apellido}`, // Origen del dato {{1}}
@@ -125,7 +126,7 @@ function ConfirmPageContent() {
                     serviceName: serviceNames, // Origen del dato {{2}}
                     reservationDate: dateStr, // Parte del dato {{3}}
                     reservationTime: time, // Parte del dato {{3}}
-                    professionalId: professionalId, // Origen del dato para buscar {{4}}
+                    professionalName: professionalName, // Origen del dato {{4}}
                 }).then(() => {
                     toast({ title: 'Notificación de WhatsApp enviada.' });
                 }).catch(err => {

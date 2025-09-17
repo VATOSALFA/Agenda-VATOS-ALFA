@@ -2,10 +2,14 @@
 import * as admin from 'firebase-admin';
 
 if (admin.apps.length === 0) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    storageBucket: "vatos-alfa-barbershop.appspot.com",
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+      storageBucket: "vatos-alfa-barbershop.appspot.com",
+    });
+  } catch (error: any) {
+    console.error("Firebase Admin Initialization Error: ", error.message);
+  }
 }
 
 const adminDb = admin.firestore();

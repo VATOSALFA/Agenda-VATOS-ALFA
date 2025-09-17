@@ -100,7 +100,11 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
     // Save the sent message to Firestore
     try {
-        const conversationRef = doc(db, 'conversations', to);
+        const conversationId = to;
+        if (!conversationId) {
+             throw new Error("Cannot save message to DB without a conversationId (recipient 'to' number).");
+        }
+        const conversationRef = doc(db, 'conversations', conversationId);
         const newMessageRef = doc(collection(conversationRef, 'messages'));
         const batch = runTransaction(db, async (transaction) => {
             transaction.set(newMessageRef, {
@@ -131,29 +135,41 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
   }
 }
 
-// Wrapper for booking confirmations for backwards compatibility
-export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, professionalId: string }): Promise<WhatsAppMessageOutput> {
+// Wrapper for booking confirmations
+export async function sendWhatsappConfirmation(input: { clientName: string, clientPhone: string, serviceName: string, reservationDate: string, reservationTime: string, professionalId: string }): Promise<WhatsAppMessageOutput> {
     const to = `whatsapp:${input.clientPhone}`;
 
     let professionalName = 'El de tu preferencia';
-    if(input.professionalId !== 'any') {
-      const profDoc = await getDoc(doc(db, 'profesionales', input.professionalId));
-      if(profDoc.exists()){
-        professionalName = (profDoc.data() as Profesional).name;
+    if(input.professionalId && input.professionalId !== 'any') {
+      try {
+        const profDoc = await getDoc(doc(db, 'profesionales', input.professionalId));
+        if(profDoc.exists()){
+          professionalName = (profDoc.data() as Profesional).name;
+        }
+      } catch (e) {
+        console.error("Could not fetch professional name, using default.", e)
       }
     }
     
     const parsedDate = parseISO(input.reservationDate);
     const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM", { locale: es });
+    const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
 
-    const bodyText = `Hola ${input.clientName}
+    // Using numbered placeholders as requested for Twilio templates
+    const bodyText = `Hola {{1}}
 ¡Tu cita en Vatos Alfa Barber Shop ha sido confirmada!
 
-Servicio: ${input.serviceName}
-Día: ${formattedDate}
-Con: ${professionalName}
+Servicio: {{2}}
+Día: {{3}}
+Con: {{4}}
 
 Si necesitas cambiar o cancelar tu cita, por favor avísanos con tiempo respondiendo a este mensaje.`;
     
-    return sendWhatsAppMessage({ to, text: bodyText });
+    const filledBody = bodyText
+        .replace('{{1}}', input.clientName)
+        .replace('{{2}}', input.serviceName)
+        .replace('{{3}}', fullDateTime)
+        .replace('{{4}}', professionalName);
+    
+    return sendWhatsAppMessage({ to, text: filledBody });
 }

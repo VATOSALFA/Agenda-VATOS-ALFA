@@ -84,10 +84,14 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     }
   } else if (input.text) {
     body.append('Body', input.text);
-  } else if (input.mediaUrl) {
+  }
+  
+  if (input.mediaUrl) {
     body.append('MediaUrl', input.mediaUrl);
-  } else {
-    return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
+  }
+
+  if (!input.contentSid && !input.text && !input.mediaUrl) {
+      return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
   }
 
   try {

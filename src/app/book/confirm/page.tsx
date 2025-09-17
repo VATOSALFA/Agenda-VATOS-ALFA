@@ -123,7 +123,7 @@ function ConfirmPageContent() {
                 // Variable {{4}}: Nombre del profesional. Si es 'any', se usa un texto por defecto.
                 const professionalName = selectedProfessional?.name || 'El de tu preferencia';
                 // El SID de la plantilla de Twilio.
-                const TWILIO_CONFIRMATION_SID = 'HX18fff4936a83e0ec91cd5bf3099efaa9';
+                const TWILIO_CONFIRMATION_SID = 'HXe8b59526715f16040e3a65243179549f';
                 
                 sendWhatsappConfirmation({
                     clientName: clientName,

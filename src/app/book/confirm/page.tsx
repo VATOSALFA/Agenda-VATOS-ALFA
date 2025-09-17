@@ -116,14 +116,10 @@ function ConfirmPageContent() {
             
             // Send WhatsApp notification
             if (data.telefono) {
-                // Variable {{1}}: Nombre completo del cliente.
                 const clientName = `${data.nombre} ${data.apellido}`;
-                // Variable {{2}}: Nombre de los servicios concatenados.
                 const serviceNames = selectedServices.map(s => s.name).join(', ');
-                // Variable {{4}}: Nombre del profesional. Si es 'any', se usa un texto por defecto.
                 const professionalName = selectedProfessional?.name || 'El de tu preferencia';
-                // El SID de la plantilla de Twilio.
-                const TWILIO_CONFIRMATION_SID = 'HXe8b59526715f16040e3a65243179549f';
+                const TWILIO_CONFIRMATION_SID = 'HX18fff4936a83e0ec91cd5bf3099efaa9';
                 
                 sendWhatsappConfirmation({
                     clientName: clientName,
@@ -133,11 +129,15 @@ function ConfirmPageContent() {
                     reservationTime: time,
                     professionalName: professionalName,
                     templateSid: TWILIO_CONFIRMATION_SID,
-                }).then(() => {
-                    toast({ title: 'Notificación de WhatsApp enviada.' });
+                }).then((result) => {
+                    if (result.success) {
+                        toast({ title: 'Notificación de WhatsApp enviada.' });
+                    } else {
+                         throw new Error(result.error || 'Error desconocido al enviar la notificación de WhatsApp.');
+                    }
                 }).catch(err => {
                     console.error("WhatsApp send failed:", err);
-                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: 'No se pudo enviar la notificación.'})
+                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: err.message })
                 });
             }
 

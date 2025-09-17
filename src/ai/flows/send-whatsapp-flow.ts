@@ -41,8 +41,6 @@ async function getTwilioCredentials() {
     ]);
     return { accountSid, authToken, fromNumber };
   } else {
-    // In development, directly use environment variables.
-    // Ensure you have a .env file with these values.
     return {
       accountSid: process.env.TWILIO_ACCOUNT_SID,
       authToken: process.env.TWILIO_AUTH_TOKEN,
@@ -147,7 +145,7 @@ export async function sendWhatsappConfirmation(input: {
     const fullDateTime = `${formattedDate} a las ${input.reservationTime}`;
     
     // {{4}}: Nombre del profesional.
-    const professionalName = input.professionalName;
+    const professionalName = input.professionalName || 'El de tu preferencia';
 
     // El número se pasa directamente, la función genérica se encarga de limpiarlo y añadir prefijo.
     const to = input.clientPhone;

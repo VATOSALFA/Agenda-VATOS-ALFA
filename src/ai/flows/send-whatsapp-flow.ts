@@ -41,6 +41,8 @@ async function getTwilioCredentials() {
     ]);
     return { accountSid, authToken, fromNumber };
   } else {
+    // In development, directly use environment variables.
+    // Ensure you have a .env file with these values.
     return {
       accountSid: process.env.TWILIO_ACCOUNT_SID,
       authToken: process.env.TWILIO_AUTH_TOKEN,
@@ -59,21 +61,21 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
   }
   
   if (accountSid.startsWith('ACxxx')) {
-     const errorMsg = "Las credenciales de Twilio no están configuradas. Por favor, configúralas.";
+     const errorMsg = "Las credenciales de Twilio no están configuradas. Por favor, configúralas en tu archivo .env";
      console.error(errorMsg);
      return { success: false, error: errorMsg };
   }
 
-  // Normaliza el número de teléfono para que sea compatible con Twilio
-  const cleanedPhone = input.to.replace(/\D/g, '');
-  const to = `whatsapp:+52${cleanedPhone}`;
+  // Normalize phone numbers to be compatible with Twilio
+  const cleanedToPhone = input.to.replace(/\D/g, '');
+  const to = `whatsapp:+52${cleanedToPhone}`; // Assuming MX country code
+  const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
 
-  
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const body = new URLSearchParams();
   body.append('To', to);
-  body.append('From', fromNumber);
+  body.append('From', from);
   
   if (input.contentSid) {
     body.append('ContentSid', input.contentSid);
@@ -82,13 +84,10 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     }
   } else if (input.text) {
     body.append('Body', input.text);
-  } else if (!input.mediaUrl) {
-    return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
-  }
-
-
-  if (input.mediaUrl) {
+  } else if (input.mediaUrl) {
     body.append('MediaUrl', input.mediaUrl);
+  } else {
+    return { success: false, error: 'A Message Body, Media URL or Content SID is required.' };
   }
 
   try {
@@ -105,17 +104,19 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
     if (!response.ok) {
         console.error("Error from Twilio API:", responseData);
-        throw new Error(`Error de la API de Twilio: ${responseData.message || response.statusText}`);
+        // Provide a more specific error message from Twilio if available
+        const twilioError = responseData.message || 'Error desconocido de Twilio.';
+        const moreInfo = responseData.more_info || '';
+        throw new Error(`Error de la API de Twilio: ${twilioError} ${moreInfo}`);
     }
 
     console.log("Mensaje de WhatsApp enviado con éxito:", responseData.sid);
     
     return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: responseData.body };
 
-  } catch(error) {
+  } catch(error: any) {
       console.error("Fallo al llamar a la API de Twilio:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al contactar a Twilio.';
-      return { success: false, error: errorMessage };
+      return { success: false, error: error.message };
   }
 }
 
@@ -165,7 +166,7 @@ export async function sendTestTwilioMessage(): Promise<Partial<WhatsAppMessageOu
   // Hardcoded test phone number. Replace with a real number for testing.
   const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314';
   if (!testPhoneNumber) {
-    return { success: false, error: 'No test phone number configured.' };
+    return { success: false, error: 'No test phone number configured in .env file.' };
   }
   const result = await sendWhatsAppMessage({
     to: testPhoneNumber,

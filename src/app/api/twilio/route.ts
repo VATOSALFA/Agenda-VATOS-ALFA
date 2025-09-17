@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/lib/firebase-admin';
-import { collection, doc, serverTimestamp, runTransaction, increment } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, runTransaction, increment, setDoc } from 'firebase/firestore';
 import twilio from 'twilio';
 
 // Helper function to download media from Twilio and upload to Firebase Storage
@@ -33,7 +33,8 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         },
     });
 
-    return fileRef.publicUrl();
+    const publicUrl = await getDownloadURL(fileRef);
+    return publicUrl;
 }
 
 export async function POST(req: NextRequest) {
@@ -62,54 +63,44 @@ export async function POST(req: NextRequest) {
             
             if (mediaUrlFromTwilio && mediaContentType) {
                 try {
-                    mediaUrl = await handleMedia(mediaUrlFromTwilio, mediaContentType, from.replace('whatsapp:', ''));
+                    const storageUrl = await handleMedia(mediaUrlFromTwilio, mediaContentType, from.replace('whatsapp:', ''));
+                    mediaUrl = storageUrl;
                     if (mediaContentType.startsWith('image')) mediaType = 'image';
                     else if (mediaContentType.startsWith('audio')) mediaType = 'audio';
                     else if (mediaContentType === 'application/pdf') mediaType = 'document';
                 } catch (mediaError) {
                     console.error("Error handling media:", mediaError);
-                    // Continue to save the text part of the message even if media fails
                     finalMessage = `${finalMessage} [Media no pudo ser procesado]`;
                 }
             }
         }
+        
+        // 1. Save the new message to the subcollection
+        const newMessageRef = doc(collection(conversationRef, 'messages'));
+        const messageData: any = {
+            senderId: 'client',
+            text: finalMessage,
+            timestamp: serverTimestamp(),
+            messageSid: messageSid,
+            read: false,
+        };
 
-        await runTransaction(adminDb, async (transaction) => {
-            const convDoc = await transaction.get(conversationRef);
+        if (mediaUrl && mediaType) {
+            messageData.mediaUrl = mediaUrl;
+            messageData.mediaType = mediaType;
+        }
+        
+        await setDoc(newMessageRef, messageData);
+        
+        // 2. Update the parent conversation document
+        const lastMessageText = finalMessage || (mediaType ? `[${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}]` : '[Mensaje vacío]');
+        
+        await setDoc(conversationRef, {
+            lastMessageText: lastMessageText,
+            lastMessageTimestamp: serverTimestamp(),
+            unreadCount: increment(1)
+        }, { merge: true });
 
-            const messageData: any = {
-                senderId: 'client',
-                text: finalMessage,
-                timestamp: serverTimestamp(),
-                messageSid: messageSid,
-                read: false,
-            };
-
-            if (mediaUrl && mediaType) {
-                messageData.mediaUrl = mediaUrl;
-                messageData.mediaType = mediaType;
-            }
-            
-            const newMessageRef = doc(collection(conversationRef, 'messages'));
-            transaction.set(newMessageRef, messageData);
-            
-            const lastMessageText = finalMessage || (mediaType ? `[${mediaType}]` : '[Mensaje vacío]');
-
-            if (convDoc.exists()) {
-                transaction.update(conversationRef, {
-                    lastMessageText,
-                    lastMessageTimestamp: serverTimestamp(),
-                    unreadCount: increment(1)
-                });
-            } else {
-                transaction.set(conversationRef, {
-                    lastMessageText,
-                    lastMessageTimestamp: serverTimestamp(),
-                    unreadCount: 1,
-                    // clientName will be populated by the frontend logic
-                });
-            }
-        });
 
         // Respond to Twilio to acknowledge receipt
         return new NextResponse('<Response/>', { headers: { 'Content-Type': 'text/xml' } });

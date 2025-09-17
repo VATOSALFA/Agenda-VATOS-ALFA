@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/lib/firebase-admin';
-import { collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, runTransaction, increment } from 'firebase/firestore';
 import twilio from 'twilio';
 
 // Helper function to download media from Twilio and upload to Firebase Storage

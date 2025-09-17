@@ -6,15 +6,11 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import {
   collection,
   doc,
-  setDoc,
   updateDoc,
   serverTimestamp,
   query,
   orderBy,
-  limit,
   onSnapshot,
-  increment,
-  writeBatch,
   getDoc,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -22,8 +18,7 @@ import { db, storage } from '@/lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, MessageSquareText, User, Send, ChevronLeft, Paperclip, X, Mic, FileText, Download, Play, Pause } from 'lucide-react';
+import { Loader2, Send, ChevronLeft, Paperclip, X, FileText, Download, Play, Pause, MessageSquareText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -113,7 +108,7 @@ export default function ConversationsPage() {
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace('whatsapp:', '');
+        const phone = conv.id.replace('whatsapp:', '').replace('+521', '');
         return {
             ...conv,
             clientName: conv.clientName || clientMap.get(phone) || phone,
@@ -176,8 +171,11 @@ export default function ConversationsPage() {
       }
 
       toast({ title: 'Enviando mensaje...', description: 'Comunicándose con Twilio.' });
+      
+      const phoneOnly = activeConversationId.replace('whatsapp:', '').replace('+521', '');
+      
       const result = await sendWhatsAppMessage({
-        to: activeConversationId,
+        to: phoneOnly,
         text: currentMessage,
         mediaUrl: mediaUrl,
       });

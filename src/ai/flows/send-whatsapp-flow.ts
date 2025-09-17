@@ -1,25 +1,32 @@
 
 'use server';
 /**
- * @fileOverview Flow to send an outbound WhatsApp message via Twilio.
+ * @fileOverview Flow to send an outbound WhatsApp message via Twilio for confirmation.
  */
 
 import { z } from 'zod';
 import { getSecret } from '@genkit-ai/googleai';
 import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-const WhatsAppInputSchema = z.object({
-  to: z.string().describe("Recipient's phone number in E.164 format with whatsapp: prefix."),
-  text: z.string().optional().describe("The text content of the message."),
-  mediaUrl: z.string().optional().describe("The URL of the media to send."),
+const WhatsAppConfirmationInputSchema = z.object({
+  clientName: z.string().describe("Client's full name."),
+  clientPhone: z.string().describe("Client's phone number, without the 'whatsapp:' prefix."),
+  serviceName: z.string().describe("Name of the service(s) booked."),
+  reservationDate: z.string().describe("Date of the reservation in yyyy-MM-dd format."),
+  reservationTime: z.string().describe("Time of the reservation in HH:mm format."),
 });
 
-type WhatsAppInput = z.infer<typeof WhatsAppInputSchema>;
+type WhatsAppConfirmationInput = z.infer<typeof WhatsAppConfirmationInputSchema>;
 
-interface WhatsAppOutput {
+interface WhatsAppConfirmationOutput {
     success: boolean;
     sid?: string;
+    from?: string;
+    to?: string;
+    body?: string;
     error?: string;
 }
 
@@ -32,7 +39,6 @@ async function getTwilioCredentials() {
     ]);
     return { accountSid, authToken, fromNumber };
   } else {
-    // For local development, ensure these are set in your .env file
     return {
       accountSid: process.env.TWILIO_ACCOUNT_SID,
       authToken: process.env.TWILIO_AUTH_TOKEN,
@@ -41,7 +47,7 @@ async function getTwilioCredentials() {
   }
 }
 
-export async function sendWhatsAppMessage(input: WhatsAppInput): Promise<WhatsAppOutput> {
+export async function sendWhatsappConfirmation(input: WhatsAppConfirmationInput): Promise<WhatsAppConfirmationOutput> {
   const { accountSid, authToken, fromNumber } = await getTwilioCredentials();
 
   if (!accountSid || !authToken || !fromNumber) {
@@ -56,22 +62,20 @@ export async function sendWhatsAppMessage(input: WhatsAppInput): Promise<WhatsAp
      return { success: false, error: errorMsg };
   }
 
+  const to = `whatsapp:${input.clientPhone}`;
+  
+  const parsedDate = parseISO(input.reservationDate);
+  const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM 'del' yyyy", { locale: es });
+  
+  const bodyText = `¡Hola, ${input.clientName}! Tu cita para ${input.serviceName} ha sido confirmada para el ${formattedDate} a las ${input.reservationTime}hs. ¡Te esperamos en VATOS ALFA Barber Shop!`;
+
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const body = new URLSearchParams();
-  body.append('To', input.to);
+  body.append('To', to);
   body.append('From', fromNumber);
+  body.append('Body', bodyText);
   
-  if (input.text) {
-      body.append('Body', input.text);
-  }
-  if (input.mediaUrl) {
-      body.append('MediaUrl', input.mediaUrl);
-  }
-  
-  if (!input.text && !input.mediaUrl) {
-    return { success: false, error: "El mensaje debe tener texto o un archivo adjunto."};
-  }
 
   try {
     const response = await fetch(url, {
@@ -90,38 +94,9 @@ export async function sendWhatsAppMessage(input: WhatsAppInput): Promise<WhatsAp
         throw new Error(`Error de la API de Twilio: ${responseData.message || response.statusText}`);
     }
 
-    console.log("Mensaje de Twilio enviado con éxito:", responseData.sid);
+    console.log("Mensaje de confirmación de Twilio enviado con éxito:", responseData.sid);
     
-    // Save outbound message to Firestore
-    const conversationRef = doc(db, 'conversations', input.to);
-    
-    await runTransaction(db, async (transaction) => {
-        const messageData: any = {
-            senderId: 'vatosalfa',
-            text: input.text,
-            timestamp: serverTimestamp(),
-            messageSid: responseData.sid,
-            read: true, // Outbound messages are always "read"
-        };
-
-        if (input.mediaUrl) {
-            messageData.mediaUrl = input.mediaUrl;
-            // You might need to determine mediaType based on the URL or another input param
-            if(input.mediaUrl.includes('.pdf')) messageData.mediaType = 'document';
-            else if(input.mediaUrl.includes('audio')) messageData.mediaType = 'audio';
-            else messageData.mediaType = 'image';
-        }
-
-        const newMessageRef = doc(collection(conversationRef, 'messages'));
-        transaction.set(newMessageRef, messageData);
-        
-        transaction.update(conversationRef, {
-            lastMessageText: input.text || `[${messageData.mediaType}]`,
-            lastMessageTimestamp: serverTimestamp(),
-        });
-    });
-
-    return { success: true, sid: responseData.sid };
+    return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: bodyText };
 
   } catch(error) {
       console.error("Fallo al llamar a la API de Twilio:", error);

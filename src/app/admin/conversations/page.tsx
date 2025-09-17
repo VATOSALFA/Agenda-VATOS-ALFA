@@ -108,7 +108,7 @@ export default function ConversationsPage() {
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace('whatsapp:', '').replace('+521', '');
+        const phone = conv.id.replace('whatsapp:+521', '').replace('whatsapp:+52', '');
         return {
             ...conv,
             clientName: conv.clientName || clientMap.get(phone) || phone,
@@ -172,7 +172,7 @@ export default function ConversationsPage() {
 
       toast({ title: 'Enviando mensaje...', description: 'Comunicándose con Twilio.' });
       
-      const phoneOnly = activeConversationId.replace('whatsapp:', '').replace('+521', '');
+      const phoneOnly = activeConversationId.replace('whatsapp:', '').replace('+521', '').replace('+52','');
       
       const result = await sendWhatsAppMessage({
         to: phoneOnly,

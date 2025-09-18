@@ -156,10 +156,8 @@ export default function ConversationsPage() {
         return;
     }
     
-    // Twilio requires the whatsapp: prefix
     const conversationId = `whatsapp:+521${client.telefono.replace(/\D/g, '')}`;
     
-    // Check if conversation exists, if not, create it
     const convRef = doc(db, 'conversations', conversationId);
     const convSnap = await getDoc(convRef);
     if (!convSnap.exists()) {
@@ -169,7 +167,7 @@ export default function ConversationsPage() {
             lastMessageTimestamp: serverTimestamp(),
             unreadCount: 0
         });
-        setConversationsKey(prev => prev + 1); // Refresh conversation list
+        setConversationsKey(prev => prev + 1);
     }
     
     handleSelectConversation(conversationId);

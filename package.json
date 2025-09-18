@@ -8,7 +8,6 @@
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
-    "build:env": "echo \"TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\nTWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\nTWILIO_WHATSAPP_NUMBER=+14155238886\\nTEST_PHONE_NUMBER=1234567890\" > .env.production",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"

@@ -3,19 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/lib/firebase-admin';
 import { collection, doc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
 import twilio from 'twilio';
-import * as fs from 'fs';
 
 // Helper function to get Twilio credentials and throw a clear error if not set
 function getTwilioCredentials() {
-    let accountSid = process.env.TWILIO_ACCOUNT_SID;
-    let authToken = process.env.TWILIO_AUTH_TOKEN;
-
-    if (!accountSid && fs.existsSync('/etc/secrets/TWILIO_ACCOUNT_SID')) {
-        accountSid = fs.readFileSync('/etc/secrets/TWILIO_ACCOUNT_SID', 'utf8').trim();
-    }
-    if (!authToken && fs.existsSync('/etc/secrets/TWILIO_AUTH_TOKEN')) {
-        authToken = fs.readFileSync('/etc/secrets/TWILIO_AUTH_TOKEN', 'utf8').trim();
-    }
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
 
     if (!accountSid || !authToken || accountSid.startsWith('ACxxx')) {
         throw new Error("Las credenciales de Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) no están configuradas en el servidor.");
@@ -27,20 +19,20 @@ function getTwilioCredentials() {
 // Helper function to download media from Twilio and upload to Firebase Storage
 async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumber: string): Promise<{ storageUrl: string, mediaType: 'image' | 'audio' | 'document' | 'other' }> {
     const { accountSid, authToken } = getTwilioCredentials();
-    const client = twilio(accountSid, authToken);
-
-    const mediaResponse = await client.httpClient.request({
-        method: 'GET',
-        uri: mediaUrl,
-        username: accountSid,
-        password: authToken,
-    });
     
-    if (mediaResponse.statusCode !== 200 || !mediaResponse.body) {
-        throw new Error(`Failed to download media from Twilio. Status: ${mediaResponse?.statusCode}`);
+    // Twilio's Node helper library can't fetch media directly.
+    // We need to use a standard HTTP client with auth.
+    const response = await fetch(mediaUrl, {
+        headers: {
+            'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+        }
+    });
+
+    if (!response.ok || !response.body) {
+        throw new Error(`Failed to download media from Twilio. Status: ${response.status}`);
     }
     
-    const mediaBuffer = Buffer.from(mediaResponse.body, 'binary');
+    const mediaBuffer = Buffer.from(await response.arrayBuffer());
 
     const fileExtension = mediaContentType.split('/')[1] || 'bin';
     const fileName = `whatsapp_media/${phoneNumber}/${Date.now()}.${fileExtension}`;
@@ -52,8 +44,11 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         },
     });
 
+    // Make the file publicly readable
     await fileRef.makePublic();
-    const publicUrl = fileRef.publicUrl();
+    
+    // Return the public URL
+    const publicUrl = `https://storage.googleapis.com/${adminStorage.bucket().name}/${fileName}`;
     
     let mediaType: 'image' | 'audio' | 'document' | 'other' = 'other';
     if (mediaContentType.startsWith('image')) mediaType = 'image';
@@ -72,7 +67,10 @@ export async function POST(req: NextRequest) {
 
         // Use twilio library to validate the request
         const twilioSignature = req.headers.get('x-twilio-signature');
-        const requestUrl = req.url;
+        // The URL needs to be reconstructed with its original protocol and host.
+        // req.url gives the full URL.
+        const requestUrl = req.url; 
+        
         const bodyText = await req.text();
         const params = new URLSearchParams(bodyText);
         const bodyObject: { [key: string]: any } = {};

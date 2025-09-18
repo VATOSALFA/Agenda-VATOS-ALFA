@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
-import * as fs from 'fs';
 import twilio from 'twilio';
 
 
@@ -32,19 +31,9 @@ interface WhatsAppMessageOutput {
 }
 
 function getTwilioCredentials() {
-  let accountSid = process.env.TWILIO_ACCOUNT_SID;
-  let authToken = process.env.TWILIO_AUTH_TOKEN;
-  let fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-  
-  if (!accountSid && fs.existsSync('/etc/secrets/TWILIO_ACCOUNT_SID')) {
-    accountSid = fs.readFileSync('/etc/secrets/TWILIO_ACCOUNT_SID', 'utf8').trim();
-  }
-  if (!authToken && fs.existsSync('/etc/secrets/TWILIO_AUTH_TOKEN')) {
-    authToken = fs.readFileSync('/etc/secrets/TWILIO_AUTH_TOKEN', 'utf8').trim();
-  }
-  if (!fromNumber && fs.existsSync('/etc/secrets/TWILIO_WHATSAPP_NUMBER')) {
-    fromNumber = fs.readFileSync('/etc/secrets/TWILIO_WHATSAPP_NUMBER', 'utf8').trim();
-  }
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
   
   if (!accountSid || !authToken || !fromNumber || accountSid.startsWith('ACxxx')) {
     throw new Error("Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).");
@@ -61,7 +50,6 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     const to = `whatsapp:+521${input.to.replace(/\D/g, '')}`;
     
     // Ensure the 'from' number is correctly formatted
-    const cleanFromNumber = fromNumber.replace(/\D/g, '');
     const from = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
     
     const messageData: any = { to, from };
@@ -91,7 +79,9 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
 
   } catch(error: any) {
       console.error("Fallo al llamar a la API de Twilio:", error);
-      return { success: false, error: error.message };
+      // Provide a more specific error message if it's a Twilio API error.
+      const errorMessage = error.message || 'Ocurrió un error desconocido al contactar a Twilio.';
+      return { success: false, error: errorMessage };
   }
 }
 

@@ -6,7 +6,7 @@ if (admin.apps.length === 0) {
   try {
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      storageBucket: "gs://agenda-1ae08.appspot.com", // Correct format with gs://
+      storageBucket: "agenda-1ae08.appspot.com", // Correct format
     });
   } catch (error: any) {
     console.error("Firebase Admin Initialization Error: ", error.message);

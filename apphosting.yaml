@@ -10,11 +10,11 @@ build:
   #You can customize your build command here, for example by adding a
   #--build-config flag to your framework's build command.
   #If you do, you must also specify a run command.
-  run: npm run build
+  run: next build
 run:
   #You can customize your run command here.
   #If you do, you must also specify a build command.
-  run: npm run start
+  run: next start
 runConfig:
   #Increase this value to automatically spin up more
   #instances in response to increased traffic.

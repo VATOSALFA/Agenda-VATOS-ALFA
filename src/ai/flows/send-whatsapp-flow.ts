@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
+import * as fs from 'fs';
 
 
 const WhatsAppMessageInputSchema = z.object({
@@ -30,16 +31,28 @@ interface WhatsAppMessageOutput {
 }
 
 function getTwilioCredentials() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+  let accountSid = process.env.TWILIO_ACCOUNT_SID;
+  let authToken = process.env.TWILIO_AUTH_TOKEN;
+  let fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+  
+  // This is a robust fallback for Firebase App Hosting environment
+  // It reads secrets directly if they aren't populated in process.env
+  if (!accountSid && fs.existsSync('/etc/secrets/TWILIO_ACCOUNT_SID')) {
+    accountSid = fs.readFileSync('/etc/secrets/TWILIO_ACCOUNT_SID', 'utf8').trim();
+  }
+  if (!authToken && fs.existsSync('/etc/secrets/TWILIO_AUTH_TOKEN')) {
+    authToken = fs.readFileSync('/etc/secrets/TWILIO_AUTH_TOKEN', 'utf8').trim();
+  }
+  if (!fromNumber && fs.existsSync('/etc/secrets/TWILIO_WHATSAPP_NUMBER')) {
+    fromNumber = fs.readFileSync('/etc/secrets/TWILIO_WHATSAPP_NUMBER', 'utf8').trim();
+  }
   
   if (!accountSid || !authToken || !fromNumber) {
     throw new Error("Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).");
   }
   
   if (accountSid.startsWith('ACxxx')) {
-     throw new Error("Las credenciales de Twilio no están configuradas. Por favor, configúralas en tu archivo .env");
+     throw new Error("Las credenciales de Twilio no están configuradas. Por favor, configúralas en tu archivo .env o en los secretos de App Hosting.");
   }
   
   return { accountSid, authToken, fromNumber };

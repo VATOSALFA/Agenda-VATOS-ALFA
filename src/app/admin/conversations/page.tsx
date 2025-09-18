@@ -40,6 +40,7 @@ interface Message {
   mediaUrl?: string;
   mediaType?: 'image' | 'audio' | 'document';
   timestamp: any;
+  read?: boolean;
 }
 
 interface Conversation {
@@ -101,17 +102,25 @@ export default function ConversationsPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isNewConversationModalOpen, setIsNewConversationModalOpen] = useState(false);
 
-  const { data: conversations, loading: conversationsLoading, setKey: setConversationsKey } = useFirestoreQuery<Conversation>('conversations', { orderBy: ['lastMessageTimestamp', 'desc']});
+  const [conversationsQueryKey, setConversationsQueryKey] = useState(0);
+  const { data: conversations, loading: conversationsLoading } = useFirestoreQuery<Conversation>('conversations', conversationsQueryKey, orderBy('lastMessageTimestamp', 'desc'));
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
   const clientMap = useMemo(() => {
     if (clientsLoading) return new Map();
-    return new Map(clients.map(c => [c.telefono.replace(/\D/g, ''), c.nombre + ' ' + c.apellido]));
+    const map = new Map<string, string>();
+    clients.forEach(c => {
+        if(c.telefono) {
+            const phone = c.telefono.replace(/\D/g, '').slice(-10); // Get last 10 digits
+            map.set(phone, `${c.nombre} ${c.apellido}`);
+        }
+    });
+    return map;
   }, [clients, clientsLoading]);
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace(/\D/g, '').slice(-10); // Get last 10 digits
+        const phone = conv.id.replace('whatsapp:', '').replace(/\D/g, '').slice(-10);
         return {
             ...conv,
             clientName: conv.clientName || clientMap.get(phone) || conv.id.replace('whatsapp:', ''),
@@ -167,7 +176,7 @@ export default function ConversationsPage() {
             lastMessageTimestamp: serverTimestamp(),
             unreadCount: 0
         });
-        setConversationsKey(prev => prev + 1);
+        setConversationsQueryKey(prev => prev + 1);
     }
     
     handleSelectConversation(conversationId);
@@ -242,7 +251,8 @@ export default function ConversationsPage() {
     <>
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
       <aside className={cn(
-        "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out"
+        "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
+        "md:flex" // Always show on desktop
       )}>
         <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -396,4 +406,5 @@ export default function ConversationsPage() {
     />
     </>
   );
-}
+
+    

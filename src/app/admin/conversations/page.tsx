@@ -12,6 +12,7 @@ import {
   orderBy,
   onSnapshot,
   getDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
@@ -100,18 +101,16 @@ export default function ConversationsPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isNewConversationModalOpen, setIsNewConversationModalOpen] = useState(false);
 
-  const { data: conversations, loading: conversationsLoading } = useFirestoreQuery<Conversation>('conversations', orderBy('lastMessageTimestamp', 'desc'));
+  const { data: conversations, loading: conversationsLoading, setKey: setConversationsKey } = useFirestoreQuery<Conversation>('conversations', { orderBy: ['lastMessageTimestamp', 'desc']});
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
   const clientMap = useMemo(() => {
     if (clientsLoading) return new Map();
-    // Normalize phone numbers for better matching
     return new Map(clients.map(c => [c.telefono.replace(/\D/g, ''), c.nombre + ' ' + c.apellido]));
   }, [clients, clientsLoading]);
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        // More robust phone number cleaning
         const phone = conv.id.replace(/\D/g, '').slice(-10); // Get last 10 digits
         return {
             ...conv,
@@ -132,6 +131,9 @@ export default function ConversationsPage() {
         });
         setMessages(fetchedMessages);
         setIsLoadingMessages(false);
+      }, (error) => {
+        console.error("Error fetching messages:", error);
+        setIsLoadingMessages(false);
       });
 
       return () => unsubscribe();
@@ -146,6 +148,32 @@ export default function ConversationsPage() {
         await updateDoc(convRef, { unreadCount: 0 });
     }
   };
+  
+  const handleClientSelected = async (client: Client) => {
+    setIsNewConversationModalOpen(false);
+    if (!client.telefono) {
+        toast({ title: "Error", description: "El cliente no tiene un número de teléfono.", variant: "destructive" });
+        return;
+    }
+    
+    // Twilio requires the whatsapp: prefix
+    const conversationId = `whatsapp:+521${client.telefono.replace(/\D/g, '')}`;
+    
+    // Check if conversation exists, if not, create it
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) {
+        await setDoc(convRef, {
+            clientName: `${client.nombre} ${client.apellido}`,
+            lastMessageText: "Conversación iniciada desde el panel.",
+            lastMessageTimestamp: serverTimestamp(),
+            unreadCount: 0
+        });
+        setConversationsKey(prev => prev + 1); // Refresh conversation list
+    }
+    
+    handleSelectConversation(conversationId);
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -366,14 +394,8 @@ export default function ConversationsPage() {
     <NewConversationModal 
       isOpen={isNewConversationModalOpen}
       onOpenChange={setIsNewConversationModalOpen}
-      onMessageSent={() => {
-        // Potentially refresh conversation list
-      }}
+      onClientSelected={handleClientSelected}
     />
     </>
   );
 }
-
-    
-
-    

@@ -14,12 +14,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, MessageCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { sendWhatsAppMessage } from '@/ai/flows/send-whatsapp-flow';
 import { Combobox } from '@/components/ui/combobox';
 import type { Client } from '@/lib/types';
 
@@ -27,26 +25,23 @@ import type { Client } from '@/lib/types';
 interface NewConversationModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onMessageSent: () => void;
+  onClientSelected: (client: Client) => void;
 }
 
-const newMessageSchema = z.object({
+const newConversationSchema = z.object({
   clientId: z.string().min(1, 'Debes seleccionar un cliente.'),
-  message: z.string().min(1, 'El mensaje no puede estar vacío.'),
 });
 
-type NewMessageFormData = z.infer<typeof newMessageSchema>;
+type NewConversationFormData = z.infer<typeof newConversationSchema>;
 
-export function NewConversationModal({ isOpen, onOpenChange, onMessageSent }: NewConversationModalProps) {
-  const [isSending, setIsSending] = useState(false);
+export function NewConversationModal({ isOpen, onOpenChange, onClientSelected }: NewConversationModalProps) {
   const { toast } = useToast();
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
 
-  const form = useForm<NewMessageFormData>({
-    resolver: zodResolver(newMessageSchema),
+  const form = useForm<NewConversationFormData>({
+    resolver: zodResolver(newConversationSchema),
     defaultValues: {
       clientId: '',
-      message: '',
     },
   });
 
@@ -57,39 +52,12 @@ export function NewConversationModal({ isOpen, onOpenChange, onMessageSent }: Ne
     }));
   }, [clients]);
 
-  const onSubmit = async (data: NewMessageFormData) => {
-    setIsSending(true);
+  const onSubmit = (data: NewConversationFormData) => {
     const selectedClient = clients.find(c => c.id === data.clientId);
-
-    if (!selectedClient || !selectedClient.telefono) {
-        toast({ variant: 'destructive', title: 'Error', description: 'El cliente seleccionado no tiene un número de teléfono.' });
-        setIsSending(false);
-        return;
-    }
-
-    try {
-      const result = await sendWhatsAppMessage({
-        to: selectedClient.telefono,
-        text: data.message,
-      });
-
-      if (result.success) {
-        toast({ title: '¡Mensaje enviado!', description: `El mensaje ha sido enviado a ${selectedClient.nombre}.` });
-        onMessageSent();
-        onOpenChange(false);
-        form.reset();
-      } else {
-        throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
-      }
-    } catch (error: any) {
-      console.error("Error sending new message:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error de Envío',
-        description: error.message || 'No se pudo enviar el mensaje.',
-      });
-    } finally {
-      setIsSending(false);
+    if (selectedClient) {
+      onClientSelected(selectedClient);
+    } else {
+        toast({ title: "Error", description: "No se pudo encontrar el cliente seleccionado.", variant: "destructive"})
     }
   };
 
@@ -99,9 +67,9 @@ export function NewConversationModal({ isOpen, onOpenChange, onMessageSent }: Ne
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>Nueva Conversación</DialogTitle>
+              <DialogTitle>Iniciar Conversación</DialogTitle>
               <DialogDescription>
-                Busca un cliente y envíale un mensaje de WhatsApp.
+                Busca un cliente para abrir su chat en el panel principal.
               </DialogDescription>
             </DialogHeader>
             <div className="py-6 space-y-4">
@@ -122,27 +90,14 @@ export function NewConversationModal({ isOpen, onOpenChange, onMessageSent }: Ne
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="message"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mensaje</FormLabel>
-                    <FormControl>
-                      <Textarea rows={5} placeholder="Escribe tu mensaje aquí..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSending}>
-                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Enviar
+              <Button type="submit" disabled={clientsLoading}>
+                {clientsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
+                Abrir Chat
               </Button>
             </DialogFooter>
           </form>
@@ -151,5 +106,3 @@ export function NewConversationModal({ isOpen, onOpenChange, onMessageSent }: Ne
     </Dialog>
   );
 }
-
-    

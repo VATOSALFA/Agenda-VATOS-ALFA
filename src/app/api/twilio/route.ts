@@ -5,21 +5,27 @@ import { collection, doc, serverTimestamp, increment, setDoc } from 'firebase/fi
 import twilio from 'twilio';
 
 // Helper function to download media from Twilio and upload to Firebase Storage
-async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumber: string): Promise<string> {
+async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumber: string): Promise<{ storageUrl: string, mediaType: 'image' | 'audio' | 'document' | 'other' }> {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-    if (!accountSid || !authToken) {
+    if (!accountSid || !authToken || accountSid.startsWith('ACxxx')) {
         throw new Error("Twilio credentials are not configured on the server.");
     }
-
+    
+    // Twilio's Node.js helper library is the most reliable way to make authenticated requests
     const twilioClient = twilio(accountSid, authToken);
+
     const mediaResponse = await twilioClient.httpClient.request({
         method: 'GET',
         uri: mediaUrl,
         username: accountSid,
         password: authToken,
     });
+    
+    if (!mediaResponse || mediaResponse.statusCode !== 200) {
+        throw new Error(`Failed to download media from Twilio. Status: ${mediaResponse?.statusCode}`);
+    }
     
     const mediaBuffer = Buffer.from(mediaResponse.body, 'binary');
 
@@ -39,22 +45,30 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         expires: '03-09-2491', // A very distant future date
     });
     
-    return publicUrl;
+    let mediaType: 'image' | 'audio' | 'document' | 'other' = 'other';
+    if (mediaContentType.startsWith('image')) mediaType = 'image';
+    else if (mediaContentType.startsWith('audio')) mediaType = 'audio';
+    else if (mediaContentType === 'application/pdf') mediaType = 'document';
+    
+    return { storageUrl: publicUrl, mediaType };
 }
 
+
 export async function POST(req: NextRequest) {
+    console.log("INCOMING TWILIO WEBHOOK");
+    
+    // Twilio webhooks come as x-www-form-urlencoded, so we need to parse the text body
     const bodyText = await req.text();
-    const body = new URLSearchParams(bodyText);
+    const params = new URLSearchParams(bodyText);
     
-    const from = body.get('From') as string; // e.g., whatsapp:+5214428133314
-    const to = body.get('To') as string;
-    const messageBody = (body.get('Body') as string) || '';
-    const messageSid = body.get('MessageSid') as string;
-    const numMedia = parseInt(body.get('NumMedia') as string || '0', 10);
+    const from = params.get('From');
+    const messageBody = params.get('Body') || '';
+    const messageSid = params.get('MessageSid');
+    const numMedia = parseInt(params.get('NumMedia') || '0', 10);
     
-    if (!from) {
-        console.error('No "From" number in webhook payload');
-        return NextResponse.json({ error: 'No "From" number in webhook payload' }, { status: 400 });
+    if (!from || !messageSid) {
+        console.error('Webhook payload is missing "From" or "MessageSid"');
+        return NextResponse.json({ error: 'Payload missing required fields.' }, { status: 400 });
     }
     
     const conversationId = from; // Use client's number as document ID
@@ -63,22 +77,20 @@ export async function POST(req: NextRequest) {
     try {
         let finalMessage = messageBody;
         let mediaUrl: string | undefined = undefined;
-        let mediaType: 'image' | 'audio' | 'document' | undefined = undefined;
+        let mediaType: 'image' | 'audio' | 'document' | 'other' | undefined = undefined;
 
         if (numMedia > 0) {
-            const mediaUrlFromTwilio = body.get('MediaUrl0') as string;
-            const mediaContentType = body.get('MediaContentType0') as string;
+            const mediaUrlFromTwilio = params.get('MediaUrl0');
+            const mediaContentType = params.get('MediaContentType0');
             
             if (mediaUrlFromTwilio && mediaContentType) {
                 try {
-                    const storageUrl = await handleMedia(mediaUrlFromTwilio, mediaContentType, from.replace('whatsapp:', ''));
-                    mediaUrl = storageUrl;
-                    if (mediaContentType.startsWith('image')) mediaType = 'image';
-                    else if (mediaContentType.startsWith('audio')) mediaType = 'audio';
-                    else if (mediaContentType === 'application/pdf') mediaType = 'document';
-                } catch (mediaError) {
+                    const result = await handleMedia(mediaUrlFromTwilio, mediaContentType, from.replace('whatsapp:', ''));
+                    mediaUrl = result.storageUrl;
+                    mediaType = result.mediaType;
+                } catch (mediaError: any) {
                     console.error("Error handling media:", mediaError);
-                    finalMessage = `${finalMessage} [Media no pudo ser procesado]`;
+                    finalMessage = `${finalMessage} [Media no pudo ser procesado: ${mediaError.message}]`;
                 }
             }
         }
@@ -100,7 +112,7 @@ export async function POST(req: NextRequest) {
         
         await setDoc(newMessageRef, messageData);
         
-        // 2. Update the parent conversation document
+        // 2. Update the parent conversation document (last message preview, unread count)
         const lastMessageText = finalMessage || (mediaType ? `[${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}]` : '[Mensaje vacío]');
         
         await setDoc(conversationRef, {
@@ -113,8 +125,9 @@ export async function POST(req: NextRequest) {
         // Respond to Twilio to acknowledge receipt
         return new NextResponse('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error processing Twilio webhook:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        // Return a 500 error to Twilio so it knows something went wrong on our end
+        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }

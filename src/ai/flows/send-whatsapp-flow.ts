@@ -9,6 +9,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
 import * as fs from 'fs';
+import twilio from 'twilio';
 
 
 const WhatsAppMessageInputSchema = z.object({
@@ -35,8 +36,6 @@ function getTwilioCredentials() {
   let authToken = process.env.TWILIO_AUTH_TOKEN;
   let fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
   
-  // This is a robust fallback for Firebase App Hosting environment
-  // It reads secrets directly if they aren't populated in process.env
   if (!accountSid && fs.existsSync('/etc/secrets/TWILIO_ACCOUNT_SID')) {
     accountSid = fs.readFileSync('/etc/secrets/TWILIO_ACCOUNT_SID', 'utf8').trim();
   }
@@ -47,12 +46,8 @@ function getTwilioCredentials() {
     fromNumber = fs.readFileSync('/etc/secrets/TWILIO_WHATSAPP_NUMBER', 'utf8').trim();
   }
   
-  if (!accountSid || !authToken || !fromNumber) {
+  if (!accountSid || !authToken || !fromNumber || accountSid.startsWith('ACxxx')) {
     throw new Error("Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).");
-  }
-  
-  if (accountSid.startsWith('ACxxx')) {
-     throw new Error("Las credenciales de Twilio no están configuradas. Por favor, configúralas en tu archivo .env o en los secretos de App Hosting.");
   }
   
   return { accountSid, authToken, fromNumber };
@@ -61,56 +56,35 @@ function getTwilioCredentials() {
 export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<WhatsAppMessageOutput> {
   try {
     const { accountSid, authToken, fromNumber } = getTwilioCredentials();
-    
-    // Normalize phone numbers to be compatible with Twilio
-    const cleanedToPhone = input.to.replace(/\D/g, '');
-    const to = `whatsapp:+521${cleanedToPhone}`; // Assuming MX country code with '1' for mobile
-    const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
+    const client = twilio(accountSid, authToken);
 
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const to = `whatsapp:+521${input.to.replace(/\D/g, '')}`;
+    const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
     
-    const body = new URLSearchParams();
-    body.append('To', to);
-    body.append('From', from);
+    const messageData: any = { to, from };
     
     if (input.contentSid) {
-      body.append('ContentSid', input.contentSid);
-      if (input.contentVariables) {
-          body.append('ContentVariables', JSON.stringify(input.contentVariables));
-      }
+        messageData.contentSid = input.contentSid;
+        if(input.contentVariables) {
+            messageData.contentVariables = JSON.stringify(input.contentVariables);
+        }
     } else if (input.text) {
-      body.append('Body', input.text);
-    }
-    
-    if (input.mediaUrl) {
-      body.append('MediaUrl', input.mediaUrl);
+        messageData.body = input.text;
     }
 
+    if (input.mediaUrl) {
+      messageData.mediaUrl = [input.mediaUrl];
+    }
+    
     if (!input.contentSid && !input.text && !input.mediaUrl) {
         return { success: false, error: 'Se requiere un cuerpo de mensaje, URL de medios o SID de contenido.' };
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: body.toString()
-    });
-
-    const responseData = await response.json();
-
-    if (!response.ok) {
-        console.error("Error from Twilio API:", responseData);
-        const twilioError = responseData.message || 'Error desconocido de Twilio.';
-        const moreInfo = responseData.more_info || '';
-        throw new Error(`Error de la API de Twilio: ${twilioError} ${moreInfo}`);
-    }
-
-    console.log("Mensaje de WhatsApp enviado con éxito:", responseData.sid);
+    const message = await client.messages.create(messageData);
     
-    return { success: true, sid: responseData.sid, from: fromNumber, to: to, body: responseData.body };
+    console.log("Mensaje de WhatsApp enviado con éxito:", message.sid);
+    
+    return { success: true, sid: message.sid, from: message.from, to: message.to, body: message.body ?? undefined };
 
   } catch(error: any) {
       console.error("Fallo al llamar a la API de Twilio:", error);

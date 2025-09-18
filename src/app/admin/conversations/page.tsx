@@ -13,6 +13,7 @@ import {
   onSnapshot,
   getDoc,
   setDoc,
+  addDoc,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
@@ -194,11 +195,24 @@ export default function ConversationsPage() {
 
     setIsSending(true);
     
+    const tempMessage = currentMessage;
+    setCurrentMessage('');
+    setFile(null);
+
     try {
       let mediaUrl: string | undefined = undefined;
       let mediaType: 'image' | 'audio' | 'document' | undefined = undefined;
+      const conversationRef = doc(db, 'conversations', activeConversationId);
 
-      if(file) {
+      // Save message to Firestore first
+      const messageData: any = {
+        senderId: 'vatosalfa',
+        text: tempMessage,
+        timestamp: serverTimestamp(),
+        read: true,
+      };
+      
+      if (file) {
         toast({ title: 'Subiendo archivo...', description: 'Por favor espera.' });
         const storageRef = ref(storage, `whatsapp_media/${Date.now()}_${file.name}`);
         await uploadBytes(storageRef, file);
@@ -207,27 +221,37 @@ export default function ConversationsPage() {
         if (file.type.startsWith('image/')) mediaType = 'image';
         else if (file.type.startsWith('audio/')) mediaType = 'audio';
         else if (file.type === 'application/pdf') mediaType = 'document';
-      }
 
-      toast({ title: 'Enviando mensaje...', description: 'Comunicándose con Twilio.' });
+        messageData.mediaUrl = mediaUrl;
+        messageData.mediaType = mediaType;
+      }
       
+      await addDoc(collection(conversationRef, 'messages'), messageData);
+      
+      // Update conversation's last message
+      const lastMessageText = tempMessage || (mediaType ? `[${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}]` : '[Mensaje vacío]');
+      await updateDoc(conversationRef, {
+        lastMessageText: `Tú: ${lastMessageText}`,
+        lastMessageTimestamp: serverTimestamp(),
+      });
+
+      // Then, send to Twilio
       const phoneOnly = activeConversationId.replace(/\D/g, '').slice(-10);
       
       const result = await sendWhatsAppMessage({
         to: phoneOnly,
-        text: currentMessage,
+        text: tempMessage,
         mediaUrl: mediaUrl,
       });
 
       if (result.success) {
           toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}`});
-          setCurrentMessage('');
-          setFile(null);
       } else {
            throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
       }
     } catch (error: any) {
         console.error("Error sending message:", error);
+        setCurrentMessage(tempMessage); // Restore message on error
         toast({
             variant: 'destructive',
             title: 'Error de envío',

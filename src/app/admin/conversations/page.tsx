@@ -194,64 +194,65 @@ export default function ConversationsPage() {
     if (!activeConversationId) return;
 
     setIsSending(true);
-    
     const tempMessage = currentMessage;
+    const tempFile = file;
     setCurrentMessage('');
-    
+    setFile(null);
+
     try {
-      let mediaUrl: string | undefined = undefined;
-      let mediaType: 'image' | 'audio' | 'document' | undefined = undefined;
-      const conversationRef = doc(db, 'conversations', activeConversationId);
+        let mediaUrl: string | undefined = undefined;
+        let mediaType: 'image' | 'audio' | 'document' | undefined = undefined;
+        
+        if (tempFile) {
+            toast({ title: 'Subiendo archivo...', description: 'Por favor espera.' });
+            const storageRef = ref(storage, `whatsapp_media/${Date.now()}_${tempFile.name}`);
+            await uploadBytes(storageRef, tempFile);
+            mediaUrl = await getDownloadURL(storageRef);
 
-      // Save message to Firestore first
-      const messageData: any = {
-        senderId: 'vatosalfa',
-        text: tempMessage,
-        timestamp: serverTimestamp(),
-        read: true,
-      };
-      
-      if (file) {
-        toast({ title: 'Subiendo archivo...', description: 'Por favor espera.' });
-        const storageRef = ref(storage, `whatsapp_media/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        mediaUrl = await getDownloadURL(storageRef);
+            if (tempFile.type.startsWith('image/')) mediaType = 'image';
+            else if (tempFile.type.startsWith('audio/')) mediaType = 'audio';
+            else if (tempFile.type === 'application/pdf') mediaType = 'document';
+        }
 
-        if (file.type.startsWith('image/')) mediaType = 'image';
-        else if (file.type.startsWith('audio/')) mediaType = 'audio';
-        else if (file.type === 'application/pdf') mediaType = 'document';
+        const conversationRef = doc(db, 'conversations', activeConversationId);
+        
+        // Save message to Firestore
+        const messageData: any = {
+            senderId: 'vatosalfa',
+            text: tempMessage,
+            timestamp: serverTimestamp(),
+            read: true,
+            ...(mediaUrl && { mediaUrl }),
+            ...(mediaType && { mediaType }),
+        };
+        
+        await addDoc(collection(conversationRef, 'messages'), messageData);
+        
+        // Update conversation's last message
+        const lastMessageText = tempMessage || (mediaType ? `[${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}]` : '[Mensaje vacío]');
+        await updateDoc(conversationRef, {
+            lastMessageText: `Tú: ${lastMessageText}`,
+            lastMessageTimestamp: serverTimestamp(),
+        });
 
-        messageData.mediaUrl = mediaUrl;
-        messageData.mediaType = mediaType;
-      }
-      setFile(null); // Clear file after processing
-      
-      await addDoc(collection(conversationRef, 'messages'), messageData);
-      
-      // Update conversation's last message
-      const lastMessageText = tempMessage || (mediaType ? `[${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}]` : '[Mensaje vacío]');
-      await updateDoc(conversationRef, {
-        lastMessageText: `Tú: ${lastMessageText}`,
-        lastMessageTimestamp: serverTimestamp(),
-      });
+        // Send to Twilio
+        const phoneOnly = activeConversationId.replace(/\D/g, '').slice(-10);
+        
+        const result = await sendWhatsAppMessage({
+            to: phoneOnly,
+            text: tempMessage,
+            mediaUrl: mediaUrl,
+        });
 
-      // Then, send to Twilio
-      const phoneOnly = activeConversationId.replace(/\D/g, '').slice(-10);
-      
-      const result = await sendWhatsAppMessage({
-        to: phoneOnly,
-        text: tempMessage,
-        mediaUrl: mediaUrl,
-      });
-
-      if (result.success) {
-          toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}`});
-      } else {
-           throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
-      }
+        if (result.success) {
+            toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}` });
+        } else {
+            throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
+        }
     } catch (error: any) {
         console.error("Error sending message:", error);
         setCurrentMessage(tempMessage); // Restore message on error
+        setFile(tempFile); // Restore file on error
         toast({
             variant: 'destructive',
             title: 'Error de envío',
@@ -261,6 +262,7 @@ export default function ConversationsPage() {
         setIsSending(false);
     }
   };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -433,5 +435,7 @@ export default function ConversationsPage() {
 
     
 
+
+    
 
     

@@ -4,14 +4,21 @@ import { adminDb, adminStorage } from '@/lib/firebase-admin';
 import { collection, doc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
 import twilio from 'twilio';
 
-// Helper function to download media from Twilio and upload to Firebase Storage
-async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumber: string): Promise<{ storageUrl: string, mediaType: 'image' | 'audio' | 'document' | 'other' }> {
+// Helper function to get Twilio credentials and throw a clear error if not set
+function getTwilioCredentials() {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
 
     if (!accountSid || !authToken || accountSid.startsWith('ACxxx')) {
-        throw new Error("Twilio credentials are not configured on the server.");
+        throw new Error("Las credenciales de Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) no están configuradas en el servidor.");
     }
+    return { accountSid, authToken };
+}
+
+
+// Helper function to download media from Twilio and upload to Firebase Storage
+async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumber: string): Promise<{ storageUrl: string, mediaType: 'image' | 'audio' | 'document' | 'other' }> {
+    const { accountSid, authToken } = getTwilioCredentials();
     
     // Twilio's Node.js helper library is the most reliable way to make authenticated requests
     const twilioClient = twilio(accountSid, authToken);
@@ -23,7 +30,7 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         password: authToken,
     });
     
-    if (!mediaResponse || mediaResponse.statusCode !== 200) {
+    if (mediaResponse.statusCode !== 200 || !mediaResponse.body) {
         throw new Error(`Failed to download media from Twilio. Status: ${mediaResponse?.statusCode}`);
     }
     
@@ -57,24 +64,26 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
 export async function POST(req: NextRequest) {
     console.log("INCOMING TWILIO WEBHOOK");
     
-    // Twilio webhooks come as x-www-form-urlencoded, so we need to parse the text body
-    const bodyText = await req.text();
-    const params = new URLSearchParams(bodyText);
-    
-    const from = params.get('From');
-    const messageBody = params.get('Body') || '';
-    const messageSid = params.get('MessageSid');
-    const numMedia = parseInt(params.get('NumMedia') || '0', 10);
-    
-    if (!from || !messageSid) {
-        console.error('Webhook payload is missing "From" or "MessageSid"');
-        return NextResponse.json({ error: 'Payload missing required fields.' }, { status: 400 });
-    }
-    
-    const conversationId = from; // Use client's number as document ID
-    const conversationRef = doc(adminDb, 'conversations', conversationId);
-    
     try {
+        // First, explicitly check credentials. This will throw if they are missing.
+        getTwilioCredentials();
+
+        const bodyText = await req.text();
+        const params = new URLSearchParams(bodyText);
+        
+        const from = params.get('From');
+        const messageBody = params.get('Body') || '';
+        const messageSid = params.get('MessageSid');
+        const numMedia = parseInt(params.get('NumMedia') || '0', 10);
+        
+        if (!from || !messageSid) {
+            console.error('Webhook payload is missing "From" or "MessageSid"');
+            return NextResponse.json({ error: 'Payload missing required fields.' }, { status: 400 });
+        }
+        
+        const conversationId = from; // Use client's number as document ID
+        const conversationRef = doc(adminDb, 'conversations', conversationId);
+    
         let finalMessage = messageBody;
         let mediaUrl: string | undefined = undefined;
         let mediaType: 'image' | 'audio' | 'document' | 'other' | undefined = undefined;
@@ -95,7 +104,6 @@ export async function POST(req: NextRequest) {
             }
         }
         
-        // 1. Save the new message to the subcollection
         const newMessageRef = doc(collection(conversationRef, 'messages'));
         const messageData: any = {
             senderId: 'client',
@@ -112,7 +120,6 @@ export async function POST(req: NextRequest) {
         
         await setDoc(newMessageRef, messageData);
         
-        // 2. Update the parent conversation document (last message preview, unread count)
         const lastMessageText = finalMessage || (mediaType ? `[${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}]` : '[Mensaje vacío]');
         
         await setDoc(conversationRef, {
@@ -122,12 +129,15 @@ export async function POST(req: NextRequest) {
         }, { merge: true });
 
 
-        // Respond to Twilio to acknowledge receipt
         return new NextResponse('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
 
     } catch (error: any) {
-        console.error('Error processing Twilio webhook:', error);
-        // Return a 500 error to Twilio so it knows something went wrong on our end
+        console.error('CRITICAL ERROR in Twilio webhook:', error.message);
+        // Return a specific error message if it's a credentials issue
+        if (error.message.includes("Las credenciales de Twilio")) {
+            return NextResponse.json({ error: 'Twilio credentials not configured on server.', details: error.message }, { status: 500 });
+        }
+        // Return a generic 500 error for other issues
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }

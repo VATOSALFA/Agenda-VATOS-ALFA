@@ -46,11 +46,11 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         },
     });
 
-    // Use getSignedUrl for server-side URL generation, valid for a long time
-    const [publicUrl] = await fileRef.getSignedUrl({
-        action: 'read',
-        expires: '03-09-2491', // A very distant future date
-    });
+    // Make the file public
+    await fileRef.makePublic();
+    
+    // Get the public URL
+    const publicUrl = fileRef.publicUrl();
     
     let mediaType: 'image' | 'audio' | 'document' | 'other' = 'other';
     if (mediaContentType.startsWith('image')) mediaType = 'image';
@@ -141,3 +141,4 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }
+

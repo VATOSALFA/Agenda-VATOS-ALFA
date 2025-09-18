@@ -103,15 +103,17 @@ export default function ConversationsPage() {
 
   const clientMap = useMemo(() => {
     if (clientsLoading) return new Map();
-    return new Map(clients.map(c => [c.telefono, c.nombre + ' ' + c.apellido]));
+    // Normalize phone numbers for better matching
+    return new Map(clients.map(c => [c.telefono.replace(/\D/g, ''), c.nombre + ' ' + c.apellido]));
   }, [clients, clientsLoading]);
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace('whatsapp:+521', '').replace('whatsapp:+52', '');
+        // More robust phone number cleaning
+        const phone = conv.id.replace(/\D/g, '').slice(-10); // Get last 10 digits
         return {
             ...conv,
-            clientName: conv.clientName || clientMap.get(phone) || phone,
+            clientName: conv.clientName || clientMap.get(phone) || conv.id.replace('whatsapp:', ''),
         }
     })
   }, [conversations, clientMap]);
@@ -172,7 +174,7 @@ export default function ConversationsPage() {
 
       toast({ title: 'Enviando mensaje...', description: 'Comunicándose con Twilio.' });
       
-      const phoneOnly = activeConversationId.replace('whatsapp:', '').replace('+521', '').replace('+52','');
+      const phoneOnly = activeConversationId.replace(/\D/g, '').slice(-10);
       
       const result = await sendWhatsAppMessage({
         to: phoneOnly,
@@ -242,7 +244,7 @@ export default function ConversationsPage() {
                             activeConversationId === conv.id ? 'bg-primary/10' : 'hover:bg-muted'
                         )}>
                             <Avatar className="h-10 w-10">
-                                <AvatarFallback>{conv.clientName?.substring(0, 2)}</AvatarFallback>
+                                <AvatarFallback>{conv.clientName?.substring(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 overflow-hidden">
                                 <p className="font-semibold truncate">{conv.clientName}</p>
@@ -268,7 +270,7 @@ export default function ConversationsPage() {
               <>
               <header className="p-4 border-b bg-background flex items-center gap-3">
                   <Avatar>
-                      <AvatarFallback>{activeConversation?.clientName?.substring(0,2)}</AvatarFallback>
+                      <AvatarFallback>{activeConversation?.clientName?.substring(0,2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div>
                       <h3 className="font-semibold">{activeConversation?.clientName}</h3>

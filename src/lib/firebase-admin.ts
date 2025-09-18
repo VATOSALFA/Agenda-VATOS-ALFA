@@ -1,11 +1,12 @@
 
 import * as admin from 'firebase-admin';
 
+// Check if the app is already initialized to prevent errors
 if (admin.apps.length === 0) {
   try {
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      storageBucket: "gs://agenda-1ae08.appspot.com",
+      storageBucket: "gs://agenda-1ae08.appspot.com", // Correct format with gs://
     });
   } catch (error: any) {
     console.error("Firebase Admin Initialization Error: ", error.message);

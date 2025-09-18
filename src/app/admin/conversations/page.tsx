@@ -206,8 +206,8 @@ export default function ConversationsPage() {
         if (tempFile) {
             toast({ title: 'Subiendo archivo...', description: 'Por favor espera.' });
             const storageRef = ref(storage, `whatsapp_media/${Date.now()}_${tempFile.name}`);
-            await uploadBytes(storageRef, tempFile);
-            mediaUrl = await getDownloadURL(storageRef);
+            const uploadTask = await uploadBytes(storageRef, tempFile);
+            mediaUrl = await getDownloadURL(uploadTask.ref);
 
             if (tempFile.type.startsWith('image/')) mediaType = 'image';
             else if (tempFile.type.startsWith('audio/')) mediaType = 'audio';
@@ -244,11 +244,12 @@ export default function ConversationsPage() {
             mediaUrl: mediaUrl,
         });
 
-        if (result.success) {
-            toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}` });
-        } else {
+        if (!result.success) {
             throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
         }
+
+        toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}` });
+        
     } catch (error: any) {
         console.error("Error sending message:", error);
         setCurrentMessage(tempMessage); // Restore message on error
@@ -432,10 +433,3 @@ export default function ConversationsPage() {
     />
     </>
   );
-
-    
-
-
-    
-
-    

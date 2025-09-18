@@ -197,8 +197,7 @@ export default function ConversationsPage() {
     
     const tempMessage = currentMessage;
     setCurrentMessage('');
-    setFile(null);
-
+    
     try {
       let mediaUrl: string | undefined = undefined;
       let mediaType: 'image' | 'audio' | 'document' | undefined = undefined;
@@ -225,6 +224,7 @@ export default function ConversationsPage() {
         messageData.mediaUrl = mediaUrl;
         messageData.mediaType = mediaType;
       }
+      setFile(null); // Clear file after processing
       
       await addDoc(collection(conversationRef, 'messages'), messageData);
       
@@ -430,5 +430,8 @@ export default function ConversationsPage() {
     />
     </>
   );
+
+    
+
 
     

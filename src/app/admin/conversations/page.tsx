@@ -222,10 +222,15 @@ export default function ConversationsPage() {
             text: tempMessage,
             timestamp: serverTimestamp(),
             read: true,
-            ...(mediaUrl && { mediaUrl }),
-            ...(mediaType && { mediaType }),
         };
         
+        if (mediaUrl) {
+            messageData.mediaUrl = mediaUrl;
+        }
+        if (mediaType) {
+            messageData.mediaType = mediaType;
+        }
+
         await addDoc(collection(conversationRef, 'messages'), messageData);
         
         // Update conversation's last message
@@ -433,3 +438,4 @@ export default function ConversationsPage() {
     />
     </>
   );
+}

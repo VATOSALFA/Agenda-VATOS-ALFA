@@ -59,7 +59,10 @@ export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<
     const client = twilio(accountSid, authToken);
 
     const to = `whatsapp:+521${input.to.replace(/\D/g, '')}`;
-    const from = `whatsapp:${fromNumber.replace(/\D/g, '')}`;
+    
+    // Ensure the 'from' number is correctly formatted
+    const cleanFromNumber = fromNumber.replace(/\D/g, '');
+    const from = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
     
     const messageData: any = { to, from };
     

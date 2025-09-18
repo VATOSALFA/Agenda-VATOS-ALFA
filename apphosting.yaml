@@ -7,10 +7,7 @@
 #You can copy it to create a new backend with similar settings.
 #For more information, see https://firebase.google.com/docs/app-hosting/configure.
 build:
-  #You can customize your build command here, for example by adding a
-  #--build-config flag to your framework's build command.
-  #If you do, you must also specify a run command.
-  run: next build
+  run: npm run build:env && next build
 run:
   #You can customize your run command here.
   #If you do, you must also specify a build command.

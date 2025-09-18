@@ -139,13 +139,20 @@ export async function sendWhatsappConfirmation(input: {
 
 // Wrapper for sending a test message
 export async function sendTestTwilioMessage(): Promise<Partial<WhatsAppMessageOutput>> {
-  const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314'; // Ensure your test number is in .env
-  if (!testPhoneNumber) {
-    return { success: false, error: 'No se ha configurado un número de teléfono de prueba en el archivo .env (TEST_PHONE_NUMBER).' };
+  try {
+    // This will throw if credentials are not set, and the error will be caught below.
+    getTwilioCredentials();
+    const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314'; // Ensure your test number is in .env
+    if (!testPhoneNumber) {
+        return { success: false, error: 'No se ha configurado un número de teléfono de prueba en el archivo .env (TEST_PHONE_NUMBER).' };
+    }
+    const result = await sendWhatsAppMessage({
+        to: testPhoneNumber,
+        text: 'Este es un mensaje de prueba de Agenda VATOS ALFA.',
+    });
+    return result;
+  } catch (error: any) {
+    // Catch the specific credentials error and return a more user-friendly message.
+    return { success: false, error: error.message };
   }
-  const result = await sendWhatsAppMessage({
-    to: testPhoneNumber,
-    text: 'Este es un mensaje de prueba de Agenda VATOS ALFA.',
-  });
-  return result;
 }

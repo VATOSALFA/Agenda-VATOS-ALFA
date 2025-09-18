@@ -6,16 +6,10 @@
 #Typically, you don't need to manually edit this file.
 #You can copy it to create a new backend with similar settings.
 #For more information, see https://firebase.google.com/docs/app-hosting/configure.
-build:
-  run: next build
 run:
   #You can customize your run command here.
   #If you do, you must also specify a build command.
   run: next start
-runConfig:
-  #Increase this value to automatically spin up more
-  #instances in response to increased traffic.
-  maxInstances: 1
 env:
   - variable: TWILIO_ACCOUNT_SID
     secret: TWILIO_ACCOUNT_SID

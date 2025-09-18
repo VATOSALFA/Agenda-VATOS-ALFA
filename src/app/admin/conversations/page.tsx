@@ -18,7 +18,7 @@ import { db, storage } from '@/lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { Loader2, Send, ChevronLeft, Paperclip, X, FileText, Download, Play, Pause, MessageSquareText } from 'lucide-react';
+import { Loader2, Send, ChevronLeft, Paperclip, X, FileText, Download, Play, Pause, MessageSquareText, SquarePen } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { sendWhatsAppMessage } from '@/ai/flows/send-whatsapp-flow';
 import type { Client } from '@/lib/types';
+import { NewConversationModal } from '@/components/admin/conversations/new-conversation-modal';
 
 
 interface Message {
@@ -97,6 +98,7 @@ export default function ConversationsPage() {
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isNewConversationModalOpen, setIsNewConversationModalOpen] = useState(false);
 
   const { data: conversations, loading: conversationsLoading } = useFirestoreQuery<Conversation>('conversations', orderBy('lastMessageTimestamp', 'desc'));
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
@@ -216,16 +218,21 @@ export default function ConversationsPage() {
       <aside className={cn(
         "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out"
       )}>
-        <div className="p-4 border-b flex items-center gap-2 flex-shrink-0">
+        <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
            <Link href="/">
                 <Button variant="ghost" size="icon" className="h-9 w-9">
                     <ChevronLeft className="h-6 w-6"/>
                 </Button>
             </Link>
-          <div>
-            <h2 className="text-xl font-bold">Conversaciones</h2>
-            <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
+            <div>
+                <h2 className="text-xl font-bold">Conversaciones</h2>
+                <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
+            </div>
           </div>
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsNewConversationModalOpen(true)}>
+             <SquarePen className="h-5 w-5" />
+          </Button>
         </div>
         <ScrollArea className="flex-1">
             {conversationsLoading ? (
@@ -355,8 +362,18 @@ export default function ConversationsPage() {
           )}
       </main>
     </div>
+
+    <NewConversationModal 
+      isOpen={isNewConversationModalOpen}
+      onOpenChange={setIsNewConversationModalOpen}
+      onMessageSent={() => {
+        // Potentially refresh conversation list
+      }}
+    />
     </>
   );
 }
+
+    
 
     

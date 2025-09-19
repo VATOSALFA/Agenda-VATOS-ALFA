@@ -31,9 +31,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // --- INICIO DEL CAMBIO: Simulación de Administrador General ---
+    // Forzamos el estado de autenticación a un usuario administrador para saltar el login.
+    const adminUser = {
+        uid: '6ITeQawj9hMDyw8xWfRs5n4h5yg2',
+        email: 'vatosalfa@gmail.com',
+        displayName: 'Administrador VATOS ALFA',
+        role: 'Administrador general',
+        // --- Simulamos el resto de la estructura de FirebaseUser para evitar errores ---
+        emailVerified: true,
+        isAnonymous: false,
+        metadata: {},
+        providerData: [],
+        providerId: 'firebase',
+        tenantId: null,
+        delete: async () => {},
+        getIdToken: async () => '',
+        getIdTokenResult: async () => ({} as any),
+        reload: async () => {},
+        toJSON: () => ({}),
+        phoneNumber: null,
+        photoURL: null,
+    };
+
+    setUser(adminUser as CustomUser);
+    setLoading(false);
+    // --- FIN DEL CAMBIO ---
+
+    // El código original de onAuthStateChanged se comenta temporalmente.
+    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Fetch custom user data from Firestore using the correct UID
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
         
@@ -48,8 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           });
         } else {
              console.error(`No user document found in Firestore for UID: ${firebaseUser.uid}.`);
-             // Set only the Firebase user without custom roles if not found.
-             // This might happen if the user exists in Auth but not in the 'usuarios' collection.
              setUser(firebaseUser);
         }
       } else {
@@ -58,11 +84,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
     return () => unsubscribe();
+    */
   }, []);
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
-    setUser(null);
+    // A pesar de la simulación, mantenemos un signOut funcional si es necesario.
+    // await firebaseSignOut(auth); 
+    setUser(null); // Para la simulación, simplemente limpiamos el usuario.
   }
 
   const value = {

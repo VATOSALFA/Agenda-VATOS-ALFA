@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getAuth, onAuthStateChanged, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Fetch custom user data from Firestore
+        // Fetch custom user data from Firestore using the correct UID
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
         
@@ -47,21 +47,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             avatarUrl: customData.avatarUrl
           });
         } else {
-            // This case might happen if user is in Auth but not in 'usuarios' collection
-            // Or for backward compatibility with old user structure
-            console.warn(`No user document found in Firestore for UID: ${firebaseUser.uid}. Trying by email...`);
-             const usersRef = collection(db, 'usuarios');
-            const q = query(usersRef, where('email', '==', firebaseUser.email));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                const userDocByEmail = querySnapshot.docs[0];
-                const customDataByEmail = userDocByEmail.data();
-                setUser({ ...firebaseUser, ...customDataByEmail });
-            } else {
-                 console.error(`User document not found by email either for: ${firebaseUser.email}`);
-                 setUser(firebaseUser);
-            }
+             console.error(`No user document found in Firestore for UID: ${firebaseUser.uid}.`);
+             // Set only the Firebase user without custom roles if not found.
+             // This might happen if the user exists in Auth but not in the 'usuarios' collection.
+             setUser(firebaseUser);
         }
       } else {
         setUser(null);

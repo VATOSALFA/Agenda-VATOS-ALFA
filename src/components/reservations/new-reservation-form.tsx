@@ -369,6 +369,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           const service = services.find(s => s.id === item.servicio);
           return {
               servicio: service?.name || '',
+              nombre: service?.name || '', // Add 'nombre' for consistency
               barbero_id: item.barbero_id,
               precio: service?.price || 0,
               duracion: service?.duration || 0,
@@ -378,6 +379,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const dataToSave: Partial<Reservation> & {hora_inicio?: string, hora_fin?: string} = {
         cliente_id: data.cliente_id,
         items: itemsToSave,
+        servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
         fecha: formattedDate,
         hora_inicio: hora_inicio,
         hora_fin: hora_fin,
@@ -412,7 +414,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 sendWhatsappConfirmation({
                     clientName: `${client.nombre} ${client.apellido}`,
                     clientPhone: client.telefono,
-                    serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
+                    serviceName: itemsToSave.map((i: any) => i.nombre).join(', '),
                     reservationDate: formattedDate,
                     reservationTime: hora_inicio,
                     professionalName: professional?.name || 'El de tu preferencia',

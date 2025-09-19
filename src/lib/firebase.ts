@@ -14,17 +14,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app: FirebaseApp;
-if (getApps().length === 0) {
-  if (process.env.NEXT_PUBLIC_FIREBASE_CONFIG) {
-    app = initializeApp(JSON.parse(process.env.NEXT_PUBLIC_FIREBASE_CONFIG));
-  } else {
-    // Fallback for local development if the env var isn't set
-    app = initializeApp(firebaseConfig);
-  }
-} else {
-  app = getApp();
-}
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 const db = getFirestore(app);
 const auth = getAuth(app);

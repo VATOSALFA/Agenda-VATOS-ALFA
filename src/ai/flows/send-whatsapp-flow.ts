@@ -30,21 +30,16 @@ interface WhatsAppMessageOutput {
     error?: string;
 }
 
-function getTwilioCredentials() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-  
-  if (!accountSid || !authToken || !fromNumber || accountSid.startsWith('ACxxx')) {
-    throw new Error("Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).");
-  }
-  
-  return { accountSid, authToken, fromNumber };
-}
-
 export async function sendWhatsAppMessage(input: WhatsAppMessageInput): Promise<WhatsAppMessageOutput> {
   try {
-    const { accountSid, authToken, fromNumber } = getTwilioCredentials();
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+    
+    if (!accountSid || !authToken || !fromNumber || accountSid.startsWith('ACxxx')) {
+      throw new Error("Faltan las credenciales de Twilio en el servidor (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER).");
+    }
+  
     const client = twilio(accountSid, authToken);
 
     const to = `whatsapp:+521${input.to.replace(/\D/g, '')}`;
@@ -120,8 +115,6 @@ export async function sendWhatsappConfirmation(input: {
 // Wrapper for sending a test message
 export async function sendTestTwilioMessage(): Promise<Partial<WhatsAppMessageOutput>> {
   try {
-    // This will throw if credentials are not set, and the error will be caught below.
-    getTwilioCredentials();
     const testPhoneNumber = process.env.TEST_PHONE_NUMBER || '4428133314'; // Ensure your test number is in .env
     if (!testPhoneNumber) {
         return { success: false, error: 'No se ha configurado un número de teléfono de prueba en el archivo .env (TEST_PHONE_NUMBER).' };

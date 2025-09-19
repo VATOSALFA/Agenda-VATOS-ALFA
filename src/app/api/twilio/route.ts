@@ -4,24 +4,15 @@ import { adminDb, adminStorage } from '@/lib/firebase-admin';
 import { collection, doc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
 import twilio from 'twilio';
 
-// Helper function to get Twilio credentials and throw a clear error if not set
-function getTwilioCredentials() {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-    if (!accountSid || !authToken || accountSid.startsWith('ACxxx')) {
-        throw new Error("Las credenciales de Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) no están configuradas en el servidor.");
-    }
-    return { accountSid, authToken };
-}
-
-
 // Helper function to download media from Twilio and upload to Firebase Storage
 async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumber: string): Promise<{ storageUrl: string, mediaType: 'image' | 'audio' | 'document' | 'other' }> {
-    const { accountSid, authToken } = getTwilioCredentials();
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
     
-    // Twilio's Node helper library can't fetch media directly.
-    // We need to use a standard HTTP client with auth.
+    if (!accountSid || !authToken) {
+        throw new Error("Twilio credentials not found on server.");
+    }
+    
     const response = await fetch(mediaUrl, {
         headers: {
             'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
@@ -44,10 +35,8 @@ async function handleMedia(mediaUrl: string, mediaContentType: string, phoneNumb
         },
     });
 
-    // Make the file publicly readable
     await fileRef.makePublic();
     
-    // Return the public URL
     const publicUrl = `https://storage.googleapis.com/${adminStorage.bucket().name}/${fileName}`;
     
     let mediaType: 'image' | 'audio' | 'document' | 'other' = 'other';
@@ -63,13 +52,17 @@ export async function POST(req: NextRequest) {
     console.log("INCOMING TWILIO WEBHOOK");
     
     try {
-        const { accountSid, authToken } = getTwilioCredentials();
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        if (!authToken) {
+            throw new Error("TWILIO_AUTH_TOKEN is not configured.");
+        }
 
-        // Use twilio library to validate the request
         const twilioSignature = req.headers.get('x-twilio-signature');
-        // The URL needs to be reconstructed with its original protocol and host.
-        // req.url gives the full URL.
-        const requestUrl = req.url; 
+        
+        // Reconstruct the full URL for validation
+        const protocol = req.headers.get('x-forwarded-proto') || 'https';
+        const host = req.headers.get('host');
+        const originalUrl = `${protocol}://${host}${req.nextUrl.pathname}`;
         
         const bodyText = await req.text();
         const params = new URLSearchParams(bodyText);
@@ -78,7 +71,7 @@ export async function POST(req: NextRequest) {
             bodyObject[key] = value;
         }
 
-        if (twilio.validateRequest(authToken, twilioSignature!, requestUrl, bodyObject)) {
+        if (twilio.validateRequest(authToken, twilioSignature!, originalUrl, bodyObject)) {
             const from = params.get('From');
             const messageBody = params.get('Body') || '';
             const messageSid = params.get('MessageSid');
@@ -139,14 +132,11 @@ export async function POST(req: NextRequest) {
             return new NextResponse('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
         } else {
             console.error("Twilio request validation failed.");
-            return NextResponse.json({ error: 'Invalid Twilio signature.' }, { status: 403 });
+            return new NextResponse('Twilio signature validation failed.', { status: 403 });
         }
 
     } catch (error: any) {
-        console.error('CRITICAL ERROR in Twilio webhook:', error.message);
-        if (error.message.includes("Las credenciales de Twilio")) {
-            return NextResponse.json({ error: 'Twilio credentials not configured on server.', details: error.message }, { status: 500 });
-        }
-        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+        console.error('CRITICAL ERROR in Twilio webhook:', error.message, error.stack);
+        return new NextResponse(`Webhook Error: ${error.message}`, { status: 500 });
     }
 }

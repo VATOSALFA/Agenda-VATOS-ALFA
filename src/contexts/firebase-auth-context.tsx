@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { getAuth, onAuthStateChanged, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 interface CustomUser extends FirebaseUser {
@@ -33,19 +33,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Query users collection by email to find the matching profile
-        const usersRef = collection(db, 'usuarios');
-        const q = query(usersRef, where('email', '==', firebaseUser.email));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0];
-            const customData = userDoc.data();
-            setUser({ ...firebaseUser, ...customData });
+        // Fetch custom user data from Firestore
+        const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const customData = userDoc.data();
+          setUser({
+            ...firebaseUser,
+            role: customData.role,
+            permissions: customData.permissions,
+            local_id: customData.local_id,
+            avatarUrl: customData.avatarUrl
+          });
         } else {
-            // Fallback or handle cases where user is in Auth but not in Firestore
-            console.warn(`No user document found in Firestore for email: ${firebaseUser.email}`);
-            setUser(firebaseUser);
+            // This case might happen if user is in Auth but not in 'usuarios' collection
+            // Or for backward compatibility with old user structure
+            console.warn(`No user document found in Firestore for UID: ${firebaseUser.uid}. Trying by email...`);
+             const usersRef = collection(db, 'usuarios');
+            const q = query(usersRef, where('email', '==', firebaseUser.email));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                const userDocByEmail = querySnapshot.docs[0];
+                const customDataByEmail = userDocByEmail.data();
+                setUser({ ...firebaseUser, ...customDataByEmail });
+            } else {
+                 console.error(`User document not found by email either for: ${firebaseUser.email}`);
+                 setUser(firebaseUser);
+            }
         }
       } else {
         setUser(null);

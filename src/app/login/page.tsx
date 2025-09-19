@@ -13,7 +13,6 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -22,14 +21,21 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
+    const { authInstance } = useAuth(); // Usar la instancia de Auth desde el contexto
     
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
 
+        if (!authInstance) {
+            setError("El servicio de autenticación no está disponible. Por favor, recarga la página.");
+            setIsLoading(false);
+            return;
+        }
+
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            await signInWithEmailAndPassword(authInstance, email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
             router.push('/');
         } catch (err: any) {

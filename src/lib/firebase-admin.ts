@@ -1,9 +1,8 @@
-
 import * as admin from 'firebase-admin';
 
-// Check if the app is already initialized to prevent errors
-if (admin.apps.length === 0) {
-    admin.initializeApp();
+// Initialize Firebase Admin SDK
+if (!admin.apps.length) {
+  admin.initializeApp();
 }
 
 const adminDb = admin.firestore();

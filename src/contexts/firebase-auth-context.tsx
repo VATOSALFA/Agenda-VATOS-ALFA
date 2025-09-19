@@ -31,35 +31,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // --- INICIO DEL CAMBIO: Simulación de Administrador General ---
-    // Forzamos el estado de autenticación a un usuario administrador para saltar el login.
-    const adminUser = {
-        uid: '6ITeQawj9hMDyw8xWfRs5n4h5yg2',
-        email: 'vatosalfa@gmail.com',
-        displayName: 'Administrador VATOS ALFA',
-        role: 'Administrador general',
-        // --- Simulamos el resto de la estructura de FirebaseUser para evitar errores ---
-        emailVerified: true,
-        isAnonymous: false,
-        metadata: {},
-        providerData: [],
-        providerId: 'firebase',
-        tenantId: null,
-        delete: async () => {},
-        getIdToken: async () => '',
-        getIdTokenResult: async () => ({} as any),
-        reload: async () => {},
-        toJSON: () => ({}),
-        phoneNumber: null,
-        photoURL: null,
-    };
-
-    setUser(adminUser as CustomUser);
-    setLoading(false);
-    // --- FIN DEL CAMBIO ---
-
-    // El código original de onAuthStateChanged se comenta temporalmente.
-    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -75,22 +46,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             avatarUrl: customData.avatarUrl
           });
         } else {
+             // This might happen if a user is created in Auth but not in Firestore.
+             // For this app, we assume a Firestore document always exists for a logged-in user.
              console.error(`No user document found in Firestore for UID: ${firebaseUser.uid}.`);
-             setUser(firebaseUser);
+             setUser(firebaseUser); // Fallback to basic user
         }
       } else {
         setUser(null);
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
-    */
   }, []);
 
   const signOut = async () => {
-    // A pesar de la simulación, mantenemos un signOut funcional si es necesario.
-    // await firebaseSignOut(auth); 
-    setUser(null); // Para la simulación, simplemente limpiamos el usuario.
+    await firebaseSignOut(auth);
+    setUser(null);
   }
 
   const value = {

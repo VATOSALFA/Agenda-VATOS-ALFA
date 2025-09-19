@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Suspense } from 'react';
@@ -117,7 +116,7 @@ function ConfirmPageContent() {
             
             toast({
                 title: '¡Reserva Confirmada!',
-                description: 'Tu cita ha sido agendada con éxito. Te hemos enviado un correo de confirmación.',
+                description: 'Tu cita ha sido agendada con éxito.',
                 className: 'bg-green-100 text-green-800 border-green-200'
             });
 

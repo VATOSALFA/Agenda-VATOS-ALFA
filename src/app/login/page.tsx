@@ -21,7 +21,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { authInstance } = useAuth(); // Usar la instancia de Auth desde el contexto
+    const { authInstance } = useAuth();
     
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

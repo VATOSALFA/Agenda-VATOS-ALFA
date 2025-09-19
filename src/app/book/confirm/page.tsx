@@ -115,35 +115,6 @@ function ConfirmPageContent() {
 
             await batch.commit();
             
-            // Send WhatsApp notification
-            if (data.telefono) {
-                const clientName = `${data.nombre} ${data.apellido}`;
-                const serviceNames = selectedServices.map(s => s.name).join(', ');
-                const professionalName = selectedProfessional?.name || 'El de tu preferencia';
-                // This is your official Twilio Template SID
-                const TWILIO_CONFIRMATION_SID = 'HX18fff4936a83e0ec91cd5bf3099efaa9';
-                
-                sendWhatsappConfirmation({
-                    clientName: clientName,
-                    clientPhone: data.telefono,
-                    serviceName: serviceNames,
-                    reservationDate: dateStr,
-                    reservationTime: time,
-                    professionalName: professionalName,
-                    templateSid: TWILIO_CONFIRMATION_SID,
-                }).then((result) => {
-                    if (result.success) {
-                        toast({ title: 'Notificación de WhatsApp enviada.' });
-                    } else {
-                         throw new Error(result.error || 'Error desconocido al enviar la notificación de WhatsApp.');
-                    }
-                }).catch(err => {
-                    console.error("WhatsApp send failed:", err);
-                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: err.message })
-                });
-            }
-
-
             toast({
                 title: '¡Reserva Confirmada!',
                 description: 'Tu cita ha sido agendada con éxito. Te hemos enviado un correo de confirmación.',

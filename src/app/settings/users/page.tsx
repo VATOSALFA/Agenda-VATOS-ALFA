@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { allPermissionCategories, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
@@ -109,7 +109,18 @@ export default function UsersPage() {
     // If Firestore has roles, use them. Otherwise, use the initial hardcoded roles.
     if (!rolesLoading) {
       if (rolesData && rolesData.length > 0) {
-        setLocalRolesState(rolesData);
+        // We need to merge Firestore data with initial data to ensure all roles are present,
+        // and descriptions/icons are up-to-date from code.
+        const firestoreRolesMap = new Map(rolesData.map(r => [r.title, r]));
+        const mergedRoles = initialRoles.map((initialRole, i) => {
+            const firestoreRole = firestoreRolesMap.get(initialRole.title);
+            if (firestoreRole) {
+                return { ...initialRole, id: firestoreRole.id, permissions: firestoreRole.permissions };
+            }
+            return { ...initialRole, id: `initial_${i}` }; // Assign temp ID if not in Firestore yet
+        });
+        setLocalRolesState(mergedRoles);
+
       } else {
         // This is a simplified version, in a real app you'd likely want a "seed" function.
         setLocalRolesState(initialRoles.map((r, i) => ({ ...r, id: `initial_${i}` })));
@@ -180,12 +191,15 @@ export default function UsersPage() {
     if (!roleToUpdate) return;
     
     try {
-      // Use role's title as document ID if it's one of the initial ones without a real ID
-      const docId = roleId.startsWith('initial_') ? roleToUpdate.title.toLowerCase().replace(/ /g, '_') : roleId;
+      const docId = roleToUpdate.title.toLowerCase().replace(/ /g, '_');
       const roleRef = doc(db, 'roles', docId);
-      await updateDoc(roleRef, { permissions: roleToUpdate.permissions });
+      await setDoc(roleRef, { 
+        title: roleToUpdate.title,
+        permissions: roleToUpdate.permissions 
+      }, { merge: true });
+
       toast({ title: 'Permisos guardados', description: `Los permisos para el rol ${roleToUpdate.title} se han actualizado.`});
-      handleDataUpdated();
+      handleDataUpdated(); // Re-fetch to get the new document ID if it was created
     } catch (error) {
       console.error("Error updating role:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los permisos.'});

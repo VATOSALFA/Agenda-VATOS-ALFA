@@ -1,31 +1,45 @@
-import type { Metadata } from 'next';
-import './globals.css';
-import { Inter } from 'next/font/google';
-import { Toaster } from '@/components/ui/toaster';
-import MainLayout from '@/components/layout/main-layout';
-import { LocalProvider } from '@/contexts/local-context';
-import { AuthProvider } from '@/contexts/firebase-auth-context';
+// src/app/layout.tsx  (server component)
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+import type { Metadata } from "next";
+import "./globals.css";
+import { Inter } from "next/font/google";
+
+import { Toaster } from "@/components/ui/toaster";
+import MainLayout from "@/components/layout/main-layout";
+
+import { LocalProvider } from "@/contexts/local-context";
+import { AuthProvider } from "@/contexts/firebase-auth-context";
+
+// 👇 este es el wrapper que espera a que Auth esté listo
+import AuthRoot from "@/components/providers/auth-root";
 
 export const metadata: Metadata = {
-  title: 'Alfa Manager',
-  description: 'Barbershop management dashboard for VATOS ALFA.',
+  title: "Alfa Manager",
+  description: "Barbershop management dashboard for VATOS ALFA.",
 };
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased`}>
+    <html lang="es" className={inter.variable}>
+      <body>
+        {/* Primero inicializamos Firebase Auth en un provider */}
         <AuthProvider>
+          {/* Tu contexto local */}
           <LocalProvider>
-            <MainLayout>{children}</MainLayout>
+            {/* Bloquea el render de la app hasta que Auth esté listo */}
+            <AuthRoot>
+              <MainLayout>{children}</MainLayout>
+            </AuthRoot>
           </LocalProvider>
         </AuthProvider>
+
+        {/* Toaster global */}
         <Toaster />
       </body>
     </html>

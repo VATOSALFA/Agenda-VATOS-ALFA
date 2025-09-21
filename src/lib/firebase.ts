@@ -3,6 +3,7 @@ import { getApps, initializeApp, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
@@ -21,6 +22,15 @@ if (!getApps().length) {
 } else {
   app = getApp();
 }
+
+// Initialize App Check
+if (typeof window !== 'undefined') {
+  const appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider('6Ld-9_MpAAAAAN2Y03c9zIunS3s-2-DOAC3YcE3q'),
+    isTokenAutoRefreshEnabled: true
+  });
+}
+
 
 const db = getFirestore(app);
 const auth = getAuth(app);

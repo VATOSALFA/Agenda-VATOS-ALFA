@@ -1,4 +1,5 @@
 
+
 import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Banknote, FileText, Settings, LucideIcon, MessageSquare } from 'lucide-react';
 
 
@@ -42,7 +43,7 @@ export const allPermissionCategories: PermissionCategory[] = [
         subCategories: [
             { title: 'Ventas Facturadas', permissions: [{ key: 'ver_ventas_facturadas', label: 'Ver Ventas Facturadas' }] },
             { title: 'Reporte de Comisiones', permissions: [{ key: 'ver_reporte_comisiones', label: 'Ver Reporte de Comisiones' }] },
-            { title: 'Caja de Ventas', permissions: [{ key: 'ver_caja', label: 'Ver Caja de Ventas' }] },
+            { title: 'Caja de Ventas', permissions: [{ key: 'ver_caja', label: 'Ver Caja de Ventas' }, {key: 'registrar_ventas', label: 'Registrar Ventas'}] },
             { title: 'Propinas', permissions: [{ key: 'ver_propinas', label: 'Ver Propinas' }] },
         ]
     },
@@ -124,13 +125,23 @@ export const initialRoles: Omit<Role, 'id'>[] = [
   {
     title: 'Recepcionista',
     description: 'Gestiona la agenda, reservas y clientes. Tiene acceso a la caja y a la creación de ventas.',
-    permissions: ['ver_agenda', 'crear_reservas', 'ver_clientes', 'ver_caja'],
+    permissions: ['ver_agenda', 'crear_reservas', 'ver_clientes', 'ver_caja', 'registrar_ventas'],
+  },
+    {
+    title: 'Recepcionista (Sin edición)',
+    description: 'Gestiona la agenda y reservas. No puede editar información sensible.',
+    permissions: ['ver_agenda', 'crear_reservas'],
   },
   {
     title: 'Staff',
     description: 'Profesional que puede ver su propia agenda y gestionar sus citas.',
+    permissions: ['ver_agenda', 'crear_reservas'],
+  },
+  {
+    title: 'Staff (Sin edición)',
+    description: 'Profesional que solo puede ver su propia agenda.',
     permissions: ['ver_agenda'],
-  }
+  },
 ];
 
 
@@ -139,5 +150,8 @@ export const roleIcons: Record<string, LucideIcon> = {
   'Administrador general': Shield,
   'Administrador local': Store,
   'Recepcionista': ConciergeBell,
+  'Recepcionista (Sin edición)': ConciergeBell,
   'Staff': Wrench,
+  'Staff (Sin edición)': Wrench,
 };
+

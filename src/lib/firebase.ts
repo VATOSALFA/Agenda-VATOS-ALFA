@@ -5,13 +5,13 @@ import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB-bY2N4V-Cw3i-aTf_Yc8B9jXyqZz-abc",
+  apiKey: "YOUR_API_KEY",
   authDomain: "agenda-1ae08.firebaseapp.com",
   projectId: "agenda-1ae08",
   storageBucket: "agenda-1ae08.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef1234567890abcd",
-  measurementId: "G-ABCDEFGHIJ",
+  messagingSenderId: "1071166848434",
+  appId: "1:1071166848434:web:e33d3c7373f15c7365d19e",
+  measurementId: "G-152Q913238",
 };
 
 // Initialize Firebase

@@ -46,10 +46,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             avatarUrl: customData.avatarUrl
           });
         } else {
-             // This might happen if a user is created in Auth but not in Firestore.
-             // For this app, we assume a Firestore document always exists for a logged-in user.
-             console.error(`No user document found in Firestore for UID: ${firebaseUser.uid}.`);
-             setUser(firebaseUser); // Fallback to basic user
+             console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
+             setUser(firebaseUser); // Fallback al usuario básico de Firebase
         }
       } else {
         setUser(null);
@@ -62,7 +60,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await firebaseSignOut(auth);
-    setUser(null);
   }
 
   const value = {

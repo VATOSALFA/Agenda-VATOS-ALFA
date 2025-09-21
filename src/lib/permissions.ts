@@ -1,5 +1,5 @@
 
-import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Banknote, FileText, Settings, LucideIcon } from 'lucide-react';
+import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Banknote, FileText, Settings, LucideIcon, MessageSquare } from 'lucide-react';
 
 
 export interface Permission {

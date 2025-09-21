@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export",
-  images: { unoptimized: true },
-  typescript: { ignoreBuildErrors: true } // temporal para que no bloquee el build
+  // ¡NADA de `output: "export"` ni `images: { unoptimized: true }`!
+  typescript: { ignoreBuildErrors: true }, // opcional/temporal
 };
 
 export default nextConfig;

@@ -6,7 +6,7 @@ import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
+  apiKey: "AIzaSyAsUWZLiMR7sVkL0of4i09-6zWfBHFjSUY",
   authDomain: "agenda-1ae08.firebaseapp.com",
   projectId: "agenda-1ae08",
   storageBucket: "agenda-1ae08.appspot.com",

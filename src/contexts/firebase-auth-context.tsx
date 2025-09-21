@@ -45,13 +45,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             ...firebaseUser,
             displayName: customData.name || firebaseUser.displayName,
             role: customData.role,
-            permissions: customData.permissions,
+            permissions: customData.permissions || [],
             local_id: customData.local_id,
             avatarUrl: customData.avatarUrl
           });
         } else {
              console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
-             setUser(firebaseUser); // Fallback to basic Firebase user
+             setUser({ ...firebaseUser, permissions: [] }); // Fallback with no permissions
         }
       } else {
         setUser(null);

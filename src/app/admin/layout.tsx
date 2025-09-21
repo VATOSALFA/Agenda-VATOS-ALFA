@@ -23,18 +23,18 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 const adminLinks = [
-  { href: '/admin/locales', label: 'Locales', icon: Store },
-  { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
-  { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
-  { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
-  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
+  { href: '/admin/locales', label: 'Locales', icon: Store, permission: 'ver_locales' },
+  { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
+  { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
+  { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle, permission: 'ver_whatsapp' },
+  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
 ];
 
 const advancedLinks = [
-  { href: '/admin/emails', label: 'E-Mails', icon: Mail },
-  { href: '/admin/integrations', label: 'Integraciones', icon: Component },
-  { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
-  { href: '/admin/school', label: 'Vatos Alfa School', icon: School },
+  { href: '/admin/emails', label: 'E-Mails', icon: Mail, permission: 'ver_emails' },
+  { href: '/admin/integrations', label: 'Integraciones', icon: Component, permission: 'ver_integraciones' },
+  { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
+  { href: '/admin/school', label: 'Vatos Alfa School', icon: School, permission: 'ver_school' },
 ]
 
 type Props = {
@@ -45,6 +45,13 @@ export default function AdminLayout({ children }: Props) {
   const pathname = usePathname();
   const { user } = useAuth();
   
+  const canSee = (permission: string) => {
+    if (!user || !user.permissions) return false;
+    // Admin always has all permissions
+    if (user.role === 'Administrador general') return true;
+    return user.permissions.includes(permission);
+  }
+
   // If the current page is the conversations page, render it without the admin sidebar and scrolling parent.
   if (pathname === '/admin/conversations') {
     return (
@@ -53,8 +60,6 @@ export default function AdminLayout({ children }: Props) {
         </>
     );
   }
-
-  const canSeeConfiguracion = user?.role === 'Administrador general';
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
@@ -66,7 +71,8 @@ export default function AdminLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {adminLinks.map(({ href, label, icon: Icon }) => (
+              {adminLinks.map(({ href, label, icon: Icon, permission }) => (
+                canSee(permission) && (
                 <Link
                   key={href}
                   href={href}
@@ -78,6 +84,7 @@ export default function AdminLayout({ children }: Props) {
                   <Icon className="h-4 w-4" />
                   {label}
                 </Link>
+                )
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -87,7 +94,8 @@ export default function AdminLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {advancedLinks.map(({ href, label, icon: Icon }) => (
+              {advancedLinks.map(({ href, label, icon: Icon, permission }) => (
+                canSee(permission) && (
                 <Link
                   key={href}
                   href={href}
@@ -99,10 +107,11 @@ export default function AdminLayout({ children }: Props) {
                   <Icon className="h-4 w-4" />
                   {label}
                 </Link>
+                )
               ))}
             </CollapsibleContent>
           </Collapsible>
-          {canSeeConfiguracion && (
+          {canSee('ver_configuracion_usuarios') && (
             <Collapsible defaultOpen>
               <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
                 Configuracion

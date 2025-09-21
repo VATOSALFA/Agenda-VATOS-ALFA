@@ -20,25 +20,26 @@ import {
   Users
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 const settingsLinks = [
-  { href: '/settings/empresa', label: 'Empresa', icon: Building2 },
-  { href: '/settings/sitio-web', label: 'Sitio Web', icon: Globe },
-  { href: '/settings/agenda', label: 'Agenda', icon: Calendar },
-  { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign },
-  { href: '/settings/sistema-caja', label: 'Sistemas de Caja', icon: Calculator },
-  { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell },
+  { href: '/settings/empresa', label: 'Empresa', icon: Building2, permission: 'ver_configuracion_empresa' },
+  { href: '/settings/sitio-web', label: 'Sitio Web', icon: Globe, permission: 'ver_configuracion_sitio_web' },
+  { href: '/settings/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_configuracion_agenda' },
+  { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign, permission: 'ver_configuracion_pagos' },
+  { href: '/settings/sistema-caja', label: 'Sistemas de Caja', icon: Calculator, permission: 'ver_configuracion_caja' },
+  { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
 ];
 
 const advancedLinks = [
-  { href: '/settings/emails', label: 'E-Mails', icon: Mail },
-  { href: '/settings/integrations', label: 'Integraciones', icon: Component },
-  { href: '/settings/clients-settings', label: 'Clientes', icon: Users },
-  { href: '/settings/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
+  { href: '/settings/emails', label: 'E-Mails', icon: Mail, permission: 'ver_configuracion_emails' },
+  { href: '/settings/integrations', label: 'Integraciones', icon: Component, permission: 'ver_configuracion_integraciones' },
+  { href: '/settings/clients-settings', label: 'Clientes', icon: Users, permission: 'ver_configuracion_clientes' },
+  { href: '/settings/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
 ];
 
 const accountLinks = [
-  { href: '/settings/profile', label: 'Mi perfil', icon: UserCircle },
+  { href: '/settings/profile', label: 'Mi perfil', icon: UserCircle, permission: 'ver_perfil' },
 ]
 
 type Props = {
@@ -47,6 +48,14 @@ type Props = {
 
 export default function SettingsLayout({ children }: Props) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  
+  const canSee = (permission: string) => {
+    if (!user || !user.permissions) return false;
+    if (user.role === 'Administrador general') return true;
+    return user.permissions.includes(permission);
+  }
+
   const isUsersPage = pathname === '/settings/users';
 
   if (isUsersPage) {
@@ -56,7 +65,6 @@ export default function SettingsLayout({ children }: Props) {
         </div>
     );
   }
-
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
@@ -68,18 +76,20 @@ export default function SettingsLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {settingsLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === href && 'bg-muted text-primary'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </Link>
+              {settingsLinks.map(({ href, label, icon: Icon, permission }) => (
+                canSee(permission) && (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                      pathname === href && 'bg-muted text-primary'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </Link>
+                )
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -90,18 +100,20 @@ export default function SettingsLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {advancedLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === href && 'bg-muted text-primary'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </Link>
+              {advancedLinks.map(({ href, label, icon: Icon, permission }) => (
+                canSee(permission) && (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                      pathname === href && 'bg-muted text-primary'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </Link>
+                )
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -112,19 +124,22 @@ export default function SettingsLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {accountLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === href && 'bg-muted text-primary'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </Link>
+              {accountLinks.map(({ href, label, icon: Icon, permission }) => (
+                canSee(permission) && (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                      pathname === href && 'bg-muted text-primary'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </Link>
+                )
               ))}
+              {canSee('ver_usuarios_permisos') && (
                  <Link
                   href={'/settings/users'}
                   className={cn(
@@ -135,6 +150,7 @@ export default function SettingsLayout({ children }: Props) {
                   <Users className="h-4 w-4" />
                   Usuarios y permisos
                 </Link>
+              )}
             </CollapsibleContent>
           </Collapsible>
         </nav>

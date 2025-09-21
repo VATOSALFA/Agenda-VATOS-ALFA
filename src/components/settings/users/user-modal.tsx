@@ -28,6 +28,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { ImageUploader } from '@/components/shared/image-uploader';
+import { rolePermissionsMap, type RoleData } from '@/lib/permissions';
 
 
 const userSchema = (isEditMode: boolean) => z.object({
@@ -71,12 +72,6 @@ const userSchema = (isEditMode: boolean) => z.object({
 type UserFormData = z.infer<ReturnType<typeof userSchema>>;
 
 
-interface RoleData {
-    icon: React.ElementType;
-    title: string;
-    description: string;
-    permissions: { access: boolean, label: string }[];
-}
 interface UserModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -118,7 +113,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             currentPassword: '',
             newPassword: '',
             confirmPassword: '',
-            permissions: user.permissions || roles.find(r => r.title === user.role)?.permissions.filter(p => p.access).map(p => p.label) || [],
+            permissions: user.permissions || [],
             avatarUrl: user.avatarUrl || ''
           });
         } else {
@@ -129,9 +124,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   
   useEffect(() => {
     if (selectedRole) {
-      const defaultPermissions = selectedRole.permissions
-        .filter(p => p.access)
-        .map(p => p.label);
+      const defaultPermissions = rolePermissionsMap[selectedRole.title] || [];
       form.setValue('permissions', defaultPermissions, { shouldDirty: true });
     }
   }, [selectedRole, form]);
@@ -140,12 +133,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const onSubmit = async (data: UserFormData) => {
     setIsSubmitting(true);
     try {
+        const permissionsForRole = rolePermissionsMap[data.role] || [];
+        
         const dataToSave: any = { 
             name: data.name,
             email: data.email,
             celular: data.celular,
             role: data.role,
-            permissions: data.permissions,
+            permissions: permissionsForRole, // Use the mapped permissions
             local_id: data.role === 'Administrador general' ? null : data.local_id,
             avatarUrl: data.avatarUrl,
         };
@@ -373,6 +368,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                                       control={form.control}
                                       name="permissions"
                                       render={({ field }) => {
+                                        const isChecked = field.value?.includes(permission.permissionKey);
                                         return (
                                           <FormItem
                                             key={permission.label}
@@ -380,13 +376,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                                           >
                                             <FormControl>
                                               <Checkbox
-                                                checked={field.value?.includes(permission.label)}
+                                                checked={isChecked}
                                                 onCheckedChange={(checked) => {
+                                                  const currentValue = field.value || [];
                                                   return checked
-                                                    ? field.onChange([...(field.value || []), permission.label])
+                                                    ? field.onChange([...currentValue, permission.permissionKey])
                                                     : field.onChange(
-                                                        (field.value || []).filter(
-                                                          (value) => value !== permission.label
+                                                        currentValue.filter(
+                                                          (value) => value !== permission.permissionKey
                                                         )
                                                       )
                                                 }}

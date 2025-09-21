@@ -6,6 +6,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut, type Auth, type User as
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface CustomUser extends FirebaseUser {
     role?: string;
@@ -29,6 +30,8 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -40,6 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const customData = userDoc.data();
           setUser({
             ...firebaseUser,
+            displayName: customData.name || firebaseUser.displayName,
             role: customData.role,
             permissions: customData.permissions,
             local_id: customData.local_id,
@@ -47,19 +51,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           });
         } else {
              console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
-             setUser(firebaseUser); // Fallback al usuario básico de Firebase
+             setUser(firebaseUser); // Fallback to basic Firebase user
         }
       } else {
         setUser(null);
+        if (pathname !== '/login') {
+            router.push('/login');
+        }
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [pathname, router]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
+    setUser(null);
   }
 
   const value = {
@@ -71,7 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   if (loading) {
       return (
-          <div className="flex justify-center items-center h-screen">
+          <div className="flex justify-center items-center h-screen bg-muted/40">
               <Loader2 className="h-8 w-8 animate-spin" />
           </div>
       )

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +21,13 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { authInstance } = useAuth();
+    const { authInstance, user, loading: authLoading } = useAuth();
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.push('/');
+        }
+    }, [user, authLoading, router]);
     
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -60,6 +66,15 @@ export default function LoginPage() {
             setIsLoading(false);
         }
     };
+
+    if (authLoading || user) {
+        return (
+          <div className="flex justify-center items-center h-screen bg-muted/40">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        );
+    }
+
 
     return (
         <div className="flex items-center justify-center h-screen bg-muted/40">

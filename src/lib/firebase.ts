@@ -25,10 +25,14 @@ if (!getApps().length) {
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  const appCheck = initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider('6Ld-9_MpAAAAAN2Y03c9zIunS3s-2-DOAC3YcE3q'),
-    isTokenAutoRefreshEnabled: true
-  });
+  try {
+    const appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6Ld-9_MpAAAAAN2Y03c9zIunS3s-2-DOAC3YcE3q'),
+      isTokenAutoRefreshEnabled: true
+    });
+  } catch (error) {
+    console.error("Error initializing App Check:", error);
+  }
 }
 
 

@@ -16,8 +16,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Check, X } from 'lucide-react';
-import type { User, Local } from '@/lib/types';
+import { Loader2 } from 'lucide-react';
+import type { User, Local, Role } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
@@ -28,7 +28,6 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { ImageUploader } from '@/components/shared/image-uploader';
-import { rolePermissionsMap, type RoleData } from '@/lib/permissions';
 
 
 const userSchema = (isEditMode: boolean) => z.object({
@@ -48,7 +47,6 @@ const userSchema = (isEditMode: boolean) => z.object({
   celular: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
-  permissions: z.array(z.string()).optional(),
   avatarUrl: z.string().optional(),
 }).refine(data => {
     if (data.newPassword || data.confirmPassword) {
@@ -77,7 +75,7 @@ interface UserModalProps {
   onClose: () => void;
   onDataSaved: () => void;
   user: User | null;
-  roles: RoleData[];
+  roles: Role[];
 }
 
 
@@ -91,14 +89,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema(isEditMode)),
-    defaultValues: { name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' },
+    defaultValues: { name: '', email: '', celular: '', role: '', password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' },
   });
 
   const selectedRoleName = form.watch('role');
-
-  const selectedRole = useMemo(() => {
-    return roles.find(r => r.title === selectedRoleName);
-  }, [selectedRoleName, roles]);
 
   useEffect(() => {
     if (isOpen) {
@@ -113,34 +107,27 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             currentPassword: '',
             newPassword: '',
             confirmPassword: '',
-            permissions: user.permissions || [],
             avatarUrl: user.avatarUrl || ''
           });
         } else {
-          form.reset({ name: '', email: '', celular: '', role: '', permissions: [], password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' });
+          form.reset({ name: '', email: '', celular: '', role: '', password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' });
         }
     }
-  }, [user, isOpen, form, roles]);
-  
-  useEffect(() => {
-    if (selectedRole) {
-      const defaultPermissions = rolePermissionsMap[selectedRole.title] || [];
-      form.setValue('permissions', defaultPermissions, { shouldDirty: true });
-    }
-  }, [selectedRole, form]);
+  }, [user, isOpen, form]);
 
 
   const onSubmit = async (data: UserFormData) => {
     setIsSubmitting(true);
     try {
-        const permissionsForRole = rolePermissionsMap[data.role] || [];
+        const selectedRoleData = roles.find(r => r.title === data.role);
+        const permissionsForRole = selectedRoleData ? selectedRoleData.permissions : [];
         
         const dataToSave: any = { 
             name: data.name,
             email: data.email,
             celular: data.celular,
             role: data.role,
-            permissions: permissionsForRole, // Use the mapped permissions
+            permissions: permissionsForRole,
             local_id: data.role === 'Administrador general' ? null : data.local_id,
             avatarUrl: data.avatarUrl,
         };
@@ -319,7 +306,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
                               {roles.map(role => (
-                                  <SelectItem key={role.title} value={role.title} disabled={!isEditMode && role.title === 'Administrador general'}>{role.title}</SelectItem>
+                                  <SelectItem key={role.id} value={role.title} disabled={!isEditMode && role.title === 'Administrador general'}>{role.title}</SelectItem>
                               ))}
                           </SelectContent>
                       </Select>
@@ -351,57 +338,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       </FormItem>
                     )}
                   />
-                )}
-                
-                {selectedRole && (
-                    <div className="space-y-2 pt-4 border-t">
-                        <h4 className="font-semibold">Permisos</h4>
-                        <ScrollArea className="h-40 rounded-md border p-3">
-                           <FormField
-                              control={form.control}
-                              name="permissions"
-                              render={() => (
-                                <FormItem className="space-y-3">
-                                  {selectedRole.permissions.map((permission) => (
-                                    <FormField
-                                      key={permission.label}
-                                      control={form.control}
-                                      name="permissions"
-                                      render={({ field }) => {
-                                        const isChecked = field.value?.includes(permission.permissionKey);
-                                        return (
-                                          <FormItem
-                                            key={permission.label}
-                                            className="flex flex-row items-center space-x-3 space-y-0"
-                                          >
-                                            <FormControl>
-                                              <Checkbox
-                                                checked={isChecked}
-                                                onCheckedChange={(checked) => {
-                                                  const currentValue = field.value || [];
-                                                  return checked
-                                                    ? field.onChange([...currentValue, permission.permissionKey])
-                                                    : field.onChange(
-                                                        currentValue.filter(
-                                                          (value) => value !== permission.permissionKey
-                                                        )
-                                                      )
-                                                }}
-                                              />
-                                            </FormControl>
-                                            <FormLabel className="font-normal text-sm">
-                                              {permission.label}
-                                            </FormLabel>
-                                          </FormItem>
-                                        )
-                                      }}
-                                    />
-                                  ))}
-                                </FormItem>
-                              )}
-                            />
-                        </ScrollArea>
-                    </div>
                 )}
               </div>
             </div>

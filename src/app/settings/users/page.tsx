@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Check, X } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2 } from "lucide-react";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { User, Local } from '@/lib/types';
+import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserModal } from '@/components/settings/users/user-modal';
 import {
@@ -23,21 +23,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { allPermissionCategories, rolesData as initialRolesData, type PermissionCategory, type RoleUIData } from '@/lib/permissions';
+import { allPermissionCategories, roleIcons, type PermissionCategory } from '@/lib/permissions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 
 
-const PermissionGroup = ({ category, currentPermissions, onPermissionChange }: { category: PermissionCategory, currentPermissions: string[], onPermissionChange: (key: string, checked: boolean) => void }) => {
+const PermissionGroup = ({ category, currentPermissions, onPermissionChange, isDisabled }: { category: PermissionCategory, currentPermissions: string[], onPermissionChange: (key: string, checked: boolean) => void, isDisabled: boolean }) => {
     
     const allSubPermissions = category.subCategories?.flatMap(sc => sc.permissions.map(p => p.key)) || [];
     const allCategoryPermissions = [...(category.permissions?.map(p => p.key) || []), ...allSubPermissions];
 
     const isAllSelected = allCategoryPermissions.every(pKey => currentPermissions.includes(pKey));
-    const isSomeSelected = allCategoryPermissions.some(pKey => currentPermissions.includes(pKey));
 
     const handleMasterCheckboxChange = (checked: boolean | string) => {
         allCategoryPermissions.forEach(pKey => {
@@ -47,7 +46,7 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange }: {
 
     return (
         <Collapsible defaultOpen={false}>
-            <CollapsibleTrigger className="w-full">
+            <CollapsibleTrigger className="w-full" disabled={isDisabled}>
                 <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted">
                     <div className="flex items-center gap-2 font-semibold">
                         <category.icon className="h-5 w-5 text-primary" />
@@ -58,6 +57,7 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange }: {
                         onCheckedChange={handleMasterCheckboxChange}
                         aria-label={`Seleccionar todo para ${category.title}`}
                         onClick={(e) => e.stopPropagation()} 
+                        disabled={isDisabled}
                      />
                 </div>
             </CollapsibleTrigger>
@@ -65,8 +65,8 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange }: {
                 <div className="space-y-3">
                     {category.permissions?.map(p => (
                         <div key={p.key} className="flex items-center gap-2">
-                             <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} />
-                             <label htmlFor={p.key} className="text-sm text-muted-foreground">{p.label}</label>
+                             <Checkbox id={`${category.title}-${p.key}`} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} disabled={isDisabled} />
+                             <label htmlFor={`${category.title}-${p.key}`} className="text-sm text-muted-foreground">{p.label}</label>
                         </div>
                     ))}
                     {category.subCategories?.map(sub => (
@@ -75,8 +75,8 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange }: {
                             <div className="pl-2 space-y-2">
                                 {sub.permissions.map(p => (
                                     <div key={p.key} className="flex items-center gap-2">
-                                        <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} />
-                                        <label htmlFor={p.key} className="text-sm text-muted-foreground">{p.label}</label>
+                                        <Checkbox id={`${category.title}-${sub.title}-${p.key}`} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} disabled={isDisabled} />
+                                        <label htmlFor={`${category.title}-${sub.title}-${p.key}`} className="text-sm text-muted-foreground">{p.label}</label>
                                     </div>
                                 ))}
                             </div>
@@ -97,13 +97,23 @@ export default function UsersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  const [roles, setRoles] = useState(initialRolesData);
   const { toast } = useToast();
   
-  const { data: users, loading } = useFirestoreQuery<User>('usuarios', queryKey);
+  const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios', queryKey);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+  const { data: rolesData, loading: rolesLoading } = useFirestoreQuery<Role>('roles', queryKey);
+  
+  const [localRolesState, setLocalRolesState] = useState<Role[]>([]);
+
+  useEffect(() => {
+    if (rolesData) {
+      setLocalRolesState(rolesData);
+    }
+  }, [rolesData]);
+
 
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
+  const isLoading = usersLoading || localesLoading || rolesLoading;
 
   const filteredUsers = useMemo(() => {
     return users.filter(user => 
@@ -145,24 +155,32 @@ export default function UsersPage() {
     }
   }
 
-  const handlePermissionChange = (roleTitle: string, permissionKey: string, checked: boolean) => {
-    setRoles(currentRoles => 
+  const handlePermissionChange = (roleId: string, permissionKey: string, checked: boolean) => {
+    setLocalRolesState(currentRoles => 
         currentRoles.map(role => {
-            if (role.title === roleTitle) {
+            if (role.id === roleId) {
                 const newPermissions = checked
                     ? [...role.permissions, permissionKey]
                     : role.permissions.filter(p => p !== permissionKey);
-                return { ...role, permissions: Array.from(new Set(newPermissions)) }; // Ensure unique permissions
+                return { ...role, permissions: Array.from(new Set(newPermissions)) };
             }
             return role;
         })
     );
   }
   
-  const handleSaveRolePermissions = (roleTitle: string) => {
-    // In a real app, you would send this to the backend to update the permissions for the role.
-    console.log(`Saving permissions for ${roleTitle}:`, roles.find(r => r.title === roleTitle)?.permissions);
-    toast({ title: 'Permisos guardados (simulado)', description: `Los permisos para el rol ${roleTitle} se han actualizado.`});
+  const handleSaveRolePermissions = async (roleId: string) => {
+    const roleToUpdate = localRolesState.find(r => r.id === roleId);
+    if (!roleToUpdate) return;
+    
+    try {
+      const roleRef = doc(db, 'roles', roleId);
+      await updateDoc(roleRef, { permissions: roleToUpdate.permissions });
+      toast({ title: 'Permisos guardados', description: `Los permisos para el rol ${roleToUpdate.title} se han actualizado.`});
+    } catch (error) {
+      console.error("Error updating role:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los permisos.'});
+    }
   }
 
 
@@ -204,7 +222,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoading ? (
                 Array.from({length: 5}).map((_, i) => (
                     <TableRow key={i}>
                         <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
@@ -243,77 +261,92 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
-        <div className="flex items-center space-x-2">
-            <p className="text-sm font-medium">Resultados por página</p>
-            <Select
-                value={`${itemsPerPage}`}
-                onValueChange={(value) => {
-                    setItemsPerPage(Number(value))
-                    setCurrentPage(1)
-                }}
-            >
-                <SelectTrigger className="h-8 w-[70px]">
-                    <SelectValue placeholder={itemsPerPage} />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                </SelectContent>
-            </Select>
+      {!isLoading && (
+        <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
+            <div className="flex items-center space-x-2">
+                <p className="text-sm font-medium">Resultados por página</p>
+                <Select
+                    value={`${itemsPerPage}`}
+                    onValueChange={(value) => {
+                        setItemsPerPage(Number(value))
+                        setCurrentPage(1)
+                    }}
+                >
+                    <SelectTrigger className="h-8 w-[70px]">
+                        <SelectValue placeholder={itemsPerPage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="text-sm font-medium">
+            Página {currentPage} de {totalPages}
+            </div>
+            <div className="flex items-center space-x-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                >
+                    Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+            </div>
         </div>
-        <div className="text-sm font-medium">
-          Página {currentPage} de {totalPages}
-        </div>
-        <div className="flex items-center space-x-2">
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-            >
-                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-            </Button>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-            >
-                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-        </div>
-      </div>
+      )}
       
       <div className="pt-8 border-t">
         <h2 className="text-3xl font-bold tracking-tight mb-6">Roles de usuarios</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-            {roles.map((role) => (
-                <Card key={role.title}>
-                    <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                        <role.icon className="h-8 w-8 text-primary" />
-                        <CardTitle>{role.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4 h-12">{role.description}</p>
-                        <div className="space-y-2">
-                            {allPermissionCategories.map(cat => (
-                                <PermissionGroup 
-                                    key={cat.title} 
-                                    category={cat} 
-                                    currentPermissions={role.permissions}
-                                    onPermissionChange={(key, checked) => handlePermissionChange(role.title, key, checked)}
-                                />
-                            ))}
-                        </div>
-                        {role.title !== 'Administrador general' && (
-                            <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.title)}>Guardar Cambios</Button>
-                        )}
-                    </CardContent>
-                </Card>
-            ))}
-        </div>
+        {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                <Skeleton className="h-96 w-full" />
+                <Skeleton className="h-96 w-full" />
+                <Skeleton className="h-96 w-full" />
+            </div>
+        ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                {localRolesState.map((role) => {
+                    const RoleIcon = roleIcons[role.title] || Info;
+                    const isDisabled = role.title === 'Administrador general';
+                    return (
+                        <Card key={role.id}>
+                            <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+                                <RoleIcon className="h-8 w-8 text-primary" />
+                                <CardTitle>{role.title}</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground mb-4 h-12">{role.description}</p>
+                                <div className="space-y-2">
+                                    {allPermissionCategories.map(cat => (
+                                        <PermissionGroup 
+                                            key={cat.title} 
+                                            category={cat} 
+                                            currentPermissions={role.permissions}
+                                            onPermissionChange={(key, checked) => handlePermissionChange(role.id, key, checked)}
+                                            isDisabled={isDisabled}
+                                        />
+                                    ))}
+                                </div>
+                                {!isDisabled && (
+                                    <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>Guardar Cambios</Button>
+                                )}
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
+        )}
       </div>
 
     </div>
@@ -323,7 +356,7 @@ export default function UsersPage() {
         onClose={() => setIsModalOpen(false)}
         onDataSaved={handleDataUpdated}
         user={editingUser}
-        roles={roles}
+        roles={rolesData}
     />
 
     {userToDelete && (

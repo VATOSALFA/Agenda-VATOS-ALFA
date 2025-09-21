@@ -26,14 +26,55 @@ import {
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { rolesData } from '@/lib/permissions';
+import { allPermissionCategories, rolesData, type PermissionCategory, type RoleUIData } from '@/lib/permissions';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Checkbox } from '@/components/ui/checkbox';
 
-const PermissionItem = ({ access, label }: { access: boolean, label: string }) => (
-    <li className="flex items-center gap-2">
-        {access ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-red-500" />}
-        <span className="text-muted-foreground">{label}</span>
-    </li>
-);
+
+const PermissionGroup = ({ category, currentPermissions }: { category: PermissionCategory, currentPermissions: string[] }) => {
+    
+    const allSubPermissions = category.subCategories?.flatMap(sc => sc.permissions.map(p => p.key)) || [];
+    const allCategoryPermissions = [...(category.permissions?.map(p => p.key) || []), ...allSubPermissions];
+
+    const isAllSelected = allCategoryPermissions.every(pKey => currentPermissions.includes(pKey));
+
+    return (
+        <Collapsible defaultOpen={false}>
+            <CollapsibleTrigger className="w-full">
+                <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted">
+                    <div className="flex items-center gap-2 font-semibold">
+                        <category.icon className="h-5 w-5 text-primary" />
+                        {category.title}
+                    </div>
+                </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="p-4 border border-t-0 rounded-b-lg">
+                <div className="space-y-3">
+                    {category.permissions?.map(p => (
+                        <div key={p.key} className="flex items-center gap-2">
+                             <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} disabled />
+                             <label htmlFor={p.key} className="text-sm text-muted-foreground">{p.label}</label>
+                        </div>
+                    ))}
+                    {category.subCategories?.map(sub => (
+                        <div key={sub.title} className="ml-4 space-y-2 pt-2">
+                            <p className="font-semibold text-sm">{sub.title}</p>
+                            <div className="pl-2 space-y-2">
+                                {sub.permissions.map(p => (
+                                    <div key={p.key} className="flex items-center gap-2">
+                                        <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} disabled />
+                                        <label htmlFor={p.key} className="text-sm text-muted-foreground">{p.label}</label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+    )
+}
+
 
 export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
@@ -213,20 +254,20 @@ export default function UsersPage() {
       
       <div className="pt-8 border-t">
         <h2 className="text-3xl font-bold tracking-tight mb-6">Roles de usuarios</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {rolesData.map((rol, index) => (
-                <Card key={index}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+            {rolesData.map((role) => (
+                <Card key={role.title}>
                     <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                        <rol.icon className="h-8 w-8 text-primary" />
-                        <CardTitle>{rol.title}</CardTitle>
+                        <role.icon className="h-8 w-8 text-primary" />
+                        <CardTitle>{role.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">{rol.description}</p>
-                        <ul className="space-y-2 text-sm">
-                            {rol.permissions.map((permission, pIndex) => (
-                                <PermissionItem key={pIndex} {...permission} />
+                        <p className="text-sm text-muted-foreground mb-4 h-12">{role.description}</p>
+                        <div className="space-y-2">
+                            {allPermissionCategories.map(cat => (
+                                <PermissionGroup key={cat.title} category={cat} currentPermissions={role.permissions} />
                             ))}
-                        </ul>
+                        </div>
                     </CardContent>
                 </Card>
             ))}
@@ -240,7 +281,7 @@ export default function UsersPage() {
         onClose={() => setIsModalOpen(false)}
         onDataSaved={handleDataUpdated}
         user={editingUser}
-        roles={rolesData}
+        roles={rolesData.map(r => ({ title: r.title, icon: r.icon, description: r.description, permissions: [] }))}
     />
 
     {userToDelete && (

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,17 +26,24 @@ import {
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { allPermissionCategories, rolesData, type PermissionCategory, type RoleUIData } from '@/lib/permissions';
+import { allPermissionCategories, rolesData as initialRolesData, type PermissionCategory, type RoleUIData } from '@/lib/permissions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 
 
-const PermissionGroup = ({ category, currentPermissions }: { category: PermissionCategory, currentPermissions: string[] }) => {
+const PermissionGroup = ({ category, currentPermissions, onPermissionChange }: { category: PermissionCategory, currentPermissions: string[], onPermissionChange: (key: string, checked: boolean) => void }) => {
     
     const allSubPermissions = category.subCategories?.flatMap(sc => sc.permissions.map(p => p.key)) || [];
     const allCategoryPermissions = [...(category.permissions?.map(p => p.key) || []), ...allSubPermissions];
 
     const isAllSelected = allCategoryPermissions.every(pKey => currentPermissions.includes(pKey));
+    const isSomeSelected = allCategoryPermissions.some(pKey => currentPermissions.includes(pKey));
+
+    const handleMasterCheckboxChange = (checked: boolean | string) => {
+        allCategoryPermissions.forEach(pKey => {
+            onPermissionChange(pKey, !!checked);
+        });
+    }
 
     return (
         <Collapsible defaultOpen={false}>
@@ -46,13 +53,19 @@ const PermissionGroup = ({ category, currentPermissions }: { category: Permissio
                         <category.icon className="h-5 w-5 text-primary" />
                         {category.title}
                     </div>
+                     <Checkbox 
+                        checked={isAllSelected}
+                        onCheckedChange={handleMasterCheckboxChange}
+                        aria-label={`Seleccionar todo para ${category.title}`}
+                        onClick={(e) => e.stopPropagation()} 
+                     />
                 </div>
             </CollapsibleTrigger>
             <CollapsibleContent className="p-4 border border-t-0 rounded-b-lg">
                 <div className="space-y-3">
                     {category.permissions?.map(p => (
                         <div key={p.key} className="flex items-center gap-2">
-                             <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} disabled />
+                             <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} />
                              <label htmlFor={p.key} className="text-sm text-muted-foreground">{p.label}</label>
                         </div>
                     ))}
@@ -62,7 +75,7 @@ const PermissionGroup = ({ category, currentPermissions }: { category: Permissio
                             <div className="pl-2 space-y-2">
                                 {sub.permissions.map(p => (
                                     <div key={p.key} className="flex items-center gap-2">
-                                        <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} disabled />
+                                        <Checkbox id={p.key} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} />
                                         <label htmlFor={p.key} className="text-sm text-muted-foreground">{p.label}</label>
                                     </div>
                                 ))}
@@ -84,6 +97,7 @@ export default function UsersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [roles, setRoles] = useState(initialRolesData);
   const { toast } = useToast();
   
   const { data: users, loading } = useFirestoreQuery<User>('usuarios', queryKey);
@@ -129,6 +143,26 @@ export default function UsersPage() {
     } finally {
         setUserToDelete(null);
     }
+  }
+
+  const handlePermissionChange = (roleTitle: string, permissionKey: string, checked: boolean) => {
+    setRoles(currentRoles => 
+        currentRoles.map(role => {
+            if (role.title === roleTitle) {
+                const newPermissions = checked
+                    ? [...role.permissions, permissionKey]
+                    : role.permissions.filter(p => p !== permissionKey);
+                return { ...role, permissions: Array.from(new Set(newPermissions)) }; // Ensure unique permissions
+            }
+            return role;
+        })
+    );
+  }
+  
+  const handleSaveRolePermissions = (roleTitle: string) => {
+    // In a real app, you would send this to the backend to update the permissions for the role.
+    console.log(`Saving permissions for ${roleTitle}:`, roles.find(r => r.title === roleTitle)?.permissions);
+    toast({ title: 'Permisos guardados (simulado)', description: `Los permisos para el rol ${roleTitle} se han actualizado.`});
   }
 
 
@@ -255,7 +289,7 @@ export default function UsersPage() {
       <div className="pt-8 border-t">
         <h2 className="text-3xl font-bold tracking-tight mb-6">Roles de usuarios</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-            {rolesData.map((role) => (
+            {roles.map((role) => (
                 <Card key={role.title}>
                     <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                         <role.icon className="h-8 w-8 text-primary" />
@@ -265,9 +299,17 @@ export default function UsersPage() {
                         <p className="text-sm text-muted-foreground mb-4 h-12">{role.description}</p>
                         <div className="space-y-2">
                             {allPermissionCategories.map(cat => (
-                                <PermissionGroup key={cat.title} category={cat} currentPermissions={role.permissions} />
+                                <PermissionGroup 
+                                    key={cat.title} 
+                                    category={cat} 
+                                    currentPermissions={role.permissions}
+                                    onPermissionChange={(key, checked) => handlePermissionChange(role.title, key, checked)}
+                                />
                             ))}
                         </div>
+                        {role.title !== 'Administrador general' && (
+                            <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.title)}>Guardar Cambios</Button>
+                        )}
                     </CardContent>
                 </Card>
             ))}
@@ -281,7 +323,7 @@ export default function UsersPage() {
         onClose={() => setIsModalOpen(false)}
         onDataSaved={handleDataUpdated}
         user={editingUser}
-        roles={rolesData.map(r => ({ title: r.title, icon: r.icon, description: r.description, permissions: [] }))}
+        roles={roles}
     />
 
     {userToDelete && (

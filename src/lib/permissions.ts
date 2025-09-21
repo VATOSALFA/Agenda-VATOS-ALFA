@@ -9,14 +9,13 @@ export interface Permission {
 
 export interface PermissionSubCategory {
     title: string;
-    icon: LucideIcon;
     permissions: Permission[];
 }
 
 export interface PermissionCategory {
     title: string;
     icon: LucideIcon;
-    permissions: Permission[];
+    permissions?: Permission[];
     subCategories?: PermissionSubCategory[];
 }
 
@@ -40,31 +39,28 @@ export const allPermissionCategories: PermissionCategory[] = [
     {
         title: 'Ventas',
         icon: HandCoins,
-        permissions: [ { key: 'ver_ventas', label: 'Ver Módulo de Ventas' } ],
         subCategories: [
-            { title: 'Ventas Facturadas', icon: FileText, permissions: [{ key: 'ver_ventas_facturadas', label: 'Ver Ventas Facturadas' }] },
-            { title: 'Reporte de Comisiones', icon: BarChart2, permissions: [{ key: 'ver_reporte_comisiones', label: 'Ver Reporte de Comisiones' }] },
-            { title: 'Caja de Ventas', icon: Banknote, permissions: [{ key: 'ver_caja', label: 'Ver Caja de Ventas' }] },
-            { title: 'Propinas', icon: HandCoins, permissions: [{ key: 'ver_propinas', label: 'Ver Propinas' }] },
+            { title: 'Ventas Facturadas', permissions: [{ key: 'ver_ventas_facturadas', label: 'Ver Ventas Facturadas' }] },
+            { title: 'Reporte de Comisiones', permissions: [{ key: 'ver_reporte_comisiones', label: 'Ver Reporte de Comisiones' }] },
+            { title: 'Caja de Ventas', permissions: [{ key: 'ver_caja', label: 'Ver Caja de Ventas' }] },
+            { title: 'Propinas', permissions: [{ key: 'ver_propinas', label: 'Ver Propinas' }] },
         ]
     },
     {
         title: 'Productos',
         icon: Package,
-        permissions: [ { key: 'ver_productos', label: 'Ver Módulo de Productos' } ],
         subCategories: [
-            { title: 'Inventario', icon: Package, permissions: [{ key: 'ver_inventario', label: 'Ver Inventario' }] },
-            { title: 'Venta de productos', icon: BarChart2, permissions: [{ key: 'ver_venta_productos', label: 'Ver Venta de Productos' }] },
+            { title: 'Inventario', permissions: [{ key: 'ver_inventario', label: 'Ver Inventario' }] },
+            { title: 'Venta de productos', permissions: [{ key: 'ver_venta_productos', label: 'Ver Venta de Productos' }] },
         ]
     },
     {
         title: 'Reportes',
         icon: BarChart2,
-        permissions: [ { key: 'ver_reportes', label: 'Ver Módulo de Reportes' } ],
         subCategories: [
-            { title: 'Reporte de reservas', icon: FileText, permissions: [{ key: 'ver_reporte_reservas', label: 'Ver Reporte de Reservas' }] },
-            { title: 'Reporte de ventas', icon: BarChart2, permissions: [{ key: 'ver_reporte_ventas', label: 'Ver Reporte de Ventas' }] },
-            { title: 'Cierres de Caja', icon: Banknote, permissions: [{ key: 'ver_cierres_caja', label: 'Ver Cierres de Caja' }] },
+            { title: 'Reporte de reservas', permissions: [{ key: 'ver_reporte_reservas', label: 'Ver Reporte de Reservas' }] },
+            { title: 'Reporte de ventas', permissions: [{ key: 'ver_reporte_ventas', label: 'Ver Reporte de Ventas' }] },
+            { title: 'Cierres de Caja', permissions: [{ key: 'ver_cierres_caja', label: 'Ver Cierres de Caja' }] },
         ]
     },
     {
@@ -90,12 +86,14 @@ export const allPermissionCategories: PermissionCategory[] = [
     },
 ];
 
+export const allPermissions = allPermissionCategories.flatMap(cat => {
+    const mainPermissions = cat.permissions || [];
+    const subPermissions = cat.subCategories ? cat.subCategories.flatMap(sub => sub.permissions) : [];
+    return [...mainPermissions, ...subPermissions];
+});
 
-export const allPermissions = allPermissionCategories.flatMap(cat => 
-    cat.permissions.concat(cat.subCategories ? cat.subCategories.flatMap(sub => sub.permissions) : [])
-);
 
-// This data will now be stored and fetched from Firestore
+// This data will now be stored and fetched from Firestore, this is just the initial state.
 export interface Role {
   id: string;
   title: string;
@@ -103,12 +101,43 @@ export interface Role {
   permissions: string[];
 }
 
+export const initialRoles: Omit<Role, 'id'>[] = [
+  {
+    title: 'Administrador general',
+    description: 'Acceso completo a todas las funcionalidades, configuraciones y datos de la plataforma.',
+    permissions: allPermissions.map(p => p.key),
+  },
+  {
+    title: 'Administrador local',
+    description: 'Administra un local específico, gestionando profesionales, servicios y viendo reportes de su sucursal.',
+    permissions: [
+        'ver_agenda', 'crear_reservas', 'bloquear_horarios', 
+        'ver_clientes', 
+        'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'ver_propinas',
+        'ver_inventario', 'ver_venta_productos',
+        'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja',
+        'ver_finanzas',
+        'ver_administracion',
+        'ver_conversaciones'
+    ],
+  },
+  {
+    title: 'Recepcionista',
+    description: 'Gestiona la agenda, reservas y clientes. Tiene acceso a la caja y a la creación de ventas.',
+    permissions: ['ver_agenda', 'crear_reservas', 'ver_clientes', 'ver_caja'],
+  },
+  {
+    title: 'Staff',
+    description: 'Profesional que puede ver su propia agenda y gestionar sus citas.',
+    permissions: ['ver_agenda'],
+  }
+];
+
+
 // Icons remain mapped in code
 export const roleIcons: Record<string, LucideIcon> = {
   'Administrador general': Shield,
   'Administrador local': Store,
   'Recepcionista': ConciergeBell,
-  'Recepcionista (Sin edición)': ConciergeBell,
   'Staff': Wrench,
-  'Staff (Sin edición)': Wrench,
 };

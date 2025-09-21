@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2 } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Save } from "lucide-react";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,7 +26,7 @@ import {
 import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { allPermissionCategories, roleIcons, type PermissionCategory } from '@/lib/permissions';
+import { allPermissionCategories, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -106,10 +106,16 @@ export default function UsersPage() {
   const [localRolesState, setLocalRolesState] = useState<Role[]>([]);
 
   useEffect(() => {
-    if (rolesData) {
-      setLocalRolesState(rolesData);
+    // If Firestore has roles, use them. Otherwise, use the initial hardcoded roles.
+    if (!rolesLoading) {
+      if (rolesData && rolesData.length > 0) {
+        setLocalRolesState(rolesData);
+      } else {
+        // This is a simplified version, in a real app you'd likely want a "seed" function.
+        setLocalRolesState(initialRoles.map((r, i) => ({ ...r, id: `initial_${i}` })));
+      }
     }
-  }, [rolesData]);
+  }, [rolesData, rolesLoading]);
 
 
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
@@ -174,9 +180,12 @@ export default function UsersPage() {
     if (!roleToUpdate) return;
     
     try {
-      const roleRef = doc(db, 'roles', roleId);
+      // Use role's title as document ID if it's one of the initial ones without a real ID
+      const docId = roleId.startsWith('initial_') ? roleToUpdate.title.toLowerCase().replace(/ /g, '_') : roleId;
+      const roleRef = doc(db, 'roles', docId);
       await updateDoc(roleRef, { permissions: roleToUpdate.permissions });
       toast({ title: 'Permisos guardados', description: `Los permisos para el rol ${roleToUpdate.title} se han actualizado.`});
+      handleDataUpdated();
     } catch (error) {
       console.error("Error updating role:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los permisos.'});
@@ -339,7 +348,9 @@ export default function UsersPage() {
                                     ))}
                                 </div>
                                 {!isDisabled && (
-                                    <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>Guardar Cambios</Button>
+                                    <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>
+                                        <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+                                    </Button>
                                 )}
                             </CardContent>
                         </Card>

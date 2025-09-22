@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import type { User, Local, Role } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -28,10 +28,13 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { ImageUploader } from '@/components/shared/image-uploader';
+import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
+import { useDebounce } from 'use-debounce';
 
 
 const userSchema = (isEditMode: boolean) => z.object({
-  name: z.string().min(1, 'El nombre es requerido.'),
+  nombre: z.string().min(1, 'El nombre es requerido.'),
+  apellido: z.string().min(1, 'El apellido es requerido.'),
   email: z.string().email('El email no es válido.'),
   password: z.string().optional().refine(password => {
     if (isEditMode) {
@@ -69,6 +72,15 @@ const userSchema = (isEditMode: boolean) => z.object({
 
 type UserFormData = z.infer<ReturnType<typeof userSchema>>;
 
+const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOutput, onAccept: (text: string) => void }) => {
+    if (!suggestion.hasCorrection) return null;
+    return (
+        <button type="button" onClick={() => onAccept(suggestion.correctedText)} className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 transition-colors p-1 rounded-md bg-blue-50 hover:bg-blue-100">
+            <Sparkles className="h-3 w-3" />
+            ¿Quisiste decir: <span className="font-semibold">{suggestion.correctedText}</span>?
+        </button>
+    )
+}
 
 interface UserModalProps {
   isOpen: boolean;
@@ -84,21 +96,71 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const [isUploading, setIsUploading] = useState(false);
   const isEditMode = !!user;
   const { toast } = useToast();
+  
+  const [nombreSuggestion, setNombreSuggestion] = useState<SpellCheckOutput | null>(null);
+  const [apellidoSuggestion, setApellidoSuggestion] = useState<SpellCheckOutput | null>(null);
+  const [isCheckingNombre, setIsCheckingNombre] = useState(false);
+  const [isCheckingApellido, setIsCheckingApellido] = useState(false);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema(isEditMode)),
-    defaultValues: { name: '', email: '', celular: '', role: '', password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' },
+    defaultValues: { nombre: '', apellido: '', email: '', celular: '', role: '', password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' },
   });
 
   const selectedRoleName = form.watch('role');
+  const nombreValue = form.watch('nombre');
+  const apellidoValue = form.watch('apellido');
+  
+  const [debouncedNombre] = useDebounce(nombreValue, 750);
+  const [debouncedApellido] = useDebounce(apellidoValue, 750);
+  
+  const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
+    if (!text || text.trim().length <= 2) return;
+    
+    if (type === 'nombre') {
+      setIsCheckingNombre(true);
+      setNombreSuggestion(null);
+    } else {
+      setIsCheckingApellido(true);
+      setApellidoSuggestion(null);
+    }
+    
+    try {
+        const result = await spellCheck(text);
+        if (result.hasCorrection) {
+            if (type === 'nombre') setNombreSuggestion(result);
+            else setApellidoSuggestion(result);
+        }
+    } catch (error) {
+        console.error("Spell check failed:", error);
+    } finally {
+        if (type === 'nombre') setIsCheckingNombre(false);
+        else setIsCheckingApellido(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    if (debouncedNombre) {
+      checkSpelling(debouncedNombre, 'nombre');
+    }
+  }, [debouncedNombre, checkSpelling]);
+  
+  useEffect(() => {
+    if (debouncedApellido) {
+      checkSpelling(debouncedApellido, 'apellido');
+    }
+  }, [debouncedApellido, checkSpelling]);
 
   useEffect(() => {
     if (isOpen) {
         if (user) {
+          const [nombre = '', ...apellidoParts] = user.name.split(' ');
+          const apellido = apellidoParts.join(' ');
           form.reset({ 
-            name: user.name, 
+            nombre: nombre, 
+            apellido: apellido,
             email: user.email, 
             role: user.role, 
             local_id: user.local_id,
@@ -110,7 +172,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             avatarUrl: user.avatarUrl || ''
           });
         } else {
-          form.reset({ name: '', email: '', celular: '', role: '', password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' });
+          form.reset({ nombre: '', apellido: '', email: '', celular: '', role: '', password: '', currentPassword: '', newPassword: '', confirmPassword: '', avatarUrl: '' });
         }
     }
   }, [user, isOpen, form]);
@@ -123,7 +185,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         const permissionsForRole = selectedRoleData ? selectedRoleData.permissions : [];
         
         const dataToSave: any = { 
-            name: data.name,
+            name: `${data.nombre} ${data.apellido}`.trim(),
             email: data.email,
             celular: data.celular,
             role: data.role,
@@ -213,17 +275,34 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nombre completo</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="nombre"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombres</FormLabel>
+                        <FormControl><Input {...field} /></FormControl>
+                        {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
+                        {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="apellido"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Apellidos</FormLabel>
+                        <FormControl><Input {...field} /></FormControl>
+                        {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
+                        {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="email"
@@ -302,7 +381,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Rol</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode && user?.role === 'Administrador general'}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
                               {roles?.map(role => (

@@ -184,10 +184,10 @@ export default function Header() {
     return user.permissions.includes(permission);
   }
   
-  const canSeeAny = (permissions: string[]) => {
+  const canSeeAny = (permissions: (string|undefined)[]) => {
       if (!user || !user.permissions) return false;
       if (user.role === 'Administrador general') return true;
-      return permissions.some(p => user.permissions!.includes(p));
+      return permissions.some(p => p && user.permissions!.includes(p));
   }
 
   const dispatchCustomEvent = (eventName: string) => {
@@ -257,9 +257,9 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
                     {salesNavLinks.map(({href, label, icon: Icon, permission}) => (
-                        canSee(permission) && (
+                        canSee(permission!) && (
                           <DropdownMenuItem key={href} asChild>
-                              <Link href={href}>
+                              <Link href={href!}>
                                   <Icon className="mr-2 h-4 w-4" />
                                   <span>{label}</span>
                               </Link>
@@ -284,9 +284,9 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
                     {productsNavLinks.map(({href, label, icon: Icon, permission}) => (
-                        canSee(permission) && (
+                        canSee(permission!) && (
                           <DropdownMenuItem key={href} asChild>
-                              <Link href={href}>
+                              <Link href={href!}>
                                   <Icon className="mr-2 h-4 w-4" />
                                   <span>{label}</span>
                               </Link>
@@ -311,9 +311,9 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
                   {reportsNavLinks.map(({href, label, icon: Icon, permission}) => (
-                    canSee(permission) && (
+                    canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
-                        <Link href={href}>
+                        <Link href={href!}>
                           <Icon className="mr-2 h-4 w-4" />
                           <span>{label}</span>
                         </Link>
@@ -341,7 +341,7 @@ export default function Header() {
                       item.isSeparator ? (
                           <DropdownMenuSeparator key={`sep-${index}`} />
                       ) : (
-                        canSee(item.permission) && (
+                        canSee(item.permission!) && (
                           <DropdownMenuItem key={item.href} asChild>
                               <Link href={item.href!}>
                                   <span>{item.label}</span>

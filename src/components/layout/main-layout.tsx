@@ -1,29 +1,17 @@
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 'use client';
 
 import type { ReactNode } from 'react';
 import Header from './header';
-import { usePathname } from 'next/navigation';
-<<<<<<< HEAD
-import { useState, useEffect, useRef, useCallback } from 'react';
-=======
-import { useState, useEffect } from 'react';
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-<<<<<<< HEAD
-import { onSnapshot, collection, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+import { useAuth } from '@/contexts/firebase-auth-context';
+import { Loader2 } from 'lucide-react';
+
 
 type Props = {
   children: ReactNode;
@@ -31,11 +19,9 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
-<<<<<<< HEAD
-  const { toast } = useToast();
   const router = useRouter();
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+  const { user, loading } = useAuth();
+  
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
@@ -46,30 +32,7 @@ export default function MainLayout({ children }: Props) {
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
-<<<<<<< HEAD
-  // Sound unlock effect
-  useEffect(() => {
-    const unlockAudio = () => {
-      // Create a dummy audio context
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const buffer = audioCtx.createBuffer(1, 1, 22050);
-      const source = audioCtx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioCtx.destination);
-      source.start(0);
-      // We only need to do this once
-      document.removeEventListener('click', unlockAudio);
-    };
-
-    document.addEventListener('click', unlockAudio);
-
-    return () => {
-      document.removeEventListener('click', unlockAudio);
-    };
-  }, []);
-
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+  // Global event listeners to open modals
   useEffect(() => {
     const handleNewReservation = () => {
         setReservationInitialData(null);
@@ -95,90 +58,65 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
-<<<<<<< HEAD
+  // Auth redirection logic
   useEffect(() => {
-    const mountTime = Timestamp.now();
+    const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
+    
+    if (!loading && !user && isProtectedRoute) {
+      router.push('/login');
+    }
+  }, [user, loading, pathname, router]);
 
-    const q = query(
-      collection(db, 'conversaciones'),
-      where('timestamp', '>', mountTime),
-      orderBy('timestamp', 'desc'),
-      limit(1)
+
+  // Render loading state for protected routes
+  if (loading && !pathname.startsWith('/book') && pathname !== '/login') {
+      return (
+          <div className="flex justify-center items-center h-screen bg-muted/40">
+              <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+      )
+  }
+
+  // Render children immediately for public routes or if user is loaded
+  if (pathname.startsWith('/book') || pathname === '/login' || user) {
+     return (
+        <div className="flex flex-col min-h-screen">
+        {pathname !== '/login' && !pathname.startsWith('/book') && <Header />}
+        <main className={cn(pathname !== '/login' && !pathname.startsWith('/book') && 'flex-grow pt-16')}>
+            {children}
+        </main>
+        
+        {/* Modals and Sheets available globally */}
+        <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+            <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+                <NewReservationForm
+                isOpen={isReservationModalOpen}
+                onOpenChange={setIsReservationModalOpen}
+                isDialogChild
+                onFormSubmit={refreshData}
+                initialData={reservationInitialData}
+                isEditMode={!!reservationInitialData?.id}
+                />
+            </DialogContent>
+        </Dialog>
+        
+        <BlockScheduleForm
+            isOpen={isBlockScheduleModalOpen}
+            onOpenChange={setIsBlockScheduleModalOpen}
+            onFormSubmit={refreshData}
+            initialData={blockInitialData}
+        />
+        
+        <NewSaleSheet 
+            isOpen={isSaleSheetOpen} 
+            onOpenChange={setIsSaleSheetOpen}
+            initialData={saleInitialData}
+            onSaleComplete={refreshData}
+        />
+        </div>
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const message = change.doc.data();
-          if (message.direction === 'inbound') {
-              try {
-                  const sound = new Audio('https://cdn.freesound.org/previews/242/242857_4284969-lq.mp3');
-                  sound.play().catch(e => console.warn("Error playing sound, user interaction might be needed.", e));
-              } catch (e) {
-                  console.error("Failed to play notification sound.", e);
-              }
-              
-              if (pathname !== '/admin/conversations') {
-              toast({
-                title: `Nuevo mensaje de ${message.from.replace('whatsapp:', '')}`,
-                description: message.body,
-                duration: Infinity, // This makes the toast persistent
-                onClick: () => router.push('/admin/conversations'),
-                className: 'cursor-pointer hover:bg-muted',
-              });
-            }
-          }
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [pathname, router, toast]);
-
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
-
-  // Don't render header on login page
-  if (pathname === '/login') {
-    return <main>{children}</main>;
-  }
-  
-  if (pathname === '/book' || pathname.startsWith('/book/')) {
-    return <>{children}</>;
   }
 
-  return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <main className="flex-grow pt-16">{children}</main>
-      
-      {/* Modals and Sheets available globally */}
-       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-            <NewReservationForm
-              isOpen={isReservationModalOpen}
-              onOpenChange={setIsReservationModalOpen}
-              isDialogChild
-              onFormSubmit={refreshData}
-              initialData={reservationInitialData}
-              isEditMode={!!reservationInitialData?.id}
-            />
-          </DialogContent>
-      </Dialog>
-      
-      <BlockScheduleForm
-        isOpen={isBlockScheduleModalOpen}
-        onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={refreshData}
-        initialData={blockInitialData}
-      />
-      
-      <NewSaleSheet 
-        isOpen={isSaleSheetOpen} 
-        onOpenChange={setIsSaleSheetOpen}
-        initialData={saleInitialData}
-        onSaleComplete={refreshData}
-      />
-    </div>
-  );
+  // Fallback, typically shows the loading spinner or nothing while redirecting
+  return null;
 }

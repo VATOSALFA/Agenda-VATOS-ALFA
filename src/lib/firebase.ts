@@ -5,7 +5,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAsUWZLIMR7sVkL0of4i09-6zWfBHFjSUY",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: "agenda-1ae08.firebaseapp.com",
   projectId: "agenda-1ae08",
   storageBucket: "agenda-1ae08.appspot.com",

@@ -37,11 +37,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .then(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
-            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            
+            // First, try to get user data from 'usuarios' collection
+            let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            let userDoc = await getDoc(userDocRef);
+            let customData;
+
             if (userDoc.exists()) {
-              const customData = userDoc.data();
+                customData = userDoc.data();
+            } else {
+                // If not in 'usuarios', try 'profesionales'
+                userDocRef = doc(db, 'profesionales', firebaseUser.uid);
+                userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    customData = userDoc.data();
+                }
+            }
+            
+            if (customData) {
               const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
 
               setUser({
@@ -55,7 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               });
 
             } else {
-                 console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
+                 console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid} en 'usuarios' o 'profesionales'.`);
                  setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
             }
           } else {

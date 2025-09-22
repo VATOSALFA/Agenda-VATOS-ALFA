@@ -43,21 +43,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (userDoc.exists()) {
           const customData = userDoc.data();
+          const isSuperAdmin = customData.role === 'Administrador general';
+          
           setUser({
             ...firebaseUser,
             displayName: customData.name || firebaseUser.displayName,
             role: customData.role,
-            permissions: customData.permissions || [],
+            // If super admin, grant all permissions dynamically from code.
+            // Otherwise, use permissions from Firestore.
+            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : customData.permissions || [],
             local_id: customData.local_id,
             avatarUrl: customData.avatarUrl
           });
+
         } else {
              console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
              setUser({ ...firebaseUser, role: 'Invitado', permissions: [] }); // Fallback with no permissions
         }
       } else {
         setUser(null);
-        if (pathname !== '/login') {
+        if (pathname !== '/login' && !pathname.startsWith('/book')) {
             router.push('/login');
         }
       }
@@ -80,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
   };
 
-  if (loading) {
+  if (loading && !pathname.startsWith('/book')) {
       return (
           <div className="flex justify-center items-center h-screen bg-muted/40">
               <Loader2 className="h-8 w-8 animate-spin" />

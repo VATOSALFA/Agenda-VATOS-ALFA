@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
@@ -32,36 +32,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          const customData = userDoc.data();
-          const isSuperAdmin = customData.role === 'Administrador general';
+    // Set persistence on the client-side
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          if (firebaseUser) {
+            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            
+            if (userDoc.exists()) {
+              const customData = userDoc.data();
+              const isSuperAdmin = customData.role === 'Administrador general';
 
-          setUser({
-            ...(firebaseUser as FirebaseUser),
-            displayName: customData.name || firebaseUser.displayName,
-            role: customData.role,
-            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
-            local_id: customData.local_id,
-            avatarUrl: customData.avatarUrl,
-            uid: firebaseUser.uid
-          });
+              setUser({
+                ...(firebaseUser as FirebaseUser),
+                displayName: customData.name || firebaseUser.displayName,
+                role: customData.role,
+                permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
+                local_id: customData.local_id,
+                avatarUrl: customData.avatarUrl,
+                uid: firebaseUser.uid
+              });
 
-        } else {
-             console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
-             setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
-        }
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
+            } else {
+                 console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
+                 setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
+            }
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+        });
 
-    return () => unsubscribe();
+        return () => unsubscribe();
+      })
+      .catch((error) => {
+        console.error("Error setting auth persistence:", error);
+        setLoading(false);
+      });
   }, []);
   
   const signOut = async () => {

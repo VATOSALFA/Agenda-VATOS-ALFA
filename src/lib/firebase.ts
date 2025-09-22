@@ -1,6 +1,6 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp } from "firebase/app";
-import {getAuth,setPersistence,browserLocalPersistence,} from "firebase/auth";
+import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -19,10 +19,3 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;
-
-// Persistencia (se ejecuta solo en navegador)
-if (typeof window !== "undefined") {
-  setPersistence(auth, browserLocalPersistence).catch(() => {
-    /* no-op */
-  });
-}

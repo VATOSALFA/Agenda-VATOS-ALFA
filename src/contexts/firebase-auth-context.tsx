@@ -8,6 +8,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { allPermissions } from '@/lib/permissions';
+import { toast } from '@/hooks/use-toast';
 
 interface CustomUser extends Partial<FirebaseUser> {
     role?: string;
@@ -36,19 +37,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
-    // TEMPORARY: Force admin user for setup
-    const tempAdminUser: CustomUser = {
-      uid: 'temp-admin-id',
-      email: 'admin@vatosalfa.com',
-      displayName: 'Admin Temporal',
-      role: 'Administrador general',
-      permissions: allPermissions.map(p => p.key)
-    };
-    setUser(tempAdminUser);
-    setLoading(false);
-
-    // REAL AUTH LOGIC (commented out for now)
-    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -81,15 +69,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-    */
+    
   }, [pathname, router]);
 
   const signOut = async () => {
-    // When re-enabling real auth, uncomment the next line
-    // await firebaseSignOut(auth);
+    await firebaseSignOut(auth);
     setUser(null); 
     router.push('/login');
-    toast({ title: "Sesión cerrada (Simulado)" });
+    toast({ title: "Sesión cerrada" });
   }
 
   const value = {
@@ -99,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
   };
 
-  if (loading && !pathname.startsWith('/book')) {
+  if (loading && !pathname.startsWith('/book') && pathname !== '/login') {
       return (
           <div className="flex justify-center items-center h-screen bg-muted/40">
               <Loader2 className="h-8 w-8 animate-spin" />

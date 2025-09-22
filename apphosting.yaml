@@ -1,16 +1,6 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
-#
-<<<<<<< HEAD
-# This file is used by Firebase to identify your app's build and run commands.
-# It also specifies other settings for your App Hosting backend.
-# Typically, you don't need to manually edit this file.
-# You can copy it to create a new backend with similar settings.
-# For more information, see https://firebase.google.com/docs/app-hosting/configure.
-run:
-  # You can customize your run command here.
-  # If you do, you must also specify a build command.
-  run: next start
+run: next start
 env:
   - variable: TWILIO_ACCOUNT_SID
     secret: TWILIO_ACCOUNT_SID
@@ -27,23 +17,3 @@ env:
     availability:
       - BUILD
       - RUNTIME
-=======
-#This file is used by Firebase to identify your app's build and run commands.
-#It also specifies other settings for your App Hosting backend.
-#Typically, you don't need to manually edit this file.
-#You can copy it to create a new backend with similar settings.
-#For more information, see https://firebase.google.com/docs/app-hosting/configure.
-build:
-  #You can customize your build command here, for example by adding a
-  #--build-config flag to your framework's build command.
-  #If you do, you must also specify a run command.
-  run: npm run build
-run:
-  #You can customize your run command here.
-  #If you do, you must also specify a build command.
-  run: npm run start
-runConfig:
-  #Increase this value to automatically spin up more
-  #instances in response to increased traffic.
-  maxInstances: 1
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65

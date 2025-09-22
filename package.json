@@ -1,25 +1,12 @@
-<<<<<<< HEAD
-
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 {
   "name": "nextn",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-<<<<<<< HEAD
     "dev": "next dev -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
-=======
-    "dev": "next dev --turbopack -p 9002",
-    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
-    "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "next build",
-    "export": "next export -o out",
-    "build:static": "npm run build && npm run export",
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
@@ -56,7 +43,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
-<<<<<<< HEAD
     "embla-carousel-react": "^8.6.0",
     "firebase": "^10.12.3",
     "firebase-admin": "^12.2.0",
@@ -68,28 +54,12 @@
     "react": "^18.2.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.2.0",
-=======
-    "dotenv": "^16.5.0",
-    "embla-carousel-react": "^8.6.0",
-    "firebase": "^10.14.1",
-    "framer-motion": "^11.5.7",
-    "genkit": "^1.13.0",
-    "lucide-react": "^0.475.0",
-    "next": "15.3.3",
-    "patch-package": "^8.0.0",
-    "react": "^18.3.1",
-    "react-day-picker": "^8.10.1",
-    "react-dom": "^18.3.1",
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
     "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.54.2",
     "recharts": "^2.15.1",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
-<<<<<<< HEAD
     "twilio": "^5.2.2",
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
     "use-debounce": "^10.0.1",
     "xlsx": "^0.18.5",
     "zod": "^3.24.2"

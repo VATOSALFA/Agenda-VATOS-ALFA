@@ -37,6 +37,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .then(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
+            // TEMPORARY: Grant admin access to specific user
+            if (firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com') {
+              setUser({
+                ...(firebaseUser as FirebaseUser),
+                displayName: 'Zeus Alejandro (Admin)',
+                role: 'Administrador general',
+                permissions: allPermissions.map(p => p.key),
+                uid: firebaseUser.uid
+              });
+              setLoading(false);
+              return;
+            }
+
             const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
             

@@ -1,8 +1,4 @@
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -18,11 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import type { Profesional, Schedule, Service, ServiceCategory } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
-<<<<<<< HEAD
-import { Loader2, Copy, Plus, Trash2 } from 'lucide-react';
-=======
-import { Loader2, Copy, UploadCloud, Plus, Trash2 } from 'lucide-react';
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+import { Loader2, Copy, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { db } from '@/lib/firebase';
@@ -47,11 +39,7 @@ interface EditProfesionalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: () => void;
-<<<<<<< HEAD
-  local: Local | null;
-=======
   local: Local | null; // This might be deprecated if we fetch all locales
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 }
 
 const daysOfWeek = [
@@ -79,10 +67,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-<<<<<<< HEAD
   const [isUploading, setIsUploading] = useState(false);
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
@@ -110,11 +95,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         services: [],
         schedule: defaultSchedule,
         biography: '',
-<<<<<<< HEAD
         avatar: '',
-=======
-        avatar: 'https://placehold.co/100x100',
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
         local_id: '',
     },
   });
@@ -155,11 +136,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             : {
                 name: '', email: '', active: true, acceptsOnline: true, services: [],
                 schedule: defaultSchedule,
-<<<<<<< HEAD
                 biography: '', avatar: '', order: 0,
-=======
-                biography: '', avatar: 'https://placehold.co/100x100', order: 0,
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 local_id: locales.length > 0 ? locales[0].id : ''
             };
         form.reset(defaultValues);
@@ -354,11 +331,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                     const currentValue = field.value || [];
                                                                     return checked
                                                                         ? field.onChange([...currentValue, service.id])
-<<<<<<< HEAD
                                                                         : field.onChange(currentValue.filter((value: string) => value !== service.id))
-=======
-                                                                        : field.onChange(currentValue.filter((value) => value !== service.id))
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                                                                 }}
                                                             />
                                                             <Label htmlFor={service.id} className="font-normal">{service.name}</Label>
@@ -429,7 +402,6 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                             name="avatar"
                             control={form.control}
                             render={({ field }) => (
-<<<<<<< HEAD
                                <ImageUploader 
                                 folder="profesionales"
                                 currentImageUrl={field.value}
@@ -439,13 +411,6 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                 }}
                                 onRemove={() => form.setValue('avatar', '', { shouldDirty: true })}
                                />
-=======
-                                <ImageUploader
-                                    folder="profesionales"
-                                    currentImageUrl={field.value}
-                                    onUpload={(url) => field.onChange(url)}
-                                />
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                             )}
                          />
                       </div>
@@ -469,13 +434,8 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             </Tabs>
             <DialogFooter className="pt-6 border-t flex-shrink-0">
                 <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
-<<<<<<< HEAD
                 <Button type="submit" disabled={isSubmitting || isUploading}>
                     {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-=======
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     Guardar
                 </Button>
             </DialogFooter>
@@ -504,7 +464,3 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     </>
   );
 }
-<<<<<<< HEAD
-=======
-
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65

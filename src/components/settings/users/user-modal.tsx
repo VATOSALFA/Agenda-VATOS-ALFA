@@ -306,7 +306,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
                               {roles?.map(role => (
-                                  <SelectItem key={role.id} value={role.title} disabled={!isEditMode && role.title === 'Administrador general'}>{role.title}</SelectItem>
+                                  <SelectItem key={role.id} value={role.title}>{role.title}</SelectItem>
                               ))}
                           </SelectContent>
                       </Select>

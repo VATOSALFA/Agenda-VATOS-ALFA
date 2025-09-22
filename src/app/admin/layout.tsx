@@ -16,18 +16,13 @@ import {
   KeyRound,
   Store,
   School,
-<<<<<<< HEAD
   Settings,
   MessagesSquare
-=======
-  Settings
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 const adminLinks = [
-<<<<<<< HEAD
   { href: '/admin/locales', label: 'Locales', icon: Store, permission: 'ver_locales' },
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
@@ -40,20 +35,6 @@ const advancedLinks = [
   { href: '/admin/integrations', label: 'Integraciones', icon: Component, permission: 'ver_integraciones' },
   { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
   { href: '/admin/school', label: 'Vatos Alfa School', icon: School, permission: 'ver_school' },
-=======
-  { href: '/admin/locales', label: 'Locales', icon: Store },
-  { href: '/admin/profesionales', label: 'Profesionales', icon: Users },
-  { href: '/admin/servicios', label: 'Servicios', icon: Scissors },
-  { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle },
-  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent },
-];
-
-const advancedLinks = [
-  { href: '/admin/emails', label: 'E-Mails', icon: Mail },
-  { href: '/admin/integrations', label: 'Integraciones', icon: Component },
-  { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound },
-  { href: '/admin/school', label: 'Vatos Alfa School', icon: School },
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 ]
 
 type Props = {
@@ -64,7 +45,6 @@ export default function AdminLayout({ children }: Props) {
   const pathname = usePathname();
   const { user } = useAuth();
   
-<<<<<<< HEAD
   const canSee = (permission: string) => {
     if (!user || !user.permissions) return false;
     // Admin always has all permissions
@@ -80,9 +60,6 @@ export default function AdminLayout({ children }: Props) {
         </>
     );
   }
-=======
-  const canSeeConfiguracion = user?.role === 'Administrador general';
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
@@ -94,12 +71,8 @@ export default function AdminLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-<<<<<<< HEAD
               {adminLinks.map(({ href, label, icon: Icon, permission }) => (
                 canSee(permission) && (
-=======
-              {adminLinks.map(({ href, label, icon: Icon }) => (
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 <Link
                   key={href}
                   href={href}
@@ -111,10 +84,7 @@ export default function AdminLayout({ children }: Props) {
                   <Icon className="h-4 w-4" />
                   {label}
                 </Link>
-<<<<<<< HEAD
                 )
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -124,12 +94,8 @@ export default function AdminLayout({ children }: Props) {
               <ChevronDown className="h-4 w-4" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-<<<<<<< HEAD
               {advancedLinks.map(({ href, label, icon: Icon, permission }) => (
                 canSee(permission) && (
-=======
-              {advancedLinks.map(({ href, label, icon: Icon }) => (
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 <Link
                   key={href}
                   href={href}
@@ -141,18 +107,11 @@ export default function AdminLayout({ children }: Props) {
                   <Icon className="h-4 w-4" />
                   {label}
                 </Link>
-<<<<<<< HEAD
                 )
               ))}
             </CollapsibleContent>
           </Collapsible>
           {canSee('ver_configuracion_usuarios') && (
-=======
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
-          {canSeeConfiguracion && (
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
             <Collapsible defaultOpen>
               <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
                 Configuracion

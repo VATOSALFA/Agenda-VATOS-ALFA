@@ -59,8 +59,7 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
-  // Auth redirection logic - TEMPORARILY DISABLED
-  /*
+  // Auth redirection logic
   useEffect(() => {
     const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
     
@@ -68,7 +67,6 @@ export default function MainLayout({ children }: Props) {
       router.push('/login');
     }
   }, [user, loading, pathname, router]);
-  */
 
 
   // Render loading state for protected routes
@@ -81,7 +79,7 @@ export default function MainLayout({ children }: Props) {
   }
 
   // Render children immediately for public routes or if user is loaded
-  // if (pathname.startsWith('/book') || pathname === '/login' || user) {
+  if (pathname.startsWith('/book') || pathname === '/login' || user) {
      return (
         <div className="flex flex-col min-h-screen">
         {pathname !== '/login' && !pathname.startsWith('/book') && <Header />}
@@ -118,8 +116,8 @@ export default function MainLayout({ children }: Props) {
         />
         </div>
     );
-  // }
+  }
 
   // Fallback, typically shows the loading spinner or nothing while redirecting
-  // return null;
+  return null;
 }

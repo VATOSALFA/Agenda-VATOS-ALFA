@@ -59,16 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                  setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
             }
           } else {
-            // --- TEMPORARY MOCK USER FOR DEVELOPMENT ---
-            // If no user is logged in, create a mock admin user to show all tabs.
-            setUser({
-                uid: 'mock-admin-user',
-                displayName: 'Admin (Dev)',
-                email: 'dev@vatosalfa.com',
-                role: 'Administrador general',
-                permissions: allPermissions.map(p => p.key),
-            } as CustomUser);
-            // --- END OF TEMPORARY MOCK ---
+            setUser(null);
           }
           setLoading(false);
         });

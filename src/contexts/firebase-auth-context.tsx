@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             role: customData.role,
             // If super admin, grant all permissions dynamically from code.
             // Otherwise, use permissions from Firestore.
-            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : customData.permissions || [],
+            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
             local_id: customData.local_id,
             avatarUrl: customData.avatarUrl
           });

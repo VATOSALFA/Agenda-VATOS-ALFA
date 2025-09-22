@@ -7,11 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-<<<<<<< HEAD
 import { z } from 'zod';
-=======
-import { z } from 'genkit';
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 const StockAlertInputSchema = z.object({
     productName: z.string().describe("The name of the product that is low on stock."),

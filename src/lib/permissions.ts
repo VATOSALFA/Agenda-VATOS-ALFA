@@ -40,6 +40,7 @@ export const allPermissionCategories: PermissionCategory[] = [
     {
         title: 'Ventas',
         icon: HandCoins,
+        permissions: [{ key: 'ver_ventas', label: 'Ver Menú Ventas' }],
         subCategories: [
             { title: 'Ventas Facturadas', permissions: [{ key: 'ver_ventas_facturadas', label: 'Ver Ventas Facturadas' }] },
             { title: 'Reporte de Comisiones', permissions: [{ key: 'ver_reporte_comisiones', label: 'Ver Reporte de Comisiones' }] },
@@ -50,6 +51,7 @@ export const allPermissionCategories: PermissionCategory[] = [
     {
         title: 'Productos',
         icon: Package,
+        permissions: [{ key: 'ver_productos', label: 'Ver Menú Productos' }],
         subCategories: [
             { title: 'Inventario', permissions: [{ key: 'ver_inventario', label: 'Ver Inventario' }] },
             { title: 'Venta de productos', permissions: [{ key: 'ver_venta_productos', label: 'Ver Venta de Productos' }] },
@@ -58,6 +60,7 @@ export const allPermissionCategories: PermissionCategory[] = [
     {
         title: 'Reportes',
         icon: BarChart2,
+        permissions: [{ key: 'ver_reportes', label: 'Ver Menú Reportes' }],
         subCategories: [
             { title: 'Reporte de reservas', permissions: [{ key: 'ver_reporte_reservas', label: 'Ver Reporte de Reservas' }] },
             { title: 'Reporte de ventas', permissions: [{ key: 'ver_reporte_ventas', label: 'Ver Reporte de Ventas' }] },
@@ -114,9 +117,9 @@ export const initialRoles: Omit<Role, 'id'>[] = [
     permissions: [
         'ver_agenda', 'crear_reservas', 'bloquear_horarios', 
         'ver_clientes', 
-        'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'ver_propinas',
-        'ver_inventario', 'ver_venta_productos',
-        'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja',
+        'ver_ventas', 'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'registrar_ventas', 'ver_propinas',
+        'ver_productos', 'ver_inventario', 'ver_venta_productos',
+        'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja',
         'ver_finanzas',
         'ver_administracion',
         'ver_conversaciones'
@@ -125,9 +128,9 @@ export const initialRoles: Omit<Role, 'id'>[] = [
   {
     title: 'Recepcionista',
     description: 'Gestiona la agenda, reservas y clientes. Tiene acceso a la caja y a la creación de ventas.',
-    permissions: ['ver_agenda', 'crear_reservas', 'ver_clientes', 'ver_caja', 'registrar_ventas'],
+    permissions: ['ver_agenda', 'crear_reservas', 'ver_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas'],
   },
-    {
+  {
     title: 'Recepcionista (Sin edición)',
     description: 'Gestiona la agenda y reservas. No puede editar información sensible.',
     permissions: ['ver_agenda', 'crear_reservas'],
@@ -135,7 +138,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
   {
     title: 'Staff',
     description: 'Profesional que puede ver su propia agenda y gestionar sus citas.',
-    permissions: ['ver_agenda', 'crear_reservas'],
+    permissions: ['ver_agenda', 'crear_reservas', 'ver_productos', 'ver_inventario'],
   },
   {
     title: 'Staff (Sin edición)',
@@ -154,4 +157,5 @@ export const roleIcons: Record<string, LucideIcon> = {
   'Staff': Wrench,
   'Staff (Sin edición)': Wrench,
 };
+
 

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Save } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Save, Check } from "lucide-react";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -106,24 +106,20 @@ export default function UsersPage() {
   const [localRolesState, setLocalRolesState] = useState<Role[]>([]);
 
   useEffect(() => {
-    // If Firestore has roles, use them. Otherwise, use the initial hardcoded roles.
     if (!rolesLoading) {
       if (rolesData && rolesData.length > 0) {
-        // We need to merge Firestore data with initial data to ensure all roles are present,
-        // and descriptions/icons are up-to-date from code.
         const firestoreRolesMap = new Map(rolesData.map(r => [r.title, r]));
-        const mergedRoles = initialRoles.map((initialRole, i) => {
+        const mergedRoles = initialRoles.map((initialRole) => {
             const firestoreRole = firestoreRolesMap.get(initialRole.title);
             if (firestoreRole) {
                 return { ...initialRole, id: firestoreRole.id, permissions: firestoreRole.permissions };
             }
-            return { ...initialRole, id: `initial_${i}` }; // Assign temp ID if not in Firestore yet
+            return { ...initialRole, id: initialRole.title.toLowerCase().replace(/ /g, '_') };
         });
         setLocalRolesState(mergedRoles);
 
       } else {
-        // This is a simplified version, in a real app you'd likely want a "seed" function.
-        setLocalRolesState(initialRoles.map((r, i) => ({ ...r, id: `initial_${i}` })));
+        setLocalRolesState(initialRoles.map(r => ({ ...r, id: r.title.toLowerCase().replace(/ /g, '_') })));
       }
     }
   }, [rolesData, rolesLoading]);
@@ -191,7 +187,7 @@ export default function UsersPage() {
     if (!roleToUpdate) return;
     
     try {
-      const docId = roleToUpdate.title.toLowerCase().replace(/ /g, '_');
+      const docId = roleToUpdate.id; // Use consistent ID
       const roleRef = doc(db, 'roles', docId);
       await setDoc(roleRef, { 
         title: roleToUpdate.title,
@@ -199,7 +195,7 @@ export default function UsersPage() {
       }, { merge: true });
 
       toast({ title: 'Permisos guardados', description: `Los permisos para el rol ${roleToUpdate.title} se han actualizado.`});
-      handleDataUpdated(); // Re-fetch to get the new document ID if it was created
+      handleDataUpdated();
     } catch (error) {
       console.error("Error updating role:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los permisos.'});
@@ -264,18 +260,14 @@ export default function UsersPage() {
                   <TableCell>{user.role}</TableCell>
                   <TableCell>{user.local_id ? localMap.get(user.local_id) : 'Todos'}</TableCell>
                   <TableCell className="text-right">
-                    {user.role === 'Administrador general' ? (
-                        <span className="text-xs text-muted-foreground">No se puede editar</span>
-                    ) : (
-                        <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -341,7 +333,6 @@ export default function UsersPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                 {localRolesState.map((role) => {
                     const RoleIcon = roleIcons[role.title] || Info;
-                    const isDisabled = role.title === 'Administrador general';
                     return (
                         <Card key={role.id}>
                             <CardHeader className="flex flex-row items-center gap-4 space-y-0">
@@ -357,15 +348,13 @@ export default function UsersPage() {
                                             category={cat} 
                                             currentPermissions={role.permissions}
                                             onPermissionChange={(key, checked) => handlePermissionChange(role.id, key, checked)}
-                                            isDisabled={isDisabled}
+                                            isDisabled={false}
                                         />
                                     ))}
                                 </div>
-                                {!isDisabled && (
-                                    <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>
-                                        <Save className="mr-2 h-4 w-4" /> Guardar Cambios
-                                    </Button>
-                                )}
+                                <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>
+                                    <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+                                </Button>
                             </CardContent>
                         </Card>
                     );

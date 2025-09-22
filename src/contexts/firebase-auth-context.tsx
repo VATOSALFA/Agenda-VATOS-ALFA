@@ -36,6 +36,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
+    // TEMPORARY: Force admin user for setup
+    const tempAdminUser: CustomUser = {
+      uid: 'temp-admin-id',
+      email: 'admin@vatosalfa.com',
+      displayName: 'Admin Temporal',
+      role: 'Administrador general',
+      permissions: allPermissions.map(p => p.key)
+    };
+    setUser(tempAdminUser);
+    setLoading(false);
+
+    // REAL AUTH LOGIC (commented out for now)
+    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -44,13 +57,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (userDoc.exists()) {
           const customData = userDoc.data();
           const isSuperAdmin = customData.role === 'Administrador general';
-          
+
           setUser({
             ...firebaseUser,
             displayName: customData.name || firebaseUser.displayName,
             role: customData.role,
-            // If super admin, grant all permissions dynamically from code.
-            // Otherwise, use permissions from Firestore.
             permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
             local_id: customData.local_id,
             avatarUrl: customData.avatarUrl
@@ -70,12 +81,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
+    */
   }, [pathname, router]);
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    // When re-enabling real auth, uncomment the next line
+    // await firebaseSignOut(auth);
     setUser(null); 
     router.push('/login');
+    toast({ title: "Sesión cerrada (Simulado)" });
   }
 
   const value = {

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -107,20 +108,18 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (!rolesLoading) {
-      if (rolesData && rolesData.length > 0) {
+        const combinedRoles = [...initialRoles];
         const firestoreRolesMap = new Map(rolesData.map(r => [r.title, r]));
-        const mergedRoles = initialRoles.map((initialRole) => {
+
+        const mergedRoles = combinedRoles.map(initialRole => {
             const firestoreRole = firestoreRolesMap.get(initialRole.title);
             if (firestoreRole) {
                 return { ...initialRole, id: firestoreRole.id, permissions: firestoreRole.permissions };
             }
             return { ...initialRole, id: initialRole.title.toLowerCase().replace(/ /g, '_') };
         });
+        
         setLocalRolesState(mergedRoles);
-
-      } else {
-        setLocalRolesState(initialRoles.map(r => ({ ...r, id: r.title.toLowerCase().replace(/ /g, '_') })));
-      }
     }
   }, [rolesData, rolesLoading]);
 

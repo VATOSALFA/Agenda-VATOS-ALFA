@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
@@ -17,6 +17,7 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   authInstance: Auth;
+  signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
 
@@ -67,11 +68,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await firebaseSignOut(auth);
     setUser(null); 
   }
+  
+  const signIn = async (email: string, pass: string) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    return userCredential.user;
+  };
 
   const value = {
     user,
     loading,
     authInstance: auth,
+    signIn,
     signOut,
   };
 

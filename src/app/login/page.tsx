@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
-import { signInWithEmailAndPassword } from "firebase/auth";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -21,7 +20,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { authInstance, user, loading: authLoading } = useAuth();
+    const { signIn, user, loading: authLoading } = useAuth();
 
     useEffect(() => {
         if (!authLoading && user) {
@@ -34,14 +33,14 @@ export default function LoginPage() {
         setIsLoading(true);
         setError(null);
 
-        if (!authInstance) {
+        if (!signIn) {
             setError("El servicio de autenticación no está disponible. Por favor, recarga la página.");
             setIsLoading(false);
             return;
         }
 
         try {
-            await signInWithEmailAndPassword(authInstance, email, password);
+            await signIn(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
             router.push('/');
         } catch (err: any) {

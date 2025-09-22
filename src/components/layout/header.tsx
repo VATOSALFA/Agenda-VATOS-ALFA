@@ -181,6 +181,12 @@ export default function Header() {
     if (user.role === 'Administrador general') return true;
     return user.permissions.includes(permission);
   }
+  
+  const canSeeAny = (permissions: string[]) => {
+      if (!user || !user.permissions) return false;
+      if (user.role === 'Administrador general') return true;
+      return permissions.some(p => user.permissions!.includes(p));
+  }
 
   const dispatchCustomEvent = (eventName: string) => {
     document.dispatchEvent(new CustomEvent(eventName));
@@ -235,7 +241,7 @@ export default function Header() {
                 )
             ))}
             
-            {canSee('ver_ventas') && (
+            {canSeeAny(salesNavLinks.map(l => l.permission)) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -262,7 +268,7 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-            {canSee('ver_productos') && (
+            {canSeeAny(productsNavLinks.map(l => l.permission)) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -289,7 +295,7 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-            {canSee('ver_reportes') && (
+            {canSeeAny(reportsNavLinks.map(l => l.permission)) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(

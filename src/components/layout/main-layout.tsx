@@ -11,6 +11,7 @@ import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 
 type Props = {

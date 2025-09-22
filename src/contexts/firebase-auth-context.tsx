@@ -36,21 +36,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Simulación de sesión de Administrador General para acceso temporal
-    const adminUser: CustomUser = {
-      uid: '6ITeQawj9hMDyw8xWfRs5n4h5yg2',
-      email: 'vatosalfa@gmail.com',
-      displayName: 'Vatos Alfa Admin',
-      role: 'Administrador general',
-      permissions: allPermissions.map(p => p.key), // Acceso a todo
-      local_id: undefined, // Sin local específico para ver todo
-      avatarUrl: ''
-    };
-    setUser(adminUser);
-    setLoading(false);
-
-    // El código original de onAuthStateChanged se deshabilita temporalmente
-    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -80,7 +65,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-    */
   }, [pathname, router]);
 
   const signOut = async () => {

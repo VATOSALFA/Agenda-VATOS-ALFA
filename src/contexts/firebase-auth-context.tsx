@@ -37,30 +37,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .then(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
-            // TEMPORARY: Grant admin access to specific user
-            if (firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com') {
-              setUser({
-                ...(firebaseUser as FirebaseUser),
-                displayName: 'Zeus Alejandro (Admin)',
-                role: 'Administrador general',
-                permissions: allPermissions.map(p => p.key),
-                uid: firebaseUser.uid
-              });
-              setLoading(false);
-              return;
-            }
-
             const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
             
             if (userDoc.exists()) {
               const customData = userDoc.data();
-              const isSuperAdmin = customData.role === 'Administrador general';
+              const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
 
               setUser({
                 ...(firebaseUser as FirebaseUser),
                 displayName: customData.name || firebaseUser.displayName,
-                role: customData.role,
+                role: isSuperAdmin ? 'Administrador general' : customData.role,
                 permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
                 local_id: customData.local_id,
                 avatarUrl: customData.avatarUrl,
@@ -72,7 +59,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                  setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
             }
           } else {
-            setUser(null);
+            // --- TEMPORARY MOCK USER FOR DEVELOPMENT ---
+            // If no user is logged in, create a mock admin user to show all tabs.
+            setUser({
+                uid: 'mock-admin-user',
+                displayName: 'Admin (Dev)',
+                email: 'dev@vatosalfa.com',
+                role: 'Administrador general',
+                permissions: allPermissions.map(p => p.key),
+            } as CustomUser);
+            // --- END OF TEMPORARY MOCK ---
           }
           setLoading(false);
         });

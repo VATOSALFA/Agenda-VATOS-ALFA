@@ -1,9 +1,13 @@
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 'use client';
 
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+<<<<<<< HEAD
 import { useState, useEffect } from 'react';
 import {
   collection,
@@ -12,6 +16,9 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+=======
+import { useState } from 'react';
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import {
   Scissors,
@@ -48,7 +55,10 @@ import {
   Share2,
   Landmark,
   LogOut,
+<<<<<<< HEAD
   MessagesSquare,
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -66,6 +76,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
+<<<<<<< HEAD
 import type { Message } from '@/lib/types';
 
 
@@ -107,6 +118,48 @@ const finanzasNavLinks = [
   { href: '/finanzas/octubre', label: 'Octubre', permission: 'ver_finanzas' },
   { href: '/finanzas/noviembre', label: 'Noviembre', permission: 'ver_finanzas' },
   { href: '/finanzas/diciembre', label: 'Diciembre', permission: 'ver_finanzas' },
+=======
+
+
+const mainNavLinks = [
+  { href: '/', label: 'Agenda', icon: Calendar },
+  { href: '/clients', label: 'Clientes', icon: Users },
+];
+
+const salesNavLinks = [
+    { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard },
+    { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign },
+    { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote },
+    { href: '/sales/tips', label: 'Propinas', icon: Gift },
+]
+
+const productsNavLinks = [
+  { href: '/products', label: 'Inventario', icon: Archive },
+  { href: '/products/sales', label: 'Venta de productos', icon: ShoppingCart },
+];
+
+const reportsNavLinks = [
+  { href: '/reports/reservations', label: 'Reporte de reservas', icon: FileText },
+  { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart },
+  { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet },
+];
+
+const finanzasNavLinks = [
+  { href: '/finanzas/resumen', label: 'Resumen' },
+  { isSeparator: true },
+  { href: '/finanzas/enero', label: 'Enero' },
+  { href: '/finanzas/febrero', label: 'Febrero' },
+  { href: '/finanzas/marzo', label: 'Marzo' },
+  { href: '/finanzas/abril', label: 'Abril' },
+  { href: '/finanzas/mayo', label: 'Mayo' },
+  { href: '/finanzas/junio', label: 'Junio' },
+  { href: '/finanzas/julio', label: 'Julio' },
+  { href: '/finanzas/agosto', label: 'Agosto' },
+  { href: '/finanzas/septiembre', label: 'Septiembre' },
+  { href: '/finanzas/octubre', label: 'Octubre' },
+  { href: '/finanzas/noviembre', label: 'Noviembre' },
+  { href: '/finanzas/diciembre', label: 'Diciembre' },
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 ];
 
 interface EmpresaSettings {
@@ -121,6 +174,7 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
   const { user, signOut } = useAuth();
+<<<<<<< HEAD
   const [unreadCount, setUnreadCount] = useState(0);
   
   useEffect(() => {
@@ -137,6 +191,8 @@ export default function Header() {
     return () => unsubscribe();
   }, []);
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
 
@@ -175,6 +231,7 @@ export default function Header() {
     return name.substring(0, 2).toUpperCase();
   }
   
+<<<<<<< HEAD
   const canSee = (permission: string) => {
     if (!user || !user.permissions) return false;
     // Admin always has all permissions
@@ -186,6 +243,18 @@ export default function Header() {
       if (!user || !user.permissions) return false;
       if (user.role === 'Administrador general') return true;
       return permissions.some(p => user.permissions!.includes(p));
+=======
+  const canSee = (section: 'reminders' | 'products' | 'reports' | 'finanzas' | 'admin' | 'settings') => {
+    if (!user || !user.role) return false;
+    if (user.role === 'Administrador general') return true;
+    if (user.role === 'Administrador local') {
+        return !['reminders', 'finanzas', 'admin', 'settings'].includes(section);
+    }
+    if (user.role.includes('Recepcionista')) {
+        return false;
+    }
+    return false;
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
   }
 
   const dispatchCustomEvent = (eventName: string) => {
@@ -224,12 +293,56 @@ export default function Header() {
             <span className="font-bold text-lg text-white whitespace-nowrap">VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
+<<<<<<< HEAD
             {mainNavLinks.map(({ href, label, permission }) => (
                 canSee(permission) && (
+=======
+            <Link
+              href="/"
+              className={cn(
+                'px-3 py-2 rounded-md transition-colors',
+                pathname === '/'
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-300 hover:bg-white/10 hover:text-white'
+              )}
+            >
+              Agenda
+            </Link>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className={cn(
+                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                  pathname.startsWith('/sales')
+                     ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}>
+                  Ventas <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="start">
+                  {salesNavLinks.map(({href, label, icon: Icon}) => (
+                      <DropdownMenuItem key={href} asChild>
+                          <Link href={href}>
+                              <Icon className="mr-2 h-4 w-4" />
+                              <span>{label}</span>
+                          </Link>
+                      </DropdownMenuItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {mainNavLinks.filter(l => !['/', '/products', '/reports'].includes(l.href)).map(({ href, label }) => {
+                if (href === '/reminders' && !canSee('reminders')) {
+                    return null;
+                }
+                return (
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     <Link
                     key={href}
                     href={href}
                     className={cn(
+<<<<<<< HEAD
                         'px-3 py-2 rounded-md transition-colors',
                         pathname === href
                         ? 'bg-white/10 text-white'
@@ -269,6 +382,20 @@ export default function Header() {
             )}
 
             {canSeeAny(productsNavLinks.map(l => l.permission)) && (
+=======
+                      'px-3 py-2 rounded-md transition-colors',
+                      pathname.startsWith(href)
+                        ? 'bg-white/10 text-white'
+                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                    )}
+                  >
+                    {label}
+                  </Link>
+                );
+            })}
+
+            {canSee('products') && (
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -281,6 +408,7 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
+<<<<<<< HEAD
                     {productsNavLinks.map(({href, label, icon: Icon, permission}) => (
                         canSee(permission) && (
                           <DropdownMenuItem key={href} asChild>
@@ -290,12 +418,25 @@ export default function Header() {
                               </Link>
                           </DropdownMenuItem>
                         )
+=======
+                    {productsNavLinks.map(({href, label, icon: Icon}) => (
+                        <DropdownMenuItem key={href} asChild>
+                            <Link href={href}>
+                                <Icon className="mr-2 h-4 w-4" />
+                                <span>{label}</span>
+                            </Link>
+                        </DropdownMenuItem>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
+<<<<<<< HEAD
             {canSeeAny(reportsNavLinks.map(l => l.permission)) && (
+=======
+            {canSee('reports') && (
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -308,6 +449,7 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
+<<<<<<< HEAD
                   {reportsNavLinks.map(({href, label, icon: Icon, permission}) => (
                     canSee(permission) && (
                       <DropdownMenuItem key={href} asChild>
@@ -317,12 +459,25 @@ export default function Header() {
                         </Link>
                       </DropdownMenuItem>
                     )
+=======
+                  {reportsNavLinks.map(({href, label, icon: Icon}) => (
+                    <DropdownMenuItem key={href} asChild>
+                      <Link href={href}>
+                        <Icon className="mr-2 h-4 w-4" />
+                        <span>{label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
+<<<<<<< HEAD
             {canSee('ver_finanzas') && (
+=======
+            {canSee('finanzas') && (
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -339,22 +494,34 @@ export default function Header() {
                       item.isSeparator ? (
                           <DropdownMenuSeparator key={`sep-${index}`} />
                       ) : (
+<<<<<<< HEAD
                         canSee(item.permission) && (
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                           <DropdownMenuItem key={item.href} asChild>
                               <Link href={item.href!}>
                                   <span>{item.label}</span>
                               </Link>
                           </DropdownMenuItem>
+<<<<<<< HEAD
                         )
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                       )
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
+<<<<<<< HEAD
             {canSee('ver_administracion') && (
               <Link
                 href="/admin"
+=======
+            {canSee('admin') && (
+              <Link
+                href="/admin/profesionales"
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                   pathname.startsWith('/admin')
@@ -375,6 +542,7 @@ export default function Header() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+<<<<<<< HEAD
                 <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
                   <Calendar className="mr-2 h-4 w-4" />
                   <span>Crear nueva reserva</span>
@@ -384,11 +552,23 @@ export default function Header() {
                   <span>Bloquear horario</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
+=======
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')}>
+                  <Calendar className="mr-2 h-4 w-4" />
+                  <span>Crear nueva reserva</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')}>
+                  <Lock className="mr-2 h-4 w-4" />
+                  <span>Bloquear horario</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')}>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                   <Tag className="mr-2 h-4 w-4" />
                   <span>Registrar nueva venta</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+<<<<<<< HEAD
 
              {canSee('ver_conversaciones') && (
                 <Link href="/admin/conversations" passHref>
@@ -404,6 +584,10 @@ export default function Header() {
              )}
             
             {canSee('ver_configuracion') && (
+=======
+            
+            {canSee('settings') && (
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                    <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
@@ -456,7 +640,11 @@ export default function Header() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-9 w-9">
+<<<<<<< HEAD
                     <AvatarImage src={user?.avatarUrl || ""} alt={user?.displayName || 'User'} />
+=======
+                    <AvatarImage src="" alt="@vatosalfa" />
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     <AvatarFallback>{getInitials(user?.displayName)}</AvatarFallback>
                   </Avatar>
                 </Button>

@@ -132,6 +132,7 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
     )
 }
 
+<<<<<<< HEAD
 const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers, addItemSearchTerm, setAddItemSearchTerm, addItemFilteredServices, addItemFilteredProducts, servicesLoading, productsLoading, addToCart }) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
       <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
@@ -140,11 +141,22 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
           <DialogTrigger asChild>
             <Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
           </DialogTrigger>
+=======
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }) => (
+    <div className="bg-card/50 rounded-lg flex flex-col shadow-lg h-full">
+      <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
+        <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
+        {step === 2 && (
+        <DialogTrigger asChild>
+            <Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
+        </DialogTrigger>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
         )}
       </div>
       
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-4">
+<<<<<<< HEAD
           {cart.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
           ) : cart.map(item => (
@@ -166,6 +178,29 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
                       {sellers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+=======
+        {cart.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
+        ) : cart.map(item => (
+            <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
+            <div className="flex-grow pr-2">
+                <p className="font-medium capitalize">{item.nombre}</p>
+                <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-MX') || '0'}</p>
+                <div className="flex items-center gap-2 mt-2">
+                <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
+                <span className="w-5 text-center font-bold">{item.cantidad}</span>
+                <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
+                </div>
+                <div className="mt-2">
+                <Select onValueChange={(value) => updateItemProfessional(item.id, value)} value={item.barbero_id}>
+                    <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccionar vendedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {sellers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                     <DiscountInput item={item} onDiscountChange={updateItemDiscount} />
@@ -179,6 +214,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
                         </SelectContent>
                     </Select>
                 </div>
+<<<<<<< HEAD
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</p>
@@ -188,6 +224,17 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
               </div>
             </div>
           ))}
+=======
+            </div>
+            <div className="text-right flex-shrink-0">
+                <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</p>
+                <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
+                <Trash2 className="h-4 w-4" />
+                </Button>
+            </div>
+            </div>
+        ))}
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
         </div>
       </ScrollArea>
       {cart.length > 0 && (
@@ -234,16 +281,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   
   const sellers = useMemo(() => {
+<<<<<<< HEAD
     const allSellers = new Map<string, { id: string; name: string }>();
     if (professionals) {
+=======
+    const allSellers = new Map<string, { id: string, name: string }>();
+    if(professionals) {
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
       professionals.forEach(p => allSellers.set(p.id, { id: p.id, name: p.name }));
     }
     if (users) {
       users.forEach(u => {
+<<<<<<< HEAD
         if (u.role !== 'Administrador general' && u.role !== 'Administrador local') {
           if (!allSellers.has(u.id)) {
             allSellers.set(u.id, { id: u.id, name: u.name });
           }
+=======
+        if (!allSellers.has(u.id)) {
+          allSellers.set(u.id, { id: u.id, name: u.name });
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
         }
       });
     }
@@ -607,6 +664,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         
         <Form {...form}>
             {step === 1 && (
+<<<<<<< HEAD
                 <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
                     {/* Item Selection & Client */}
                     <div className="col-span-2 flex flex-col gap-4">
@@ -650,6 +708,57 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             )}
                         </div>
                         <div className="relative mb-4 flex-shrink-0">
+=======
+                <div className="flex-grow flex gap-6 px-6 py-4 overflow-hidden">
+                    {/* Item Selection */}
+                    <div className="w-2/3 flex flex-col">
+                        
+                        {selectedClient ? (
+                             <Card>
+                                <CardContent className="p-4">
+                                        <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                                    <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                                    <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                             <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                                <FormItem>
+                                    <div className="flex justify-between items-center">
+                                    <FormLabel>Cliente</FormLabel>
+                                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                    </Button>
+                                    </div>
+                                     <Combobox
+                                        options={clientOptions}
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        placeholder="Busca o selecciona un cliente..."
+                                        loading={clientsLoading}
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                        )}
+
+                        <div className="relative mt-4 mb-4">
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input placeholder="Buscar servicio o producto..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
@@ -696,7 +805,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </Tabs>
                     </div>
                     {/* Cart */}
+<<<<<<< HEAD
                     <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
+=======
+                    <div className="w-1/3 flex flex-col">
+                        <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
+                    </div>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 </div>
             )}
 
@@ -880,7 +995,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </div>
                         {/* Order Summary */}
                         <Dialog>
+<<<<<<< HEAD
                             <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
+=======
+                            <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                              <DialogContent className="sm:max-w-2xl">
                                 <DialogHeader>
                                 <DialogTitle>Agregar Ítem a la Venta</DialogTitle>
@@ -888,7 +1007,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <div className="flex flex-col h-[60vh]">
                                 <div className="relative mb-4">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+<<<<<<< HEAD
                                     <Input placeholder="Buscar servicio o producto..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
+=======
+                                    <Input placeholder="Buscar por nombre..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                                 </div>
                                 <Tabs defaultValue="servicios" className="flex-grow flex flex-col overflow-hidden">
                                     <TabsList>
@@ -1017,4 +1140,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </>
   );
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65

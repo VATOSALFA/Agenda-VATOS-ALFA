@@ -1,5 +1,8 @@
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -369,7 +372,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           const service = services.find(s => s.id === item.servicio);
           return {
               servicio: service?.name || '',
+<<<<<<< HEAD
               nombre: service?.name || '', // Add 'nombre' for consistency
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
               barbero_id: item.barbero_id,
               precio: service?.price || 0,
               duracion: service?.duration || 0,
@@ -379,7 +385,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const dataToSave: Partial<Reservation> & {hora_inicio?: string, hora_fin?: string} = {
         cliente_id: data.cliente_id,
         items: itemsToSave,
+<<<<<<< HEAD
         servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
         fecha: formattedDate,
         hora_inicio: hora_inicio,
         hora_fin: hora_fin,
@@ -405,6 +414,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
         
+<<<<<<< HEAD
         if (data.notifications?.whatsapp_notification) {
             const client = clients.find(c => c.id === data.cliente_id);
             const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
@@ -428,6 +438,22 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 }).catch(err => {
                     console.error("WhatsApp send failed:", err);
                     toast({ variant: 'destructive', title: 'Error de WhatsApp', description: err.message })
+=======
+        if (dataToSave.notifications?.whatsapp_notification) {
+            const client = clients.find(c => c.id === data.cliente_id);
+            if (client && client.telefono) {
+                sendWhatsappConfirmation({
+                    clientName: `${client.nombre} ${client.apellido}`,
+                    clientPhone: client.telefono,
+                    serviceName: itemsToSave.map((i: any) => i.servicio).join(', '),
+                    reservationDate: formattedDate,
+                    reservationTime: hora_inicio,
+                }).then(() => {
+                    toast({ title: 'Notificación de WhatsApp enviada.' });
+                }).catch(err => {
+                    console.error("WhatsApp send failed:", err);
+                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: 'No se pudo enviar la notificación.'})
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 });
             }
         }
@@ -596,7 +622,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                 <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                         </Button>
                         </div>
+<<<<<<< HEAD
                          <Combobox
+=======
+                        <Combobox
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                             options={clientOptions}
                             value={field.value}
                             onChange={field.onChange}

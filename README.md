@@ -11,15 +11,26 @@ Hemos construido con éxito un flujo completo de agendamiento para clientes, que
 3.  **Confirmación de Cita (`/book/confirm`):** Un formulario para que el cliente ingrese sus datos y confirme los detalles de la reserva.
 4.  **Página de Éxito (`/book/success`):** Una página de agradecimiento que confirma que la cita ha sido agendada correctamente.
 5.  **Vista de Agenda Semanal (`/agenda/semanal/[id]`):** Una vista de la agenda por profesional que muestra todas las citas de la semana.
+<<<<<<< HEAD
 6.  **Recepción de Mensajes de WhatsApp:** Tu sistema ahora puede recibir y almacenar correctamente los mensajes, incluyendo imágenes, que te envían tus clientes.
 7.  **Panel de Conversaciones:** Tienes un chat interno para ver y responder los mensajes de WhatsApp.
 
 ## Siguientes Pasos
 
 Para que puedas ver la aplicación funcionando con todos estos cambios, necesitas actualizar tu repositorio de GitHub.
+=======
+
+## Siguientes Pasos
+
+Para que puedas ver la aplicación funcionando, necesitas actualizar tu repositorio de GitHub con los archivos que hemos creado aquí.
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 1.  **Copia el código:** Revisa el historial de nuestra conversación y copia el contenido final de cada archivo que hemos modificado.
 2.  **Actualiza tu Repositorio:** Pega el contenido en los archivos correspondientes en tu repositorio local y sube (haz "push") los cambios a GitHub.
 3.  **Despliegue Automático:** Una vez que actualices GitHub, Firebase App Hosting detectará los cambios y desplegará automáticamente la nueva versión.
 
+<<<<<<< HEAD
 Esto resolverá cualquier problema de que veas una versión antigua en la web. ¡Estás listo para despegar!
+=======
+Esto resolverá el problema de que veas una versión antigua en la web.
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65

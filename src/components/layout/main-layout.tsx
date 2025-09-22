@@ -1,19 +1,29 @@
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 'use client';
 
 import type { ReactNode } from 'react';
 import Header from './header';
 import { usePathname } from 'next/navigation';
+<<<<<<< HEAD
 import { useState, useEffect, useRef, useCallback } from 'react';
+=======
+import { useState, useEffect } from 'react';
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+<<<<<<< HEAD
 import { onSnapshot, collection, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 type Props = {
   children: ReactNode;
@@ -21,8 +31,11 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
+<<<<<<< HEAD
   const { toast } = useToast();
   const router = useRouter();
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
   const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
@@ -33,6 +46,7 @@ export default function MainLayout({ children }: Props) {
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
+<<<<<<< HEAD
   // Sound unlock effect
   useEffect(() => {
     const unlockAudio = () => {
@@ -54,6 +68,8 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
   useEffect(() => {
     const handleNewReservation = () => {
         setReservationInitialData(null);
@@ -79,6 +95,7 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
+<<<<<<< HEAD
   useEffect(() => {
     const mountTime = Timestamp.now();
 
@@ -118,6 +135,8 @@ export default function MainLayout({ children }: Props) {
     return () => unsubscribe();
   }, [pathname, router, toast]);
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   // Don't render header on login page
   if (pathname === '/login') {

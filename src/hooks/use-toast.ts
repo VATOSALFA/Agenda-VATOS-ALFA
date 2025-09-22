@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 "use client"
 
 // Inspired by react-hot-toast library
@@ -9,7 +12,11 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
+<<<<<<< HEAD
 const TOAST_LIMIT = 5
+=======
+const TOAST_LIMIT = 1
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 const TOAST_REMOVE_DELAY = 1000000
 
 type ToasterToast = ToastProps & {

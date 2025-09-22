@@ -1,17 +1,29 @@
 
+<<<<<<< HEAD
 
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+=======
+'use client';
+
+import { useState, useMemo } from 'react';
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+<<<<<<< HEAD
 import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Save, Check } from "lucide-react";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { User, Local, Role } from '@/lib/types';
+=======
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserCircle, Shield, ConciergeBell, Wrench, Store, Check, X, UserPlus, Loader2 } from "lucide-react";
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { User, Local } from '@/lib/types';
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserModal } from '@/components/settings/users/user-modal';
 import {
@@ -24,6 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+<<<<<<< HEAD
 import { doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -89,6 +102,88 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange, isD
     )
 }
 
+=======
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
+
+
+const rolesData = [
+  {
+    icon: Shield,
+    title: 'Administrador general',
+    description: 'El dueño del negocio. Tiene acceso a toda la información de todos los locales.',
+    permissions: [
+      { access: true, label: 'Acceso a todos los locales' },
+      { access: true, label: 'Ver y editar toda la configuración' },
+      { access: true, label: 'Ver y editar la agenda de todos' },
+      { access: true, label: 'Ver todos los reportes' },
+    ],
+  },
+  {
+    icon: Store,
+    title: 'Administrador local',
+    description: 'El encargado de un local. Tiene acceso a toda la información de su local asignado.',
+    permissions: [
+      { access: true, label: 'Acceso solo a su local' },
+      { access: true, label: 'Ver y editar configuración de su local' },
+      { access: true, label: 'Ver y editar la agenda de su local' },
+      { access: true, label: 'Ver reportes de su local' },
+    ],
+  },
+  {
+    icon: ConciergeBell,
+    title: 'Recepcionista',
+    description: 'Ayuda en la gestión del local. Puede editar la agenda, caja y clientes.',
+    permissions: [
+      { access: true, label: 'Ver y editar agenda' },
+      { access: true, label: 'Acceso a la caja' },
+      { access: true, label: 'Ver y editar clientes' },
+      { access: false, label: 'Acceso a reportes y configuración' },
+    ],
+  },
+   {
+    icon: ConciergeBell,
+    title: 'Recepcionista (Sin edición)',
+    description: 'Solo puede ver la agenda, caja y clientes, pero no puede editar nada.',
+    permissions: [
+      { access: true, label: 'Ver agenda' },
+      { access: true, label: 'Ver caja' },
+      { access: true, label: 'Ver clientes' },
+      { access: false, label: 'No puede editar nada' },
+    ],
+  },
+  {
+    icon: Wrench,
+    title: 'Staff',
+    description: 'El profesional que realiza los servicios. Puede ver su agenda y editarla.',
+    permissions: [
+      { access: true, label: 'Ver y editar su propia agenda' },
+      { access: true, label: 'Acceso a su propia caja' },
+      { access: false, label: 'Ver agenda de otros profesionales' },
+      { access: false, label: 'Acceso a configuración' },
+    ],
+  },
+  {
+    icon: Wrench,
+    title: 'Staff (Sin edición)',
+    description: 'Solo puede ver su agenda, pero no puede editar nada.',
+    permissions: [
+      { access: true, label: 'Ver su propia agenda' },
+      { access: false, label: 'No puede editar su agenda' },
+      { access: false, label: 'No puede ver agenda de otros' },
+      { access: false, label: 'Acceso a configuración' },
+    ],
+  },
+];
+
+const PermissionItem = ({ access, label }: { access: boolean, label: string }) => (
+    <li className="flex items-center gap-2">
+        {access ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-red-500" />}
+        <span className="text-muted-foreground">{label}</span>
+    </li>
+);
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
@@ -100,6 +195,7 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { toast } = useToast();
   
+<<<<<<< HEAD
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios', queryKey);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
   const { data: rolesData, loading: rolesLoading } = useFirestoreQuery<Role>('roles', queryKey);
@@ -126,6 +222,12 @@ export default function UsersPage() {
 
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
   const isLoading = usersLoading || localesLoading || rolesLoading;
+=======
+  const { data: users, loading } = useFirestoreQuery<User>('usuarios', queryKey);
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+
+  const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   const filteredUsers = useMemo(() => {
     return users.filter(user => 
@@ -167,6 +269,7 @@ export default function UsersPage() {
     }
   }
 
+<<<<<<< HEAD
   const handlePermissionChange = (roleId: string, permissionKey: string, checked: boolean) => {
     setLocalRolesState(currentRoles => 
         currentRoles.map(role => {
@@ -201,6 +304,8 @@ export default function UsersPage() {
     }
   }
 
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   return (
     <>
@@ -240,7 +345,11 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+<<<<<<< HEAD
               {isLoading ? (
+=======
+              {loading ? (
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 Array.from({length: 5}).map((_, i) => (
                     <TableRow key={i}>
                         <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
@@ -259,6 +368,7 @@ export default function UsersPage() {
                   <TableCell>{user.role}</TableCell>
                   <TableCell>{user.local_id ? localMap.get(user.local_id) : 'Todos'}</TableCell>
                   <TableCell className="text-right">
+<<<<<<< HEAD
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)}>
                         <Pencil className="h-4 w-4" />
@@ -267,6 +377,20 @@ export default function UsersPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+=======
+                    {user.role === 'Administrador general' ? (
+                        <span className="text-xs text-muted-foreground">No se puede editar</span>
+                    ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                    )}
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                   </TableCell>
                 </TableRow>
               ))}
@@ -275,6 +399,7 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
+<<<<<<< HEAD
       {!isLoading && (
         <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
             <div className="flex items-center space-x-2">
@@ -360,6 +485,71 @@ export default function UsersPage() {
                 })}
             </div>
         )}
+=======
+      <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
+        <div className="flex items-center space-x-2">
+            <p className="text-sm font-medium">Resultados por página</p>
+            <Select
+                value={`${itemsPerPage}`}
+                onValueChange={(value) => {
+                    setItemsPerPage(Number(value))
+                    setCurrentPage(1)
+                }}
+            >
+                <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue placeholder={itemsPerPage} />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
+        <div className="text-sm font-medium">
+          Página {currentPage} de {totalPages}
+        </div>
+        <div className="flex items-center space-x-2">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+        </div>
+      </div>
+      
+      <div className="pt-8 border-t">
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Roles de usuarios</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {rolesData.map((rol, index) => (
+                <Card key={index}>
+                    <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+                        <rol.icon className="h-8 w-8 text-primary" />
+                        <CardTitle>{rol.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground mb-4">{rol.description}</p>
+                        <ul className="space-y-2 text-sm">
+                            {rol.permissions.map((permission, pIndex) => (
+                                <PermissionItem key={pIndex} {...permission} />
+                            ))}
+                        </ul>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
       </div>
 
     </div>

@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 Nombre,Apellido,Telefono,Correo,Día del nacimiento,Mes del nacimiento,Año de nacimiento,Cliente desde el día,Cliente desde el mes,Cliente desde el año,Citas totales,Citas asistidas,Citas no asistidas,Citas canceladas,Gasto total,Número de cliente
+=======
+Nombre,Apellido,Telefono,Correo,Día del nacimiento,Mes del nacimiento,Año de nacimiento,Cliente desde el día,Cliente desde el mes,Cliente desde el año,Citas totales,Citas asistidas,Citas no asistidas,Citas canceladas,Gasto total,Número de cliente
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65

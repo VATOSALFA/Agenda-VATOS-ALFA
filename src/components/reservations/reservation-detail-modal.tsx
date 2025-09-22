@@ -30,7 +30,10 @@ import {
   Trash2,
   Send,
   Eye,
+<<<<<<< HEAD
   MessageCircle,
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 } from 'lucide-react';
 import type { Reservation, Sale } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
@@ -44,8 +47,11 @@ import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
+<<<<<<< HEAD
 import Link from 'next/link';
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 
 interface ReservationDetailModalProps {
@@ -78,7 +84,10 @@ export function ReservationDetailModal({
   const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
   const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
+<<<<<<< HEAD
   const [isSending, setIsSending] = useState(false);
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   const { toast } = useToast();
 
@@ -128,6 +137,7 @@ export function ReservationDetailModal({
         setIsLoadingSale(false);
     }
   };
+<<<<<<< HEAD
   
   const handleSendReminder = async () => {
     if (!reservation.customer?.telefono) {
@@ -157,6 +167,9 @@ export function ReservationDetailModal({
   }
 
   const clientNameParam = encodeURIComponent(`${reservation.customer?.nombre} ${reservation.customer?.apellido}`);
+=======
+
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
   return (
     <>
@@ -164,6 +177,7 @@ export function ReservationDetailModal({
       <DialogContent className="max-w-xl">
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
+<<<<<<< HEAD
               <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={handleSendReminder} disabled={isSending}>
                       {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
@@ -173,6 +187,11 @@ export function ReservationDetailModal({
                       <Pencil className="mr-2 h-4 w-4" /> Editar
                   </Button>
               </div>
+=======
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                  <Pencil className="mr-2 h-4 w-4" /> Editar
+              </Button>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
           </DialogHeader>
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-start">
@@ -211,11 +230,17 @@ export function ReservationDetailModal({
                         <span>{reservation.customer?.telefono || 'No registrado'}</span>
                     </div>
                     {reservation.customer?.telefono && (
+<<<<<<< HEAD
                         <Link href={`/admin/conversations?phone=${reservation.customer.telefono}&name=${clientNameParam}`} passHref>
                             <Button variant="outline" size="sm">
                                 <MessageCircle className="w-4 h-4 mr-2"/> Ver Conversación
                             </Button>
                         </Link>
+=======
+                        <a href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm"><Send className="w-4 h-4 mr-2"/> Enviar WhatsApp</Button>
+                        </a>
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     )}
                 </div>
             </div>

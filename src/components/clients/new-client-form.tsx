@@ -1,4 +1,8 @@
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -35,9 +39,13 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 const clientSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
   apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
+<<<<<<< HEAD
   telefono: z.string()
     .min(10, 'El teléfono debe tener al menos 10 dígitos.')
     .transform(val => val.replace(/\D/g, '')),
+=======
+  telefono: z.string().min(8, 'El número de teléfono es requerido.'),
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
   correo: z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
   fecha_nacimiento: z.date().optional(),
   notas: z.string().optional(),
@@ -251,7 +259,11 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               <FormItem>
                 <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono</FormLabel>
                 <FormControl>
+<<<<<<< HEAD
                   <Input placeholder="Ej: +521234567890 (10 dígitos)" {...field} />
+=======
+                  <Input placeholder="+56 9 1234 5678" {...field} />
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 </FormControl>
                 <FormMessage />
               </FormItem>

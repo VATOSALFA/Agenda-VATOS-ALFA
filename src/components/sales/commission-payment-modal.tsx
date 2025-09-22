@@ -23,12 +23,20 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
+<<<<<<< HEAD
 import { where, Timestamp, writeBatch, collection, doc, getDocs } from 'firebase/firestore';
+=======
+import { where, Timestamp, writeBatch, collection, doc } from 'firebase/firestore';
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Info, Loader2 } from 'lucide-react';
+<<<<<<< HEAD
 import type { Sale, Profesional, Service, Product, Egreso, SaleItem } from '@/lib/types';
+=======
+import type { Sale, Profesional, Service, Product, Egreso } from '@/lib/types';
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { Checkbox } from '../ui/checkbox';
 import { startOfDay, endOfDay, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -47,7 +55,10 @@ interface CommissionRowData {
     professionalName: string;
     totalSales: number;
     totalCommission: number;
+<<<<<<< HEAD
     saleItemIds: { saleId: string; itemIndex: number }[];
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 }
 
 export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dateRange, localId }: CommissionPaymentModalProps) {
@@ -68,17 +79,41 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         }
         return constraints;
     }, [todayStart, todayEnd, localId]);
+<<<<<<< HEAD
     
+=======
+
+    const egresosQueryConstraints = useMemo(() => {
+        const constraints = [];
+        constraints.push(where('fecha', '>=', Timestamp.fromDate(todayStart)));
+        constraints.push(where('fecha', '<=', Timestamp.fromDate(todayEnd)));
+        constraints.push(where('concepto', '==', 'Pago de Comisión'));
+        return constraints;
+    }, [todayStart, todayEnd]);
+
+
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints ? `sales-commissions-${format(todayStart, 'yyyy-MM-dd')}-${localId}` : undefined, ...(salesQueryConstraints || []));
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+<<<<<<< HEAD
     
     const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
+=======
+    const { data: commissionEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-commissions-${format(todayStart, 'yyyy-MM-dd')}`, ...(egresosQueryConstraints || []));
+    
+    const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading || egresosLoading;
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
     
     useEffect(() => {
         if (isLoading || !isOpen) return;
 
+<<<<<<< HEAD
+=======
+        const paidProfessionalIds = new Set(commissionEgresos.map(e => e.aQuien));
+
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
         const professionalMap = new Map(professionals.map(p => [p.id, p]));
         const serviceMap = new Map(services.map(s => [s.id, s]));
         const productMap = new Map(products.map(p => [p.id, p]));
@@ -86,8 +121,13 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
         sales.forEach(sale => {
+<<<<<<< HEAD
             sale.items?.forEach((item, itemIndex) => {
                 if (!item.barbero_id || item.commissionPaid) return;
+=======
+            sale.items?.forEach(item => {
+                if (!item.barbero_id || paidProfessionalIds.has(item.barbero_id)) return;
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
                 const professional = professionalMap.get(item.barbero_id);
                 if (!professional) return;
@@ -98,7 +138,10 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         professionalName: professional.name,
                         totalSales: 0,
                         totalCommission: 0,
+<<<<<<< HEAD
                         saleItemIds: [],
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     };
                 }
 
@@ -127,7 +170,10 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     
                     commissionsByProfessional[professional.id].totalSales += finalItemPrice;
                     commissionsByProfessional[professional.id].totalCommission += commissionAmount;
+<<<<<<< HEAD
                     commissionsByProfessional[professional.id].saleItemIds.push({ saleId: sale.id, itemIndex });
+=======
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 }
             });
         });
@@ -136,7 +182,11 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setCommissionData(commissionList);
         setSelectedProfessionals(commissionList.map(c => c.professionalId));
 
+<<<<<<< HEAD
     }, [isOpen, sales, professionals, services, products, isLoading]);
+=======
+    }, [isOpen, sales, professionals, services, products, commissionEgresos, isLoading]);
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 
     const handlePayCommissions = async () => {
@@ -152,9 +202,14 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
 
+<<<<<<< HEAD
             for(const comm of professionalsToPay) {
                 if (comm.totalCommission > 0) {
                     // Create expense record
+=======
+            professionalsToPay.forEach(comm => {
+                if (comm.totalCommission > 0) {
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                     const egresoRef = doc(collection(db, 'egresos'));
                     batch.set(egresoRef, {
                         fecha: now,
@@ -164,6 +219,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         local_id: localId,
                         comentarios: `Pago de comisión a ${comm.professionalName} el ${formattedDate}`,
                     });
+<<<<<<< HEAD
 
                     // Mark items as paid
                     const salesToUpdate = new Map<string, Sale>();
@@ -187,6 +243,10 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     });
                 }
             }
+=======
+                }
+            });
+>>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
             await batch.commit();
 

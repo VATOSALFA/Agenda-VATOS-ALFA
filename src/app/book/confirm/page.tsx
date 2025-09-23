@@ -22,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { User, Calendar, Clock, Scissors, CheckCircle, Loader2 } from 'lucide-react';
-import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 
 
 const confirmSchema = z.object({

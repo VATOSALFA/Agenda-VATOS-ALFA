@@ -50,7 +50,6 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { TemplateSelectionModal, type Template } from '@/components/admin/whatsapp/template-selection-modal';
 import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
-import { sendTestTwilioMessage } from '@/ai/flows/send-whatsapp-flow';
 
 
 interface WhatsappConfig {
@@ -140,12 +139,7 @@ export default function WhatsappPage() {
 
   const handleSendTest = async () => {
     setIsSendingTest(true);
-    const result = await sendTestTwilioMessage();
-    if ('sid' in result && result.sid) {
-      toast({ title: '¡Mensaje de prueba enviado!', description: `SID del mensaje: ${result.sid}` });
-    } else {
-      toast({ variant: 'destructive', title: 'Error al enviar mensaje', description: result.error });
-    }
+    toast({ variant: 'destructive', title: 'Función desactivada', description: 'El envío de mensajes de prueba está temporalmente desactivado.' });
     setIsSendingTest(false);
   };
 

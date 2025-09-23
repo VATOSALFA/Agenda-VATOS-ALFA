@@ -45,7 +45,6 @@ import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
 import Link from 'next/link';
-import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 
 
 interface ReservationDetailModalProps {
@@ -135,25 +134,8 @@ export function ReservationDetailModal({
         return;
     }
     setIsSending(true);
-    try {
-        const TWILIO_CONFIRMATION_SID = 'HXe8b59526715f16040e3a65243179549f'; // Your template SID
-
-        await sendWhatsappConfirmation({
-            clientName: `${reservation.customer.nombre} ${reservation.customer.apellido}`,
-            clientPhone: reservation.customer.telefono,
-            serviceName: reservation.items.map(i => i.servicio || i.nombre).join(', '),
-            reservationDate: reservation.fecha,
-            reservationTime: reservation.hora_inicio,
-            professionalName: reservation.professionalNames || 'El de tu preferencia',
-            templateSid: TWILIO_CONFIRMATION_SID
-        });
-        toast({ title: 'Recordatorio enviado', description: 'El mensaje de WhatsApp ha sido enviado con éxito.' });
-    } catch (error) {
-        console.error("Error sending reminder:", error);
-        toast({ variant: 'destructive', title: 'Error al enviar', description: 'No se pudo enviar el recordatorio.' });
-    } finally {
-        setIsSending(false);
-    }
+    toast({ variant: 'destructive', title: 'Función desactivada', description: 'El envío de recordatorios está temporalmente desactivado.'});
+    setIsSending(false);
   }
 
   const clientNameParam = encodeURIComponent(`${reservation.customer?.nombre} ${reservation.customer?.apellido}`);

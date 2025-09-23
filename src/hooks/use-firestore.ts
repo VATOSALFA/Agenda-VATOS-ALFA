@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useDebugValue } from 'react';
 import { collection, getDocs, query, QueryConstraint, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -26,27 +26,23 @@ export function useFirestoreQuery<T>(
   let effectiveKey: any;
   let constraints: (QueryConstraint | undefined)[];
 
-  if (typeof keyOrConstraint === 'string' || typeof keyOrConstraint === 'number') {
-      effectiveKey = keyOrConstraint;
-      constraints = queryConstraints;
-  } else if (keyOrConstraint === undefined) {
-      effectiveKey = internalKey;
-      constraints = queryConstraints;
-  } else if (keyOrConstraint && typeof keyOrConstraint.type === 'string') {
-      effectiveKey = internalKey;
-      constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
-  } else {
+  // Determine how arguments were passed
+  if (keyOrConstraint === undefined || typeof keyOrConstraint === 'string' || typeof keyOrConstraint === 'number' || (keyOrConstraint && Object.prototype.toString.call(keyOrConstraint) === '[object Object]' && !keyOrConstraint.type)) {
       effectiveKey = keyOrConstraint !== undefined ? keyOrConstraint : internalKey;
       constraints = queryConstraints;
+  } else {
+      effectiveKey = internalKey;
+      constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
   }
   
   const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
+  const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    if (constraints.some(c => c === undefined)) {
+    if (!isQueryActive) {
         setData([]);
         setLoading(false);
-        return;
+        return () => {}; // Return an empty cleanup function
     }
 
     setLoading(true);
@@ -69,7 +65,10 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey]);
+  // Using JSON.stringify for deep comparison of constraints array
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive]);
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }
+

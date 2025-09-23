@@ -133,7 +133,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', where('active', '==', true));
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
@@ -168,7 +168,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [selectedClientId, clients]);
   
   const servicesMap = useMemo(() => {
-    if (!services) return new Map<string, Service>();
+    if (!services) return new Map<string, ServiceType>();
     return new Map(services.map(s => [s.id, s]));
   }, [services]);
 

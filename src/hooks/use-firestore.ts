@@ -4,6 +4,7 @@
 import { useState, useEffect, useDebugValue } from 'react';
 import { collection, getDocs, query, QueryConstraint, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface UseFirestoreQuery<T> {
   data: T[];
@@ -22,6 +23,7 @@ export function useFirestoreQuery<T>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
+  const { loading: authLoading } = useAuth(); // Get auth loading state
   
   let effectiveKey: any;
   let constraints: (QueryConstraint | undefined)[];
@@ -39,10 +41,10 @@ export function useFirestoreQuery<T>(
   const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    if (!isQueryActive) {
-        setData([]);
-        setLoading(false);
-        return () => {}; // Return an empty cleanup function
+    // Do not run query if auth is loading or query is not active
+    if (authLoading || !isQueryActive) {
+        setLoading(true); // Keep loading state until auth is ready
+        return () => {};
     }
 
     setLoading(true);
@@ -65,10 +67,9 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  // Using JSON.stringify for deep comparison of constraints array
+  // Add authLoading to the dependency array
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive]);
+  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, authLoading]);
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }
-

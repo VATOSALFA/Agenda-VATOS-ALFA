@@ -37,7 +37,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true);
       if (firebaseUser) {
         let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
         let userDoc = await getDoc(userDocRef);
@@ -51,7 +50,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 customData = userDoc.data();
-                // Assign a default role if not specified for professionals
                 if (!customData.role) {
                   customData.role = 'Staff';
                 }
@@ -73,7 +71,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         } else {
              console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid} en 'usuarios' o 'profesionales'.`);
-             // Set a default guest user if no data found to avoid app crash
              setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
         }
       } else {
@@ -86,9 +83,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !user) {
       const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-      if (!user && isProtectedRoute) {
+      if (isProtectedRoute) {
         router.push('/login');
       }
     }

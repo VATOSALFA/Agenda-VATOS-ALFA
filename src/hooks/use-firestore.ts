@@ -73,4 +73,3 @@ export function useFirestoreQuery<T>(
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }
-

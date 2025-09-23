@@ -3,11 +3,30 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+
+// --- Firebase Initialization ---
+const firebaseConfig: FirebaseOptions = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+// --- End Firebase Initialization ---
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -19,6 +38,8 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   authInstance: Auth;
+  db: typeof db;
+  storage: typeof storage;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -45,7 +66,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (userDoc.exists()) {
             customData = userDoc.data();
         } else {
-            // Fallback to check professionals collection if not found in usuarios
             userDocRef = doc(db, 'profesionales', firebaseUser.uid);
             userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
@@ -106,6 +126,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     loading,
     authInstance: auth,
+    db,
+    storage,
     signIn,
     signOut,
   };
@@ -120,7 +142,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       </div>
     );
   }
-
 
   return (
     <AuthContext.Provider value={value}>

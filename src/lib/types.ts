@@ -1,8 +1,4 @@
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -57,10 +53,7 @@ export interface Reservation {
     items: { servicio: string; barbero_id: string; nombre?: string; }[];
     cliente_id: string;
     servicio: string; // Concatenated services for simple display
-<<<<<<< HEAD
-    barbero_id: string; // Added for single professional reservations
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+    barbero_id: string;
     hora_inicio: string;
     hora_fin: string;
     fecha: string;
@@ -221,10 +214,7 @@ export interface SaleItem {
     tipo: 'fixed' | 'percentage';
     monto: number;
   };
-<<<<<<< HEAD
   commissionPaid?: boolean;
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 }
 
 export interface Egreso {
@@ -234,10 +224,7 @@ export interface Egreso {
   concepto: string;
   aQuien: string; // professional ID
   aQuienNombre?: string; // transient
-<<<<<<< HEAD
-  aQuienId?: string; // transient
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
+  aQuienId?: string;
   comentarios?: string;
   local_id?: string;
 }
@@ -270,15 +257,9 @@ export interface User {
   email: string;
   role: string;
   celular?: string;
-<<<<<<< HEAD
   permissions?: string[];
   local_id?: string;
   avatarUrl?: string;
-=======
-  password?: string;
-  permissions?: string[];
-  local_id?: string;
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 }
 
 export interface AuthCode {

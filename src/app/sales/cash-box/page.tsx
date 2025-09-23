@@ -1075,13 +1075,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-
-
-
-
-
-
-<<<<<<< HEAD
-
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65

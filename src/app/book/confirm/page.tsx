@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Suspense } from 'react';
@@ -6,11 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { db } from '@/lib/firebase';
-<<<<<<< HEAD
 import { collection, query, where, getDocs, writeBatch, Timestamp, doc, addDoc } from 'firebase/firestore';
-=======
-import { collection, query, where, getDocs, writeBatch, Timestamp, doc } from 'firebase/firestore';
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 import { useToast } from '@/hooks/use-toast';
 import { addMinutes, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -25,10 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { User, Calendar, Clock, Scissors, CheckCircle, Loader2 } from 'lucide-react';
-<<<<<<< HEAD
 import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
 
 
 const confirmSchema = z.object({
@@ -101,11 +95,8 @@ function ConfirmPageContent() {
             const newReservationRef = doc(collection(db, 'reservas'));
             batch.set(newReservationRef, {
                 cliente_id: clientId,
-<<<<<<< HEAD
                 barbero_id: professionalId,
                 servicio: selectedServices.map(s => s.name).join(', '),
-=======
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 items: selectedServices.map(s => ({
                     servicio: s.name,
                     barbero_id: professionalId,
@@ -123,17 +114,10 @@ function ConfirmPageContent() {
             });
 
             await batch.commit();
-<<<<<<< HEAD
             
             toast({
                 title: '¡Reserva Confirmada!',
                 description: 'Tu cita ha sido agendada con éxito.',
-=======
-
-            toast({
-                title: '¡Reserva Confirmada!',
-                description: 'Tu cita ha sido agendada con éxito. Te hemos enviado un correo de confirmación.',
->>>>>>> 3abc79918a551207d4bec74e7af2be2f37c3bc65
                 className: 'bg-green-100 text-green-800 border-green-200'
             });
 

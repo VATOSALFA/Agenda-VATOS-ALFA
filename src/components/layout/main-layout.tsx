@@ -40,7 +40,7 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   const isAuthPage = pathname === '/login';
   const isPublicBookingPage = pathname.startsWith('/book');
 
-  if (loading && !isAuthPage && !isPublicBookingPage) {
+  if (!isClient || (loading && !isAuthPage && !isPublicBookingPage)) {
     return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-8 w-8 animate-spin" />

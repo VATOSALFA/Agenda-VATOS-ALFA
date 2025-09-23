@@ -10,6 +10,7 @@ import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 type Props = {
   children: ReactNode;
@@ -17,6 +18,7 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
+  const { user, loading } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
@@ -54,10 +56,10 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
-  const showHeader = pathname !== '/login' && !pathname.startsWith('/book') && !pathname.startsWith('/admin/conversations');
+  const showHeader = user && !loading && pathname !== '/login' && !pathname.startsWith('/book') && !pathname.startsWith('/admin/conversations');
   
   return (
-      <div className="flex flex-col min-h-screen">
+    <>
       {showHeader && <Header />}
       <main className={cn(showHeader && 'flex-grow pt-16')}>
           {children}
@@ -90,6 +92,6 @@ export default function MainLayout({ children }: Props) {
           initialData={saleInitialData}
           onSaleComplete={refreshData}
       />
-      </div>
+    </>
   );
 }

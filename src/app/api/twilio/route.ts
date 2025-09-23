@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/lib/firebase-admin';
 import { collection, doc, serverTimestamp, increment, setDoc } from 'firebase/firestore';

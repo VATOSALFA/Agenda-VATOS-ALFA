@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -39,6 +38,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
+
+export const dynamic = 'force-dynamic';
 
 const months = Array.from({ length: 12 }, (_, i) => ({
     value: i.toString(),

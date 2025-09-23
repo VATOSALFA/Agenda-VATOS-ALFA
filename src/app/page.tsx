@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import AgendaView from '@/components/agenda/agenda-view';
 
+export const dynamic = 'force-dynamic';
+
 export default function Home() {
     const [key, setKey] = useState(0);
     const refreshData = () => setKey(prev => prev + 1);

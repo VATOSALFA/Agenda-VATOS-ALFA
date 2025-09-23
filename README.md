@@ -1,6 +1,6 @@
-# Proyecto de Agenda VATOS ALFA Barber Shop - Versión 1.0
+# Proyecto de Agenda VATOS ALFA Barber Shop
 
-¡Felicidades! Has alcanzado la versión 1.0 de tu sistema de agendamiento. Esta es una versión estable y completa de tu aplicación.
+¡Felicidades! Has construido una versión estable y completa de tu sistema de agendamiento.
 
 ## Funcionalidades Principales
 
@@ -12,18 +12,6 @@
 6.  **Gestión de Clientes e Inventario:** Herramientas para administrar tu base de clientes y productos.
 7.  **Autenticación Segura:** Sistema de inicio de sesión basado en roles y permisos.
 
-## Cómo hacer una copia "V1" en GitHub
+## Despliegue
 
-Para guardar esta versión en tu repositorio de GitHub, te recomiendo crear una **etiqueta (tag)**. Es la forma estándar de marcar una versión específica.
-
-1.  **Abre una terminal** en tu entorno de desarrollo.
-2.  **Crea la etiqueta** con el siguiente comando:
-    ```bash
-    git tag -a v1.0 -m "Versión 1.0 estable"
-    ```
-3.  **Sube la etiqueta** a tu repositorio en GitHub:
-    ```bash
-    git push origin v1.0
-    ```
-
-¡Y listo! Con eso, tendrás una referencia permanente a la versión 1.0 de tu código en GitHub.
+Este proyecto está configurado para desplegarse automáticamente en Firebase App Hosting cada vez que subas cambios a tu repositorio de GitHub.

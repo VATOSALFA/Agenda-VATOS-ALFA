@@ -2,7 +2,8 @@
 'use client';
 
 import { useState, useEffect, useDebugValue } from 'react';
-import { collection, getDocs, query, QueryConstraint, onSnapshot, getApp, getApps } from 'firebase/firestore';
+import { collection, getDocs, query, QueryConstraint, onSnapshot } from 'firebase/firestore';
+import { getApps } from "firebase/app";
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
@@ -72,4 +73,3 @@ export function useFirestoreQuery<T>(
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }
-

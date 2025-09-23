@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Header from './header';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
@@ -18,10 +18,56 @@ type Props = {
   children: ReactNode;
 };
 
-export default function MainLayout({ children }: Props) {
+function AuthWrapper({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient && !loading) {
+      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
+      if (!user && isProtectedRoute) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, pathname, router, isClient]);
+
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (isAuthPage || isPublicBookingPage || user) {
+     return <>{children}</>;
+  }
+
+  // If loading is finished but user is not available on a protected route,
+  // we show the loader while redirecting.
+  if (!user && !isPublicBookingPage && !isAuthPage) {
+     return (
+        <div className="flex justify-center items-center h-screen bg-muted/40">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+     )
+  }
+
+  return null;
+}
+
+
+export default function MainLayout({ children }: Props) {
+  const pathname = usePathname();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
@@ -59,65 +105,44 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
-  // Auth redirection logic
-  useEffect(() => {
-    const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-    
-    if (!loading && !user && isProtectedRoute) {
-      router.push('/login');
-    }
-  }, [user, loading, pathname, router]);
-
-
-  // Render loading state for protected routes
-  if (loading && !pathname.startsWith('/book') && pathname !== '/login') {
-      return (
-          <div className="flex justify-center items-center h-screen bg-muted/40">
-              <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-      )
-  }
-
-  // Render children immediately for public routes or if user is loaded
-  if (pathname.startsWith('/book') || pathname === '/login' || user) {
-     return (
-        <div className="flex flex-col min-h-screen">
-        {pathname !== '/login' && !pathname.startsWith('/book') && <Header />}
-        <main className={cn(pathname !== '/login' && !pathname.startsWith('/book') && 'flex-grow pt-16')}>
-            {children}
-        </main>
-        
-        {/* Modals and Sheets available globally */}
-        <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-            <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-                <NewReservationForm
-                isOpen={isReservationModalOpen}
-                onOpenChange={setIsReservationModalOpen}
-                isDialogChild
-                onFormSubmit={refreshData}
-                initialData={reservationInitialData}
-                isEditMode={!!reservationInitialData?.id}
-                />
-            </DialogContent>
-        </Dialog>
-        
-        <BlockScheduleForm
-            isOpen={isBlockScheduleModalOpen}
-            onOpenChange={setIsBlockScheduleModalOpen}
-            onFormSubmit={refreshData}
-            initialData={blockInitialData}
-        />
-        
-        <NewSaleSheet 
-            isOpen={isSaleSheetOpen} 
-            onOpenChange={setIsSaleSheetOpen}
-            initialData={saleInitialData}
-            onSaleComplete={refreshData}
-        />
-        </div>
-    );
-  }
-
-  // Fallback, typically shows the loading spinner or nothing while redirecting
-  return null;
+  const showHeader = pathname !== '/login' && !pathname.startsWith('/book') && !pathname.startsWith('/admin/conversations');
+  
+  return (
+    <AuthWrapper>
+      <div className="flex flex-col min-h-screen">
+      {showHeader && <Header />}
+      <main className={cn(showHeader && 'flex-grow pt-16')}>
+          {children}
+      </main>
+      
+      {/* Modals and Sheets available globally */}
+      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+              <NewReservationForm
+              isOpen={isReservationModalOpen}
+              onOpenChange={setIsReservationModalOpen}
+              isDialogChild
+              onFormSubmit={refreshData}
+              initialData={reservationInitialData}
+              isEditMode={!!reservationInitialData?.id}
+              />
+          </DialogContent>
+      </Dialog>
+      
+      <BlockScheduleForm
+          isOpen={isBlockScheduleModalOpen}
+          onOpenChange={setIsBlockScheduleModalOpen}
+          onFormSubmit={refreshData}
+          initialData={blockInitialData}
+      />
+      
+      <NewSaleSheet 
+          isOpen={isSaleSheetOpen} 
+          onOpenChange={setIsSaleSheetOpen}
+          initialData={saleInitialData}
+          onSaleComplete={refreshData}
+      />
+      </div>
+    </AuthWrapper>
+  );
 }

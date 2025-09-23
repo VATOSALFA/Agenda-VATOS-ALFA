@@ -7,6 +7,8 @@ import MainLayout from '@/components/layout/main-layout';
 import { LocalProvider } from '@/contexts/local-context';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 
+export const dynamic = 'force-dynamic';
+
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {

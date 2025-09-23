@@ -6,6 +6,8 @@ import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassw
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
+import { usePathname, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -30,6 +32,8 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -41,10 +45,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (userDoc.exists()) {
             customData = userDoc.data();
         } else {
+            // Fallback to check professionals collection if not found in usuarios
             userDocRef = doc(db, 'profesionales', firebaseUser.uid);
             userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 customData = userDoc.data();
+                // Assign a default role if not specified for professionals
+                if (!customData.role) {
+                  customData.role = 'Staff';
+                }
             }
         }
         
@@ -63,6 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         } else {
              console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid} en 'usuarios' o 'profesionales'.`);
+             // Set a default guest user if no data found to avoid app crash
              setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
         }
       } else {
@@ -74,9 +84,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
+  useEffect(() => {
+    if (!loading) {
+      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
+      if (!user && isProtectedRoute) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, pathname, router]);
+
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null); 
+    router.push('/login');
   }
   
   const signIn = async (email: string, pass: string) => {
@@ -91,6 +111,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signIn,
     signOut,
   };
+  
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

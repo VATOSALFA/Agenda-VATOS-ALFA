@@ -3,68 +3,17 @@
 
 import type { ReactNode } from 'react';
 import Header from './header';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { useAuth } from '@/contexts/firebase-auth-context';
-import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
 
 type Props = {
   children: ReactNode;
 };
-
-function AuthWrapper({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const { user, loading } = useAuth();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (isClient && !loading) {
-      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-      if (!user && isProtectedRoute) {
-        router.push('/login');
-      }
-    }
-  }, [user, loading, pathname, router, isClient]);
-
-  const isAuthPage = pathname === '/login';
-  const isPublicBookingPage = pathname.startsWith('/book');
-
-  if (!isClient || (loading && !isAuthPage && !isPublicBookingPage)) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (isAuthPage || isPublicBookingPage || user) {
-     return <>{children}</>;
-  }
-
-  // If loading is finished but user is not available on a protected route,
-  // we show the loader while redirecting.
-  if (!user && !isPublicBookingPage && !isAuthPage) {
-     return (
-        <div className="flex justify-center items-center h-screen bg-muted/40">
-            <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-     )
-  }
-
-  return null;
-}
-
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
@@ -108,7 +57,6 @@ export default function MainLayout({ children }: Props) {
   const showHeader = pathname !== '/login' && !pathname.startsWith('/book') && !pathname.startsWith('/admin/conversations');
   
   return (
-    <AuthWrapper>
       <div className="flex flex-col min-h-screen">
       {showHeader && <Header />}
       <main className={cn(showHeader && 'flex-grow pt-16')}>
@@ -143,6 +91,5 @@ export default function MainLayout({ children }: Props) {
           onSaleComplete={refreshData}
       />
       </div>
-    </AuthWrapper>
   );
 }

@@ -113,14 +113,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuthPage = pathname === '/login';
   const isPublicBookingPage = pathname.startsWith('/book');
 
-  if (loading && !isAuthPage && !isPublicBookingPage) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
+  // Render children immediately, the protection is handled by the useEffect redirect
+  // and the data fetching is handled by the improved useFirestoreQuery hook.
   return (
     <AuthContext.Provider value={value}>
       {children}

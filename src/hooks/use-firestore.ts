@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useDebugValue } from 'react';
-import { collection, getDocs, query, QueryConstraint, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, QueryConstraint, onSnapshot, getApp, getApps } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
@@ -23,7 +23,7 @@ export function useFirestoreQuery<T>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
-  const { loading: authLoading } = useAuth(); // Get auth loading state
+  const { user, loading: authLoading } = useAuth(); // Get auth loading state
   
   let effectiveKey: any;
   let constraints: (QueryConstraint | undefined)[];
@@ -41,9 +41,10 @@ export function useFirestoreQuery<T>(
   const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    // Do not run query if auth is loading or query is not active
-    if (authLoading || !isQueryActive) {
-        setLoading(true); // Keep loading state until auth is ready
+    // New Check: Do not run query until Firebase App is initialized.
+    // Also, wait for auth to be ready to prevent trying to fetch data for a user that isn't logged in yet.
+    if (getApps().length === 0 || authLoading || !isQueryActive) {
+        setLoading(true);
         return () => {};
     }
 
@@ -67,9 +68,8 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  // Add authLoading to the dependency array
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, authLoading]);
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }
+

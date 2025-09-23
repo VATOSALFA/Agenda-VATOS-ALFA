@@ -61,7 +61,7 @@ export default function MainLayout({ children }: Props) {
   return (
     <>
       {showHeader && <Header />}
-      <main className={cn(showHeader && 'flex-grow pt-16')}>
+      <main className={cn(showHeader && "pt-16")}>
           {children}
       </main>
       

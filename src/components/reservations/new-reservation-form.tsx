@@ -41,7 +41,6 @@ import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
-import { sendWhatsappConfirmation } from '@/ai/flows/send-whatsapp-flow';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { Combobox } from '../ui/combobox';
@@ -395,7 +394,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
          await updateDoc(resRef, dataToSave);
          toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
       } else {
-        const docRef = await addDoc(collection(db, 'reservas'), {
+        await addDoc(collection(db, 'reservas'), {
             ...dataToSave,
             pago_estado: 'Pendiente',
             canal_reserva: 'agenda',
@@ -403,33 +402,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             creado_en: Timestamp.now(),
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
-        
-        if (data.notifications?.whatsapp_notification) {
-            const client = clients.find(c => c.id === data.cliente_id);
-            const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
-
-            if (client && client.telefono) {
-                const TWILIO_CONFIRMATION_SID = 'HX18fff4936a83e0ec91cd5bf3099efaa9';
-                sendWhatsappConfirmation({
-                    clientName: `${client.nombre} ${client.apellido}`,
-                    clientPhone: client.telefono,
-                    serviceName: itemsToSave.map((i: any) => i.nombre).join(', '),
-                    reservationDate: formattedDate,
-                    reservationTime: hora_inicio,
-                    professionalName: professional?.name || 'El de tu preferencia',
-                    templateSid: TWILIO_CONFIRMATION_SID,
-                }).then((result) => {
-                     if (result.success) {
-                        toast({ title: 'Notificación de WhatsApp enviada.' });
-                    } else {
-                         throw new Error(result.error || 'Error desconocido al enviar la notificación de WhatsApp.');
-                    }
-                }).catch(err => {
-                    console.error("WhatsApp send failed:", err);
-                    toast({ variant: 'destructive', title: 'Error de WhatsApp', description: err.message })
-                });
-            }
-        }
       }
 
       onFormSubmit();

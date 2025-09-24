@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import { collection, doc, addDoc, setDoc, Timestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: Request) {
   try {
@@ -16,12 +16,12 @@ export async function POST(req: Request) {
     }
 
     const conversationId = from;
-    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationRef = db.collection('conversations').doc(conversationId);
 
     const messageData: any = {
       senderId: 'client',
       text: messageBody,
-      timestamp: Timestamp.now(),
+      timestamp: FieldValue.serverTimestamp(),
       read: false,
     };
 
@@ -40,24 +40,22 @@ export async function POST(req: Request) {
     }
 
     // Add the message to the subcollection
-    await addDoc(collection(conversationRef, 'messages'), messageData);
+    await conversationRef.collection('messages').add(messageData);
     
     // Update or create the conversation document
-    const conversationSnap = await getDoc(conversationRef);
-    if (conversationSnap.exists()) {
-        const currentData = conversationSnap.data();
-        const currentUnreadCount = currentData.unreadCount || 0;
-        await updateDoc(conversationRef, {
+    const conversationSnap = await conversationRef.get();
+    if (conversationSnap.exists) {
+        await conversationRef.update({
             lastMessageText: messageBody || '[Media]',
-            lastMessageTimestamp: Timestamp.now(),
-            unreadCount: currentUnreadCount + 1,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            unreadCount: FieldValue.increment(1),
         });
     } else {
          const fromNumber = from.replace('whatsapp:', '');
-         await setDoc(conversationRef, {
+         await conversationRef.set({
             clientName: fromNumber,
             lastMessageText: messageBody || '[Media]',
-            lastMessageTimestamp: Timestamp.now(),
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
             unreadCount: 1,
          });
     }

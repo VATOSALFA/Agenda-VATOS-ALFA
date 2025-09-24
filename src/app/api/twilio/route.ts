@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-admin'; // <-- Cambio clave: Usamos la configuración de admin
 import { collection, doc, addDoc, setDoc, Timestamp, getDoc } from 'firebase/firestore';
 
 export async function POST(req: Request) {

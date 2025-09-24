@@ -2,15 +2,13 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, doc, addDoc, setDoc, Timestamp, getDoc } from 'firebase/firestore';
-import { URLSearchParams } from 'url';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.text();
-    const params = new URLSearchParams(body);
-    const from = params.get('From');
-    const messageBody = params.get('Body');
-    const numMedia = parseInt(params.get('NumMedia') || '0', 10);
+    const formData = await req.formData();
+    const from = formData.get('From') as string;
+    const messageBody = formData.get('Body') as string;
+    const numMedia = parseInt(formData.get('NumMedia') as string || '0', 10);
     
     if (!from) {
       return NextResponse.json({ message: "No 'From' number provided" }, { status: 400 });
@@ -27,8 +25,8 @@ export async function POST(req: Request) {
     };
 
     if (numMedia > 0) {
-      const mediaUrl = params.get('MediaUrl0');
-      const mediaContentType = params.get('MediaContentType0');
+      const mediaUrl = formData.get('MediaUrl0') as string;
+      const mediaContentType = formData.get('MediaContentType0') as string;
       
       messageData.mediaUrl = mediaUrl;
       if (mediaContentType?.startsWith('image/')) {

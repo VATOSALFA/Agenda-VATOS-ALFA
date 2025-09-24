@@ -4,8 +4,7 @@
 import { initMercadoPago } from '@mercadopago/sdk-react';
 import { ReactNode } from 'react';
 
-// This is a placeholder for a real public key from environment variables
-const MERCADO_PAGO_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || 'TEST-e801f416-2ed2-4930-9feb-e6cc0e75982e';
+const MERCADO_PAGO_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
 
 // Initialize Mercado Pago
 if (MERCADO_PAGO_PUBLIC_KEY) {
@@ -13,7 +12,7 @@ if (MERCADO_PAGO_PUBLIC_KEY) {
     locale: 'es-MX'
   });
 } else {
-    console.error("Mercado Pago Public Key is not configured.");
+    console.error("Mercado Pago Public Key is not configured in environment variables.");
 }
 
 

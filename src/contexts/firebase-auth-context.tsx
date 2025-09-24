@@ -83,14 +83,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
-  // useEffect(() => {
-  //   if (!loading && !user) {
-  //     const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-  //     if (isProtectedRoute) {
-  //       router.push('/login');
-  //     }
-  //   }
-  // }, [user, loading, pathname, router]);
+  useEffect(() => {
+    if (!loading && !user) {
+      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
+      if (isProtectedRoute) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, pathname, router]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);

@@ -19,6 +19,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { sendWhatsAppMessage } from '@/ai/flows/send-whatsapp-message-flow';
 
 import { Loader2, Send, ChevronLeft, Paperclip, X, FileText, Download, Play, Pause, MessageSquareText, SquarePen } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -215,7 +216,7 @@ export default function ConversationsPage() {
 
         const conversationRef = doc(db, 'conversations', activeConversationId);
         
-        // Save message to Firestore
+        // Save message to Firestore first
         const messageData: any = {
             senderId: 'vatosalfa',
             text: tempMessage,
@@ -239,17 +240,17 @@ export default function ConversationsPage() {
             lastMessageTimestamp: serverTimestamp(),
         });
 
-        // Send to Twilio - THIS PART IS NOW DISABLED
-        // const phoneOnly = activeConversationId.replace(/\D/g, '').slice(-10);
-        // const result = await sendWhatsAppMessage({
-        //     to: phoneOnly,
-        //     text: tempMessage,
-        //     mediaUrl: mediaUrl,
-        // });
-        // if (!result.success) {
-        //     throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
-        // }
-        // toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}` });
+        // Send to Twilio
+        const phoneOnly = activeConversationId.replace(/\D/g, '').slice(-10);
+        const result = await sendWhatsAppMessage({
+            to: phoneOnly,
+            text: tempMessage,
+            mediaUrl: mediaUrl,
+        });
+        if (!result.success) {
+            throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
+        }
+        toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}` });
         
     } catch (error: any) {
         console.error("Error sending message:", error);
@@ -258,7 +259,7 @@ export default function ConversationsPage() {
         toast({
             variant: 'destructive',
             title: 'Error de envío',
-            description: 'La función de envío está temporalmente desactivada.'
+            description: error.message || 'No se pudo enviar el mensaje a través de Twilio.'
         })
     } finally {
         setIsSending(false);

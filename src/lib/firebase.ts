@@ -1,4 +1,3 @@
-
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
@@ -21,17 +20,18 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 // Initialize App Check
 if (typeof window !== 'undefined') {
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-  if (process.env.NODE_ENV !== 'production') {
+  // Make sure NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN is not set to true in your .env.local
+  if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN) {
       (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN;
   }
   
-  if (siteKey) {
+  // Only initialize App Check if the site key is available and we're not using a debug token
+  // This temporarily disables App Check for local development if the debug token isn't registered in the console.
+  if (siteKey && !(self as any).FIREBASE_APPCHECK_DEBUG_TOKEN) {
     initializeAppCheck(app, {
       provider: new ReCaptchaV3Provider(siteKey),
       isTokenAutoRefreshEnabled: true
     });
-  } else {
-    console.warn("Firebase App Check: reCAPTCHA v3 site key is not defined. App Check will not be initialized.");
   }
 }
 

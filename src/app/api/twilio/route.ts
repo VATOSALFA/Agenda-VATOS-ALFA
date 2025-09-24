@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin'; // <-- Cambio clave: Usamos la configuración de admin
+import { db } from '@/lib/firebase-admin'; // Usamos la configuración de admin
 import { collection, doc, addDoc, setDoc, Timestamp, getDoc } from 'firebase/firestore';
 
 export async function POST(req: Request) {
@@ -11,6 +11,7 @@ export async function POST(req: Request) {
     const numMedia = parseInt(formData.get('NumMedia') as string || '0', 10);
     
     if (!from) {
+      console.error('Twilio Webhook: No "From" number provided in the request.');
       return NextResponse.json({ message: "No 'From' number provided" }, { status: 400 });
     }
 
@@ -60,7 +61,11 @@ export async function POST(req: Request) {
          });
     }
 
-    return new Response('<Response/>', { headers: { 'Content-Type': 'text/xml' } });
+    // Twilio espera una respuesta vacía en formato XML para confirmar la recepción
+    return new Response('<Response/>', { 
+        status: 200,
+        headers: { 'Content-Type': 'text/xml' } 
+    });
 
   } catch (error) {
     console.error('Twilio Webhook Error:', error);

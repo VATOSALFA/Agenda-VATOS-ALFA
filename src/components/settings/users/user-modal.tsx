@@ -36,8 +36,9 @@ const userSchema = (isEditMode: boolean) => z.object({
   email: z.string().email('El email no es válido.'),
   password: z.string().optional().refine(password => {
     if (isEditMode) {
-      return true;
+      return true; // Password is not required when editing
     }
+    // Password is required for new users and must be at least 6 characters
     return !!password && password.length >= 6;
   }, {
       message: 'La contraseña debe tener al menos 6 caracteres.',
@@ -317,15 +318,15 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Contraseña</FormLabel>
-                        <FormControl><Input type="password" {...field} /></FormControl>
+                        <FormLabel>Contraseña (temporal)</FormLabel>
+                        <FormControl><Input type="password" {...field} placeholder="Debe tener al menos 6 caracteres" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 ) : (
                   <div className="space-y-4 pt-4 border-t">
-                      <h4 className="text-sm font-medium">Cambiar Contraseña</h4>
+                      <h4 className="text-sm font-medium">Cambiar Contraseña (Opcional)</h4>
                       <FormField
                           control={form.control}
                           name="currentPassword"

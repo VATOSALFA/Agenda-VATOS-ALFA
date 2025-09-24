@@ -24,7 +24,6 @@ export function useFirestoreQuery<T>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
-  const { loading: authLoading } = useAuth(); // Get auth loading state
   
   let effectiveKey: any;
   let constraints: (QueryConstraint | undefined)[];
@@ -42,8 +41,8 @@ export function useFirestoreQuery<T>(
   const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    // Wait for auth to be ready to prevent trying to fetch data for a user that isn't logged in yet.
-    if (authLoading || !isQueryActive) {
+    // New Check: Do not run query until Firebase App is initialized.
+    if (getApps().length === 0 || !isQueryActive) {
         setLoading(true);
         return () => {};
     }
@@ -68,7 +67,7 @@ export function useFirestoreQuery<T>(
 
     return () => unsubscribe();
     
-  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, authLoading]);
+  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive]);
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }

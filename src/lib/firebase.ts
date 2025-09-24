@@ -20,12 +20,11 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  if (process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN) {
-    (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN;
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  if (process.env.NODE_ENV !== 'production') {
+      (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN;
   }
   
-  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-
   if (siteKey) {
     initializeAppCheck(app, {
       provider: new ReCaptchaV3Provider(siteKey),

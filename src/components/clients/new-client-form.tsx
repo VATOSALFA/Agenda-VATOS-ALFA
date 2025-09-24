@@ -94,6 +94,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   const [debouncedApellido] = useDebounce(apellidoValue, 750);
 
   const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
+    if (!text || text.trim().length <= 2) return;
+    
     if (type === 'nombre') {
       setIsCheckingNombre(true);
       setNombreSuggestion(null);

@@ -20,18 +20,21 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  // Only initialize App Check in production
   if (process.env.NODE_ENV === 'production') {
       const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
       if (siteKey) {
-        initializeAppCheck(app, {
-          provider: new ReCaptchaV3Provider(siteKey),
-          isTokenAutoRefreshEnabled: true
-        });
+        try {
+          initializeAppCheck(app, {
+            provider: new ReCaptchaV3Provider(siteKey),
+            isTokenAutoRefreshEnabled: true
+          });
+        } catch (error) {
+          console.error("Error initializing App Check:", error);
+        }
       }
   } else {
     // This allows testing in development without App Check enforcement.
-    // To test App Check locally, you would set the debug token.
+    // The 'true' value is a special flag for the SDK.
     (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
 }

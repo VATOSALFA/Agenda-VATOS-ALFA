@@ -36,8 +36,8 @@ const CodeBlock = ({ code }: { code: string }) => {
 
 export default function IntegrationsPage() {
 
-    const iframeCode = `<iframe src="https://vatosalfa--agenda-1ae08.us-central1.hosted.app" style="width: 100%; height: 800px; border: none;"></iframe>`;
-    const bannerCode = `<a href="https://vatosalfa--agenda-1ae08.us-central1.hosted.app" target="_blank">\n  <img src="https://agendapro.com/assets/img/boton.png" alt="Reserva tu cita" />\n</a>`;
+    const iframeCode = `<iframe src="/book" style="width: 100%; height: 800px; border: none;"></iframe>`;
+    const bannerCode = `<a href="/book" target="_blank">\n  <img src="https://agendapro.com/assets/img/boton.png" alt="Reserva tu cita" />\n</a>`;
 
     return (
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">

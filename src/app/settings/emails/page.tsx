@@ -37,7 +37,7 @@ export default function EmailsSettingsPage() {
             signature: 'Saludos, El equipo de VATOS ALFA Barber Shop',
             enableBirthdayEmail: true,
             birthdayEmailBody: '¡Feliz cumpleaños, [Nombre Cliente]! Esperamos que tengas un día increíble. ¡Te esperamos pronto para celebrar!',
-            birthdayButtonLink: 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app'
+            birthdayButtonLink: '/book'
         }
     });
 
@@ -230,7 +230,7 @@ export default function EmailsSettingsPage() {
                                     name="birthdayButtonLink"
                                     control={form.control}
                                     render={({ field }) => (
-                                       <Input id="birthday-button-link" {...field} placeholder="https://..." />
+                                       <Input id="birthday-button-link" {...field} placeholder="/book" />
                                     )}
                                 />
                             </div>

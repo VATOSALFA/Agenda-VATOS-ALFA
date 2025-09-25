@@ -5,7 +5,7 @@ import * as admin from 'firebase-admin';
 if (!admin.apps.length) {
   try {
     // Estas variables deben estar definidas en tu entorno de hosting (ej. App Hosting)
-    // SIN el prefijo NEXT_PUBLIC_ por seguridad.
+    // como secretos.
     const privateKey = process.env.FIREBASE_PRIVATE_KEY;
     if (!privateKey) {
         throw new Error('La variable de entorno FIREBASE_PRIVATE_KEY no está definida.');

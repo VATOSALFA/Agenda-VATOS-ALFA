@@ -1,8 +1,7 @@
 
-
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -17,7 +16,7 @@ import { format, addMinutes, set, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
-export default function SchedulePage() {
+function SchedulePageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { db } = useAuth();
@@ -56,6 +55,7 @@ export default function SchedulePage() {
     const totalPrice = useMemo(() => selectedServices.reduce((acc, s) => acc + s.price, 0), [selectedServices]);
     
     const fetchOccupiedSlots = useCallback(async (date: Date, professionalId: string) => {
+        if (!db) return [];
         const dateStr = format(date, 'yyyy-MM-dd');
         
         // Fetch reservations
@@ -263,4 +263,12 @@ export default function SchedulePage() {
             </div>
         </div>
     );
+}
+
+export default function SchedulePage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+            <SchedulePageContent />
+        </Suspense>
+    )
 }

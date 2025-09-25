@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Suspense } from 'react';
@@ -64,7 +63,7 @@ function ConfirmPageContent() {
 
     const handleConfirm = async (data: ConfirmFormData) => {
         setIsSubmitting(true);
-        if (!dateStr || !time || !professionalId || !endTime) {
+        if (!db || !dateStr || !time || !professionalId || !endTime) {
             toast({ variant: 'destructive', title: 'Error', description: 'Faltan datos para confirmar la reserva.' });
             setIsSubmitting(false);
             return;

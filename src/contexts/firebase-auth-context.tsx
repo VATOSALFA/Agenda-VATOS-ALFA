@@ -2,11 +2,11 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser, getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDoc, type Firestore } from 'firebase/firestore';
-import { getStorage, type FirebaseStorage } from 'firebase/storage';
-import { getFirebaseApp } from '@/lib/firebase';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc, type Firestore } from 'firebase/firestore';
+import { type FirebaseStorage } from 'firebase/storage';
 import { allPermissions } from '@/lib/permissions';
+import { useFirebase } from './firebase-context';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -38,13 +38,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Initialize Firebase services here, ensuring it only runs on the client
-  const app = getFirebaseApp();
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-
+  const { auth, db, storage } = useFirebase();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {

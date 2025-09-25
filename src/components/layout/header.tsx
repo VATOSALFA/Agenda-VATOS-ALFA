@@ -11,7 +11,6 @@ import {
   where,
   onSnapshot,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import {
   Scissors,
@@ -117,12 +116,13 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
+  const { user, signOut, db } = useAuth();
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
-  const { user, signOut } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   
   useEffect(() => {
+    if (!db) return;
     const q = query(
       collection(db, 'conversaciones'),
       where('unreadCount', '>', 0)
@@ -137,7 +137,7 @@ export default function Header() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [db]);
 
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';

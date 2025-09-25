@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, QueryConstraint, onSnapshot, Firestore } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { useFirebase } from '@/contexts/firebase-context';
 
 interface UseFirestoreQuery<T> {
   data: T[];
@@ -18,7 +18,7 @@ export function useFirestoreQuery<T>(
   keyOrConstraint?: any,
   ...queryConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> & { key: any, setKey: React.Dispatch<React.SetStateAction<any>> } {
-  const { db, loading: authLoading } = useAuth(); // Use auth loading to wait for db instance
+  const { db } = useFirebase();
   const [internalKey, setInternalKey] = useState(0);
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -40,9 +40,8 @@ export function useFirestoreQuery<T>(
   const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    // Wait for authentication and a valid db instance.
-    // The key check is to prevent running on initial mount if a specific key is expected but not ready.
-    if (authLoading || !db || !(db instanceof Firestore) || !isQueryActive) {
+    // Wait for a valid db instance.
+    if (!db || !(db instanceof Firestore) || !isQueryActive) {
       setLoading(true);
       return;
     }
@@ -74,7 +73,7 @@ export function useFirestoreQuery<T>(
         setLoading(false);
     }
     
-  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, authLoading, db]);
+  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, db]);
 
-  return { data, loading: authLoading || loading, error, key: effectiveKey, setKey: setInternalKey };
+  return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }

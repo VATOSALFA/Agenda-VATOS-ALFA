@@ -16,7 +16,7 @@ import {
   addDoc,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/ai/flows/send-whatsapp-message-flow';
@@ -93,6 +93,7 @@ const AudioPlayer = ({ src }: { src: string }) => {
 
 export default function ConversationsPage() {
   const { toast } = useToast();
+  const { db, storage } = useAuth();
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -130,7 +131,7 @@ export default function ConversationsPage() {
   }, [conversations, clientMap]);
 
   useEffect(() => {
-    if (activeConversationId) {
+    if (activeConversationId && db) {
       setIsLoadingMessages(true);
       const messagesQuery = query(collection(db, `conversations/${activeConversationId}/messages`), orderBy('timestamp', 'asc'));
       
@@ -148,10 +149,11 @@ export default function ConversationsPage() {
 
       return () => unsubscribe();
     }
-  }, [activeConversationId]);
+  }, [activeConversationId, db]);
 
   const handleSelectConversation = async (conversationId: string) => {
     setActiveConversationId(conversationId);
+    if (!db) return;
     const convRef = doc(db, 'conversations', conversationId);
     const convSnap = await getDoc(convRef);
     if(convSnap.exists() && convSnap.data().unreadCount > 0) {
@@ -161,6 +163,7 @@ export default function ConversationsPage() {
   
   const handleClientSelected = async (client: Client) => {
     setIsNewConversationModalOpen(false);
+    if (!db) return;
     if (!client.telefono) {
         toast({ title: "Error", description: "El cliente no tiene un número de teléfono.", variant: "destructive" });
         return;
@@ -190,8 +193,7 @@ export default function ConversationsPage() {
   useEffect(scrollToBottom, [messages]);
   
   const handleSendMessage = async () => {
-    if (!currentMessage.trim() && !file) return;
-    if (!activeConversationId) return;
+    if ((!currentMessage.trim() && !file) || !activeConversationId || !db || !storage) return;
 
     setIsSending(true);
     const tempMessage = currentMessage;

@@ -42,7 +42,7 @@ export function ImageUploader({
     // Check if it's a Firebase URL before trying to delete
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
     
-    if (isFirebaseUrl) {
+    if (isFirebaseUrl && storage) {
         try {
             const imageRef = ref(storage, currentImageUrl);
             await deleteObject(imageRef);
@@ -65,6 +65,11 @@ export function ImageUploader({
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
+
+    if (!storage) {
+      toast({ variant: 'destructive', title: 'Error', description: 'El servicio de almacenamiento no está disponible.' });
+      return;
+    }
 
     if (file.size > 3 * 1024 * 1024) { // 3MB limit
         toast({

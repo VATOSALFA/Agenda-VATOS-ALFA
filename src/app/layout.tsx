@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from '@/contexts/firebase-auth-context';
 import { LocalProvider } from '@/contexts/local-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { FirebaseProvider } from '@/contexts/firebase-context';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -49,11 +50,13 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body>
-        <AuthProvider>
-          <LocalProvider>
-            <AppContent>{children}</AppContent>
-          </LocalProvider>
-        </AuthProvider>
+        <FirebaseProvider>
+          <AuthProvider>
+            <LocalProvider>
+              <AppContent>{children}</AppContent>
+            </LocalProvider>
+          </AuthProvider>
+        </FirebaseProvider>
         <Toaster />
       </body>
     </html>

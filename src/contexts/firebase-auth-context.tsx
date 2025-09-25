@@ -5,7 +5,10 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, doc, getDoc, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
+import { auth, db, storage } from '@/lib/firebase';
 import { allPermissions } from '@/lib/permissions';
+import { useRouter, usePathname } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -26,31 +29,30 @@ interface AuthContextType {
 const AuthContext = createContext<Partial<AuthContextType>>({});
 
 export const useAuth = () => {
-  return useContext(AuthContext);
+  return useContext(AuthContext) as AuthContextType;
 };
 
 interface AuthProviderProps {
     children: ReactNode;
-    authInstance: Auth;
-    dbInstance: Firestore;
-    storageInstance: FirebaseStorage;
 }
 
-export const AuthProvider = ({ children, authInstance, dbInstance, storageInstance }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        let userDocRef = doc(dbInstance, 'usuarios', firebaseUser.uid);
+        let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
         let userDoc = await getDoc(userDocRef);
         let customData;
 
         if (userDoc.exists()) {
             customData = userDoc.data();
         } else {
-            userDocRef = doc(dbInstance, 'profesionales', firebaseUser.uid);
+            userDocRef = doc(db, 'profesionales', firebaseUser.uid);
             userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 customData = userDoc.data();
@@ -84,27 +86,48 @@ export const AuthProvider = ({ children, authInstance, dbInstance, storageInstan
     });
 
     return () => unsubscribe();
-  }, [authInstance, dbInstance]);
+  }, []);
 
   const signOut = async () => {
-    await firebaseSignOut(authInstance);
+    await firebaseSignOut(auth);
     setUser(null);
+    router.push('/login');
   }
   
   const signIn = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(authInstance, email, pass);
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
   };
 
   const value = {
     user,
     loading,
-    auth: authInstance,
-    db: dbInstance,
-    storage: storageInstance,
+    auth,
+    db,
+    storage,
     signIn,
     signOut,
   };
+
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  
+  if (!loading && !user && !isAuthPage && !isPublicBookingPage) {
+    router.push('/login');
+    return (
+        <div className="flex justify-center items-center h-screen bg-muted/40">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

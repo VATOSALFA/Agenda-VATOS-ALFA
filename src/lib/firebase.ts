@@ -1,9 +1,9 @@
 
 // src/lib/firebase.ts
-import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { initializeApp, getApps, getApp, type FirebaseOptions, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
@@ -15,32 +15,38 @@ const firebaseConfig: FirebaseOptions = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+let storage: FirebaseStorage;
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+if (typeof window !== 'undefined' && !getApps().length) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
 
-// Initialize App Check
-if (typeof window !== 'undefined') {
-  if (process.env.NODE_ENV === 'production') {
-      const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-      if (siteKey) {
-        try {
-          initializeAppCheck(app, {
-            provider: new ReCaptchaV3Provider(siteKey),
-            isTokenAutoRefreshEnabled: true
-          });
-        } catch (error) {
-          console.error("Error initializing App Check:", error);
+    if (process.env.NODE_ENV === 'production') {
+        const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+        if (siteKey) {
+            try {
+                initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider(siteKey),
+                    isTokenAutoRefreshEnabled: true
+                });
+            } catch (error) {
+                console.error("Error initializing App Check:", error);
+            }
         }
-      }
-  } else {
-    // This allows testing in development without App Check enforcement.
-    // The 'true' value is a special flag for the SDK.
-    (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-  }
+    } else {
+        (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+} else if (getApps().length > 0) {
+    app = getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
 }
 
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
+// @ts-ignore
 export { auth, db, storage, app };

@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AuthCode } from '@/lib/types';
 
@@ -63,6 +63,7 @@ const ToggleField = ({ name, label, control, description }: { name: string, labe
 
 export default function AuthCodesSettingsPage() {
     const { toast } = useToast();
+    const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCode, setEditingCode] = useState<AuthCode | null>(null);

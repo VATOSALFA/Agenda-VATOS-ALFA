@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -21,7 +20,7 @@ import { Switch } from '@/components/ui/switch';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, Timestamp, type Firestore } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import type { AuthCode } from '@/lib/types';
 
@@ -77,15 +76,18 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
   }, [code, form, isOpen]);
 
   const onSubmit = async (data: AuthCodeFormData) => {
-    if (!db) return;
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Error', description: 'La base de datos no está disponible.' });
+        return;
+    };
     setIsSubmitting(true);
     try {
         if(isEditMode && code) {
-            const codeRef = doc(db, 'codigos_autorizacion', code.id);
+            const codeRef = doc(db as Firestore, 'codigos_autorizacion', code.id);
             await updateDoc(codeRef, data);
             toast({ title: 'Código actualizado con éxito' });
         } else {
-            await addDoc(collection(db, 'codigos_autorizacion'), {
+            await addDoc(collection(db as Firestore, 'codigos_autorizacion'), {
                 ...data,
                 created_at: Timestamp.now(),
             });

@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import MainLayout from '@/components/layout/main-layout';
 import { LocalProvider } from '@/contexts/local-context';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
+import { auth, db, storage } from '@/lib/firebase';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,9 +25,11 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body>
-        <AuthProvider>
+        <AuthProvider authInstance={auth} dbInstance={db} storageInstance={storage}>
           <LocalProvider>
-            <MainLayout>{children}</MainLayout>
+            <MainLayout>
+              {children}
+            </MainLayout>
           </LocalProvider>
         </AuthProvider>
         <Toaster />

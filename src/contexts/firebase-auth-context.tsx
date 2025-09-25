@@ -3,11 +3,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { auth, db, storage } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { allPermissions } from '@/lib/permissions';
-import { usePathname, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -18,9 +16,9 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  authInstance: Auth;
-  db: typeof db;
-  storage: typeof storage;
+  auth: Auth;
+  db: Firestore;
+  storage: FirebaseStorage;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -31,23 +29,28 @@ export const useAuth = () => {
   return useContext(AuthContext);
 };
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+interface AuthProviderProps {
+    children: ReactNode;
+    authInstance: Auth;
+    dbInstance: Firestore;
+    storageInstance: FirebaseStorage;
+}
+
+export const AuthProvider = ({ children, authInstance, dbInstance, storageInstance }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const pathname = usePathname();
-  const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser) => {
       if (firebaseUser) {
-        let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+        let userDocRef = doc(dbInstance, 'usuarios', firebaseUser.uid);
         let userDoc = await getDoc(userDocRef);
         let customData;
 
         if (userDoc.exists()) {
             customData = userDoc.data();
         } else {
-            userDocRef = doc(db, 'profesionales', firebaseUser.uid);
+            userDocRef = doc(dbInstance, 'profesionales', firebaseUser.uid);
             userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 customData = userDoc.data();
@@ -81,52 +84,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, []);
-  
-  useEffect(() => {
-    if (!loading && !user) {
-      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-      if (isProtectedRoute) {
-        router.push('/login');
-      }
-    }
-  }, [user, loading, pathname, router]);
+  }, [authInstance, dbInstance]);
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
-    setUser(null); 
-    router.push('/login');
+    await firebaseSignOut(authInstance);
+    setUser(null);
   }
   
   const signIn = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    const userCredential = await signInWithEmailAndPassword(authInstance, email, pass);
     return userCredential.user;
   };
 
   const value = {
     user,
     loading,
-    authInstance: auth,
-    db,
-    storage,
+    auth: authInstance,
+    db: dbInstance,
+    storage: storageInstance,
     signIn,
     signOut,
   };
-  
-  const isAuthPage = pathname === '/login';
-  const isPublicBookingPage = pathname.startsWith('/book');
-
-  if (loading && !isAuthPage && !isPublicBookingPage) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading ? children : (isAuthPage || isPublicBookingPage ? children : null)}
+      {children}
     </AuthContext.Provider>
   );
 };

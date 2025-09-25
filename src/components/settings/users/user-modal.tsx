@@ -19,12 +19,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2, Sparkles } from 'lucide-react';
 import type { User, Local, Role } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
 import { useDebounce } from 'use-debounce';

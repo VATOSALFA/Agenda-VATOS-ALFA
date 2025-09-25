@@ -22,7 +22,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/contexts/firebase-auth-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import type { AuthCode } from '@/lib/types';
 
 interface AuthCodeModalProps {
@@ -47,6 +47,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!code;
   const { toast } = useToast();
+  const { db } = useAuth();
 
   const form = useForm<AuthCodeFormData>({
     resolver: zodResolver(authCodeSchema),
@@ -76,6 +77,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
   }, [code, form, isOpen]);
 
   const onSubmit = async (data: AuthCodeFormData) => {
+    if (!db) return;
     setIsSubmitting(true);
     try {
         if(isEditMode && code) {

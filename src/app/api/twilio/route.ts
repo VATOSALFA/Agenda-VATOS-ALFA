@@ -2,6 +2,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import Twilio from 'twilio';
 
 /**
  * Handles GET requests to the Twilio webhook URL.
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     // Update or create the conversation document
     const conversationSnap = await conversationRef.get();
     
-    const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType}]` : '[Mensaje vacío]');
+    const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
 
     if (conversationSnap.exists) {
         await conversationRef.update({
@@ -80,15 +81,16 @@ export async function POST(req: NextRequest) {
          });
     }
 
-    // Twilio expects an empty response in XML to confirm receipt
-    return new NextResponse('<Response/>', {
-      status: 200,
-      headers: { 'Content-Type': 'text/xml' },
+    // Twilio expects an empty TwiML response to prevent it from sending a reply.
+    const twiml = new Twilio.twiml.MessagingResponse();
+    
+    return new NextResponse(twiml.toString(), {
+        status: 200,
+        headers: { 'Content-Type': 'text/xml' },
     });
 
   } catch (error: any) {
     console.error('Twilio Webhook Error:', error);
-    // Return a more generic error to Twilio to avoid leaking implementation details
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

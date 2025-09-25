@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import Header from './header';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
@@ -11,9 +11,7 @@ import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { useLocal } from '@/contexts/local-context';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Local } from '@/lib/types';
+
 
 type Props = {
   children: ReactNode;
@@ -21,9 +19,7 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
-  const { user, loading } = useAuth();
-  const { selectedLocalId, setSelectedLocalId } = useLocal();
-  const { data: locales } = useFirestoreQuery<Local>('locales');
+  const { user } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
@@ -34,15 +30,6 @@ export default function MainLayout({ children }: Props) {
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
-
-  // Set default local based on user or first available
-  useEffect(() => {
-    if (user?.local_id) {
-      setSelectedLocalId(user.local_id);
-    } else if (!selectedLocalId && locales && locales.length > 0) {
-      setSelectedLocalId(locales[0].id);
-    }
-  }, [user, locales, selectedLocalId, setSelectedLocalId]);
 
   // Global event listeners to open modals
   useEffect(() => {
@@ -70,7 +57,7 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
 
-  const showHeader = user && !loading && pathname !== '/login' && !pathname.startsWith('/book');
+  const showHeader = user && pathname !== '/login' && !pathname.startsWith('/book');
 
   return (
     <>

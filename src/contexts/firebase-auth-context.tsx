@@ -7,8 +7,6 @@ import { getFirestore, doc, getDoc, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { auth, db, storage } from '@/lib/firebase';
 import { allPermissions } from '@/lib/permissions';
-import { useRouter, usePathname } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -39,8 +37,6 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -88,12 +84,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => unsubscribe();
   }, []);
 
-  const signOut = async () => {
-    await firebaseSignOut(auth);
-    setUser(null);
-    router.push('/login');
-  }
-  
   const signIn = async (email: string, pass: string) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
@@ -106,28 +96,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     db,
     storage,
     signIn,
-    signOut,
+    signOut: firebaseSignOut,
   };
-
-  const isAuthPage = pathname === '/login';
-  const isPublicBookingPage = pathname.startsWith('/book');
-
-  if (loading && !isAuthPage && !isPublicBookingPage) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-  
-  if (!loading && !user && !isAuthPage && !isPublicBookingPage) {
-    router.push('/login');
-    return (
-        <div className="flex justify-center items-center h-screen bg-muted/40">
-            <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-    );
-  }
 
   return (
     <AuthContext.Provider value={value}>

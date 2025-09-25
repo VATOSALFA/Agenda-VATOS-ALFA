@@ -38,8 +38,10 @@ function AppContent({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  
+  const showMainLayout = user && !isAuthPage && !pathname.startsWith('/book');
 
-  return <MainLayout>{children}</MainLayout>;
+  return showMainLayout ? <MainLayout>{children}</MainLayout> : <>{children}</>;
 }
 
 export default function RootLayout({

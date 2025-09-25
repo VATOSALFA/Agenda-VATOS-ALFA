@@ -56,8 +56,8 @@ export default function MainLayout({ children }: Props) {
         document.removeEventListener('new-sale', handleNewSale);
     };
   }, []);
-
-  const showHeader = user && pathname !== '/login' && !pathname.startsWith('/book');
+  
+  const showHeader = pathname !== '/login' && !pathname.startsWith('/book');
 
   return (
     <>

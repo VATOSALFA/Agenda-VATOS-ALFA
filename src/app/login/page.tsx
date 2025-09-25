@@ -66,7 +66,7 @@ export default function LoginPage() {
         }
     };
 
-    if (authLoading || user) {
+    if (authLoading || (!authLoading && user)) {
         return (
           <div className="flex justify-center items-center h-screen bg-muted/40">
             <Loader2 className="h-8 w-8 animate-spin" />

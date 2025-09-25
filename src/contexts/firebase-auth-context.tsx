@@ -38,9 +38,13 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const { auth, db, storage } = useFirebase();
+  const firebaseContext = useFirebase();
 
   useEffect(() => {
+    if (!firebaseContext) return;
+
+    const { auth, db } = firebaseContext;
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -84,25 +88,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
 
     return () => unsubscribe();
-  }, [auth, db]);
+  }, [firebaseContext]);
 
   const signIn = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    if (!firebaseContext) throw new Error("Firebase not initialized");
+    const userCredential = await signInWithEmailAndPassword(firebaseContext.auth, email, pass);
     return userCredential.user;
   };
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    if (!firebaseContext) throw new Error("Firebase not initialized");
+    await firebaseSignOut(firebaseContext.auth);
   }
 
   const value = {
     user,
     loading,
-    auth,
-    db,
-    storage,
     signIn,
     signOut,
+    ...firebaseContext
   };
 
   return (

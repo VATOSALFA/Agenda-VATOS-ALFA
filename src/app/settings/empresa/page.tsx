@@ -31,7 +31,7 @@ export default function EmpresaPage() {
     
     // Assuming a single document for company settings
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
-    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfabarbershop', logo_url: ''};
+    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
     
     const form = useForm<EmpresaSettings>({
         defaultValues: settings
@@ -43,7 +43,7 @@ export default function EmpresaPage() {
         }
     }, [data, loading, form]);
 
-    const websiteUrl = `${form.watch('website_slug') || 'vatosalfabarbershop'}.site.agendapro.com/mx`;
+    const websiteUrl = `https://${form.watch('website_slug') || 'vatosalfa--agenda-1ae08.us-central1.hosted.app'}`;
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(websiteUrl);
@@ -175,9 +175,6 @@ export default function EmpresaPage() {
             <CardContent>
                  <div className="flex items-center space-x-2">
                     <Input {...form.register('website_slug')} />
-                    <div className="flex-shrink-0 px-3 py-2 text-sm text-muted-foreground bg-muted border rounded-r-md">
-                        .site.agendapro.com/mx
-                    </div>
                     <Button type="button" variant="outline" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
                 </div>
             </CardContent>

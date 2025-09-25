@@ -37,7 +37,7 @@ export default function EmailsSettingsPage() {
             signature: 'Saludos, El equipo de VATOS ALFA Barber Shop',
             enableBirthdayEmail: true,
             birthdayEmailBody: '¡Feliz cumpleaños, [Nombre Cliente]! Esperamos que tengas un día increíble. ¡Te esperamos pronto para celebrar!',
-            birthdayButtonLink: 'https://vatosalfabarbershop.site.agendapro.com/mx'
+            birthdayButtonLink: 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app'
         }
     });
 

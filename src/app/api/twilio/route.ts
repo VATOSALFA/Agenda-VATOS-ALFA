@@ -1,24 +1,39 @@
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
-export async function POST(req: Request) {
+/**
+ * Handles GET requests to the Twilio webhook URL.
+ * This is used for simple verification from a browser.
+ */
+export async function GET(req: NextRequest) {
+  return new NextResponse(
+    'Webhook de Twilio activo y escuchando. Listo para recibir mensajes POST.',
+    { status: 200, headers: { 'Content-Type': 'text/plain' } }
+  );
+}
+
+
+/**
+ * Handles POST requests from Twilio when a message is received.
+ */
+export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const from = formData.get('From') as string;
-    const messageBody = formData.get('Body') as string;
-    const numMedia = parseInt(formData.get('NumMedia') as string || '0', 10);
+    const messageBody = (formData.get('Body') as string) || '';
+    const numMedia = parseInt((formData.get('NumMedia') as string) || '0', 10);
 
     if (!from) {
       console.error('Twilio Webhook: No "From" number provided in the request.');
-      return new NextResponse("No 'From' number provided", { status: 400 });
+      return new NextResponse("Missing 'From' parameter", { status: 400 });
     }
 
     const conversationId = from;
     const conversationRef = db.collection('conversations').doc(conversationId);
 
-    const messageData: any = {
+    const messageData: { [key: string]: any } = {
       senderId: 'client',
       text: messageBody,
       timestamp: FieldValue.serverTimestamp(),
@@ -29,13 +44,15 @@ export async function POST(req: Request) {
       const mediaUrl = formData.get('MediaUrl0') as string;
       const mediaContentType = formData.get('MediaContentType0') as string;
       
-      messageData.mediaUrl = mediaUrl;
-      if (mediaContentType?.startsWith('image/')) {
-        messageData.mediaType = 'image';
-      } else if (mediaContentType?.startsWith('audio/')) {
-        messageData.mediaType = 'audio';
-      } else if (mediaContentType === 'application/pdf') {
-        messageData.mediaType = 'document';
+      if(mediaUrl) {
+          messageData.mediaUrl = mediaUrl;
+          if (mediaContentType?.startsWith('image/')) {
+            messageData.mediaType = 'image';
+          } else if (mediaContentType?.startsWith('audio/')) {
+            messageData.mediaType = 'audio';
+          } else if (mediaContentType === 'application/pdf') {
+            messageData.mediaType = 'document';
+          }
       }
     }
 
@@ -44,9 +61,12 @@ export async function POST(req: Request) {
     
     // Update or create the conversation document
     const conversationSnap = await conversationRef.get();
+    
+    const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType}]` : '[Mensaje vacío]');
+
     if (conversationSnap.exists) {
         await conversationRef.update({
-            lastMessageText: messageBody || '[Media]',
+            lastMessageText: lastMessagePreview,
             lastMessageTimestamp: FieldValue.serverTimestamp(),
             unreadCount: FieldValue.increment(1),
         });
@@ -54,13 +74,13 @@ export async function POST(req: Request) {
          const fromNumber = from.replace('whatsapp:', '');
          await conversationRef.set({
             clientName: fromNumber,
-            lastMessageText: messageBody || '[Media]',
+            lastMessageText: lastMessagePreview,
             lastMessageTimestamp: FieldValue.serverTimestamp(),
             unreadCount: 1,
          });
     }
 
-    // Twilio espera una respuesta vacía en formato XML para confirmar la recepción
+    // Twilio expects an empty response in XML to confirm receipt
     return new NextResponse('<Response/>', {
       status: 200,
       headers: { 'Content-Type': 'text/xml' },
@@ -68,6 +88,7 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error('Twilio Webhook Error:', error);
-    return new NextResponse(`Internal Server Error: ${error.message}`, { status: 500 });
+    // Return a more generic error to Twilio to avoid leaking implementation details
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

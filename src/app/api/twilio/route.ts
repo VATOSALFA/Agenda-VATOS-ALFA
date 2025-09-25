@@ -60,26 +60,16 @@ export async function POST(req: NextRequest) {
     // Add the message to the subcollection
     await conversationRef.collection('messages').add(messageData);
     
-    // Update or create the conversation document
-    const conversationSnap = await conversationRef.get();
-    
+    // Unified logic to create or update the conversation document
     const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
+    
+    await conversationRef.set({
+        lastMessageText: lastMessagePreview,
+        lastMessageTimestamp: FieldValue.serverTimestamp(),
+        unreadCount: FieldValue.increment(1),
+        clientName: from.replace('whatsapp:', '') // Set a default name, can be updated later
+    }, { merge: true });
 
-    if (conversationSnap.exists) {
-        await conversationRef.update({
-            lastMessageText: lastMessagePreview,
-            lastMessageTimestamp: FieldValue.serverTimestamp(),
-            unreadCount: FieldValue.increment(1),
-        });
-    } else {
-         const fromNumber = from.replace('whatsapp:', '');
-         await conversationRef.set({
-            clientName: fromNumber,
-            lastMessageText: lastMessagePreview,
-            lastMessageTimestamp: FieldValue.serverTimestamp(),
-            unreadCount: 1,
-         });
-    }
 
     // Twilio expects an empty TwiML response to prevent it from sending a reply.
     const twiml = new Twilio.twiml.MessagingResponse();

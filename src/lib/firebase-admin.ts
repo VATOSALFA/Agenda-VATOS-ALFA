@@ -1,26 +1,24 @@
-
 // src/lib/firebase-server.ts
 import * as admin from 'firebase-admin';
-
-const firebaseConfig = {
-    apiKey: process.env.FIREBASE_API_KEY,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.FIREBASE_APP_ID,
-};
 
 // Evita la reinicialización en entornos de desarrollo con recarga rápida.
 if (!admin.apps.length) {
   try {
+    // Estas variables deben estar definidas en tu entorno de hosting (ej. App Hosting)
+    // SIN el prefijo NEXT_PUBLIC_ por seguridad.
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    if (!privateKey) {
+        throw new Error('La variable de entorno FIREBASE_PRIVATE_KEY no está definida.');
+    }
+
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: firebaseConfig.projectId,
+        projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+        // Reemplaza los escapes literales \\n con saltos de línea reales
+        privateKey: privateKey.replace(/\\n/g, '\n'),
       }),
-      databaseURL: `https://${firebaseConfig.projectId}.firebaseio.com`,
+      databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
     });
   } catch (error) {
     console.error('Error al inicializar Firebase Admin SDK:', error);

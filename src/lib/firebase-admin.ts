@@ -1,7 +1,6 @@
 // src/lib/firebase-server.ts
 import * as admin from 'firebase-admin';
 
-// Re-utiliza las variables de entorno que ya tenemos.
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -17,7 +16,6 @@ if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: firebaseConfig.projectId,
-        // Las variables de cliente y email se obtienen del entorno de ejecución.
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
       }),

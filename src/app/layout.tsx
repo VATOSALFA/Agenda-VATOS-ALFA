@@ -1,21 +1,45 @@
 
-import type { Metadata } from 'next';
+'use client';
+
+import type { ReactNode } from 'react';
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 import MainLayout from '@/components/layout/main-layout';
 import { LocalProvider } from '@/contexts/local-context';
-import { AuthProvider } from '@/contexts/firebase-auth-context';
+import { AuthProvider, useAuth } from '@/contexts/firebase-auth-context';
 import { auth, db, storage } from '@/lib/firebase';
-
-export const dynamic = 'force-dynamic';
+import { usePathname } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-export const metadata: Metadata = {
-  title: 'Alfa Manager',
-  description: 'Barbershop management dashboard for VATOS ALFA.',
-};
+function AppContent({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  const pathname = usePathname();
+
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // This prevents a flash of the main layout on protected pages before redirection
+  if (!user && !isAuthPage && !isPublicBookingPage) {
+    return (
+        <div className="flex justify-center items-center h-screen bg-muted/40">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      );
+  }
+
+  return <MainLayout>{children}</MainLayout>;
+}
 
 export default function RootLayout({
   children,
@@ -27,9 +51,7 @@ export default function RootLayout({
       <body>
         <AuthProvider authInstance={auth} dbInstance={db} storageInstance={storage}>
           <LocalProvider>
-            <MainLayout>
-              {children}
-            </MainLayout>
+            <AppContent>{children}</AppContent>
           </LocalProvider>
         </AuthProvider>
         <Toaster />

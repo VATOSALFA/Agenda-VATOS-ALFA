@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -41,7 +42,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { cn } from '@/lib/utils';
 
 
@@ -60,6 +61,7 @@ export default function LocalesPage() {
   const [localToDelete, setLocalToDelete] = useState<Local | null>(null);
   const [queryKey, setQueryKey] = useState(0);
   const { toast } = useToast();
+  const { db } = useAuth();
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
 

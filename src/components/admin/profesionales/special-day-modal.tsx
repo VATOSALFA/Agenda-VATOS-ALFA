@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -30,7 +31,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface SpecialDayModalProps {
   profesional: Profesional;
@@ -53,6 +54,7 @@ interface SpecialDay {
 
 export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   

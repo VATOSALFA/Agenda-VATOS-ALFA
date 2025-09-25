@@ -8,7 +8,7 @@ import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
-import { storage } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Progress } from '../ui/progress';
 
 interface ImageUploaderProps {
@@ -30,6 +30,7 @@ export function ImageUploader({
 }: ImageUploaderProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
+  const { storage } = useAuth();
 
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -59,7 +60,7 @@ export function ImageUploader({
             }
         }
     }
-  }, [currentImageUrl, onRemove, onUploadEnd, toast]);
+  }, [currentImageUrl, onRemove, onUploadEnd, toast, storage]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -102,7 +103,7 @@ export function ImageUploader({
       }
     );
 
-  }, [folder, onUploadEnd, onUploadStateChange, toast]);
+  }, [folder, onUploadEnd, onUploadStateChange, toast, storage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

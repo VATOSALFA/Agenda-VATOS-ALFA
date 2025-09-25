@@ -83,11 +83,11 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
     setIsSubmitting(true);
     try {
         if(isEditMode && code) {
-            const codeRef = doc(db as Firestore, 'codigos_autorizacion', code.id);
+            const codeRef = doc(db, 'codigos_autorizacion', code.id);
             await updateDoc(codeRef, data);
             toast({ title: 'Código actualizado con éxito' });
         } else {
-            await addDoc(collection(db as Firestore, 'codigos_autorizacion'), {
+            await addDoc(collection(db, 'codigos_autorizacion'), {
                 ...data,
                 created_at: Timestamp.now(),
             });

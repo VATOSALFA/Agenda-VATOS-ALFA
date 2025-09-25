@@ -6,7 +6,7 @@ import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, query, where, getDocs, writeBatch, Timestamp, doc, addDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { addMinutes, format, parse } from 'date-fns';
@@ -37,6 +37,7 @@ function ConfirmPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
+    const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const serviceIds = useMemo(() => searchParams.get('services')?.split(',') || [], [searchParams]);

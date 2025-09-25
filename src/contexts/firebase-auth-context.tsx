@@ -2,10 +2,10 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser, getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDoc, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
-import { auth, db, storage } from '@/lib/firebase';
+import { getFirebaseApp } from '@/lib/firebase';
 import { allPermissions } from '@/lib/permissions';
 
 export interface CustomUser extends FirebaseUser {
@@ -14,6 +14,7 @@ export interface CustomUser extends FirebaseUser {
     local_id?: string;
     avatarUrl?: string;
 }
+
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
@@ -37,6 +38,13 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Initialize Firebase services here, ensuring it only runs on the client
+  const app = getFirebaseApp();
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -82,12 +90,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [auth, db]);
 
   const signIn = async (email: string, pass: string) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
   };
+
+  const signOut = async () => {
+    await firebaseSignOut(auth);
+  }
 
   const value = {
     user,
@@ -96,7 +108,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     db,
     storage,
     signIn,
-    signOut: firebaseSignOut,
+    signOut,
   };
 
   return (

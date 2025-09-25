@@ -5,6 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import type { Service, Profesional, Reservation, TimeBlock } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,11 +16,11 @@ import { ArrowRight, ShoppingCart, User, Clock, Calendar as CalendarIcon, Loader
 import { format, addMinutes, set, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 export default function SchedulePage() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { db } = useAuth();
     const serviceIds = useMemo(() => searchParams.get('services')?.split(',') || [], [searchParams]);
     
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
@@ -82,7 +83,7 @@ export default function SchedulePage() {
         });
 
         return bookedSlots;
-    }, []);
+    }, [db]);
 
     useEffect(() => {
         if (!selectedDate || totalDuration === 0 || availableProfessionals.length === 0) {

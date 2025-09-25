@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2 } from 'lucide-react';
 import type { ServiceCategory } from '@/app/admin/servicios/page';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 
 interface CategoryModalProps {
@@ -22,6 +23,7 @@ interface CategoryModalProps {
 
 export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCategories }: CategoryModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [newCategoryName, setNewCategoryName] = useState('');
 
   const handleAddCategory = async () => {

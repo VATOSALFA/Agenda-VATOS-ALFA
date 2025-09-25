@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, QueryConstraint, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, QueryConstraint, onSnapshot, Firestore } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface UseFirestoreQuery<T> {
@@ -40,30 +40,39 @@ export function useFirestoreQuery<T>(
   const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    if (authLoading || !db || !isQueryActive) {
-        setLoading(true);
-        return () => {};
+    // Wait for authentication and a valid db instance.
+    // The key check is to prevent running on initial mount if a specific key is expected but not ready.
+    if (authLoading || !db || !(db instanceof Firestore) || !isQueryActive) {
+      setLoading(true);
+      return;
     }
 
     setLoading(true);
     setError(null);
     
-    const q = query(collection(db, collectionName), ...finalConstraints);
-    
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const items = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as T[];
-      setData(items);
-      setLoading(false);
-    }, (err) => {
-      setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-      console.error(`Error fetching from ${collectionName}:`, err);
-      setLoading(false);
-    });
+    try {
+        const q = query(collection(db, collectionName), ...finalConstraints);
+        
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const items = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as T[];
+          setData(items);
+          setLoading(false);
+        }, (err) => {
+          setError(err instanceof Error ? err : new Error('An unknown error occurred'));
+          console.error(`Error fetching from ${collectionName}:`, err);
+          setLoading(false);
+        });
 
-    return () => unsubscribe();
+        return () => unsubscribe();
+
+    } catch (err: any) {
+        console.error(`Firestore query setup error for ${collectionName}:`, err);
+        setError(err);
+        setLoading(false);
+    }
     
   }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, authLoading, db]);
 

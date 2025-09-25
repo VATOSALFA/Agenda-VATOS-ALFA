@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to send a WhatsApp message using Twilio.
@@ -58,7 +59,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
       const client = new Twilio.Twilio(accountSid, authToken);
       
       const messageData: any = {
-        from: `whatsapp:${fromNumber}`,
+        from: fromNumber,
         to: `whatsapp:+521${input.to}`,
         body: input.text || '',
       };
@@ -82,3 +83,4 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     }
   }
 );
+

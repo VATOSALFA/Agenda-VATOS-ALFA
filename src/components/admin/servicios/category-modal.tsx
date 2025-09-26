@@ -37,6 +37,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
     }
     
     try {
+      if(!db) throw new Error("Database not available");
         const docRef = await addDoc(collection(db, 'categorias_servicios'), {
             name: newCategoryName.trim(),
             order: existingCategories.length,
@@ -64,6 +65,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
     const categoryToDelete = existingCategories.find(c => c.id === idToDelete);
     if (categoryToDelete) {
         try {
+            if(!db) throw new Error("Database not available");
             await deleteDoc(doc(db, 'categorias_servicios', idToDelete));
             toast({
                 title: 'Categoría eliminada',

@@ -255,6 +255,7 @@ export default function ProfessionalsPage() {
   };
 
   const handleToggleActive = async (id: string, active: boolean) => {
+    if(!db) return;
     try {
         const profRef = doc(db, 'profesionales', id);
         await updateDoc(profRef, { active });
@@ -283,6 +284,7 @@ export default function ProfessionalsPage() {
       setProfessionals(newOrder);
 
       try {
+        if(!db) throw new Error("db not initialized");
         const batch = writeBatch(db);
         newOrder.forEach((prof, index) => {
           const profRef = doc(db, 'profesionales', prof.id);

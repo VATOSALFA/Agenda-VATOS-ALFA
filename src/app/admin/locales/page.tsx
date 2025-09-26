@@ -106,7 +106,7 @@ export default function LocalesPage() {
   };
 
   const handleDeleteLocal = async () => {
-    if (!localToDelete) return;
+    if (!localToDelete || !db) return;
     try {
       await deleteDoc(doc(db, "locales", localToDelete.id));
       toast({

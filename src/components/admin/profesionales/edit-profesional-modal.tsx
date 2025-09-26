@@ -146,6 +146,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   }, [profesional, form, isOpen, locales]);
 
   const upsertUser = async (profData: any, profId: string) => {
+    if(!db) throw new Error("Database not available");
     const userRef = doc(db, 'usuarios', profId);
     const userSnap = await getDoc(userRef);
 
@@ -168,6 +169,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
+        if(!db) throw new Error("Database not available");
         if(profesional) {
             // Update
             const profRef = doc(db, 'profesionales', profesional.id);
@@ -200,7 +202,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
   };
 
   const handleDelete = async () => {
-    if (!profesional) return;
+    if (!profesional || !db) return;
     setIsDeleting(true);
     try {
         await deleteDoc(doc(db, 'profesionales', profesional.id));

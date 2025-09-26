@@ -99,6 +99,8 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
+        if(!db) throw new Error("Database not available");
+
         const dataToSave = {
             ...data,
             price: Number(data.price),

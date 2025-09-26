@@ -7,6 +7,7 @@ import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import { type FirebaseStorage } from 'firebase/storage';
 import { allPermissions } from '@/lib/permissions';
 import { useFirebase } from './firebase-context';
+import { useRouter, usePathname } from 'next/navigation';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -39,6 +40,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   const firebaseContext = useFirebase();
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!firebaseContext) return;
@@ -89,6 +92,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     return () => unsubscribe();
   }, [firebaseContext]);
+
+  useEffect(() => {
+    if (!loading) {
+      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
+      if (!user && isProtectedRoute) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, pathname, router]);
 
   const signIn = async (email: string, pass: string) => {
     if (!firebaseContext) throw new Error("Firebase not initialized");

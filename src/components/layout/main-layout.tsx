@@ -11,6 +11,7 @@ import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { Loader2 } from 'lucide-react';
 
 
 type Props = {
@@ -19,7 +20,7 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
@@ -57,7 +58,18 @@ export default function MainLayout({ children }: Props) {
     };
   }, []);
   
-  const showHeader = pathname !== '/login' && !pathname.startsWith('/book');
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  
+  const showHeader = user && !isAuthPage && !pathname.startsWith('/book');
 
   return (
     <>

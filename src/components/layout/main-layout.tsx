@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import Header from './header';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
@@ -20,6 +20,7 @@ type Props = {
 
 export default function MainLayout({ children }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, loading } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -60,6 +61,14 @@ export default function MainLayout({ children }: Props) {
   
   const isAuthPage = pathname === '/login';
   const isPublicBookingPage = pathname.startsWith('/book');
+  
+  // This effect handles redirection and is now the single source of truth for it.
+  useEffect(() => {
+    if (!loading && !user && !isAuthPage && !isPublicBookingPage) {
+      router.push('/login');
+    }
+  }, [loading, user, isAuthPage, isPublicBookingPage, router]);
+
 
   if (loading && !isAuthPage && !isPublicBookingPage) {
     return (
@@ -68,14 +77,18 @@ export default function MainLayout({ children }: Props) {
       </div>
     );
   }
-  
-  const showHeader = user && !isAuthPage && !pathname.startsWith('/book');
+
+  const showHeader = user && !isAuthPage && !isPublicBookingPage;
+
+  // Render children immediately if it's a public page, or if loading is done.
+  // This prevents showing a loader on public pages.
+  const canRenderChildren = isAuthPage || isPublicBookingPage || !loading;
 
   return (
     <>
       {showHeader && <Header />}
       <main className={cn(showHeader && "pt-16")}>
-          {children}
+          {canRenderChildren ? children : null}
       </main>
       
       {/* Modals and Sheets available globally */}

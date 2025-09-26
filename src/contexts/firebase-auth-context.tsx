@@ -7,7 +7,6 @@ import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import { type FirebaseStorage } from 'firebase/storage';
 import { allPermissions } from '@/lib/permissions';
 import { useFirebase } from './firebase-context';
-import { useRouter, usePathname } from 'next/navigation';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -40,49 +39,53 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   const firebaseContext = useFirebase();
-  const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    if (!firebaseContext) return;
+    if (!firebaseContext) {
+      setLoading(false);
+      return;
+    }
 
     const { auth, db } = firebaseContext;
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-        let userDoc = await getDoc(userDocRef);
-        let customData;
+        try {
+            let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            let userDoc = await getDoc(userDocRef);
+            let customData;
 
-        if (userDoc.exists()) {
-            customData = userDoc.data();
-        } else {
-            userDocRef = doc(db, 'profesionales', firebaseUser.uid);
-            userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 customData = userDoc.data();
-                if (!customData.role) {
-                  customData.role = 'Staff';
+            } else {
+                userDocRef = doc(db, 'profesionales', firebaseUser.uid);
+                userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    customData = userDoc.data();
+                    if (!customData.role) customData.role = 'Staff';
                 }
             }
-        }
-        
-        if (customData) {
-          const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
+            
+            if (customData) {
+              const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
 
-          setUser({
-            ...(firebaseUser as FirebaseUser),
-            displayName: customData.name || firebaseUser.displayName,
-            role: isSuperAdmin ? 'Administrador general' : customData.role,
-            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
-            local_id: customData.local_id,
-            avatarUrl: customData.avatarUrl,
-            uid: firebaseUser.uid
-          });
+              setUser({
+                ...(firebaseUser as FirebaseUser),
+                displayName: customData.name || firebaseUser.displayName,
+                role: isSuperAdmin ? 'Administrador general' : customData.role,
+                permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
+                local_id: customData.local_id,
+                avatarUrl: customData.avatarUrl,
+                uid: firebaseUser.uid
+              });
 
-        } else {
-             console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid} en 'usuarios' o 'profesionales'.`);
-             setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
+            } else {
+                 console.warn(`No user document found for UID: ${firebaseUser.uid}. Treating as guest.`);
+                 setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
+            }
+        } catch (error) {
+            console.error("Error fetching user data:", error);
+            setUser(null);
         }
       } else {
         setUser(null);
@@ -92,15 +95,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     return () => unsubscribe();
   }, [firebaseContext]);
-
-  useEffect(() => {
-    if (!loading) {
-      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-      if (!user && isProtectedRoute) {
-        router.push('/login');
-      }
-    }
-  }, [user, loading, pathname, router]);
 
   const signIn = async (email: string, pass: string) => {
     if (!firebaseContext) throw new Error("Firebase not initialized");

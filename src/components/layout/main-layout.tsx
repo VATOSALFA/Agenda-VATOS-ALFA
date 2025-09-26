@@ -78,7 +78,7 @@ export default function MainLayout({ children }: Props) {
     );
   }
 
-  const showHeader = user && !isAuthPage && !isPublicBookingPage;
+  const showHeader = user && !isAuthPage;
 
   // Render children immediately if it's a public page, or if loading is done.
   // This prevents showing a loader on public pages.

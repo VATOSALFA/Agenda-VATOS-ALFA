@@ -4,7 +4,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, type Firestore } from 'firebase/firestore';
-import { type FirebaseStorage } from 'firebase/storage';
 import { allPermissions } from '@/lib/permissions';
 import { useFirebase } from './firebase-context';
 
@@ -20,7 +19,6 @@ interface AuthContextType {
   loading: boolean;
   auth: Auth;
   db: Firestore;
-  storage: FirebaseStorage;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -41,7 +39,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const firebaseContext = useFirebase();
 
   useEffect(() => {
-    if (!firebaseContext) {
+    if (!firebaseContext || !firebaseContext.auth || !firebaseContext.db) {
       setLoading(false);
       return;
     }
@@ -62,7 +60,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
                     customData = userDoc.data();
-                    if (!customData.role) customData.role = 'Staff';
+                    if (!customData.role) customData.role = 'Staff (Sin edición)'; // A more restricted default
                 }
             }
             
@@ -107,13 +105,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     await firebaseSignOut(firebaseContext.auth);
   }
 
-  const value = {
+  const value: AuthContextType = {
     user,
     loading,
     signIn,
     signOut,
-    ...firebaseContext
-  };
+    auth: firebaseContext?.auth,
+    db: firebaseContext?.db,
+    storage: firebaseContext?.storage,
+  } as AuthContextType;
 
   return (
     <AuthContext.Provider value={value}>

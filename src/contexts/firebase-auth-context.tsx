@@ -6,6 +6,8 @@ import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassw
 import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { useFirebase } from './firebase-context';
+import { usePathname, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -17,8 +19,8 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  auth: Auth;
   db: Firestore;
+  auth: Auth;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -37,6 +39,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   const firebaseContext = useFirebase();
+  const router = useRouter();
+  const pathname = usePathname();
+
 
   useEffect(() => {
     if (!firebaseContext || !firebaseContext.auth || !firebaseContext.db) {
@@ -60,7 +65,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
                     customData = userDoc.data();
-                    if (!customData.role) customData.role = 'Staff (Sin edición)'; // A more restricted default
+                    if (!customData.role) customData.role = 'Staff (Sin edición)';
                 }
             }
             
@@ -93,6 +98,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     return () => unsubscribe();
   }, [firebaseContext]);
+  
+  useEffect(() => {
+    if (!loading) {
+      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
+      if (!user && isProtectedRoute) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, pathname, router]);
 
   const signIn = async (email: string, pass: string) => {
     if (!firebaseContext) throw new Error("Firebase not initialized");
@@ -103,6 +117,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signOut = async () => {
     if (!firebaseContext) throw new Error("Firebase not initialized");
     await firebaseSignOut(firebaseContext.auth);
+    setUser(null); 
+    router.push('/login');
   }
 
   const value: AuthContextType = {
@@ -114,6 +130,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     db: firebaseContext?.db,
     storage: firebaseContext?.storage,
   } as AuthContextType;
+
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

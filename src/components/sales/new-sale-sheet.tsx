@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -211,7 +210,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
 
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, db } = useAuth();
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -389,7 +388,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         const initialCartItems = initialData.items.map(item => {
             const tipo = 'duration' in item ? 'servicio' : 'producto';
             const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
-            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
+            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as ServiceType).nombre;
             const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
             return {
                 id: item.id,

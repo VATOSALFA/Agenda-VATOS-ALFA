@@ -2,12 +2,12 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Header from './header';
+import Header from '@/components/layout/header';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { NewReservationForm } from '../reservations/new-reservation-form';
-import { BlockScheduleForm } from '../reservations/block-schedule-form';
-import { NewSaleSheet } from '../sales/new-sale-sheet';
+import { NewReservationForm } from '@/components/reservations/new-reservation-form';
+import { BlockScheduleForm } from '@/components/reservations/block-schedule-form';
+import { NewSaleSheet } from '@/components/sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';

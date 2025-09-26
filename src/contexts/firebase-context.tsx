@@ -25,14 +25,35 @@ interface FirebaseContextType {
 
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
 
+// Helper function to initialize Firebase
+const initializeFirebase = () => {
+    if (getApps().length === 0) {
+        return initializeApp(firebaseConfig);
+    } else {
+        return getApp();
+    }
+};
+
 export function FirebaseProvider({ children }: { children: ReactNode }) {
   const services = useMemo(() => {
-    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    // This check ensures Firebase is only initialized on the client side,
+    // preventing the build-time error.
+    if (typeof window === "undefined") {
+        return null;
+    }
+    
+    const app = initializeFirebase();
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
     return { app, auth, db, storage };
   }, []);
+
+  if (!services) {
+    // During server-side rendering, we don't provide the Firebase context.
+    // The components will handle this gracefully.
+    return <>{children}</>;
+  }
 
   return (
     <FirebaseContext.Provider value={services}>

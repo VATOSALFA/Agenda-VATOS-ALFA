@@ -46,14 +46,14 @@ import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
+import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock } from '@/lib/types';
+import { db } from '@/lib/firebase-admin';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -782,3 +782,5 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
+
+    

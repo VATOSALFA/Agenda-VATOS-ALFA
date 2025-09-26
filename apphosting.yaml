@@ -1,9 +1,17 @@
 
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
-buildAndRun:
-  command: npm run build && next start
-  env:
+runConfig:
+  minInstances: 1
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 1024
+build:
+  - npm install
+  - npm run build
+run:
+  - next start
+env:
     - variable: NEXT_PUBLIC_FIREBASE_API_KEY
       secret: NEXT_PUBLIC_FIREBASE_API_KEY
     - variable: NEXT_PUBLIC_FIREBASE_APP_ID
@@ -24,8 +32,3 @@ buildAndRun:
       secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
       secret: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-runConfig:
-  minInstances: 1
-  maxInstances: 2
-  cpu: 1
-  memoryMiB: 1024

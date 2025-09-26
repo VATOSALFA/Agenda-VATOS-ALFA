@@ -7,16 +7,8 @@ import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
-import { firebaseConfig } from '@/lib/firebase-config';
-
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+import { auth, db, storage } from '@/lib/firebase';
+import type { FirebaseStorage } from "firebase/storage";
 
 
 export interface CustomUser extends FirebaseUser {

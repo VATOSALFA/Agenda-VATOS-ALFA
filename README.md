@@ -15,3 +15,5 @@
 ## Despliegue
 
 Este proyecto está configurado para desplegarse automáticamente en Firebase App Hosting cada vez que subas cambios a tu repositorio de GitHub.
+
+**Nota:** Se ha actualizado la configuración de secretos para el despliegue.

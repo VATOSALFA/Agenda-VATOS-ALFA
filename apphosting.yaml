@@ -1,15 +1,15 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
-runConfig:
-  minInstances: 1
-  maxInstances: 2
-  cpu: 1
-  memoryMiB: 1024
 build:
   - npm install
   - npm run build
 run:
   - next start
+runConfig:
+  minInstances: 1
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 1024
 env:
     - variable: NEXT_PUBLIC_FIREBASE_API_KEY
       secret: NEXT_PUBLIC_FIREBASE_API_KEY

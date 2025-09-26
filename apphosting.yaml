@@ -21,3 +21,10 @@ buildAndRun:
       secret: NEXT_PUBLIC_TWILIO_AUTH_TOKEN
     - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
       secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
+    - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+      secret: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+runConfig:
+  minInstances: 1
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 1024

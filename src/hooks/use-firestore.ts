@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, QueryConstraint, onSnapshot, Firestore } from 'firebase/firestore';
-import { useFirebase } from '@/contexts/firebase-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface UseFirestoreQuery<T> {
   data: T[];
@@ -18,7 +18,7 @@ export function useFirestoreQuery<T>(
   keyOrConstraint?: any,
   ...queryConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> & { key: any, setKey: React.Dispatch<React.SetStateAction<any>> } {
-  const { db } = useFirebase();
+  const { db } = useAuth();
   const [internalKey, setInternalKey] = useState(0);
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

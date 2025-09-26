@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback } from 'react';
 import { format, parseISO, getYear, getMonth, getDate, isValid } from 'date-fns';
@@ -68,6 +68,7 @@ const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOu
 
 export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!client;
   
@@ -159,6 +160,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
     try {
+      if (!db) throw new Error("Database not available.");
       const dataToSave = {
         ...data,
         fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,

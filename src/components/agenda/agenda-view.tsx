@@ -53,7 +53,6 @@ import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
 import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock } from '@/lib/types';
-import { db } from '@/lib/firebase-admin';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -117,7 +116,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
   const [selectedProfessionalFilter, setSelectedProfessionalFilter] = useState('todos');
   const { selectedLocalId, setSelectedLocalId } = useLocal();
-  const { user } = useAuth();
+  const { user, db } = useAuth();
 
   const [hoveredSlot, setHoveredSlot] = useState<{barberId: string, time: string} | null>(null);
   const [popoverState, setPopoverState] = useState<{barberId: string, time: string} | null>(null);
@@ -782,5 +781,3 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
-
-    

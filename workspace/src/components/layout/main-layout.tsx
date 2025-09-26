@@ -1,22 +1,28 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
-import Header from './header';
+import './globals.css';
+import { Inter } from 'next/font/google';
+import { Toaster } from '@/components/ui/toaster';
+import { AuthProvider } from '@/contexts/firebase-auth-context';
+import { LocalProvider } from '@/contexts/local-context';
+import { FirebaseProvider } from '@/contexts/firebase-context';
+import Header from '@/components/layout/header';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { NewReservationForm } from '../reservations/new-reservation-form';
-import { BlockScheduleForm } from '../reservations/block-schedule-form';
-import { NewSaleSheet } from '../sales/new-sale-sheet';
+import { NewReservationForm } from '@/components/reservations/new-reservation-form';
+import { BlockScheduleForm } from '@/components/reservations/block-schedule-form';
+import { NewSaleSheet } from '@/components/sales/new-sale-sheet';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/firebase-auth-context';
+import { Loader2 } from 'lucide-react';
 
-type Props = {
-  children: ReactNode;
-};
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-export default function MainLayout({ children }: Props) {
+const MainLayout = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
+  const { user, loading } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
@@ -28,7 +34,6 @@ export default function MainLayout({ children }: Props) {
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
-  // Global event listeners to open modals
   useEffect(() => {
     const handleNewReservation = () => {
         setReservationInitialData(null);
@@ -53,17 +58,29 @@ export default function MainLayout({ children }: Props) {
         document.removeEventListener('new-sale', handleNewSale);
     };
   }, []);
-
-  const showHeader = pathname !== '/login' && !pathname.startsWith('/book') && !pathname.startsWith('/admin/conversations');
   
+  const isAuthPage = pathname === '/login';
+  const isPublicBookingPage = pathname.startsWith('/book');
+  
+  if (loading && !isAuthPage && !isPublicBookingPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  const showHeader = user && !isAuthPage && !pathname.startsWith('/admin/conversations');
+
+  const canRenderChildren = isAuthPage || isPublicBookingPage || !loading;
+
   return (
-      <div className="flex flex-col min-h-screen">
+    <>
       {showHeader && <Header />}
-      <main className={cn(showHeader && 'flex-grow pt-16')}>
-          {children}
+      <main className={cn(showHeader && "pt-16")}>
+          {canRenderChildren ? children : null}
       </main>
       
-      {/* Modals and Sheets available globally */}
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
           <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
               <NewReservationForm
@@ -90,6 +107,28 @@ export default function MainLayout({ children }: Props) {
           initialData={saleInitialData}
           onSaleComplete={refreshData}
       />
-      </div>
+    </>
+  );
+};
+
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="es" className={inter.variable}>
+      <body>
+        <FirebaseProvider>
+          <AuthProvider>
+            <LocalProvider>
+              <MainLayout>{children}</MainLayout>
+            </LocalProvider>
+          </AuthProvider>
+        </FirebaseProvider>
+        <Toaster />
+      </body>
+    </html>
   );
 }

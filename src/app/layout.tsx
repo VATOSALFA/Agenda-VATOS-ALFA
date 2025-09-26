@@ -1,116 +1,15 @@
 
-'use client';
-
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { LocalProvider } from '@/contexts/local-context';
-import { FirebaseProvider } from '@/contexts/firebase-context';
-import Header from '@/components/layout/header';
-import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { NewReservationForm } from '@/components/reservations/new-reservation-form';
-import { BlockScheduleForm } from '@/components/reservations/block-schedule-form';
-import { NewSaleSheet } from '@/components/sales/new-sale-sheet';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import AppInitializer from '@/components/layout/app-initializer';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/firebase-auth-context';
-import { Loader2 } from 'lucide-react';
+
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-
-const MainLayout = ({ children }: { children: ReactNode }) => {
-  const pathname = usePathname();
-  const { user, loading } = useAuth();
-  
-  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
-  const [reservationInitialData, setReservationInitialData] = useState<any>(null);
-  const [isBlockScheduleModalOpen, setIsBlockScheduleModalOpen] = useState(false);
-  const [blockInitialData, setBlockInitialData] = useState<any>(null);
-  const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
-  const [saleInitialData, setSaleInitialData] = useState<any>(null);
-  const [dataRefreshKey, setDataRefreshKey] = useState(0);
-
-  const refreshData = () => setDataRefreshKey(prev => prev + 1);
-
-  useEffect(() => {
-    const handleNewReservation = (e: CustomEvent) => {
-        setReservationInitialData(e.detail);
-        setIsReservationModalOpen(true);
-    };
-    const handleNewBlock = (e: CustomEvent) => {
-        setBlockInitialData(e.detail);
-        setIsBlockScheduleModalOpen(true);
-    };
-    const handleNewSale = (e: CustomEvent) => {
-        setSaleInitialData(e.detail);
-        setIsSaleSheetOpen(true);
-    }
-
-    document.addEventListener('new-reservation', handleNewReservation as EventListener);
-    document.addEventListener('new-block', handleNewBlock as EventListener);
-    document.addEventListener('new-sale', handleNewSale as EventListener);
-
-    return () => {
-        document.removeEventListener('new-reservation', handleNewReservation as EventListener);
-        document.removeEventListener('new-block', handleNewBlock as EventListener);
-        document.removeEventListener('new-sale', handleNewSale as EventListener);
-    };
-  }, []);
-  
-  const isAuthPage = pathname === '/login';
-  const isPublicBookingPage = pathname.startsWith('/book');
-  
-  if (loading && !isAuthPage && !isPublicBookingPage) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  const showHeader = user && !isAuthPage && !pathname.startsWith('/admin/conversations');
-
-  const canRenderChildren = isAuthPage || isPublicBookingPage || !loading;
-
-  return (
-    <>
-      {showHeader && <Header />}
-      <main className={cn(showHeader && "pt-16")}>
-          {canRenderChildren ? children : null}
-      </main>
-      
-      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-              <NewReservationForm
-              isOpen={isReservationModalOpen}
-              onOpenChange={setIsReservationModalOpen}
-              isDialogChild
-              onFormSubmit={refreshData}
-              initialData={reservationInitialData}
-              isEditMode={!!reservationInitialData?.id}
-              />
-          </DialogContent>
-      </Dialog>
-      
-      <BlockScheduleForm
-          isOpen={isBlockScheduleModalOpen}
-          onOpenChange={setIsBlockScheduleModalOpen}
-          onFormSubmit={refreshData}
-          initialData={blockInitialData}
-      />
-      
-      <NewSaleSheet 
-          isOpen={isSaleSheetOpen} 
-          onOpenChange={setIsSaleSheetOpen}
-          initialData={saleInitialData}
-          onSaleComplete={refreshData}
-      />
-    </>
-  );
-};
 
 
 export default function RootLayout({
@@ -121,15 +20,14 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body>
-        <FirebaseProvider>
           <AuthProvider>
             <LocalProvider>
-              <MainLayout>{children}</MainLayout>
+              <AppInitializer>{children}</AppInitializer>
             </LocalProvider>
           </AuthProvider>
-        </FirebaseProvider>
         <Toaster />
       </body>
     </html>
   );
 }
+

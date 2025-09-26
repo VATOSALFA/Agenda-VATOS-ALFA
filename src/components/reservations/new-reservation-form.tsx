@@ -6,7 +6,6 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -43,6 +42,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Checkbox } from '../ui/checkbox';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
 
 
@@ -129,6 +129,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
+  const { db } = useAuth();
   
   const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -537,23 +538,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
              {selectedClient ? (
                 <Card>
-                    <CardContent className="p-4">
+                    <CardContent className="p-3">
                             <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-4">
-                                <Avatar className="h-10 w-10">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="h-9 w-9">
                                     <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
-                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
-                                    </p>
+                                    <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                    <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                             </div>
                         </div>
                     </CardContent>

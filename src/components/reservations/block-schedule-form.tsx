@@ -1,12 +1,10 @@
 
-
 'use client';
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { addDoc, collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -37,6 +35,7 @@ import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
 import { useLocal } from '@/contexts/local-context';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 const blockSchema = z.object({
   barbero_id: z.string().min(1, 'Debes seleccionar un barbero.'),
@@ -65,6 +64,7 @@ interface BlockScheduleFormProps {
 
 export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialData }: BlockScheduleFormProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { selectedLocalId } = useLocal();
 
@@ -129,6 +129,10 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
 
 
   async function onSubmit(data: BlockFormData) {
+    if(!db) {
+        toast({variant: 'destructive', title: 'Error de base de datos'});
+        return;
+    }
     setIsSubmitting(true);
     try {
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');

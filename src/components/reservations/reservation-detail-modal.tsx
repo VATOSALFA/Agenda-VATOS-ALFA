@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -40,7 +39,7 @@ import { cn } from '@/lib/utils';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { doc, deleteDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
@@ -80,6 +79,7 @@ export function ReservationDetailModal({
   const [isSending, setIsSending] = useState(false);
 
   const { toast } = useToast();
+  const { db } = useAuth();
 
   if (!reservation) return null;
   

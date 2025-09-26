@@ -36,27 +36,27 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
 
   useEffect(() => {
-    const handleNewReservation = () => {
-        setReservationInitialData(null);
+    const handleNewReservation = (e: CustomEvent) => {
+        setReservationInitialData(e.detail);
         setIsReservationModalOpen(true);
     };
-    const handleNewBlock = () => {
-        setBlockInitialData(null);
+    const handleNewBlock = (e: CustomEvent) => {
+        setBlockInitialData(e.detail);
         setIsBlockScheduleModalOpen(true);
     };
-    const handleNewSale = () => {
-        setSaleInitialData(null);
+    const handleNewSale = (e: CustomEvent) => {
+        setSaleInitialData(e.detail);
         setIsSaleSheetOpen(true);
     }
 
-    document.addEventListener('new-reservation', handleNewReservation);
-    document.addEventListener('new-block', handleNewBlock);
-    document.addEventListener('new-sale', handleNewSale);
+    document.addEventListener('new-reservation', handleNewReservation as EventListener);
+    document.addEventListener('new-block', handleNewBlock as EventListener);
+    document.addEventListener('new-sale', handleNewSale as EventListener);
 
     return () => {
-        document.removeEventListener('new-reservation', handleNewReservation);
-        document.removeEventListener('new-block', handleNewBlock);
-        document.removeEventListener('new-sale', handleNewSale);
+        document.removeEventListener('new-reservation', handleNewReservation as EventListener);
+        document.removeEventListener('new-block', handleNewBlock as EventListener);
+        document.removeEventListener('new-sale', handleNewSale as EventListener);
     };
   }, []);
   

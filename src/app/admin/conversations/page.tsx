@@ -122,7 +122,7 @@ export default function ConversationsPage() {
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace('whatsapp:', '').replace(/\D/g, '').slice(-10);
+        const phone = conv.id.replace('whatsapp:+521', '').replace(/\D/g, '');
         return {
             ...conv,
             clientName: conv.clientName || clientMap.get(phone) || conv.id.replace('whatsapp:', ''),
@@ -280,7 +280,7 @@ export default function ConversationsPage() {
 
   return (
     <>
-    <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
+    <div className="flex h-full bg-muted/40">
       <aside className={cn(
         "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
         "md:flex" // Always show on desktop
@@ -314,23 +314,25 @@ export default function ConversationsPage() {
                 <div className="p-2 space-y-1">
                     {conversationsWithNames.map(conv => (
                         <button key={conv.id} onClick={() => handleSelectConversation(conv.id)} className={cn(
-                            'w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors',
+                            'w-full flex items-start gap-3 p-2 rounded-lg text-left transition-colors',
                             activeConversationId === conv.id ? 'bg-primary/10' : 'hover:bg-muted'
                         )}>
                             <Avatar className="h-10 w-10">
                                 <AvatarFallback>{conv.clientName?.substring(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 overflow-hidden">
-                                <p className="font-semibold truncate">{conv.clientName}</p>
-                                <p className="text-xs text-muted-foreground truncate">{conv.lastMessageText}</p>
-                            </div>
-                            <div className="flex flex-col items-end text-xs text-muted-foreground space-y-1">
-                               <span>
-                                  {conv.lastMessageTimestamp ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { locale: es, addSuffix: true }) : ''}
-                               </span>
-                               {conv.unreadCount && conv.unreadCount > 0 && (
-                                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">{conv.unreadCount}</span>
-                               )}
+                                <div className="flex justify-between items-baseline">
+                                    <p className="font-semibold truncate pr-2">{conv.clientName}</p>
+                                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                                      {conv.lastMessageTimestamp ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { locale: es, addSuffix: true }) : ''}
+                                   </span>
+                                </div>
+                                <div className="flex justify-between items-start">
+                                    <p className="text-xs text-muted-foreground truncate pr-2">{conv.lastMessageText}</p>
+                                    {conv.unreadCount && conv.unreadCount > 0 && (
+                                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">{conv.unreadCount}</span>
+                                   )}
+                                </div>
                             </div>
                         </button>
                     ))}

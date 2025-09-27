@@ -52,12 +52,13 @@ export default function AdminLayout({ children }: Props) {
     return user.permissions.includes(permission);
   }
 
-  // If the current page is the conversations page, render it without the admin sidebar and scrolling parent.
+  // If the current page is the conversations page, render it without the admin sidebar.
+  // The main header will still be rendered by the root layout.
   if (pathname === '/admin/conversations') {
     return (
-        <>
+        <div className="h-[calc(100vh-4rem)]">
             {children}
-        </>
+        </div>
     );
   }
 

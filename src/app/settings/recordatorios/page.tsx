@@ -35,8 +35,6 @@ export default function RecordatoriosPage() {
 
     const form = useForm({
         defaultValues: {
-            email_notification: true,
-            email_reminder: true,
             whatsapp_notification: true,
             whatsapp_reminder: true,
             reminder_day: '1_day_before',
@@ -66,16 +64,6 @@ export default function RecordatoriosPage() {
         </div>
         
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Notificaciones automáticas de reserva por Email</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <ToggleField name="email_notification" label="Notificación de creación, edición o cancelación de cita" control={form.control} />
-                    <ToggleField name="email_reminder" label="Recordatorio" control={form.control} />
-                </CardContent>
-            </Card>
-
             <Card>
                 <CardHeader>
                     <CardTitle>Notificaciones automáticas de reserva por WhatsApp</CardTitle>

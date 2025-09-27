@@ -621,7 +621,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     </FormItem>
                                 )}/>
                                 <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
-                                    <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel></FormItem>
+                                    <FormItem className="flex items-center space-x-2">
+                                        <FormControl>
+                                            <Checkbox
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                disabled={!reminderSettings?.whatsapp_reminder}
+                                            />
+                                        </FormControl>
+                                        <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel>
+                                    </FormItem>
                                 )}/>
                             </>
                           )}

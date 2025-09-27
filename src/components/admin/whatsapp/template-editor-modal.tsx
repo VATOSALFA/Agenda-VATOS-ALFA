@@ -134,7 +134,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
             <div className="grid md:grid-cols-3 gap-6 flex-grow overflow-hidden">
                 {/* Left Column */}
                 <div className="md:col-span-2 flex flex-col space-y-4 overflow-hidden">
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 space-y-4">
                         <FormField
                             control={form.control}
                             name="name"
@@ -146,14 +146,14 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                                 </FormItem>
                             )}
                         />
+                        <div>
+                             <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
+                            <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
+                        </div>
                     </div>
                     
                     <ScrollArea className="flex-grow pr-2">
                         <div className="space-y-2">
-                           <div className="space-y-2">
-                                <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
-                                <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
-                            </div>
                             <Accordion type="multiple" className="w-full space-y-2">
                                 {Object.entries(dataTags).map(([category, tags]) => (
                                     <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">

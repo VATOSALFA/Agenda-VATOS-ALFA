@@ -137,21 +137,22 @@ function ConfirmPageContent() {
                         // Construct the message and save it to the conversation
                         const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                         const conversationRef = doc(db, 'conversations', conversationId);
-                        
                         const messageText = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
                         
-                        await addDoc(collection(conversationRef, 'messages'), {
-                            senderId: 'vatosalfa',
-                            text: messageText,
-                            timestamp: serverTimestamp(),
-                            read: true, // Mark as read since we sent it
-                        });
-
+                        // Ensure conversation document exists before adding a message
                         await setDoc(conversationRef, {
                             lastMessageText: `Tú: ${messageText}`,
                             lastMessageTimestamp: serverTimestamp(),
                             clientName: `${data.nombre} ${data.apellido}`.trim()
                         }, { merge: true });
+                        
+                        // Add message to subcollection
+                        await addDoc(collection(conversationRef, 'messages'), {
+                            senderId: 'vatosalfa',
+                            text: messageText,
+                            timestamp: serverTimestamp(),
+                            read: true,
+                        });
 
                     } else {
                         toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });

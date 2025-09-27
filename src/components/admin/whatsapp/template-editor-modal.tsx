@@ -43,6 +43,10 @@ const dataTags = {
     ]
 }
 
+const emojis = {
+    'Emojis': ['✂️', '💈', '💇‍♂️', '💇‍♀️', '✨', '👍', '✅', '📅', '⏰', '📍', '💰', '💳', '👋', '🙏', '😎', '🔥', '💯', '👉', '👈', '➡️', '⬅️', '🔝', '💥', '🧔', '👨‍🦱', '👨‍🦰', '👨‍🦳', '👑', '💀']
+}
+
 const sampleData: Record<string, string> = {
     '[[Nombre cliente]]': 'Juan',
     '[[Apellido cliente]]': 'Pérez',
@@ -140,21 +144,35 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
             </div>
             
             <div className="grid md:grid-cols-3 gap-6 flex-grow overflow-hidden">
-                <div className="flex flex-col space-y-4 overflow-hidden md:col-span-2">
+                <div className="flex flex-col space-y-2 overflow-hidden md:col-span-2">
                     <div className="space-y-2">
                         <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
                         <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
                     </div>
 
-                    <Accordion type="multiple" className="w-full">
+                    <Accordion type="multiple" className="w-full space-y-2">
                         {Object.entries(dataTags).map(([category, tags]) => (
-                            <AccordionItem value={category} key={category}>
-                                <AccordionTrigger>{category}</AccordionTrigger>
+                            <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
+                                <AccordionTrigger className="px-4 py-3 hover:no-underline">{category}</AccordionTrigger>
                                 <AccordionContent>
-                                    <div className="flex flex-wrap gap-2 pt-1">
+                                    <div className="flex flex-wrap gap-2 pt-1 px-4 pb-4">
                                         {tags.map(tag => (
                                             <Button key={tag} type="button" variant="outline" size="sm" className="text-xs" onClick={() => handleTagClick(tag)}>
                                                 {tag.replace(/\[|\]/g, '')}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                         {Object.entries(emojis).map(([category, tags]) => (
+                            <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
+                                <AccordionTrigger className="px-4 py-3 hover:no-underline">{category}</AccordionTrigger>
+                                <AccordionContent>
+                                    <div className="flex flex-wrap gap-1 pt-1 px-4 pb-4">
+                                        {tags.map(tag => (
+                                            <Button key={tag} type="button" variant="ghost" size="icon" className="text-xl" onClick={() => handleTagClick(tag)}>
+                                                {tag}
                                             </Button>
                                         ))}
                                     </div>
@@ -167,7 +185,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                         control={form.control}
                         name="body"
                         render={({ field }) => (
-                            <FormItem className="flex flex-col flex-grow">
+                            <FormItem className="flex flex-col flex-grow pt-2">
                                 <FormControl>
                                     <Textarea {...field} ref={textareaRef} className="flex-grow resize-none min-h-[150px]"/>
                                 </FormControl>

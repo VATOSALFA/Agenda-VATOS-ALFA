@@ -4,10 +4,10 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, parseISO, getYear, getMonth, getDate, isValid } from 'date-fns';
 import type { Client } from '@/lib/types';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
@@ -27,23 +27,41 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { DialogFooter } from '@/components/ui/dialog';
-import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, CheckCircle, X } from 'lucide-react';
+import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, CheckCircle, X, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
+import { db } from '@/lib/firebase';
+import { Skeleton } from '../ui/skeleton';
 
-const clientSchema = z.object({
-  nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
-  apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
-  telefono: z.string()
-    .min(10, 'El teléfono debe tener al menos 10 dígitos.')
-    .transform(val => val.replace(/\D/g, '')),
-  correo: z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
-  fecha_nacimiento: z.date().optional(),
-  notas: z.string().optional(),
-});
 
-type ClientFormData = z.infer<typeof clientSchema>;
+interface AgendaSettings {
+    customerFields?: Record<string, { use: boolean; required: boolean }>;
+}
+
+const createClientSchema = (settings?: AgendaSettings) => {
+    const fieldSettings = settings?.customerFields || {};
+    
+    return z.object({
+      nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
+      apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
+      telefono: fieldSettings.phone?.required 
+        ? z.string().min(10, 'El teléfono debe tener al menos 10 dígitos.').transform(val => val.replace(/\D/g, ''))
+        : z.string().optional().transform(val => val ? val.replace(/\D/g, '') : ''),
+      correo: fieldSettings.email?.required
+        ? z.string().email('El correo electrónico no es válido.')
+        : z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
+      fecha_nacimiento: fieldSettings.dob?.required
+        ? z.date({ required_error: 'La fecha de nacimiento es obligatoria.' })
+        : z.date().optional(),
+      direccion: fieldSettings.address?.required
+        ? z.string().min(1, 'La dirección es requerida.')
+        : z.string().optional(),
+      notas: z.string().optional(),
+    });
+};
+
+type ClientFormData = z.infer<ReturnType<typeof createClientSchema>>;
 
 interface NewClientFormProps {
   onFormSubmit: (clientId: string) => void;
@@ -76,6 +94,11 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   const [apellidoSuggestion, setApellidoSuggestion] = useState<SpellCheckOutput | null>(null);
   const [isCheckingNombre, setIsCheckingNombre] = useState(false);
   const [isCheckingApellido, setIsCheckingApellido] = useState(false);
+  
+  const [agendaSettings, setAgendaSettings] = useState<AgendaSettings | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  const clientSchema = useMemo(() => createClientSchema(agendaSettings || undefined), [agendaSettings]);
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -85,6 +108,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
       telefono: '',
       correo: '',
       notas: '',
+      direccion: ''
     },
   });
   
@@ -93,6 +117,30 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   
   const [debouncedNombre] = useDebounce(nombreValue, 750);
   const [debouncedApellido] = useDebounce(apellidoValue, 750);
+  
+  useEffect(() => {
+    const fetchSettings = async () => {
+        setIsLoadingSettings(true);
+        const settingsRef = doc(db, 'configuracion', 'agenda');
+        const docSnap = await getDoc(settingsRef);
+        if (docSnap.exists()) {
+            setAgendaSettings(docSnap.data() as AgendaSettings);
+        } else {
+            // Set default settings if none are found in DB
+            setAgendaSettings({
+                customerFields: {
+                    email: { use: true, required: false },
+                    phone: { use: true, required: true },
+                    dob: { use: true, required: false },
+                    address: { use: true, required: false },
+                    notes: { use: true, required: false },
+                }
+            });
+        }
+        setIsLoadingSettings(false);
+    };
+    fetchSettings();
+  }, []);
 
   const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
     if (!text || text.trim().length <= 2) return;
@@ -137,8 +185,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
       if (client.fecha_nacimiento) {
         if (typeof client.fecha_nacimiento === 'string') {
           birthDate = parseISO(client.fecha_nacimiento);
-        } else if (client.fecha_nacimiento.seconds) {
-          birthDate = new Date(client.fecha_nacimiento.seconds * 1000);
+        } else if ((client.fecha_nacimiento as any).seconds) {
+          birthDate = new Date((client.fecha_nacimiento as any).seconds * 1000);
         }
       }
       form.reset({
@@ -152,6 +200,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         telefono: '',
         correo: '',
         notas: '',
+        direccion: '',
         fecha_nacimiento: undefined,
       });
     }
@@ -168,7 +217,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
 
       if (isEditMode && client) {
         const clientRef = doc(db, 'clientes', client.id);
-        await updateDoc(clientRef, dataToSave);
+        await updateDoc(clientRef, dataToSave as any);
         toast({
           title: '¡Cliente Actualizado!',
           description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
@@ -215,6 +264,17 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     }
   };
 
+  const fieldSettings = agendaSettings?.customerFields;
+
+  if (isLoadingSettings) {
+    return (
+        <div className="space-y-4 px-1 py-6 max-h-[60vh]">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+        </div>
+    )
+  }
 
   return (
     <Form {...form}>
@@ -248,38 +308,43 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               )}
             />
           </div>
-          <FormField
-            control={form.control}
-            name="telefono"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ej: +521234567890 (10 dígitos)" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="correo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4" /> Correo Electrónico (Opcional)</FormLabel>
-                <FormControl>
-                  <Input placeholder="juan.perez@email.com" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {fieldSettings?.phone?.use && (
+            <FormField
+                control={form.control}
+                name="telefono"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && '*'}</FormLabel>
+                    <FormControl>
+                    <Input placeholder="Ej: +521234567890 (10 dígitos)" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+          )}
+          {fieldSettings?.email?.use && (
+            <FormField
+                control={form.control}
+                name="correo"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4" /> Correo Electrónico {fieldSettings.email.required && '*'}</FormLabel>
+                    <FormControl>
+                    <Input placeholder="juan.perez@email.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+          )}
+           {fieldSettings?.dob?.use && (
            <FormField
             control={form.control}
             name="fecha_nacimiento"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento (Opcional)</FormLabel>
+                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {fieldSettings.dob.required && '*'}</FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -349,12 +414,27 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               </FormItem>
             )}
           />
+          )}
+          {fieldSettings?.address?.use && (
+            <FormField
+                control={form.control}
+                name="direccion"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4" /> Dirección {fieldSettings.address.required && '*'}</FormLabel>
+                    <FormControl><Input placeholder="Calle, número, ciudad..." {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+          )}
+          {fieldSettings?.notes?.use && (
           <FormField
             control={form.control}
             name="notas"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Notas (Opcional)</FormLabel>
+                <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Notas {fieldSettings.notes.required && '*'}</FormLabel>
                 <FormControl>
                   <Textarea placeholder="Alergias, preferencias, etc." {...field} />
                 </FormControl>
@@ -362,6 +442,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               </FormItem>
             )}
           />
+          )}
         </div>
 
         <DialogFooter>

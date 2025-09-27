@@ -59,7 +59,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
       const client = new Twilio.Twilio(accountSid, authToken);
       
       const messageData: any = {
-        from: fromNumber,
+        from: `whatsapp:${fromNumber}`,
         to: `whatsapp:+521${input.to}`,
         body: input.text || '',
       };

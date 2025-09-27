@@ -124,7 +124,7 @@ export default function Header() {
   useEffect(() => {
     if (!db) return;
     const q = query(
-      collection(db, 'conversaciones'),
+      collection(db, 'conversations'),
       where('unreadCount', '>', 0)
     );
 

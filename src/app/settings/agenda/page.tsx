@@ -30,7 +30,6 @@ interface AgendaSettings {
     overlappingReservations: boolean;
     simultaneousReservations: boolean;
     resourceOverload: boolean;
-    requireContactInfo: boolean;
     internalOutOfHours: boolean;
     internalInBlocked: boolean;
     customerFields: Record<string, { use: boolean; required: boolean }>;
@@ -47,7 +46,6 @@ export default function AgendaSettingsPage() {
             overlappingReservations: true,
             simultaneousReservations: true,
             resourceOverload: false,
-            requireContactInfo: true,
             internalOutOfHours: false,
             internalInBlocked: true,
             customerFields: customerFields.reduce((acc, field) => {
@@ -151,15 +149,6 @@ export default function AgendaSettingsPage() {
                         <Switch id="resource-overload" checked={field.value} onCheckedChange={field.onChange} />
                     </div>
                  )} />
-                <Controller name="requireContactInfo" control={form.control} render={({ field }) => (
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <Label htmlFor="require-contact-info">Requerir datos de contacto</Label>
-                            <p className="text-sm text-muted-foreground">Al habilitar esta opción al generar una nueva reserva, el cliente debe tener email o teléfono.</p>
-                        </div>
-                        <Switch id="require-contact-info" checked={field.value} onCheckedChange={field.onChange} />
-                    </div>
-                )} />
             </CardContent>
         </Card>
         

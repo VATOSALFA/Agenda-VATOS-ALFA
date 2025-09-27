@@ -54,6 +54,7 @@ interface ReminderSettings {
 interface AgendaSettings {
     overlappingReservations: boolean;
     resourceOverload: boolean;
+    simultaneousReservations: boolean;
 }
 
 const createReservationSchema = (isEditMode: boolean) => z.object({
@@ -202,6 +203,22 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     const hora_inicio = `${hora_inicio_hora}:${hora_inicio_minuto}`;
     const hora_fin = `${hora_fin_hora}:${hora_fin_minuto}`;
     const formattedDate = format(fecha, 'yyyy-MM-dd');
+    
+    // Check for client simultaneous reservations
+    if (!agendaSettings?.simultaneousReservations && values.cliente_id) {
+        const clientConflict = allReservations.some(r => {
+            if(r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+            return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
+        });
+        if (clientConflict) {
+             Object.keys(items).forEach((_, index) => {
+                errors[index] = "El cliente ya tiene una cita en este horario.";
+            });
+            setAvailabilityErrors(errors);
+            return;
+        }
+    }
+
 
     items.forEach((item, index) => {
       if (!item.barbero_id) return;
@@ -633,18 +650,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                             />
                                         </FormControl>
                                         <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
-                                    </FormItem>
-                                )}/>
-                                <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
-                                    <FormItem className="flex items-center space-x-2">
-                                        <FormControl>
-                                            <Checkbox
-                                                checked={field.value}
-                                                onCheckedChange={field.onChange}
-                                                disabled={!reminderSettings?.whatsapp_reminder}
-                                            />
-                                        </FormControl>
-                                        <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel>
                                     </FormItem>
                                 )}/>
                             </>

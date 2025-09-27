@@ -30,8 +30,6 @@ interface AgendaSettings {
     overlappingReservations: boolean;
     simultaneousReservations: boolean;
     resourceOverload: boolean;
-    internalOutOfHours: boolean;
-    internalInBlocked: boolean;
     customerFields: Record<string, { use: boolean; required: boolean }>;
 }
 
@@ -46,8 +44,6 @@ export default function AgendaSettingsPage() {
             overlappingReservations: true,
             simultaneousReservations: true,
             resourceOverload: false,
-            internalOutOfHours: false,
-            internalInBlocked: true,
             customerFields: customerFields.reduce((acc, field) => {
                 acc[field.id] = { use: true, required: ['phone'].includes(field.id) };
                 return acc;
@@ -153,30 +149,6 @@ export default function AgendaSettingsPage() {
         </Card>
         
         <Accordion type="multiple" className="w-full space-y-4">
-            <AccordionItem value="item-1" className="border rounded-lg bg-card">
-                <AccordionTrigger className="p-6 font-semibold text-base">Reservas internas fuera de horario</AccordionTrigger>
-                <AccordionContent className="p-6 pt-0 space-y-6">
-                    <Controller name="internalInBlocked" control={form.control} render={({ field }) => (
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <Label htmlFor="internal-in-blocked">Reservas en Bloques de horario</Label>
-                                <p className="text-sm text-muted-foreground">Esta opción te permite crear reservas internas en bloques de horario en la agenda.</p>
-                            </div>
-                            <Switch id="internal-in-blocked" checked={field.value} onCheckedChange={field.onChange} />
-                        </div>
-                    )} />
-                    <Controller name="internalOutOfHours" control={form.control} render={({ field }) => (
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <Label htmlFor="internal-out-of-hours">Horario extendido para reservas internas</Label>
-                                <p className="text-sm text-muted-foreground">Habilita esta opción para extender el horario en la sección Agenda.</p>
-                            </div>
-                            <Switch id="internal-out-of-hours" checked={field.value} onCheckedChange={field.onChange} />
-                        </div>
-                    )} />
-                </AccordionContent>
-            </AccordionItem>
-            
             <AccordionItem value="item-2" className="border rounded-lg bg-card">
                 <AccordionTrigger className="p-6 font-semibold text-base">Configuración de campos adicionales</AccordionTrigger>
                 <AccordionContent className="p-6 pt-0">

@@ -128,40 +128,40 @@ function ConfirmPageContent() {
                         '3': fullDateStr,
                         '4': selectedProfessional.name,
                     };
-                    
-                    // "Cook" the message locally
-                    const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr}. ¡Te esperamos!`;
 
-                    // 1. Send to Twilio (don't wait for body)
-                    const result = await sendTemplatedWhatsAppMessage({
+                    // Cook the message locally to save it
+                    const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
+
+                    // 1. Save the locally "cooked" message to Firestore
+                    const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
+                    const conversationRef = doc(db, 'conversations', conversationId);
+                    
+                    await setDoc(conversationRef, {
+                        lastMessageText: `Tú: ${messageBody}`,
+                        lastMessageTimestamp: serverTimestamp(),
+                        clientName: `${data.nombre} ${data.apellido}`.trim()
+                    }, { merge: true });
+                    
+                    await addDoc(collection(conversationRef, 'messages'), {
+                        senderId: 'vatosalfa',
+                        text: messageBody,
+                        timestamp: serverTimestamp(),
+                        read: true, // It's an automated message, so we can mark as read for the user
+                    });
+
+                    // 2. Send to Twilio (fire and forget)
+                    sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,
                         contentVariables: contentVariables,
+                    }).then(result => {
+                         if (result.success) {
+                            toast({ title: 'Notificación de WhatsApp enviada.' });
+                        } else {
+                            toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
+                        }
                     });
 
-                    if (result.success) {
-                        toast({ title: 'Notificación de WhatsApp enviada.' });
-
-                        // 2. Save the locally "cooked" message to Firestore
-                        const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
-                        const conversationRef = doc(db, 'conversations', conversationId);
-                        
-                        await setDoc(conversationRef, {
-                            lastMessageText: `Tú: ${messageBody}`,
-                            lastMessageTimestamp: serverTimestamp(),
-                            clientName: `${data.nombre} ${data.apellido}`.trim()
-                        }, { merge: true });
-                        
-                        await addDoc(collection(conversationRef, 'messages'), {
-                            senderId: 'vatosalfa',
-                            text: messageBody,
-                            timestamp: serverTimestamp(),
-                            read: true,
-                        });
-
-                    } else {
-                        toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
-                    }
                 } catch (waError) {
                     console.error("WhatsApp notification failed:", waError);
                     toast({ variant: 'destructive', title: 'Error', description: 'No se pudo enviar la notificación por WhatsApp.' });

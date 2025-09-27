@@ -612,7 +612,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <FormItem className="flex items-center space-x-2">
                                         <FormControl>
                                             <Checkbox
-                                                checked={field.value}
+                                                checked={!!reminderSettings?.whatsapp_notification && field.value}
                                                 onCheckedChange={field.onChange}
                                                 disabled={!reminderSettings?.whatsapp_notification}
                                             />
@@ -624,7 +624,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <FormItem className="flex items-center space-x-2">
                                         <FormControl>
                                             <Checkbox
-                                                checked={field.value}
+                                                checked={!!reminderSettings?.whatsapp_reminder && field.value}
                                                 onCheckedChange={field.onChange}
                                                 disabled={!reminderSettings?.whatsapp_reminder}
                                             />
@@ -749,3 +749,5 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
+
+    

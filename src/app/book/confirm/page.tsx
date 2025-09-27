@@ -131,21 +131,19 @@ function ConfirmPageContent() {
                             '4': selectedProfessional.name,
                         }
                     });
+
                     if (result.success && result.body) {
                         toast({ title: 'Notificación de WhatsApp enviada.' });
 
-                        // Construct the message and save it to the conversation
                         const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                         const conversationRef = doc(db, 'conversations', conversationId);
                         
-                        // Ensure conversation document exists before adding a message
                         await setDoc(conversationRef, {
                             lastMessageText: `Tú: ${result.body}`,
                             lastMessageTimestamp: serverTimestamp(),
                             clientName: `${data.nombre} ${data.apellido}`.trim()
                         }, { merge: true });
                         
-                        // Add message to subcollection
                         await addDoc(collection(conversationRef, 'messages'), {
                             senderId: 'vatosalfa',
                             text: result.body,

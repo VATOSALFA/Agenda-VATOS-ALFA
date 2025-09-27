@@ -64,6 +64,9 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
       
       const message = await client.messages.create(messageData);
 
+      // Wait a moment for the message to be processed and the body to be available.
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // Fetch the message to get its body, as create doesn't return it for templates
       const sentMessage = await client.messages(message.sid).fetch();
 

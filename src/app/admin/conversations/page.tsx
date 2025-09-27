@@ -110,11 +110,13 @@ export default function ConversationsPage() {
 
   const clientMap = useMemo(() => {
     if (clientsLoading) return new Map();
+    // Normalize phone numbers to just digits for reliable mapping.
+    // Stores `521442...` or `442...` as the key.
     const map = new Map<string, string>();
     clients.forEach(c => {
         if(c.telefono) {
-            const phone = c.telefono.replace(/\D/g, '').slice(-10); // Get last 10 digits
-            map.set(phone, `${c.nombre} ${c.apellido}`);
+            const cleanPhone = c.telefono.replace(/\D/g, '');
+            map.set(cleanPhone, `${c.nombre} ${c.apellido}`);
         }
     });
     return map;
@@ -122,13 +124,27 @@ export default function ConversationsPage() {
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace(/\D/g, '').slice(-10);
+        const conversationPhone = conv.id.replace(/\D/g, ''); // e.g., "521442..."
+        
+        // Attempt to find a match. This is flexible:
+        // 1. Check for full international match (e.g., '521442...' in both)
+        // 2. Check if conv phone ends with client phone (e.g., '521442...' ends with '442...')
+        // 3. Check if client phone ends with conv phone (less likely, but for safety)
+        let foundName: string | undefined = undefined;
+        for (const [clientPhone, clientName] of clientMap.entries()) {
+            if (conversationPhone === clientPhone || conversationPhone.endsWith(clientPhone) || clientPhone.endsWith(conversationPhone)) {
+                foundName = clientName;
+                break;
+            }
+        }
+
         return {
             ...conv,
-            clientName: conv.clientName || clientMap.get(phone) || conv.id.replace('whatsapp:', ''),
+            clientName: foundName || conv.clientName || conv.id.replace('whatsapp:', ''),
         }
     })
   }, [conversations, clientMap]);
+
 
   useEffect(() => {
     if (activeConversationId && db) {
@@ -280,18 +296,13 @@ export default function ConversationsPage() {
 
   return (
     <>
-    <div className="flex h-full bg-muted/40">
+    <div className="h-[calc(100vh-4rem)] flex bg-muted/40">
       <aside className={cn(
         "w-full md:w-80 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
         "md:flex" // Always show on desktop
       )}>
         <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2">
-           <Link href="/">
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                    <ChevronLeft className="h-6 w-6"/>
-                </Button>
-            </Link>
             <div>
                 <h2 className="text-xl font-bold">Conversaciones</h2>
                 <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
@@ -440,3 +451,5 @@ export default function ConversationsPage() {
     </>
   );
 }
+
+    

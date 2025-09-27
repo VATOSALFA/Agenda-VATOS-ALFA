@@ -100,3 +100,5 @@ export default function AppInitializer({ children }: { children: ReactNode }) {
     </>
   );
 };
+
+    

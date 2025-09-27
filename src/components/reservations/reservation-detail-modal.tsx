@@ -38,7 +38,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { cn } from '@/lib/utils';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, deleteDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
@@ -84,14 +84,30 @@ export function ReservationDetailModal({
   if (!reservation) return null;
   
   const handleCancelReservation = async (reservationId: string) => {
+    if (!reservation.cliente_id) {
+         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado." });
+         return;
+    }
+    
     try {
-        const resRef = doc(db, 'reservas', reservationId);
-        await deleteDoc(resRef);
-        toast({
-            title: "Reserva eliminada con éxito",
+        await runTransaction(db, async (transaction) => {
+            const resRef = doc(db, 'reservas', reservationId);
+            const clientRef = doc(db, 'clientes', reservation.cliente_id);
+
+            transaction.update(resRef, { estado: 'Cancelado' });
+            transaction.update(clientRef, {
+                citas_canceladas: increment(1)
+            });
         });
+
+        toast({
+            title: "Reserva Cancelada",
+            description: "El estado de la reserva ha sido actualizado a 'Cancelado'.",
+        });
+
         onOpenChange(false);
         onUpdateStatus(reservationId, 'Cancelado'); // Force refetch in parent
+        
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({

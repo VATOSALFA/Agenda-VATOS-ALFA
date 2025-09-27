@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { collection, query, where, getDocs, writeBatch, Timestamp, doc, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, Timestamp, doc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { addMinutes, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -133,6 +133,26 @@ function ConfirmPageContent() {
                     });
                     if (result.success) {
                         toast({ title: 'Notificación de WhatsApp enviada.' });
+
+                        // Construct the message and save it to the conversation
+                        const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
+                        const conversationRef = doc(db, 'conversations', conversationId);
+                        
+                        const messageText = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
+                        
+                        await addDoc(collection(conversationRef, 'messages'), {
+                            senderId: 'vatosalfa',
+                            text: messageText,
+                            timestamp: serverTimestamp(),
+                            read: true, // Mark as read since we sent it
+                        });
+
+                        await setDoc(conversationRef, {
+                            lastMessageText: `Tú: ${messageText}`,
+                            lastMessageTimestamp: serverTimestamp(),
+                            clientName: `${data.nombre} ${data.apellido}`.trim()
+                        }, { merge: true });
+
                     } else {
                         toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
                     }

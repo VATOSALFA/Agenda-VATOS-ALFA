@@ -605,12 +605,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   <AccordionItem value="notificaciones">
                     <AccordionTrigger>Notificaciones Adicionales</AccordionTrigger>
                     <AccordionContent className="space-y-3 pt-2">
-                         <FormField control={form.control} name="notifications.email_notification" render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar email de notificación de reserva</FormLabel></FormItem>
-                         )}/>
-                          <FormField control={form.control} name="notifications.email_reminder" render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar email de recordatorio de reserva</FormLabel></FormItem>
-                         )}/>
                           {selectedClient?.telefono && (
                             <>
                                 <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (

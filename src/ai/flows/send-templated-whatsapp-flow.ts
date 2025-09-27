@@ -23,7 +23,6 @@ const WhatsAppMessageOutputSchema = z.object({
   success: z.boolean(),
   sid: z.string().optional(),
   error: z.string().optional(),
-  body: z.string().optional(), // Added to return the message body
 });
 
 type WhatsAppMessageOutput = z.infer<typeof WhatsAppMessageOutputSchema>;
@@ -64,16 +63,9 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
       
       const message = await client.messages.create(messageData);
 
-      // Wait a moment for the message to be processed and the body to be available.
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Fetch the message to get its body, as create doesn't return it for templates
-      const sentMessage = await client.messages(message.sid).fetch();
-
       return {
         success: true,
         sid: message.sid,
-        body: sentMessage.body,
       };
     } catch (error: any) {
       console.error('Twilio API Error (Template):', error);

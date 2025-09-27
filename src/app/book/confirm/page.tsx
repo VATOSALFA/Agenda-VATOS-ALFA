@@ -121,37 +121,45 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
+                    const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
+                    const contentVariables = {
+                        '1': data.nombre,
+                        '2': reservationData.servicio,
+                        '3': fullDateStr,
+                        '4': selectedProfessional.name,
+                    };
+                    
+                    // "Cook" the message locally
+                    const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr}. ¡Te esperamos!`;
+
+                    // 1. Send to Twilio (don't wait for body)
                     const result = await sendTemplatedWhatsAppMessage({
                         to: data.telefono,
-                        contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
-                        contentVariables: {
-                            '1': data.nombre,
-                            '2': reservationData.servicio,
-                            '3': fullDateStr,
-                            '4': selectedProfessional.name,
-                        }
+                        contentSid: contentSid,
+                        contentVariables: contentVariables,
                     });
 
-                    if (result.success && result.body) {
+                    if (result.success) {
                         toast({ title: 'Notificación de WhatsApp enviada.' });
 
+                        // 2. Save the locally "cooked" message to Firestore
                         const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                         const conversationRef = doc(db, 'conversations', conversationId);
                         
                         await setDoc(conversationRef, {
-                            lastMessageText: `Tú: ${result.body}`,
+                            lastMessageText: `Tú: ${messageBody}`,
                             lastMessageTimestamp: serverTimestamp(),
                             clientName: `${data.nombre} ${data.apellido}`.trim()
                         }, { merge: true });
                         
                         await addDoc(collection(conversationRef, 'messages'), {
                             senderId: 'vatosalfa',
-                            text: result.body,
+                            text: messageBody,
                             timestamp: serverTimestamp(),
                             read: true,
                         });
 
-                    } else if (!result.success) {
+                    } else {
                         toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
                     }
                 } catch (waError) {

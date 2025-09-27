@@ -299,10 +299,10 @@ export default function ConversationsPage() {
 
   return (
     <>
-    <div className="h-screen flex flex-col">
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-1 flex bg-muted/40 overflow-hidden">
         <aside className={cn(
-            "w-full md:w-[500px] border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
+            "w-[500px] border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
             "md:flex" // Always show on desktop
         )}>
             <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
@@ -344,9 +344,9 @@ export default function ConversationsPage() {
                                     </div>
                                     <div className="flex justify-between items-start mt-1">
                                         <p className="text-xs text-muted-foreground truncate pr-2">{conv.lastMessageText}</p>
-                                        {conv.unreadCount && conv.unreadCount > 0 && (
-                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">{conv.unreadCount}</span>
-                                    )}
+                                        {conv.unreadCount && conv.unreadCount > 0 ? (
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">{conv.unreadCount}</span>
+                                        ) : null}
                                     </div>
                                 </div>
                             </button>
@@ -460,4 +460,5 @@ export default function ConversationsPage() {
     
 
     
+
 

@@ -128,23 +128,22 @@ function ConfirmPageContent() {
                     // Replicate Twilio Webhook logic to save the message
                     const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                     const conversationRef = doc(db, 'conversations', conversationId);
-
-                    // 1. Save message to subcollection
-                    const messageData = {
-                        senderId: 'vatosalfa',
-                        text: messageBody,
-                        timestamp: serverTimestamp(),
-                        read: true, // It's a system message, "read" by the system
-                    };
-                    await addDoc(collection(conversationRef, 'messages'), messageData);
                     
-                    // 2. Create or update the conversation summary document
+                    // 1. Create or update the main conversation document
                     await setDoc(conversationRef, {
                         lastMessageText: messageBody,
                         lastMessageTimestamp: serverTimestamp(),
                         clientName: `${data.nombre} ${data.apellido}`.trim()
                     }, { merge: true });
 
+                    // 2. Add the message to the 'messages' subcollection
+                    await addDoc(collection(conversationRef, 'messages'), {
+                        senderId: 'vatosalfa',
+                        text: messageBody,
+                        timestamp: serverTimestamp(),
+                        read: true, // It's a system message, "read" by the system
+                    });
+                    
                     // 3. Send to Twilio (fire and forget)
                     sendTemplatedWhatsAppMessage({
                         to: data.telefono,

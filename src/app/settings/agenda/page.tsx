@@ -26,7 +26,6 @@ const customerFields = [
 ];
 
 interface AgendaSettings {
-    blockDuration: string;
     overlappingReservations: boolean;
     simultaneousReservations: boolean;
     resourceOverload: boolean;
@@ -40,7 +39,6 @@ export default function AgendaSettingsPage() {
 
     const form = useForm<AgendaSettings>({
         defaultValues: {
-            blockDuration: '30',
             overlappingReservations: true,
             simultaneousReservations: true,
             resourceOverload: false,
@@ -90,31 +88,6 @@ export default function AgendaSettingsPage() {
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Bloque Agenda</CardTitle>
-            <p className="text-muted-foreground text-sm">Esta sección determina el largo de cada bloque en la sección Agenda.</p>
-          </CardHeader>
-          <CardContent>
-             <Controller
-                name="blockDuration"
-                control={form.control}
-                render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Selecciona duración" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="15">15 minutos</SelectItem>
-                            <SelectItem value="30">30 minutos</SelectItem>
-                            <SelectItem value="60">60 minutos</SelectItem>
-                        </SelectContent>
-                    </Select>
-                )}
-             />
-          </CardContent>
-        </Card>
-
         <Card>
             <CardHeader><CardTitle>Configuración de Reservas</CardTitle></CardHeader>
             <CardContent className="space-y-6">

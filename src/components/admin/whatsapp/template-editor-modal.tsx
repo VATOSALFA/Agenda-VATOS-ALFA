@@ -118,7 +118,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
+      <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Editando: {template.name}</DialogTitle>
         </DialogHeader>

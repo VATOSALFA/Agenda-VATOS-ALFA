@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import type { Template } from './template-selection-modal';
 
@@ -28,12 +27,40 @@ const editorSchema = z.object({
   contentSid: z.string().regex(/^HX[a-f0-9]{32}$/, 'Debe ser un Content SID válido de Twilio (ej. HX...).'),
 });
 
-
 type EditorFormData = z.infer<typeof editorSchema>;
 
-const availableTags = [
-    '{{1}}', '{{2}}', '{{3}}', '{{4}}', '{{5}}',
-];
+const dataTags = {
+    'Datos de la reserva': [
+        '[[Nombre cliente]]', '[[Apellido cliente]]', '[[Profesional]]', '[[Nombre servicio]]', '[[Precio reserva]]', '[[Duración]]', '[[Fecha y hora reserva]]', '[[Link de pago]]'
+    ],
+    'Datos del local': [
+        '[[Nombre local]]', '[[Ubicación local]]', '[[Teléfono local]]', '[[Email local]]'
+    ],
+    'Datos de la compañía': [
+        '[[Compañía]]', '[[Sitio de agendamiento]]', '[[Instagram]]', '[[Facebook]]', '[[Tu página web]]'
+    ]
+}
+
+const sampleData: Record<string, string> = {
+    '[[Nombre cliente]]': 'Juan',
+    '[[Apellido cliente]]': 'Pérez',
+    '[[Profesional]]': 'El Patrón',
+    '[[Nombre servicio]]': 'Corte y Barba',
+    '[[Precio reserva]]': '$500.00',
+    '[[Duración]]': '60 min',
+    '[[Fecha y hora reserva]]': '15/08/2024 a las 16:00',
+    '[[Link de pago]]': 'https://pagos.vatosalfa.com/pay123',
+    '[[Nombre local]]': 'Sucursal Condesa',
+    '[[Ubicación local]]': 'Av. Amsterdam 123, Condesa',
+    '[[Teléfono local]]': '+52 55 1234 5678',
+    '[[Email local]]': 'condesa@vatosalfa.com',
+    '[[Compañía]]': 'VATOS ALFA Barber Shop',
+    '[[Sitio de agendamiento]]': 'https://vatosalfa.com/agenda',
+    '[[Instagram]]': '@vatosalfa',
+    '[[Facebook]]': '/vatosalfa.bs',
+    '[[Tu página web]]': 'https://vatosalfa.com'
+};
+
 
 export function TemplateEditorModal({ isOpen, onClose, onSave, template }: TemplateEditorModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,17 +71,17 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
     defaultValues: {
       name: template.name,
       body: template.body,
-      contentSid: template.contentSid.startsWith('HX') ? template.contentSid : '',
+      contentSid: template.contentSid?.startsWith('HX') ? template.contentSid : '',
     },
   });
-
+  
   const messageBody = form.watch('body');
 
   useEffect(() => {
     form.reset({
         name: template.name,
         body: template.body,
-        contentSid: template.contentSid.startsWith('HX') ? template.contentSid : '',
+        contentSid: template.contentSid?.startsWith('HX') ? template.contentSid : '',
     });
   }, [template, form]);
 
@@ -64,12 +91,20 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       const text = textarea.value;
-      const newText = text.substring(0, start) + tag + text.substring(end);
+      const newText = `${text.substring(0, start)}${tag}${text.substring(end)}`;
       form.setValue('body', newText, { shouldValidate: true });
       textarea.focus();
       textarea.setSelectionRange(start + tag.length, start + tag.length);
     }
   };
+  
+  const generatePreview = () => {
+    let preview = messageBody;
+    for (const key in sampleData) {
+        preview = preview.replace(new RegExp(key.replace(/\[/g, '\\[').replace(/\]/g, '\\]'), 'g'), sampleData[key]);
+    }
+    return preview;
+  }
 
   const onSubmit = (data: EditorFormData) => {
     setIsSubmitting(true);
@@ -85,76 +120,90 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
       <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Editando: {template.name}</DialogTitle>
-          <DialogDescription>
-            Personaliza el mensaje y guárdalo para usarlo más tarde.
-          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow grid md:grid-cols-2 gap-6 overflow-hidden">
-            <div className="flex flex-col space-y-4">
-                <FormField
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col space-y-4 overflow-hidden">
+            <div className="flex-shrink-0">
+               <FormField
                     control={form.control}
                     name="name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Nombre de la plantilla</FormLabel>
-                            <FormControl><Input {...field} /></FormControl>
+                            <FormLabel>Nombre del mensaje <span className="text-destructive">*</span></FormLabel>
+                            <FormControl><Input {...field} placeholder="El nombre se usará para reconocer el mensaje en la agenda" /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                 <FormField
-                    control={form.control}
-                    name="contentSid"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Content SID (de Twilio)</FormLabel>
-                            <FormControl><Input {...field} placeholder="HX..." /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="body"
-                    render={({ field }) => (
-                        <FormItem className="flex flex-col flex-grow">
-                            <FormLabel>Cuerpo del mensaje</FormLabel>
-                            <FormControl>
-                                <Textarea {...field} ref={textareaRef} className="flex-grow resize-none"/>
-                            </FormControl>
-                             <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <div>
-                    <FormLabel>Variables</FormLabel>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                        {availableTags.map(tag => (
-                            <Badge key={tag} variant="secondary" className="cursor-pointer" onClick={() => handleTagClick(tag)}>
-                                {tag}
-                            </Badge>
+            </div>
+            
+            <div className="flex-grow grid md:grid-cols-2 gap-6 overflow-hidden">
+                <div className="flex flex-col space-y-4 overflow-hidden">
+                    <div className="space-y-2">
+                        <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
+                        <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
+                    </div>
+
+                    <div className="space-y-4 p-2 rounded-md border">
+                        {Object.entries(dataTags).map(([category, tags]) => (
+                            <div key={category}>
+                                <h4 className="text-sm font-semibold mb-2">{category}</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {tags.map(tag => (
+                                        <Button key={tag} type="button" variant="outline" size="sm" className="text-xs" onClick={() => handleTagClick(tag)}>
+                                            {tag.replace(/\[|\]/g, '')}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
+
+                     <FormField
+                        control={form.control}
+                        name="body"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-col flex-grow">
+                                <FormControl>
+                                    <Textarea {...field} ref={textareaRef} className="flex-grow resize-none"/>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="contentSid"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Content SID (de Twilio) <span className="text-destructive">*</span></FormLabel>
+                              <FormControl><Input {...field} placeholder="HX..." /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                    />
+                </div>
+                 <div className="flex flex-col space-y-2">
+                     <h4 className="font-semibold text-sm">Previsualización del mensaje</h4>
+                     <Card className="flex-grow bg-muted/50">
+                        <CardContent className="p-4">
+                            <pre className="text-sm whitespace-pre-wrap font-sans">{generatePreview() || "Escribe un mensaje para ver la previsualización."}</pre>
+                        </CardContent>
+                     </Card>
+                     <div className="flex justify-end">
+                        <Button type="button" variant="ghost">Enviar mensaje de prueba</Button>
+                     </div>
                 </div>
             </div>
-            <div className="flex flex-col space-y-4">
-                 <h4 className="font-semibold text-sm">Previsualización del mensaje</h4>
-                 <Card className="flex-grow bg-muted/50">
-                    <CardContent className="p-4">
-                        <pre className="text-sm whitespace-pre-wrap font-sans">{messageBody || "Escribe un mensaje para ver la previsualización."}</pre>
-                    </CardContent>
-                 </Card>
-            </div>
+            <DialogFooter className="pt-4 border-t flex-shrink-0">
+              <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
-        <DialogFooter className="pt-4 border-t">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

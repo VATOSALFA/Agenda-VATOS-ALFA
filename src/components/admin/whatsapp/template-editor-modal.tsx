@@ -152,13 +152,13 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl h-[90vh] flex flex-col">
+      <DialogContent className="max-w-[1200px] w-[90vw] h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Editando: {template.name}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col space-y-4 overflow-hidden">
-            <div className="grid md:grid-cols-[1fr_450px] gap-6 flex-grow overflow-hidden">
+            <div className="grid md:grid-cols-[1fr_350px] gap-6 flex-grow overflow-hidden">
                 {/* Left Column */}
                 <div className="flex flex-col space-y-4 overflow-hidden">
                     <div className="flex-shrink-0 space-y-2">
@@ -176,11 +176,13 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                     </div>
                     
                     <div className="flex-grow flex flex-col space-y-2 overflow-hidden">
-                        <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
-                        <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
+                        <div className="flex-shrink-0 pr-4">
+                            <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
+                            <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
+                        </div>
                         
-                        <div className="flex-grow overflow-y-auto pr-2">
-                             <div className="space-y-2">
+                        <div className="flex-grow overflow-hidden flex flex-col">
+                            <div className="space-y-1 py-2 flex-shrink-0 pr-4">
                                 <Accordion type="multiple" className="w-full space-y-1">
                                     {Object.entries(dataTags).map(([category, tags]) => (
                                         <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
@@ -211,11 +213,14 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                                         </AccordionItem>
                                     ))}
                                 </Accordion>
+                            </div>
+                            <ScrollArea className="flex-grow">
+                                <div className="pr-4">
                                 <FormField
                                     control={form.control}
                                     name="body"
                                     render={({ field }) => (
-                                        <FormItem className="flex flex-col flex-grow pt-2">
+                                        <FormItem className="flex flex-col h-full pt-2">
                                             <FormControl>
                                                 <Textarea {...field} ref={textareaRef} className="flex-grow resize-none min-h-[150px]"/>
                                             </FormControl>
@@ -223,10 +228,11 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                                         </FormItem>
                                     )}
                                 />
-                            </div>
+                                </div>
+                            </ScrollArea>
                         </div>
                     </div>
-                     <div className="flex-shrink-0">
+                     <div className="flex-shrink-0 pr-4">
                         <FormField
                             control={form.control}
                             name="contentSid"
@@ -242,7 +248,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                 </div>
 
                 {/* Right Column */}
-                 <div className="flex flex-col space-y-4 overflow-y-auto pr-2">
+                 <div className="flex flex-col space-y-4 overflow-y-auto pr-2 -mr-4">
                      <div className="flex-grow flex flex-col space-y-2">
                         <h4 className="font-semibold text-sm">Previsualización</h4>
                         <Card className="flex-grow bg-muted/50">
@@ -256,7 +262,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                         <Card className="bg-blue-50 border-blue-200">
                            <CardContent className="p-4 space-y-2">
                                <p className="text-xs text-blue-800">
-                                   Copia este texto y pégalo en el campo "Body" al crear tu plantilla en Twilio. Las variables se han convertido al formato `{{'{{1}}'}}`.
+                                   Copia este texto y pégalo en el campo "Body" al crear tu plantilla en Twilio. Las variables se han convertido al formato `&#123;&#123;1&#125;&#125;`.
                                </p>
                                <div className="bg-white p-2 rounded-md border border-blue-200 relative">
                                    <pre className="text-xs whitespace-pre-wrap font-mono text-blue-900">{twilioTemplateBody}</pre>

@@ -128,28 +128,28 @@ function ConfirmPageContent() {
                         '3': fullDateStr,
                         '4': selectedProfessional.name,
                     };
-
-                    // Cook the message locally to save it
+                    
                     const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
 
-                    // 1. Save the locally "cooked" message to Firestore
                     const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                     const conversationRef = doc(db, 'conversations', conversationId);
-                    
+
+                    // 1. Create or update the conversation summary document
                     await setDoc(conversationRef, {
                         lastMessageText: messageBody,
                         lastMessageTimestamp: serverTimestamp(),
                         clientName: `${data.nombre} ${data.apellido}`.trim()
                     }, { merge: true });
-                    
+
+                    // 2. Add the message to the 'messages' subcollection
                     await addDoc(collection(conversationRef, 'messages'), {
                         senderId: 'vatosalfa',
                         text: messageBody,
                         timestamp: serverTimestamp(),
-                        read: true,
+                        read: true, // It's a system message, so it's "read" by the system
                     });
 
-                    // 2. Send to Twilio (fire and forget)
+                    // 3. Send to Twilio (fire and forget)
                     sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,

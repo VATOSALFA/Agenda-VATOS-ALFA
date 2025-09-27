@@ -131,17 +131,16 @@ function ConfirmPageContent() {
                             '4': selectedProfessional.name,
                         }
                     });
-                    if (result.success) {
+                    if (result.success && result.body) {
                         toast({ title: 'Notificación de WhatsApp enviada.' });
 
                         // Construct the message and save it to the conversation
                         const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                         const conversationRef = doc(db, 'conversations', conversationId);
-                        const messageText = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
                         
                         // Ensure conversation document exists before adding a message
                         await setDoc(conversationRef, {
-                            lastMessageText: `Tú: ${messageText}`,
+                            lastMessageText: `Tú: ${result.body}`,
                             lastMessageTimestamp: serverTimestamp(),
                             clientName: `${data.nombre} ${data.apellido}`.trim()
                         }, { merge: true });
@@ -149,12 +148,12 @@ function ConfirmPageContent() {
                         // Add message to subcollection
                         await addDoc(collection(conversationRef, 'messages'), {
                             senderId: 'vatosalfa',
-                            text: messageText,
+                            text: result.body,
                             timestamp: serverTimestamp(),
                             read: true,
                         });
 
-                    } else {
+                    } else if (!result.success) {
                         toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
                     }
                 } catch (waError) {

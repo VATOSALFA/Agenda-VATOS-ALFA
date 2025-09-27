@@ -62,7 +62,7 @@ export default function AppInitializer({ children }: { children: ReactNode }) {
     );
   }
 
-  const showHeader = user && !isAuthPage && !pathname.startsWith('/admin/conversations');
+  const showHeader = user && !isAuthPage;
 
   return (
     <>

@@ -122,38 +122,39 @@ function ConfirmPageContent() {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
                     const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
-                    const contentVariables = {
-                        '1': data.nombre,
-                        '2': reservationData.servicio,
-                        '3': fullDateStr,
-                        '4': selectedProfessional.name,
-                    };
                     
                     const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
-
+                    
+                    // Replicate Twilio Webhook logic to save the message
                     const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                     const conversationRef = doc(db, 'conversations', conversationId);
 
-                    // 1. Create or update the conversation summary document
+                    // 1. Save message to subcollection
+                    const messageData = {
+                        senderId: 'vatosalfa',
+                        text: messageBody,
+                        timestamp: serverTimestamp(),
+                        read: true, // It's a system message, "read" by the system
+                    };
+                    await addDoc(collection(conversationRef, 'messages'), messageData);
+                    
+                    // 2. Create or update the conversation summary document
                     await setDoc(conversationRef, {
                         lastMessageText: messageBody,
                         lastMessageTimestamp: serverTimestamp(),
                         clientName: `${data.nombre} ${data.apellido}`.trim()
                     }, { merge: true });
 
-                    // 2. Add the message to the 'messages' subcollection
-                    await addDoc(collection(conversationRef, 'messages'), {
-                        senderId: 'vatosalfa',
-                        text: messageBody,
-                        timestamp: serverTimestamp(),
-                        read: true, // It's a system message, so it's "read" by the system
-                    });
-
                     // 3. Send to Twilio (fire and forget)
                     sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,
-                        contentVariables: contentVariables,
+                        contentVariables: {
+                            '1': data.nombre,
+                            '2': reservationData.servicio,
+                            '3': fullDateStr,
+                            '4': selectedProfessional.name,
+                        },
                     }).then(result => {
                          if (result.success) {
                             toast({ title: 'Notificación de WhatsApp enviada.' });

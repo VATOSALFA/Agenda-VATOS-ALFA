@@ -1,21 +1,22 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import type { Template } from './template-selection-modal';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface TemplateEditorModalProps {
@@ -73,6 +74,7 @@ const sampleData: Record<string, string> = {
 export function TemplateEditorModal({ isOpen, onClose, onSave, template }: TemplateEditorModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { toast } = useToast();
   
   const form = useForm<EditorFormData>({
     resolver: zodResolver(editorSchema),
@@ -113,6 +115,31 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
     }
     return preview;
   }
+  
+  const { twilioTemplateBody, variableMapping } = useMemo(() => {
+    const variableMap = new Map<string, number>();
+    let counter = 1;
+    const regex = /\[\[(.*?)\]\]/g;
+    
+    let match;
+    const bodyWithTwilioVars = messageBody.replace(regex, (fullMatch) => {
+      if (!variableMap.has(fullMatch)) {
+        variableMap.set(fullMatch, counter++);
+      }
+      return `{{${variableMap.get(fullMatch)}}}`;
+    });
+
+    return { twilioTemplateBody: bodyWithTwilioVars, variableMapping: variableMap };
+  }, [messageBody]);
+
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+        title: '¡Copiado!',
+        description: 'La plantilla para Twilio ha sido copiada.',
+    });
+  }
 
   const onSubmit = (data: EditorFormData) => {
     setIsSubmitting(true);
@@ -131,9 +158,9 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col space-y-4 overflow-hidden">
-            <div className="grid md:grid-cols-3 gap-6 flex-grow overflow-hidden">
+            <div className="grid md:grid-cols-[1fr_450px] gap-6 flex-grow overflow-hidden">
                 {/* Left Column */}
-                <div className="md:col-span-2 flex flex-col space-y-4 overflow-hidden">
+                <div className="flex flex-col space-y-4 overflow-hidden">
                     <div className="flex-shrink-0 space-y-2">
                         <FormField
                             control={form.control}
@@ -152,16 +179,16 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                         <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
                         <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
                         
-                        <ScrollArea className="flex-grow pr-4">
-                            <div className="space-y-2 pr-2">
-                                <Accordion type="multiple" className="w-full space-y-2">
+                        <div className="flex-grow overflow-y-auto pr-2">
+                             <div className="space-y-2">
+                                <Accordion type="multiple" className="w-full space-y-1">
                                     {Object.entries(dataTags).map(([category, tags]) => (
                                         <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
-                                            <AccordionTrigger className="px-4 py-3 hover:no-underline">{category}</AccordionTrigger>
+                                            <AccordionTrigger className="px-4 py-2 text-sm hover:no-underline">{category}</AccordionTrigger>
                                             <AccordionContent>
                                                 <div className="flex flex-wrap gap-2 pt-1 px-4 pb-4">
                                                     {tags.map(tag => (
-                                                        <Button key={tag} type="button" variant="outline" size="sm" className="text-xs" onClick={() => handleTagClick(tag)}>
+                                                        <Button key={tag} type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => handleTagClick(tag)}>
                                                             {tag.replace(/\[|\]/g, '')}
                                                         </Button>
                                                     ))}
@@ -171,7 +198,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                                     ))}
                                     {Object.entries(emojis).map(([category, tags]) => (
                                         <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
-                                            <AccordionTrigger className="px-4 py-3 hover:no-underline">{category}</AccordionTrigger>
+                                            <AccordionTrigger className="px-4 py-2 text-sm hover:no-underline">{category}</AccordionTrigger>
                                             <AccordionContent>
                                                 <div className="flex flex-wrap gap-1 pt-1 px-4 pb-4">
                                                     {tags.map(tag => (
@@ -197,7 +224,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                                     )}
                                 />
                             </div>
-                        </ScrollArea>
+                        </div>
                     </div>
                      <div className="flex-shrink-0">
                         <FormField
@@ -215,13 +242,31 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                 </div>
 
                 {/* Right Column */}
-                 <div className="md:col-span-1 flex flex-col space-y-2">
-                     <h4 className="font-semibold text-sm">Previsualización del mensaje</h4>
-                     <Card className="flex-grow bg-muted/50">
-                        <CardContent className="p-4">
-                            <pre className="text-sm whitespace-pre-wrap font-sans">{generatePreview() || "Escribe un mensaje para ver la previsualización."}</pre>
-                        </CardContent>
-                     </Card>
+                 <div className="flex flex-col space-y-4 overflow-y-auto pr-2">
+                     <div className="flex-grow flex flex-col space-y-2">
+                        <h4 className="font-semibold text-sm">Previsualización</h4>
+                        <Card className="flex-grow bg-muted/50">
+                            <CardContent className="p-4">
+                                <pre className="text-sm whitespace-pre-wrap font-sans">{generatePreview() || "Escribe un mensaje para ver la previsualización."}</pre>
+                            </CardContent>
+                        </Card>
+                     </div>
+                     <div className="flex-shrink-0 flex flex-col space-y-2">
+                        <h4 className="font-semibold text-sm">Plantilla para Twilio</h4>
+                        <Card className="bg-blue-50 border-blue-200">
+                           <CardContent className="p-4 space-y-2">
+                               <p className="text-xs text-blue-800">
+                                   Copia este texto y pégalo en el campo "Body" al crear tu plantilla en Twilio. Las variables se han convertido al formato `{{'{{1}}'}}`.
+                               </p>
+                               <div className="bg-white p-2 rounded-md border border-blue-200 relative">
+                                   <pre className="text-xs whitespace-pre-wrap font-mono text-blue-900">{twilioTemplateBody}</pre>
+                                   <Button type="button" size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7" onClick={() => copyToClipboard(twilioTemplateBody)}>
+                                       <Copy className="h-4 w-4" />
+                                   </Button>
+                               </div>
+                           </CardContent>
+                        </Card>
+                     </div>
                      <div className="flex justify-end">
                         <Button type="button" variant="ghost">Enviar mensaje de prueba</Button>
                      </div>

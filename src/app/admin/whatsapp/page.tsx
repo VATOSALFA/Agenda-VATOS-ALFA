@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -35,7 +34,7 @@ import { Loader2, PlusCircle, Trash2, MessageCircle, Edit, Send } from 'lucide-r
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Local } from '@/lib/types';
-import { collection, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, Timestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   AlertDialog,
@@ -68,19 +67,15 @@ const whatsappSchema = z.object({
 
 type WhatsappFormData = z.infer<typeof whatsappSchema>;
 
-const initialTemplates: Template[] = [
-    { id: 'confirmacion', name: 'Mensaje de confirmación', contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', body: '¡Hola, {{1}}! Tu cita para {{2}} con {{4}} ha sido confirmada para el {{3}}. ¡Te esperamos!' },
-    { id: 'recordatorio', name: 'Recordatorio de cita', contentSid: 'HX...', body: '¡No lo olvides, {{1}}! Mañana a las {{2}} tienes tu cita para {{3}}. Responde a este mensaje para confirmar tu asistencia.' },
-];
-
 export default function WhatsappPage() {
   const [queryKey, setQueryKey] = useState(0);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
   const { data: whatsappConfigs, loading: configsLoading } = useFirestoreQuery<WhatsappConfig>('whatsapp_configuraciones', queryKey);
+  const { data: templates, loading: templatesLoading } = useFirestoreQuery<Template>('whatsapp_templates', queryKey);
+  
   const [configToDelete, setConfigToDelete] = useState<WhatsappConfig | null>(null);
   const { toast } = useToast();
   
-  const [templates, setTemplates] = useState<Template[]>(initialTemplates);
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
@@ -125,17 +120,19 @@ export default function WhatsappPage() {
     setIsSelectionModalOpen(false);
   }
 
-  const handleSaveTemplate = (data: { name: string, body: string, contentSid: string }) => {
-    if (editingTemplate) {
-      setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? { ...t, ...data } : t));
-      toast({ title: 'Plantilla actualizada' });
-    } else {
-        const newTemplate = { id: Date.now().toString(), ...data };
-        setTemplates(prev => [...prev, newTemplate]);
-        toast({ title: 'Plantilla creada' });
+  const handleSaveTemplate = async (templateId: string, data: { name: string, body: string, contentSid: string }) => {
+    try {
+        const templateRef = doc(db, 'whatsapp_templates', templateId);
+        await setDoc(templateRef, data, { merge: true });
+        toast({ title: 'Plantilla guardada' });
+        setQueryKey(prev => prev + 1);
+    } catch (error) {
+        console.error("Error guardando plantilla:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar la plantilla.' });
+    } finally {
+        setEditingTemplate(null);
+        setIsEditorModalOpen(false);
     }
-    setEditingTemplate(null);
-    setIsEditorModalOpen(false);
   }
 
   const handleSendTest = async () => {
@@ -164,7 +161,7 @@ export default function WhatsappPage() {
   };
 
   const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
-  const isLoading = localesLoading || configsLoading;
+  const isLoading = localesLoading || configsLoading || templatesLoading;
 
   return (
     <>
@@ -313,18 +310,24 @@ export default function WhatsappPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {templates.map((template) => (
-                                    <TableRow key={template.id}>
-                                        <TableCell className="font-medium">{template.name}</TableCell>
-                                        <TableCell className="font-mono text-xs">{template.contentSid}</TableCell>
-                                        <TableCell className="max-w-md truncate text-muted-foreground">{template.body}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="outline" size="sm" onClick={() => handleOpenEditor(template)}>
-                                                <Edit className="mr-2 h-4 w-4" /> Editar
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {templatesLoading ? (
+                                     <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></TableCell></TableRow>
+                                ) : templates.length === 0 ? (
+                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No hay plantillas guardadas.</TableCell></TableRow>
+                                ) : (
+                                    templates.map((template) => (
+                                        <TableRow key={template.id}>
+                                            <TableCell className="font-medium">{template.name}</TableCell>
+                                            <TableCell className="font-mono text-xs">{template.contentSid}</TableCell>
+                                            <TableCell className="max-w-md truncate text-muted-foreground">{template.body}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenEditor(template)}>
+                                                    <Edit className="mr-2 h-4 w-4" /> Editar
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>
@@ -368,3 +371,5 @@ export default function WhatsappPage() {
     </>
   );
 }
+
+    

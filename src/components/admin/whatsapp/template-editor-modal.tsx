@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 interface TemplateEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { name: string; body: string; contentSid: string }) => void;
+  onSave: (templateId: string, data: { name: string; body: string; contentSid: string }) => void;
   template: Template;
 }
 
@@ -143,11 +143,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
 
   const onSubmit = (data: EditorFormData) => {
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-        onSave(data);
-        setIsSubmitting(false);
-    }, 1000);
+    onSave(template.id, data);
   };
 
   return (
@@ -182,7 +178,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                         </div>
                         
                         <ScrollArea className="flex-grow pr-4 -mr-4">
-                            <div className="pr-4 space-y-1 py-2">
+                            <div className="pr-4 py-2 space-y-1">
                                 <Accordion type="multiple" className="w-full space-y-1">
                                     {Object.entries(dataTags).map(([category, tags]) => (
                                         <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
@@ -287,3 +283,5 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
     </Dialog>
   );
 }
+
+    

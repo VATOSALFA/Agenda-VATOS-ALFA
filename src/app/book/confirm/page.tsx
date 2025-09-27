@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { User, Calendar, Clock, Scissors, CheckCircle, Loader2 } from 'lucide-react';
+import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
 
 const confirmSchema = z.object({
@@ -90,9 +91,7 @@ function ConfirmPageContent() {
                 clientId = querySnapshot.docs[0].id;
             }
             
-            // Create reservation
-            const newReservationRef = doc(collection(db, 'reservas'));
-            batch.set(newReservationRef, {
+            const reservationData = {
                 cliente_id: clientId,
                 barbero_id: professionalId,
                 servicio: selectedServices.map(s => s.name).join(', '),
@@ -110,9 +109,37 @@ function ConfirmPageContent() {
                 canal_reserva: 'sitio_web',
                 pago_estado: 'Pendiente',
                 creado_en: Timestamp.now()
-            });
+            };
+
+            // Create reservation
+            const newReservationRef = doc(collection(db, 'reservas'));
+            batch.set(newReservationRef, reservationData);
 
             await batch.commit();
+
+            // Send WhatsApp notification
+            if (data.telefono) {
+                try {
+                    const result = await sendTemplatedWhatsAppMessage({
+                        to: data.telefono,
+                        contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
+                        contentVariables: {
+                            '1': data.nombre,
+                            '2': reservationData.servicio,
+                            '3': format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es }),
+                            '4': time,
+                        }
+                    });
+                    if (result.success) {
+                        toast({ title: 'Notificación de WhatsApp enviada.' });
+                    } else {
+                        toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
+                    }
+                } catch (waError) {
+                    console.error("WhatsApp notification failed:", waError);
+                    toast({ variant: 'destructive', title: 'Error', description: 'No se pudo enviar la notificación por WhatsApp.' });
+                }
+            }
             
             toast({
                 title: '¡Reserva Confirmada!',

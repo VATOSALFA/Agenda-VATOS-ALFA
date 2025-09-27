@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
-import type { Profesional, Service, Reservation, TimeBlock, Local } from '@/lib/types';
+import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
@@ -44,6 +44,7 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
+import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
 
 const createReservationSchema = (isEditMode: boolean) => z.object({
@@ -390,11 +391,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         local_id: data.local_id
       };
       
+      let wasCreation = false;
       if (isEditMode && initialData?.id) {
          const resRef = doc(db, 'reservas', initialData.id);
          await updateDoc(resRef, dataToSave);
          toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
       } else {
+        wasCreation = true;
         await addDoc(collection(db, 'reservas'), {
             ...dataToSave,
             pago_estado: 'Pendiente',
@@ -403,6 +406,28 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             creado_en: Timestamp.now(),
         });
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
+      }
+
+      // Send WhatsApp notification on creation
+      if (wasCreation && data.notifications?.whatsapp_notification) {
+          const client = clients.find(c => c.id === data.cliente_id);
+          if (client?.telefono) {
+              const result = await sendTemplatedWhatsAppMessage({
+                  to: client.telefono,
+                  contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
+                  contentVariables: {
+                      '1': client.nombre,
+                      '2': dataToSave.servicio!,
+                      '3': format(data.fecha, "dd 'de' MMMM", { locale: es }),
+                      '4': hora_inicio,
+                  }
+              });
+              if(result.success) {
+                  toast({ title: 'Notificación de WhatsApp enviada.' });
+              } else {
+                  toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });
+              }
+          }
       }
 
       onFormSubmit();

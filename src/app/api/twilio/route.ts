@@ -22,9 +22,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const from = formData.get('From') as string;
-    const messageBody = (formData.get('Body') as string) || '';
-    const numMedia = parseInt((formData.get('NumMedia') as string) || '0', 10);
+    const body = Object.fromEntries(formData);
+    const signature = req.headers.get('X-Twilio-Signature') || '';
+    const url = req.url;
+
+    const authToken = process.env.NEXT_PUBLIC_TWILIO_AUTH_TOKEN;
+    if (!authToken) {
+        console.error('Twilio Webhook: Auth Token no está configurado.');
+        return new NextResponse('Internal Server Error: Auth Token missing', { status: 500 });
+    }
+    
+    // Validate request signature
+    const isValid = Twilio.validateRequest(authToken, signature, url, body);
+
+    if (!isValid) {
+      console.warn('Twilio Webhook: Invalid request signature received.');
+      return new NextResponse('Invalid signature', { status: 403 });
+    }
+
+    const from = body.From as string;
+    const messageBody = (body.Body as string) || '';
+    const numMedia = parseInt((body.NumMedia as string) || '0', 10);
 
     if (!from) {
       console.error('Twilio Webhook: No "From" number provided in the request.');
@@ -42,8 +60,8 @@ export async function POST(req: NextRequest) {
     };
 
     if (numMedia > 0) {
-      const mediaUrl = formData.get('MediaUrl0') as string;
-      const mediaContentType = formData.get('MediaContentType0') as string;
+      const mediaUrl = body.MediaUrl0 as string;
+      const mediaContentType = body.MediaContentType0 as string;
       
       if(mediaUrl) {
           messageData.mediaUrl = mediaUrl;

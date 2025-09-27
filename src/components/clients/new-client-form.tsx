@@ -84,6 +84,9 @@ const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOu
     )
 }
 
+const OptionalLabel = () => <span className="text-xs text-muted-foreground ml-1">(opcional)</span>;
+
+
 export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProps) {
   const { toast } = useToast();
   const { db } = useAuth();
@@ -286,7 +289,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               name="nombre"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Nombre</FormLabel>
+                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Nombre <span className="text-red-500 ml-1">*</span></FormLabel>
                   <FormControl><Input placeholder="Juan" {...field} /></FormControl>
                    {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
                    {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
@@ -299,7 +302,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               name="apellido"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido</FormLabel>
+                  <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido <span className="text-red-500 ml-1">*</span></FormLabel>
                   <FormControl><Input placeholder="Pérez" {...field} /></FormControl>
                   {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
                   {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
@@ -314,7 +317,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 name="telefono"
                 render={({ field }) => (
                 <FormItem>
-                    <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && '*'}</FormLabel>
+                    <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}</FormLabel>
                     <FormControl>
                     <Input placeholder="Ej: +521234567890 (10 dígitos)" {...field} />
                     </FormControl>
@@ -329,7 +332,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 name="correo"
                 render={({ field }) => (
                 <FormItem>
-                    <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4" /> Correo Electrónico {fieldSettings.email.required && '*'}</FormLabel>
+                    <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4" /> Correo Electrónico {fieldSettings.email.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.email.required && <OptionalLabel />}</FormLabel>
                     <FormControl>
                     <Input placeholder="juan.perez@email.com" {...field} />
                     </FormControl>
@@ -344,7 +347,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             name="fecha_nacimiento"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {fieldSettings.dob.required && '*'}</FormLabel>
+                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.dob.required && <OptionalLabel />}</FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -421,7 +424,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 name="direccion"
                 render={({ field }) => (
                 <FormItem>
-                    <FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4" /> Dirección {fieldSettings.address.required && '*'}</FormLabel>
+                    <FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4" /> Dirección {fieldSettings.address.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.address.required && <OptionalLabel />}</FormLabel>
                     <FormControl><Input placeholder="Calle, número, ciudad..." {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
@@ -434,7 +437,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             name="notas"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Notas {fieldSettings.notes.required && '*'}</FormLabel>
+                <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Notas {fieldSettings.notes.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.notes.required && <OptionalLabel />}</FormLabel>
                 <FormControl>
                   <Textarea placeholder="Alergias, preferencias, etc." {...field} />
                 </FormControl>

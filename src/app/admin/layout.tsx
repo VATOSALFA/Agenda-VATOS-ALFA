@@ -31,10 +31,7 @@ const adminLinks = [
 ];
 
 const advancedLinks = [
-  { href: '/admin/emails', label: 'E-Mails', icon: Mail, permission: 'ver_emails' },
-  { href: '/admin/integrations', label: 'Integraciones', icon: Component, permission: 'ver_integraciones' },
   { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
-  { href: '/admin/school', label: 'Vatos Alfa School', icon: School, permission: 'ver_school' },
 ]
 
 type Props = {

@@ -122,7 +122,7 @@ export default function ConversationsPage() {
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const phone = conv.id.replace('whatsapp:+521', '').replace(/\D/g, '');
+        const phone = conv.id.replace(/\D/g, '').slice(-10);
         return {
             ...conv,
             clientName: conv.clientName || clientMap.get(phone) || conv.id.replace('whatsapp:', ''),

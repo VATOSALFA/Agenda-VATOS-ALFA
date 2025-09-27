@@ -121,30 +121,30 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
                     
+                    // Manually construct the message body to save it locally
                     const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
-                    
-                    // Replicate Twilio Webhook logic to save the message
+
                     const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
                     const conversationRef = doc(db, 'conversations', conversationId);
-                    
-                    // 1. Create or update the main conversation document
+
+                    // 1. Create or update the main conversation document (the summary)
                     await setDoc(conversationRef, {
                         lastMessageText: messageBody,
                         lastMessageTimestamp: serverTimestamp(),
                         clientName: `${data.nombre} ${data.apellido}`.trim()
                     }, { merge: true });
 
-                    // 2. Add the message to the 'messages' subcollection
+                    // 2. Add the actual message to the 'messages' subcollection
                     await addDoc(collection(conversationRef, 'messages'), {
-                        senderId: 'vatosalfa',
+                        senderId: 'vatosalfa', // Indicates it's an outgoing message from the business
                         text: messageBody,
                         timestamp: serverTimestamp(),
-                        read: true, // It's a system message, "read" by the system
+                        read: true, // It's an automated message, no need for it to be "unread"
                     });
                     
-                    // 3. Send to Twilio (fire and forget)
+                    // 3. Send to Twilio (fire and forget for the response)
+                    const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
                     sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,
@@ -158,7 +158,8 @@ function ConfirmPageContent() {
                          if (result.success) {
                             toast({ title: 'Notificación de WhatsApp enviada.' });
                         } else {
-                            toast({ variant: 'destructive', title: 'Error al enviar WhatsApp', description: result.error });
+                            // Log error but don't bother the user, the reservation is confirmed.
+                            console.error('Error al enviar WhatsApp:', result.error);
                         }
                     });
 
@@ -266,3 +267,5 @@ export default function ConfirmPage() {
         </Suspense>
     )
 }
+
+    

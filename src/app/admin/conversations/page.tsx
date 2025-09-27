@@ -302,7 +302,7 @@ export default function ConversationsPage() {
     <div className="h-screen flex flex-col">
       <div className="flex-1 flex bg-muted/40 overflow-hidden">
         <aside className={cn(
-            "w-full md:w-96 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
+            "w-full md:w-[500px] border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
             "md:flex" // Always show on desktop
         )}>
             <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
@@ -335,10 +335,10 @@ export default function ConversationsPage() {
                                 <Avatar className="h-10 w-10">
                                     <AvatarFallback>{conv.clientName?.substring(0, 2).toUpperCase()}</AvatarFallback>
                                 </Avatar>
-                                <div className="flex-1 overflow-hidden">
+                                <div className="flex-1 overflow-hidden pr-2">
                                     <div className="flex justify-between items-start">
                                         <p className="font-semibold truncate">{conv.clientName}</p>
-                                        <span className="text-xs text-muted-foreground flex-shrink-0 pr-2">
+                                        <span className="text-xs text-muted-foreground flex-shrink-0">
                                         {conv.lastMessageTimestamp ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { locale: es, addSuffix: true }) : ''}
                                     </span>
                                     </div>
@@ -460,3 +460,4 @@ export default function ConversationsPage() {
     
 
     
+

@@ -113,7 +113,7 @@ export default function ConversationsPage() {
     const map = new Map<string, string>();
     clients.forEach(c => {
         if(c.telefono) {
-            const cleanPhone = c.telefono.replace(/\D/g, '').slice(-10);
+            const cleanPhone = c.telefono.replace(/\D/g, '');
             map.set(cleanPhone, `${c.nombre} ${c.apellido}`);
         }
     });
@@ -122,8 +122,20 @@ export default function ConversationsPage() {
 
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
-        const conversationPhone = conv.id.replace(/\D/g, '').slice(-10);
-        const foundName = clientMap.get(conversationPhone);
+        const conversationPhone = conv.id.replace(/\D/g, '');
+        // Try matching last 10 digits, then full number, etc.
+        const phone10 = conversationPhone.slice(-10);
+        
+        let foundName = clientMap.get(phone10);
+
+        if(!foundName) {
+            for(const [clientPhone, clientName] of clientMap.entries()) {
+                if (clientPhone.slice(-10) === phone10) {
+                    foundName = clientName;
+                    break;
+                }
+            }
+        }
 
         return {
             ...conv,
@@ -283,7 +295,7 @@ export default function ConversationsPage() {
 
   return (
     <>
-    <div className="h-screen flex flex-col">
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
        <div className="flex-1 flex bg-muted/40 overflow-hidden">
             <aside className={cn(
                 "w-full md:w-96 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",

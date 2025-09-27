@@ -83,6 +83,11 @@ export function ReservationDetailModal({
 
   if (!reservation) return null;
   
+  const handleCancelClick = () => {
+    onOpenChange(false);
+    setIsCancelModalOpen(true);
+  }
+
   const handleCancelReservation = async (reservationId: string) => {
     if (!reservation.cliente_id) {
          toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado." });
@@ -92,7 +97,7 @@ export function ReservationDetailModal({
     try {
         await runTransaction(db, async (transaction) => {
             const resRef = doc(db, 'reservas', reservationId);
-            const clientRef = doc(db, 'clientes', reservation.cliente_id);
+            const clientRef = doc(db, 'clientes', reservation.cliente_id!);
 
             transaction.update(resRef, { estado: 'Cancelado' });
             transaction.update(clientRef, {
@@ -241,11 +246,11 @@ export function ReservationDetailModal({
             </div>
           </div>
           <DialogFooter className="p-6 border-t flex justify-between">
-              {reservation.pago_estado !== 'Pagado' ? (
-                <Button variant="destructive" onClick={() => setIsCancelModalOpen(true)}>
+              {reservation.estado !== 'Cancelado' && (
+                <Button variant="destructive" onClick={handleCancelClick}>
                     <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
                 </Button>
-              ) : <div />}
+              )}
               
               {reservation.pago_estado !== 'Pagado' ? (
                 <Button onClick={onPay} className="bg-primary hover:bg-primary/90">

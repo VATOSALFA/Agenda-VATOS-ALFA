@@ -45,7 +45,7 @@ import { ReservationDetailModal } from '../reservations/reservation-detail-modal
 import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
@@ -226,7 +226,9 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const clientMap = new Map(clients.map(c => [c.id, c]));
     const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
 
-    const appointmentEvents = reservations.map(res => {
+    const appointmentEvents = reservations
+        .filter(res => res.estado !== 'Cancelado')
+        .map(res => {
         const [startH, startM] = res.hora_inicio.split(':').map(Number);
         const [endH, endM] = res.hora_fin.split(':').map(Number);
         const start = startH + startM / 60;
@@ -376,13 +378,32 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   };
   
   const handleCancelReservation = async (reservationId: string) => {
+    if (!selectedReservation || !selectedReservation.cliente_id) {
+         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado." });
+         return;
+    }
+    
     try {
-        await deleteDoc(doc(db, 'reservas', reservationId));
-        toast({
-            title: "Reserva eliminada con éxito",
+        await runTransaction(db, async (transaction) => {
+            const resRef = doc(db, 'reservas', reservationId);
+            const clientRef = doc(db, 'clientes', selectedReservation.cliente_id!);
+
+            transaction.update(resRef, { estado: 'Cancelado' });
+            transaction.update(clientRef, {
+                citas_canceladas: increment(1)
+            });
         });
+
+        toast({
+            title: "Reserva Cancelada",
+            description: "El estado de la reserva ha sido actualizado a 'Cancelado'.",
+        });
+
         setIsCancelModalOpen(false);
-        onDataRefresh();
+        setSelectedReservation(null);
+        setIsDetailModalOpen(false);
+        onDataRefresh(); // This will trigger a re-render of AgendaView and a re-fetch of reservations
+        
     } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({
@@ -739,7 +760,10 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
           <ReservationDetailModal
             reservation={selectedReservation}
             isOpen={isDetailModalOpen}
-            onOpenChange={setIsDetailModalOpen}
+            onOpenChange={(isOpen) => {
+                if (!isOpen) setSelectedReservation(null);
+                setIsDetailModalOpen(isOpen);
+            }}
             onPay={handlePayFromDetail}
             onUpdateStatus={handleUpdateStatus}
             onEdit={handleEditFromDetail}

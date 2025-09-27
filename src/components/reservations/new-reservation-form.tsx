@@ -51,6 +51,11 @@ interface ReminderSettings {
     whatsapp_reminder: boolean;
 }
 
+interface AgendaSettings {
+    overlappingReservations: boolean;
+    resourceOverload: boolean;
+}
+
 const createReservationSchema = (isEditMode: boolean) => z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
   items: z.array(
@@ -141,8 +146,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
   const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion');
+  const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion');
   
   const reminderSettings = reminderSettingsData.find(s => (s as any).id === 'recordatorios');
+  const agendaSettings = agendaSettingsData.find(s => (s as any).id === 'agenda');
+
 
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(createReservationSchema(isEditMode)),
@@ -204,35 +212,39 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
       
-      if (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end) {
+      if (!agendaSettings?.resourceOverload && (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end)) {
         errors[index] = `El profesional no está disponible en este horario.`;
         return;
       }
+      
+      if (!agendaSettings?.overlappingReservations) {
+        const reservationConflict = allReservations.some(r => {
+          if (!r.items) return false;
+          const isSameProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
+          if (r.fecha !== formattedDate || !isSameProfessional || (isEditMode && r.id === initialData?.id)) return false;
+          return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
+        });
 
-      const reservationConflict = allReservations.some(r => {
-        if (!r.items) return false;
-        const isSameProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
-        if (r.fecha !== formattedDate || !isSameProfessional || (isEditMode && r.id === initialData?.id)) return false;
-        return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
-      });
-
-      if (reservationConflict) {
-        errors[index] = `El profesional ya tiene una cita en este horario.`;
-        return;
+        if (reservationConflict) {
+          errors[index] = `El profesional ya tiene una cita en este horario.`;
+          return;
+        }
       }
       
-      const blockConflict = allTimeBlocks.some(b => {
-          if (b.barbero_id !== item.barbero_id || b.fecha !== formattedDate) return false;
-          return hora_inicio < b.hora_fin && hora_fin > b.hora_inicio;
-      });
+      if (!agendaSettings?.resourceOverload) {
+        const blockConflict = allTimeBlocks.some(b => {
+            if (b.barbero_id !== item.barbero_id || b.fecha !== formattedDate) return false;
+            return hora_inicio < b.hora_fin && hora_fin > b.hora_inicio;
+        });
 
-      if(blockConflict) {
-          errors[index] = `El profesional tiene un bloqueo en este horario.`;
-          return;
+        if(blockConflict) {
+            errors[index] = `El profesional tiene un bloqueo en este horario.`;
+            return;
+        }
       }
     });
     setAvailabilityErrors(errors);
-  }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData]);
+  }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
 
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
@@ -288,7 +300,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             precio: initialData.precio || 0,
             notas: initialData.notas || '',
             nota_interna: initialData.nota_interna || '',
-            notifications: initialData.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
+            notifications: {
+              whatsapp_notification: reminderSettings?.whatsapp_notification ?? true,
+              whatsapp_reminder: reminderSettings?.whatsapp_reminder ?? true
+            },
             local_id: initialData.local_id
         });
     } else if (isOpen) {
@@ -299,13 +314,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             precio: 0,
             items: [{ servicio: '', barbero_id: '' }],
             notifications: {
-                whatsapp_notification: true,
-                whatsapp_reminder: true,
+              whatsapp_notification: reminderSettings?.whatsapp_notification ?? true,
+              whatsapp_reminder: reminderSettings?.whatsapp_reminder ?? true
             },
             local_id: selectedLocalId || '',
         });
     }
-  }, [initialData, form, isOpen, services, isEditMode, selectedLocalId]);
+  }, [initialData, form, isOpen, services, isEditMode, selectedLocalId, reminderSettings]);
   
   // Recalculate price and end time when items change
   useEffect(() => {
@@ -612,7 +627,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <FormItem className="flex items-center space-x-2">
                                         <FormControl>
                                             <Checkbox
-                                                checked={!!reminderSettings?.whatsapp_notification && field.value}
+                                                checked={field.value}
                                                 onCheckedChange={field.onChange}
                                                 disabled={!reminderSettings?.whatsapp_notification}
                                             />
@@ -624,7 +639,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <FormItem className="flex items-center space-x-2">
                                         <FormControl>
                                             <Checkbox
-                                                checked={!!reminderSettings?.whatsapp_reminder && field.value}
+                                                checked={field.value}
                                                 onCheckedChange={field.onChange}
                                                 disabled={!reminderSettings?.whatsapp_reminder}
                                             />
@@ -749,5 +764,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
+
+    
 
     

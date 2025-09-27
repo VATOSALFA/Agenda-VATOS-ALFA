@@ -294,62 +294,62 @@ export default function ConversationsPage() {
 
   return (
     <>
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
-       <div className="flex-1 flex bg-muted/40 overflow-hidden">
-            <aside className={cn(
-                "w-full md:w-96 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
-                "md:flex" // Always show on desktop
-            )}>
-                <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                    <div>
-                        <h2 className="text-xl font-bold">Conversaciones</h2>
-                        <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 flex bg-muted/40 overflow-hidden">
+        <aside className={cn(
+            "w-full md:w-96 border-r bg-background flex flex-col transition-transform duration-300 ease-in-out",
+            "md:flex" // Always show on desktop
+        )}>
+            <div className="p-4 border-b flex items-center justify-between gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
+                <div>
+                    <h2 className="text-xl font-bold">Conversaciones</h2>
+                    <p className="text-sm text-muted-foreground">{conversations.length} chats activos</p>
+                </div>
+            </div>
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsNewConversationModalOpen(true)}>
+                <SquarePen className="h-5 w-5" />
+            </Button>
+            </div>
+            <ScrollArea className="flex-1">
+                {conversationsLoading ? (
+                    <div className="p-4 space-y-4">
+                        {Array.from({length: 5}).map((_, i) => <div key={i} className="h-16 bg-muted rounded-md animate-pulse"/>)}
                     </div>
-                </div>
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsNewConversationModalOpen(true)}>
-                    <SquarePen className="h-5 w-5" />
-                </Button>
-                </div>
-                <ScrollArea className="flex-1">
-                    {conversationsLoading ? (
-                        <div className="p-4 space-y-4">
-                            {Array.from({length: 5}).map((_, i) => <div key={i} className="h-16 bg-muted rounded-md animate-pulse"/>)}
-                        </div>
-                    ) : conversationsWithNames.length === 0 ? (
-                        <div className="p-8 text-center text-sm text-muted-foreground">
-                            No hay conversaciones.
-                        </div>
-                    ) : (
-                        <div className="p-2 space-y-1">
-                            {conversationsWithNames.map(conv => (
-                                <button key={conv.id} onClick={() => handleSelectConversation(conv.id)} className={cn(
-                                    'w-full flex items-start gap-3 p-2 rounded-lg text-left transition-colors',
-                                    activeConversationId === conv.id ? 'bg-primary/10' : 'hover:bg-muted'
-                                )}>
-                                    <Avatar className="h-10 w-10">
-                                        <AvatarFallback>{conv.clientName?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 overflow-hidden">
-                                        <div className="flex justify-between items-start">
-                                            <p className="font-semibold truncate">{conv.clientName}</p>
-                                            <span className="text-xs text-muted-foreground flex-shrink-0 pr-2">
-                                            {conv.lastMessageTimestamp ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { locale: es, addSuffix: true }) : ''}
-                                        </span>
-                                        </div>
-                                        <div className="flex justify-between items-start mt-1">
-                                            <p className="text-xs text-muted-foreground truncate pr-2">{conv.lastMessageText}</p>
-                                            {conv.unreadCount && conv.unreadCount > 0 && (
-                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">{conv.unreadCount}</span>
-                                        )}
-                                        </div>
+                ) : conversationsWithNames.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground">
+                        No hay conversaciones.
+                    </div>
+                ) : (
+                    <div className="p-2 space-y-1">
+                        {conversationsWithNames.map(conv => (
+                            <button key={conv.id} onClick={() => handleSelectConversation(conv.id)} className={cn(
+                                'w-full flex items-start gap-3 p-2 rounded-lg text-left transition-colors',
+                                activeConversationId === conv.id ? 'bg-primary/10' : 'hover:bg-muted'
+                            )}>
+                                <Avatar className="h-10 w-10">
+                                    <AvatarFallback>{conv.clientName?.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 overflow-hidden">
+                                    <div className="flex justify-between items-start">
+                                        <p className="font-semibold truncate">{conv.clientName}</p>
+                                        <span className="text-xs text-muted-foreground flex-shrink-0 pr-2">
+                                        {conv.lastMessageTimestamp ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { locale: es, addSuffix: true }) : ''}
+                                    </span>
                                     </div>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </ScrollArea>
-            </aside>
+                                    <div className="flex justify-between items-start mt-1">
+                                        <p className="text-xs text-muted-foreground truncate pr-2">{conv.lastMessageText}</p>
+                                        {conv.unreadCount && conv.unreadCount > 0 && (
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">{conv.unreadCount}</span>
+                                    )}
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </ScrollArea>
+        </aside>
 
             <main className={"flex-1 flex flex-col bg-gray-100"}>
                 {activeConversationId ? (
@@ -451,5 +451,7 @@ export default function ConversationsPage() {
     </>
   );
 }
+
+    
 
     

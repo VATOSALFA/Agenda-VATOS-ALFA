@@ -52,8 +52,7 @@ export default function AdminLayout({ children }: Props) {
     return user.permissions.includes(permission);
   }
 
-  // If the current page is the conversations page, render it without the admin sidebar.
-  // The main header will still be rendered by the root layout.
+  // The conversation page has its own layout, but we want the main app header.
   if (pathname === '/admin/conversations') {
     return (
         <div className="h-[calc(100vh-4rem)]">

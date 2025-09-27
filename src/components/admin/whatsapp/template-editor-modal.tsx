@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import type { Template } from './template-selection-modal';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface TemplateEditorModalProps {
   isOpen: boolean;
@@ -138,27 +139,29 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                 />
             </div>
             
-            <div className="flex-grow grid md:grid-cols-3 gap-6 overflow-hidden">
+            <div className="grid md:grid-cols-3 gap-6 flex-grow overflow-hidden">
                 <div className="flex flex-col space-y-4 overflow-hidden md:col-span-2">
                     <div className="space-y-2">
                         <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
                         <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
                     </div>
 
-                    <div className="space-y-4 p-2 rounded-md border">
+                    <Accordion type="multiple" className="w-full">
                         {Object.entries(dataTags).map(([category, tags]) => (
-                            <div key={category}>
-                                <h4 className="text-sm font-semibold mb-2">{category}</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {tags.map(tag => (
-                                        <Button key={tag} type="button" variant="outline" size="sm" className="text-xs" onClick={() => handleTagClick(tag)}>
-                                            {tag.replace(/\[|\]/g, '')}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
+                            <AccordionItem value={category} key={category}>
+                                <AccordionTrigger>{category}</AccordionTrigger>
+                                <AccordionContent>
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        {tags.map(tag => (
+                                            <Button key={tag} type="button" variant="outline" size="sm" className="text-xs" onClick={() => handleTagClick(tag)}>
+                                                {tag.replace(/\[|\]/g, '')}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
                         ))}
-                    </div>
+                    </Accordion>
 
                      <FormField
                         control={form.control}
@@ -166,7 +169,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                         render={({ field }) => (
                             <FormItem className="flex flex-col flex-grow">
                                 <FormControl>
-                                    <Textarea {...field} ref={textareaRef} className="flex-grow resize-none"/>
+                                    <Textarea {...field} ref={textareaRef} className="flex-grow resize-none min-h-[150px]"/>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>

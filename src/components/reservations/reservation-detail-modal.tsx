@@ -84,7 +84,6 @@ export function ReservationDetailModal({
   if (!reservation) return null;
   
   const handleCancelClick = () => {
-    onOpenChange(false);
     setIsCancelModalOpen(true);
   }
 

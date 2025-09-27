@@ -239,6 +239,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
             customer: clientMap.get(res.cliente_id),
             professionalNames: res.items?.map(i => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
             start: start,
+            end: end,
             duration: Math.max(0.5, end - start),
             color: getStatusColor(res.estado),
             type: 'appointment'
@@ -257,6 +258,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
           customer: { nombre: block.motivo },
           service: 'Bloqueado',
           start: start,
+          end: end,
           duration: Math.max(0.5, end - start),
           color: 'bg-striped-gray border-gray-400 text-gray-600',
           type: 'block',
@@ -265,6 +267,59 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
 
       return [...appointmentEvents, ...blockEvents];
   }, [reservations, timeBlocks, clients, professionals]);
+
+    const eventsWithLayout = useMemo(() => {
+        const processedEvents = allEvents.map(event => ({ ...event, layout: { width: 100, left: 0, col: 0, totalCols: 1 }}));
+
+        for (let i = 0; i < processedEvents.length; i++) {
+            const eventA = processedEvents[i];
+            
+            const overlappingEvents: typeof eventA[] = [eventA];
+            
+            for (let j = i + 1; j < processedEvents.length; j++) {
+                const eventB = processedEvents[j];
+                // Check if same professional
+                const eventAProfessionals = eventA.type === 'appointment' ? eventA.items.map(item => item.barbero_id) : [eventA.barbero_id];
+                const eventBProfessionals = eventB.type === 'appointment' ? eventB.items.map(item => item.barbero_id) : [eventB.barbero_id];
+                
+                const hasCommonProfessional = eventAProfessionals.some(p => eventBProfessionals.includes(p));
+
+                if (hasCommonProfessional && eventA.start < eventB.end && eventA.end > eventB.start) {
+                    overlappingEvents.push(eventB);
+                }
+            }
+
+            if (overlappingEvents.length > 1) {
+                overlappingEvents.sort((a,b) => a.start - b.start);
+
+                const columns: (typeof eventA)[][] = [];
+                overlappingEvents.forEach(event => {
+                    let placed = false;
+                    for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+                        const lastEventInColumn = columns[colIndex][columns[colIndex].length - 1];
+                        if (event.start >= lastEventInColumn.end) {
+                            columns[colIndex].push(event);
+                            event.layout.col = colIndex;
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) {
+                        columns.push([event]);
+                        event.layout.col = columns.length - 1;
+                    }
+                });
+
+                const totalCols = columns.length;
+                overlappingEvents.forEach(event => {
+                    event.layout.totalCols = totalCols;
+                    event.layout.width = 100 / totalCols;
+                    event.layout.left = event.layout.col * event.layout.width;
+                });
+            }
+        }
+        return processedEvents;
+    }, [allEvents]);
 
   
   const handleSetToday = () => setDate(new Date());
@@ -682,13 +737,13 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                     )}
 
                                     {/* Events */}
-                                    {allEvents.filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id))).map(event => (
+                                    {eventsWithLayout.filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id))).map(event => (
                                         <Tooltip key={event.id}>
                                         <TooltipTrigger asChild>
                                             <div
                                                 onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                                className={cn("absolute w-[calc(100%_-_2px)] left-[1px] rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
-                                                style={calculatePosition((event as any).start, (event as any).duration)}
+                                                className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
+                                                style={{...calculatePosition((event as any).start, (event as any).duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%`}}
                                             >
                                               <div className="flex-grow overflow-hidden pr-1">
                                                     <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? ((event as any).customer?.nombre || 'Cliente Eliminado') : (event as any).motivo}</p>
@@ -707,7 +762,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                                     <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : (event as any).servicio}</p>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                         <Clock className="w-4 h-4" />
-                                                        <span>{formatHour((event as any).start)} - {formatHour((event as any).start + (event as any).duration)}</span>
+                                                        <span>{formatHour((event as any).start)} - {formatHour((event as any).end)}</span>
                                                     </div>
                                                     {(event as Reservation).pago_estado &&
                                                         <div className="flex items-center gap-2 text-sm">
@@ -805,3 +860,5 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
+
+    

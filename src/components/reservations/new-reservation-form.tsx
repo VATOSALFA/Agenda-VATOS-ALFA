@@ -408,13 +408,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
       }
 
-      // Send WhatsApp notification on creation
+      // Send WhatsApp notification on creation if checkbox is checked
       if (wasCreation && data.notifications?.whatsapp_notification) {
           const client = clients.find(c => c.id === data.cliente_id);
           const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
           if (client?.telefono && professional) {
               const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
-              const result = await sendTemplatedWhatsAppMessage({
+              await sendTemplatedWhatsAppMessage({
                   to: client.telefono,
                   contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
                   contentVariables: {
@@ -424,11 +424,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                       '4': professional.name,
                   }
               });
-              if(result.success) {
-                  toast({ title: 'Notificación de WhatsApp enviada.' });
-              } else {
-                  toast({ variant: 'destructive', title: 'Error de WhatsApp', description: result.error });
-              }
+              // Do not show a toast here to avoid spamming the user
           }
       }
 

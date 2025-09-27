@@ -122,7 +122,7 @@ function ConfirmPageContent() {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
                     const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
-                    sendTemplatedWhatsAppMessage({
+                    await sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,
                         contentVariables: {

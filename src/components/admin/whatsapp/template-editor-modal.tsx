@@ -138,8 +138,8 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                 />
             </div>
             
-            <div className="flex-grow grid md:grid-cols-2 gap-6 overflow-hidden">
-                <div className="flex flex-col space-y-4 overflow-hidden">
+            <div className="flex-grow grid md:grid-cols-3 gap-6 overflow-hidden">
+                <div className="flex flex-col space-y-4 overflow-hidden md:col-span-2">
                     <div className="space-y-2">
                         <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
                         <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>

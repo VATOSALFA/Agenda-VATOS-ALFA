@@ -137,7 +137,7 @@ function ConfirmPageContent() {
                     const conversationRef = doc(db, 'conversations', conversationId);
                     
                     await setDoc(conversationRef, {
-                        lastMessageText: `Tú: ${messageBody}`,
+                        lastMessageText: messageBody,
                         lastMessageTimestamp: serverTimestamp(),
                         clientName: `${data.nombre} ${data.apellido}`.trim()
                     }, { merge: true });
@@ -146,7 +146,7 @@ function ConfirmPageContent() {
                         senderId: 'vatosalfa',
                         text: messageBody,
                         timestamp: serverTimestamp(),
-                        read: true, // It's an automated message, so we can mark as read for the user
+                        read: true,
                     });
 
                     // 2. Send to Twilio (fire and forget)

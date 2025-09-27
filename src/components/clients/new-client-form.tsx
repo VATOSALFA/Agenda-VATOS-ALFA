@@ -319,7 +319,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 <FormItem>
                     <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}</FormLabel>
                     <FormControl>
-                    <Input placeholder="Ej: +521234567890 (10 dígitos)" {...field} />
+                    <Input placeholder="Ej: 1234567890 (10 dígitos)" {...field} />
                     </FormControl>
                     <FormMessage />
                 </FormItem>

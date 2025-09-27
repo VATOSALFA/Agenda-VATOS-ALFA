@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { collection, query, where, getDocs, writeBatch, Timestamp, doc, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, Timestamp, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { addMinutes, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -121,29 +121,6 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    
-                    // Manually construct the message body to save it locally
-                    const messageBody = `¡Hola, ${data.nombre}! Tu cita para ${reservationData.servicio} ha sido confirmada para el ${fullDateStr} con ${selectedProfessional.name}. ¡Te esperamos!`;
-
-                    const conversationId = `whatsapp:+521${data.telefono.replace(/\D/g, '')}`;
-                    const conversationRef = doc(db, 'conversations', conversationId);
-
-                    // 1. Create or update the main conversation document (the summary)
-                    await setDoc(conversationRef, {
-                        lastMessageText: messageBody,
-                        lastMessageTimestamp: serverTimestamp(),
-                        clientName: `${data.nombre} ${data.apellido}`.trim()
-                    }, { merge: true });
-
-                    // 2. Add the actual message to the 'messages' subcollection
-                    await addDoc(collection(conversationRef, 'messages'), {
-                        senderId: 'vatosalfa', // Indicates it's an outgoing message from the business
-                        text: messageBody,
-                        timestamp: serverTimestamp(),
-                        read: true, // It's an automated message, no need for it to be "unread"
-                    });
-                    
-                    // 3. Send to Twilio (fire and forget for the response)
                     const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
                     sendTemplatedWhatsAppMessage({
                         to: data.telefono,
@@ -154,18 +131,10 @@ function ConfirmPageContent() {
                             '3': fullDateStr,
                             '4': selectedProfessional.name,
                         },
-                    }).then(result => {
-                         if (result.success) {
-                            toast({ title: 'Notificación de WhatsApp enviada.' });
-                        } else {
-                            // Log error but don't bother the user, the reservation is confirmed.
-                            console.error('Error al enviar WhatsApp:', result.error);
-                        }
                     });
-
                 } catch (waError) {
                     console.error("WhatsApp notification failed:", waError);
-                    toast({ variant: 'destructive', title: 'Error', description: 'No se pudo enviar la notificación por WhatsApp.' });
+                    // Do not block UI for this error
                 }
             }
             
@@ -267,5 +236,3 @@ export default function ConfirmPage() {
         </Suspense>
     )
 }
-
-    

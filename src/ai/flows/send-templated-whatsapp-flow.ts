@@ -76,5 +76,3 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
     }
   }
 );
-
-    

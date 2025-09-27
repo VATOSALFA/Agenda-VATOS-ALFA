@@ -46,6 +46,10 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
 import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
+interface ReminderSettings {
+    whatsapp_notification: boolean;
+    whatsapp_reminder: boolean;
+}
 
 const createReservationSchema = (isEditMode: boolean) => z.object({
   cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
@@ -65,8 +69,6 @@ const createReservationSchema = (isEditMode: boolean) => z.object({
   notas: z.string().optional(),
   nota_interna: z.string().optional(),
   notifications: z.object({
-    email_notification: z.boolean().default(true),
-    email_reminder: z.boolean().default(true),
     whatsapp_notification: z.boolean().default(true),
     whatsapp_reminder: z.boolean().default(true),
   }).optional(),
@@ -138,7 +140,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
+  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion');
   
+  const reminderSettings = reminderSettingsData.find(s => (s as any).id === 'recordatorios');
+
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(createReservationSchema(isEditMode)),
     mode: 'onChange',
@@ -149,8 +154,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       precio: 0,
       items: [{ servicio: '', barbero_id: '' }],
       notifications: {
-        email_notification: true,
-        email_reminder: true,
         whatsapp_notification: true,
         whatsapp_reminder: true,
       }
@@ -285,7 +288,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             precio: initialData.precio || 0,
             notas: initialData.notas || '',
             nota_interna: initialData.nota_interna || '',
-            notifications: initialData.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true },
+            notifications: initialData.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
             local_id: initialData.local_id
         });
     } else if (isOpen) {
@@ -296,8 +299,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             precio: 0,
             items: [{ servicio: '', barbero_id: '' }],
             notifications: {
-                email_notification: true,
-                email_reminder: true,
                 whatsapp_notification: true,
                 whatsapp_reminder: true,
             },
@@ -387,7 +388,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         precio: data.precio,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
-        notifications: data.notifications || { email_notification: true, email_reminder: true, whatsapp_notification: true, whatsapp_reminder: true },
+        notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id
       };
       
@@ -409,7 +410,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
 
       // Send WhatsApp notification on creation if checkbox is checked
-      if (wasCreation && data.notifications?.whatsapp_notification) {
+      if (wasCreation && data.notifications?.whatsapp_notification && reminderSettings?.whatsapp_notification) {
           const client = clients.find(c => c.id === data.cliente_id);
           const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
           if (client?.telefono && professional) {
@@ -608,7 +609,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           {selectedClient?.telefono && (
                             <>
                                 <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
-                                    <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel></FormItem>
+                                    <FormItem className="flex items-center space-x-2">
+                                        <FormControl>
+                                            <Checkbox
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                disabled={!reminderSettings?.whatsapp_notification}
+                                            />
+                                        </FormControl>
+                                        <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
+                                    </FormItem>
                                 )}/>
                                 <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
                                     <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de reserva</FormLabel></FormItem>

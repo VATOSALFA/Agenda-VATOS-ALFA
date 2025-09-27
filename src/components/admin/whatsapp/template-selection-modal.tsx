@@ -13,15 +13,17 @@ export interface Template {
   id: string;
   name: string;
   body: string;
+  contentSid: string;
 }
 
-const predefinedTemplates: Template[] = [
-  { id: 'confirmacion', name: 'Mensaje de confirmación', body: '¡Hola, {Nombre cliente}! Tu cita para {Servicio} ha sido confirmada para el {Fecha y hora reserva}. ¡Te esperamos!' },
-  { id: 'recordatorio', name: 'Recordatorio de cita', body: '¡No lo olvides, {Nombre cliente}! Mañana a las {Hora reserva} tienes tu cita para {Servicio}. Responde a este mensaje para confirmar tu asistencia.' },
-  { id: 'redes_sociales', name: 'Mensaje para redes sociales', body: '¡Hey! ¿Listo para tu próximo corte? Agenda tu cita directamente desde aquí: {Link de reserva}' },
-  { id: 'cumpleanos', name: 'Descuento por cumpleaños', body: '¡Feliz cumpleaños, {Nombre cliente}! Para celebrarlo, te ofrecemos un 20% de descuento en tu próximo servicio. ¡Válido por 30 días!' },
-  { id: 'agradecimiento', name: 'Agradecimiento post-cita', body: '¡Gracias por visitarnos, {Nombre cliente}! Esperamos que hayas disfrutado tu {Servicio}. ¡Nos vemos pronto!' },
+const predefinedTemplates: Omit<Template, 'id'>[] = [
+  { name: 'Mensaje de confirmación', contentSid: 'HX...', body: '¡Hola, {{1}}! Tu cita para {{2}} con {{4}} ha sido confirmada para el {{3}}. ¡Te esperamos!' },
+  { name: 'Recordatorio de cita', contentSid: 'HX...', body: '¡No lo olvides, {{1}}! Mañana a las {{2}} tienes tu cita para {{3}}. Responde a este mensaje para confirmar tu asistencia.' },
+  { name: 'Mensaje para redes sociales', contentSid: 'HX...', body: '¡Hey! ¿Listo para tu próximo corte? Agenda tu cita directamente desde aquí: {{1}}' },
+  { name: 'Descuento por cumpleaños', contentSid: 'HX...', body: '¡Feliz cumpleaños, {{1}}! Para celebrarlo, te ofrecemos un 20% de descuento en tu próximo servicio. ¡Válido por 30 días!' },
+  { name: 'Agradecimiento post-cita', contentSid: 'HX...', body: '¡Gracias por visitarnos, {{1}}! Esperamos que hayas disfrutado tu {{2}}. ¡Nos vemos pronto!' },
 ];
+
 
 interface TemplateSelectionModalProps {
   isOpen: boolean;
@@ -30,7 +32,15 @@ interface TemplateSelectionModalProps {
 }
 
 export function TemplateSelectionModal({ isOpen, onClose, onSelectAndEdit }: TemplateSelectionModalProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<Template>(predefinedTemplates[0]);
+  const [selectedTemplate, setSelectedTemplate] = useState<Omit<Template, 'id'>>(predefinedTemplates[0]);
+
+  const handleSelect = () => {
+    const newTemplate: Template = {
+      id: Date.now().toString(), // Create a temporary ID
+      ...selectedTemplate
+    };
+    onSelectAndEdit(newTemplate);
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -38,7 +48,7 @@ export function TemplateSelectionModal({ isOpen, onClose, onSelectAndEdit }: Tem
         <DialogHeader>
           <DialogTitle>Plantillas prediseñadas</DialogTitle>
           <DialogDescription>
-            Selecciona una plantilla para empezar. Podrás editarla antes de guardarla.
+            Selecciona una plantilla para empezar. Podrás editarla y agregar el Content SID de Twilio antes de guardarla.
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow grid md:grid-cols-3 gap-6 overflow-hidden">
@@ -48,11 +58,11 @@ export function TemplateSelectionModal({ isOpen, onClose, onSelectAndEdit }: Tem
                 <div className="p-2 space-y-1">
                     {predefinedTemplates.map((template) => (
                     <button
-                        key={template.id}
+                        key={template.name}
                         onClick={() => setSelectedTemplate(template)}
                         className={cn(
                         'w-full text-left p-2 rounded-md text-sm flex items-center gap-3',
-                        selectedTemplate.id === template.id
+                        selectedTemplate.name === template.name
                             ? 'bg-primary/10 text-primary font-semibold'
                             : 'hover:bg-muted'
                         )}
@@ -75,7 +85,7 @@ export function TemplateSelectionModal({ isOpen, onClose, onSelectAndEdit }: Tem
         </div>
         <DialogFooter className="pt-4 border-t">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => onSelectAndEdit(selectedTemplate)}>Seleccionar y editar</Button>
+          <Button onClick={handleSelect}>Seleccionar y editar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

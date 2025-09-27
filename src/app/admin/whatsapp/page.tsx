@@ -50,6 +50,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { TemplateSelectionModal, type Template } from '@/components/admin/whatsapp/template-selection-modal';
 import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
+import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
 
 interface WhatsappConfig {
@@ -68,9 +69,8 @@ const whatsappSchema = z.object({
 type WhatsappFormData = z.infer<typeof whatsappSchema>;
 
 const initialTemplates: Template[] = [
-    { id: 'confirmacion', name: 'Mensaje de confirmación', body: '¡Hola, {Nombre cliente}! Tu cita para {Servicio} ha sido confirmada para el {Fecha y hora reserva}. ¡Te esperamos!' },
-    { id: 'recordatorio', name: 'Recordatorio de cita', body: '¡No lo olvides, {Nombre cliente}! Mañana a las {Hora reserva} tienes tu cita para {Servicio}. Responde a este mensaje para confirmar tu asistencia.' },
-    { id: 'redes_sociales', name: 'Mensaje para redes sociales', body: '¡Hey! ¿Listo para tu próximo corte? Agenda tu cita directamente desde aquí: {Link de reserva}' },
+    { id: 'confirmacion', name: 'Mensaje de confirmación', contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', body: '¡Hola, {{1}}! Tu cita para {{2}} con {{4}} ha sido confirmada para el {{3}}. ¡Te esperamos!' },
+    { id: 'recordatorio', name: 'Recordatorio de cita', contentSid: 'HX...', body: '¡No lo olvides, {{1}}! Mañana a las {{2}} tienes tu cita para {{3}}. Responde a este mensaje para confirmar tu asistencia.' },
 ];
 
 export default function WhatsappPage() {
@@ -125,21 +125,41 @@ export default function WhatsappPage() {
     setIsSelectionModalOpen(false);
   }
 
-  const handleSaveTemplate = (data: { name: string, body: string }) => {
+  const handleSaveTemplate = (data: { name: string, body: string, contentSid: string }) => {
     if (editingTemplate) {
-      setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? { ...t, name: data.name, body: data.body } : t));
+      setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? { ...t, ...data } : t));
       toast({ title: 'Plantilla actualizada' });
     } else {
         const newTemplate = { id: Date.now().toString(), ...data };
         setTemplates(prev => [...prev, newTemplate]);
         toast({ title: 'Plantilla creada' });
     }
+    setEditingTemplate(null);
     setIsEditorModalOpen(false);
   }
 
   const handleSendTest = async () => {
     setIsSendingTest(true);
-    toast({ variant: 'destructive', title: 'Función desactivada', description: 'El envío de mensajes de prueba está temporalmente desactivado.' });
+    try {
+      const result = await sendTemplatedWhatsAppMessage({
+        to: '5561042575', // Hardcoded test number
+        contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada'
+        contentVariables: {
+          '1': 'Alejandro',
+          '2': 'Corte y Barba',
+          '3': '25 de Julio a las 15:00',
+          '4': 'El Patrón'
+        }
+      });
+      if(result.success) {
+        toast({ title: "Mensaje de prueba enviado", description: `SID: ${result.sid}` });
+      } else {
+        throw new Error(result.error || 'Error desconocido');
+      }
+    } catch (error: any) {
+        console.error(error);
+        toast({ variant: 'destructive', title: 'Error de envío', description: error.message });
+    }
     setIsSendingTest(false);
   };
 
@@ -287,6 +307,7 @@ export default function WhatsappPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Nombre de la plantilla</TableHead>
+                                    <TableHead>Content SID</TableHead>
                                     <TableHead>Mensaje</TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
@@ -295,6 +316,7 @@ export default function WhatsappPage() {
                                 {templates.map((template) => (
                                     <TableRow key={template.id}>
                                         <TableCell className="font-medium">{template.name}</TableCell>
+                                        <TableCell className="font-mono text-xs">{template.contentSid}</TableCell>
                                         <TableCell className="max-w-md truncate text-muted-foreground">{template.body}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="outline" size="sm" onClick={() => handleOpenEditor(template)}>
@@ -338,7 +360,7 @@ export default function WhatsappPage() {
       {editingTemplate && (
           <TemplateEditorModal 
             isOpen={isEditorModalOpen}
-            onClose={() => setIsEditorModalOpen(false)}
+            onClose={() => setEditingTemplate(null)}
             onSave={handleSaveTemplate}
             template={editingTemplate}
           />

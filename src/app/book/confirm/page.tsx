@@ -97,6 +97,7 @@ function ConfirmPageContent() {
                 servicio: selectedServices.map(s => s.name).join(', '),
                 items: selectedServices.map(s => ({
                     servicio: s.name,
+                    nombre: s.name,
                     barbero_id: professionalId,
                     precio: s.price,
                     duracion: s.duration

@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
@@ -19,26 +18,21 @@ import type { Template } from './template-selection-modal';
 interface TemplateEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { name: string, body: string }) => void;
+  onSave: (data: { name: string; body: string; contentSid: string }) => void;
   template: Template;
 }
 
 const editorSchema = z.object({
   name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
-  body: z.string().min(10, 'El mensaje debe tener al menos 10 caracteres.'),
+  body: z.string().min(1, 'El cuerpo del mensaje no puede estar vacío.'),
+  contentSid: z.string().regex(/^HX[a-f0-9]{32}$/, 'Debe ser un Content SID válido de Twilio (ej. HX...).'),
 });
+
 
 type EditorFormData = z.infer<typeof editorSchema>;
 
 const availableTags = [
-    '{Nombre cliente}',
-    '{Apellido cliente}',
-    '{Compañía}',
-    '{Servicio}',
-    '{Fecha reserva}',
-    '{Hora reserva}',
-    '{Fecha y hora reserva}',
-    '{Link de reserva}',
+    '{{1}}', '{{2}}', '{{3}}', '{{4}}', '{{5}}',
 ];
 
 export function TemplateEditorModal({ isOpen, onClose, onSave, template }: TemplateEditorModalProps) {
@@ -50,13 +44,18 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
     defaultValues: {
       name: template.name,
       body: template.body,
+      contentSid: template.contentSid.startsWith('HX') ? template.contentSid : '',
     },
   });
 
   const messageBody = form.watch('body');
 
   useEffect(() => {
-    form.reset({ name: template.name, body: template.body });
+    form.reset({
+        name: template.name,
+        body: template.body,
+        contentSid: template.contentSid.startsWith('HX') ? template.contentSid : '',
+    });
   }, [template, form]);
 
   const handleTagClick = (tag: string) => {
@@ -98,8 +97,19 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                     name="name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Nombre del mensaje</FormLabel>
+                            <FormLabel>Nombre de la plantilla</FormLabel>
                             <FormControl><Input {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="contentSid"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Content SID (de Twilio)</FormLabel>
+                            <FormControl><Input {...field} placeholder="HX..." /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -109,7 +119,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                     name="body"
                     render={({ field }) => (
                         <FormItem className="flex flex-col flex-grow">
-                            <FormLabel>Mensaje</FormLabel>
+                            <FormLabel>Cuerpo del mensaje</FormLabel>
                             <FormControl>
                                 <Textarea {...field} ref={textareaRef} className="flex-grow resize-none"/>
                             </FormControl>
@@ -118,7 +128,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                     )}
                 />
                 <div>
-                    <FormLabel>Etiquetas</FormLabel>
+                    <FormLabel>Variables</FormLabel>
                     <div className="flex flex-wrap gap-2 pt-2">
                         {availableTags.map(tag => (
                             <Badge key={tag} variant="secondary" className="cursor-pointer" onClick={() => handleTagClick(tag)}>
@@ -135,10 +145,6 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                         <pre className="text-sm whitespace-pre-wrap font-sans">{messageBody || "Escribe un mensaje para ver la previsualización."}</pre>
                     </CardContent>
                  </Card>
-                 <div className="flex items-center gap-2">
-                    <Input placeholder="Número de prueba" />
-                    <Button variant="secondary" type="button">Enviar mensaje de prueba</Button>
-                 </div>
             </div>
           </form>
         </Form>

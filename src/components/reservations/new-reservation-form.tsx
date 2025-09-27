@@ -411,15 +411,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       // Send WhatsApp notification on creation
       if (wasCreation && data.notifications?.whatsapp_notification) {
           const client = clients.find(c => c.id === data.cliente_id);
-          if (client?.telefono) {
+          const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
+          if (client?.telefono && professional) {
+              const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
               const result = await sendTemplatedWhatsAppMessage({
                   to: client.telefono,
                   contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
                   contentVariables: {
                       '1': client.nombre,
                       '2': dataToSave.servicio!,
-                      '3': format(data.fecha, "dd 'de' MMMM", { locale: es }),
-                      '4': hora_inicio,
+                      '3': fullDateStr,
+                      '4': professional.name,
                   }
               });
               if(result.success) {

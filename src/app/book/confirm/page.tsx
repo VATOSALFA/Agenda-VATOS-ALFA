@@ -64,7 +64,7 @@ function ConfirmPageContent() {
 
     const handleConfirm = async (data: ConfirmFormData) => {
         setIsSubmitting(true);
-        if (!db || !dateStr || !time || !professionalId || !endTime) {
+        if (!db || !dateStr || !time || !professionalId || !endTime || !selectedProfessional) {
             toast({ variant: 'destructive', title: 'Error', description: 'Faltan datos para confirmar la reserva.' });
             setIsSubmitting(false);
             return;
@@ -120,14 +120,15 @@ function ConfirmPageContent() {
             // Send WhatsApp notification
             if (data.telefono) {
                 try {
+                    const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
                     const result = await sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
                         contentVariables: {
                             '1': data.nombre,
                             '2': reservationData.servicio,
-                            '3': format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es }),
-                            '4': time,
+                            '3': fullDateStr,
+                            '4': selectedProfessional.name,
                         }
                     });
                     if (result.success) {

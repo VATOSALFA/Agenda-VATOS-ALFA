@@ -123,7 +123,6 @@ export default function ConversationsPage() {
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
         const conversationPhone = conv.id.replace(/\D/g, '');
-        // Try matching last 10 digits, then full number, etc.
         const phone10 = conversationPhone.slice(-10);
         
         let foundName = clientMap.get(phone10);
@@ -333,8 +332,8 @@ export default function ConversationsPage() {
                                     </Avatar>
                                     <div className="flex-1 overflow-hidden">
                                         <div className="flex justify-between items-start">
-                                            <p className="font-semibold truncate pr-2">{conv.clientName}</p>
-                                            <span className="text-xs text-muted-foreground flex-shrink-0">
+                                            <p className="font-semibold truncate">{conv.clientName}</p>
+                                            <span className="text-xs text-muted-foreground flex-shrink-0 pr-2">
                                             {conv.lastMessageTimestamp ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { locale: es, addSuffix: true }) : ''}
                                         </span>
                                         </div>

@@ -123,19 +123,24 @@ export default function ConversationsPage() {
   const conversationsWithNames = useMemo(() => {
     return conversations.map(conv => {
         const conversationPhone = conv.id.replace(/\D/g, '');
-        const phone10 = conversationPhone.slice(-10);
         
-        let foundName = clientMap.get(phone10);
+        let foundName: string | undefined;
 
-        if(!foundName) {
-            for(const [clientPhone, clientName] of clientMap.entries()) {
-                if (clientPhone.slice(-10) === phone10) {
+        // Try to match the last 10 digits
+        const phone10 = conversationPhone.slice(-10);
+        foundName = clientMap.get(phone10);
+
+        // If not found, try matching with country code prefixes
+        if (!foundName) {
+            for (const [clientPhone, clientName] of clientMap.entries()) {
+                const clientPhone10 = clientPhone.slice(-10);
+                if (clientPhone10 === phone10) {
                     foundName = clientName;
                     break;
                 }
             }
         }
-
+        
         return {
             ...conv,
             clientName: foundName || conv.clientName || conv.id.replace('whatsapp:', ''),

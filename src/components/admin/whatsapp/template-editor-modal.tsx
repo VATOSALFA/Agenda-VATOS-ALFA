@@ -15,7 +15,7 @@ import { Loader2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import type { Template } from './template-selection-modal';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ScrollArea } from '../ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 interface TemplateEditorModalProps {

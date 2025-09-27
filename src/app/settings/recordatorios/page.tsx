@@ -20,6 +20,7 @@ interface ReminderSettings {
     whatsapp_reminder: boolean;
     reminder_day: string;
     reminder_time: string;
+    reminder_time_relative: string;
 }
 
 const ToggleField = ({ name, label, control, disabled = false }: { name: keyof ReminderSettings, label: string, control: any, disabled?: boolean }) => (
@@ -50,9 +51,12 @@ export default function RecordatoriosPage() {
             whatsapp_notification: true,
             whatsapp_reminder: true,
             reminder_day: '1_day_before',
-            reminder_time: '09:00'
+            reminder_time: '09:00',
+            reminder_time_relative: '1_hour_before',
         }
     });
+    
+    const reminderDayValue = form.watch('reminder_day');
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -125,21 +129,38 @@ export default function RecordatoriosPage() {
                                             </Select>
                                         )}
                                     />
-                                    <Controller
-                                        name="reminder_time"
-                                        control={form.control}
-                                        render={({ field }) => (
-                                             <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch('whatsapp_reminder')}>
-                                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="09:00">09:00</SelectItem>
-                                                    <SelectItem value="10:00">10:00</SelectItem>
-                                                    <SelectItem value="11:00">11:00</SelectItem>
-                                                    <SelectItem value="12:00">12:00</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
+                                    {reminderDayValue === 'same_day' ? (
+                                        <Controller
+                                            name="reminder_time_relative"
+                                            control={form.control}
+                                            render={({ field }) => (
+                                                 <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch('whatsapp_reminder')}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="1_hour_before">1 hora antes de la cita</SelectItem>
+                                                        <SelectItem value="2_hours_before">2 horas antes de la cita</SelectItem>
+                                                        <SelectItem value="3_hours_before">3 horas antes de la cita</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    ) : (
+                                        <Controller
+                                            name="reminder_time"
+                                            control={form.control}
+                                            render={({ field }) => (
+                                                 <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch('whatsapp_reminder')}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="09:00">09:00</SelectItem>
+                                                        <SelectItem value="10:00">10:00</SelectItem>
+                                                        <SelectItem value="11:00">11:00</SelectItem>
+                                                        <SelectItem value="12:00">12:00</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </>

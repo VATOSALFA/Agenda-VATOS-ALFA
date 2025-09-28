@@ -107,26 +107,6 @@ export default function AdminLayout({ children }: Props) {
               ))}
             </CollapsibleContent>
           </Collapsible>
-          {canSee('ver_configuracion_usuarios') && (
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-                Configuracion
-                <ChevronDown className="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 pt-2">
-                  <Link
-                    href={'/settings/users'}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                      pathname === '/settings/users' && 'bg-muted text-primary'
-                    )}
-                  >
-                    <Settings className="h-4 w-4" />
-                    Usuarios y permisos
-                  </Link>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
         </nav>
       </aside>
       <div className="flex-1 overflow-y-auto">

@@ -47,7 +47,7 @@ const dataTags = {
 }
 
 const emojis = {
-    'Emojis': ['✂️', '💈', '💇‍♂️', '💇‍♀️', '✨', '👍', '✅', '📅', '⏰', '📍', '💰', '💳', '👋', '🙏', '😎', '🔥', '💯', '👉', '👈', '➡️', '⬅️', '🔝', '💥', '🧔', '👨‍🦱', '👨‍🦰', '👨‍🦳', '👑', '💀']
+    'Emojis': ['✂️', '💈', '💇‍♂️', '💇‍♀️', '✨', '👍', '✅', '📅', '⏰', '📍', '💰', '💳', '👋', '🙏', '😎', '🔥', '💯', '👉', '👈', '➡️', '⬅️', '🔝', '💥', '🧔', '👨‍🦱', '👨‍🦰', '👨‍🦳', '👑', '💀', '🎂', '🎈', '🎉', '🥳', '🎁']
 }
 
 const sampleData: Record<string, string> = {
@@ -157,7 +157,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
             <div className="grid md:grid-cols-2 gap-8 flex-grow overflow-hidden">
                 {/* Left Column */}
                 <div className="flex flex-col space-y-4 overflow-hidden">
-                    <div className="flex-shrink-0 space-y-2">
+                    <div className="flex-shrink-0 space-y-2 pr-4">
                         <FormField
                             control={form.control}
                             name="name"
@@ -172,13 +172,13 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                     </div>
                     
                     <div className="flex-grow flex flex-col space-y-2 overflow-hidden">
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 pr-4">
                             <Label>Personaliza el mensaje <span className="text-destructive">*</span></Label>
                             <p className="text-xs text-muted-foreground">Escribe en el cuadro de texto y haz clic en las tarjetas para agregar datos pre-cargados de la cita a tu mensaje personalizado.</p>
                         </div>
                         
-                        <ScrollArea className="flex-grow pr-4 -mr-4">
-                            <div className="pr-4 py-2 space-y-1">
+                        <ScrollArea className="flex-grow">
+                             <div className="space-y-1 pr-4 py-2">
                                 <Accordion type="multiple" className="w-full space-y-1">
                                     {Object.entries(dataTags).map(([category, tags]) => (
                                         <AccordionItem value={category} key={category} className="border rounded-lg bg-card/50">
@@ -224,7 +224,7 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
                             </div>
                         </ScrollArea>
                     </div>
-                     <div className="flex-shrink-0">
+                     <div className="flex-shrink-0 pr-4">
                         <FormField
                             control={form.control}
                             name="contentSid"
@@ -283,5 +283,3 @@ export function TemplateEditorModal({ isOpen, onClose, onSave, template }: Templ
     </Dialog>
   );
 }
-
-    

@@ -23,7 +23,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 const adminLinks = [
-  { href: '/admin/locales', label: 'Locales', icon: Store, permission: 'ver_locales' },
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
   { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle, permission: 'ver_whatsapp' },
@@ -136,5 +135,3 @@ export default function AdminLayout({ children }: Props) {
     </div>
   );
 }
-
-    

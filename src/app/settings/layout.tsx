@@ -17,13 +17,15 @@ import {
   KeyRound,
   ChevronDown,
   UserCircle,
-  Users
+  Users,
+  Store,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 const settingsLinks = [
   { href: '/settings/empresa', label: 'Empresa', icon: Building2, permission: 'ver_configuracion_empresa' },
+  { href: '/admin/locales', label: 'Locales', icon: Store, permission: 'ver_locales' },
   { href: '/settings/sitio-web', label: 'Sitio Web', icon: Globe, permission: 'ver_configuracion_sitio_web' },
   { href: '/settings/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_configuracion_agenda' },
   { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign, permission: 'ver_configuracion_pagos' },

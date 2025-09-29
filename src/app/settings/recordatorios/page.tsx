@@ -48,16 +48,20 @@ export default function RecordatoriosPage() {
         }
     });
 
-    const { data: settingsData, loading: settingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', `recordatorios-settings`, (snapshot) => {
-        if (snapshot && snapshot.docs.length > 0 && snapshot.docs[0].id === 'recordatorios') {
-            form.reset(snapshot.docs[0].data());
+    const { data: settingsData, loading: settingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion');
+
+    useEffect(() => {
+        if (!settingsLoading && settingsData) {
+            const recordatoriosSettings = settingsData.find(d => (d as any).id === 'recordatorios');
+            if (recordatoriosSettings) {
+                form.reset(recordatoriosSettings);
+            }
         }
-    });
+    }, [settingsData, settingsLoading, form]);
 
 
     const isLoading = templatesLoading || settingsLoading;
 
-    // A watch to re-render the component when a timing type changes
     const watchedTimings = useWatch({ control: form.control, name: "notifications" });
 
     const onSubmit = async (data: ReminderSettings) => {

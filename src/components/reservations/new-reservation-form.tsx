@@ -494,8 +494,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }));
   }, [clients]);
 
-  const isNotificationEnabled = reminderSettings?.notifications?.['notification_template_1']?.enabled ?? false;
-  const isReminderEnabled = reminderSettings?.notifications?.['reminder_template_1']?.enabled ?? false;
+  const isNotificationEnabled = reminderSettings?.notifications?.['template_notificacion']?.enabled ?? false;
+  const isReminderEnabled = reminderSettings?.notifications?.['template_recordatorio']?.enabled ?? false;
 
   const FormContent = () => (
     <>
@@ -642,36 +642,31 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   <AccordionItem value="notificaciones">
                     <AccordionTrigger>Notificaciones Adicionales</AccordionTrigger>
                     <AccordionContent className="space-y-3 pt-2">
-                        {isNotificationEnabled && (
-                            <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                    <FormControl>
-                                        <Checkbox
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                            disabled={!selectedClient?.telefono}
-                                        />
-                                    </FormControl>
-                                    <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
-                                </FormItem>
-                            )}/>
-                        )}
-                        {isReminderEnabled && (
-                             <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                    <FormControl>
-                                        <Checkbox
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                            disabled={!selectedClient?.telefono}
-                                        />
-                                    </FormControl>
-                                    <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>
-                                </FormItem>
-                            )}/>
-                        )}
+                        <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2">
+                                <FormControl>
+                                    <Checkbox
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                        disabled={!selectedClient?.telefono || !isNotificationEnabled}
+                                    />
+                                </FormControl>
+                                <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
+                            </FormItem>
+                        )}/>
+                         <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2">
+                                <FormControl>
+                                    <Checkbox
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                        disabled={!selectedClient?.telefono || !isReminderEnabled}
+                                    />
+                                </FormControl>
+                                <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>
+                            </FormItem>
+                        )}/>
                         {!selectedClient?.telefono && <p className="text-xs text-muted-foreground pl-6">El cliente no tiene un teléfono para enviar notificaciones de WhatsApp.</p>}
-                        {!isNotificationEnabled && !isReminderEnabled && <p className="text-xs text-muted-foreground pl-6">No hay notificaciones automáticas por WhatsApp activadas. Puedes activarlas en la configuración de recordatorios.</p>}
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -787,8 +782,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-
-    
-
-    
-

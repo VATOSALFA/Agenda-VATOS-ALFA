@@ -217,6 +217,39 @@ export default function RecordatoriosPage() {
                                 )
                             })}
                             
+                             {birthdayTemplates.map((template) => (
+                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                        <Controller
+                                            name={`notifications.${template.id}.enabled`}
+                                            control={form.control}
+                                            defaultValue={false}
+                                            render={({ field }) => (
+                                                <Switch
+                                                    id={`enabled-${template.id}`}
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                    <Controller
+                                        name={`notifications.${template.id}.rules`}
+                                        control={form.control}
+                                        defaultValue=""
+                                        render={({ field }) => (
+                                            <Textarea 
+                                                {...field}
+                                                className="text-sm"
+                                                rows={2}
+                                                placeholder="Define las reglas para esta notificación..."
+                                            />
+                                        )}
+                                    />
+                                </div>
+                            ))}
+
                             {reviewTemplates.map((template) => (
                                 <div key={template.id} className="p-4 border rounded-lg space-y-3">
                                     <div className="flex items-center justify-between">
@@ -249,40 +282,7 @@ export default function RecordatoriosPage() {
                                     />
                                 </div>
                             ))}
-
-                            {birthdayTemplates.map((template) => (
-                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
-                                        <Controller
-                                            name={`notifications.${template.id}.enabled`}
-                                            control={form.control}
-                                            defaultValue={false}
-                                            render={({ field }) => (
-                                                <Switch
-                                                    id={`enabled-${template.id}`}
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
-                                                />
-                                            )}
-                                        />
-                                    </div>
-                                    <Controller
-                                        name={`notifications.${template.id}.rules`}
-                                        control={form.control}
-                                        defaultValue=""
-                                        render={({ field }) => (
-                                            <Textarea 
-                                                {...field}
-                                                className="text-sm"
-                                                rows={2}
-                                                placeholder="Define las reglas para esta notificación..."
-                                            />
-                                        )}
-                                    />
-                                </div>
-                            ))}
-
+                            
                             { !templatesLoading && templates.length === 0 && (
                                 <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>
                             )}
@@ -302,3 +302,5 @@ export default function RecordatoriosPage() {
     </div>
   );
 }
+
+    

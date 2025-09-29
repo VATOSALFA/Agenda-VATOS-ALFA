@@ -186,7 +186,9 @@ export default function RecordatoriosPage() {
                                                 <FormItem>
                                                     <FormLabel>Cuándo enviar</FormLabel>
                                                     <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                                        <FormControl>
+                                                            <SelectTrigger><SelectValue/></SelectTrigger>
+                                                        </FormControl>
                                                         <SelectContent>
                                                             <SelectItem value="day_before">Un día antes de la cita</SelectItem>
                                                             <SelectItem value="same_day">El mismo día de la cita</SelectItem>

@@ -210,7 +210,7 @@ export default function RecordatoriosPage() {
                                                     <FormItem>
                                                         <FormLabel>Horas antes</FormLabel>
                                                         <FormControl>
-                                                          <Input type="number" min="1" max="23" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                                          <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10) || undefined)} />
                                                         </FormControl>
                                                     </FormItem>
                                                 )}

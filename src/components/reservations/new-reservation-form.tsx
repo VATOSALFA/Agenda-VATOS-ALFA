@@ -146,11 +146,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
-  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion');
-  const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion');
+  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', 'recordatorios');
+  const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', 'agenda');
   
-  const reminderSettings = reminderSettingsData.find(s => (s as any).id === 'recordatorios');
-  const agendaSettings = agendaSettingsData.find(s => (s as any).id === 'agenda');
+  const reminderSettings = reminderSettingsData?.[0];
+  const agendaSettings = agendaSettingsData?.[0];
 
 
   const form = useForm<ReservationFormData>({
@@ -494,7 +494,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }));
   }, [clients]);
 
-  const isNotificationEnabled = reminderSettings?.notifications?.['notificacion-de-citas']?.enabled ?? false;
+  const isNotificationEnabled = reminderSettings?.notifications?.['notification_template_1']?.enabled ?? false;
   const isReminderEnabled = reminderSettings?.notifications?.['recordatorio-de-cita']?.enabled ?? false;
 
   const FormContent = () => (

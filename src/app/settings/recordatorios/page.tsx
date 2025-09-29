@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -15,10 +15,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Template } from '@/components/admin/whatsapp/template-selection-modal';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+
+
+interface ReminderTiming {
+    type: 'day_before' | 'same_day';
+    hours_before?: number;
+}
 
 interface AutomaticNotification {
     enabled: boolean;
     rules: string;
+    timing?: ReminderTiming;
 }
 
 interface ReminderSettings {
@@ -45,6 +55,9 @@ export default function RecordatoriosPage() {
 
     const isLoading = templatesLoading || settingsLoading;
 
+    // A watch to re-render the component when a timing type changes
+    const watchedTimings = useWatch({ control: form.control, name: "notifications" });
+
     const onSubmit = async (data: ReminderSettings) => {
         setIsSubmitting(true);
         try {
@@ -61,6 +74,15 @@ export default function RecordatoriosPage() {
             setIsSubmitting(false);
         }
     }
+    
+    const notificationTemplates = useMemo(() => {
+        return templates.filter(t => t.name.toLowerCase().includes('notificación de citas'));
+    }, [templates]);
+
+    const reminderTemplates = useMemo(() => {
+        return templates.filter(t => t.name.toLowerCase().includes('recordatorio de cita'));
+    }, [templates]);
+
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -79,9 +101,10 @@ export default function RecordatoriosPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {isLoading ? (
-                        Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
+                        Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
                     ) : (
-                        templates.map((template) => (
+                        <>
+                        {notificationTemplates.map((template) => (
                             <div key={template.id} className="p-4 border rounded-lg space-y-3">
                                 <div className="flex items-center justify-between">
                                     <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
@@ -101,22 +124,89 @@ export default function RecordatoriosPage() {
                                 <Controller
                                     name={`notifications.${template.id}.rules`}
                                     control={form.control}
-                                    defaultValue=""
+                                    defaultValue="Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada"
                                     render={({ field }) => (
                                         <Textarea 
                                             {...field}
-                                            placeholder="Define las reglas o condiciones para esta notificación. Ej: 'Enviar 1 día antes a las 10:00 AM'"
-                                            className="text-sm"
+                                            className="text-sm text-muted-foreground"
                                             rows={2}
                                         />
                                     )}
                                 />
                             </div>
-                        ))
+                        ))}
+                        {reminderTemplates.map((template) => {
+                            const timingType = watchedTimings?.[template.id]?.timing?.type;
+                            return (
+                            <div key={template.id} className="p-4 border rounded-lg space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                    <Controller
+                                        name={`notifications.${template.id}.enabled`}
+                                        control={form.control}
+                                        defaultValue={false}
+                                        render={({ field }) => (
+                                            <Switch
+                                                id={`enabled-${template.id}`}
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
+                                </div>
+                                 <Controller
+                                    name={`notifications.${template.id}.rules`}
+                                    control={form.control}
+                                    defaultValue="Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda."
+                                    render={({ field }) => (
+                                        <Textarea 
+                                            {...field}
+                                            className="text-sm text-muted-foreground"
+                                            rows={2}
+                                        />
+                                    )}
+                                />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end pt-2">
+                                     <Controller
+                                        name={`notifications.${template.id}.timing.type`}
+                                        control={form.control}
+                                        defaultValue="day_before"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Cuándo enviar</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="day_before">Un día antes de la cita</SelectItem>
+                                                        <SelectItem value="same_day">El mismo día de la cita</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                     />
+                                     {timingType === 'same_day' && (
+                                        <Controller
+                                            name={`notifications.${template.id}.timing.hours_before`}
+                                            control={form.control}
+                                            defaultValue={2}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                     <FormLabel>Horas antes</FormLabel>
+                                                     <Input type="number" min="1" max="23" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                                </FormItem>
+                                            )}
+                                        />
+                                     )}
+                                </div>
+                            </div>
+                            )
+                        })}
+
+                         { !templatesLoading && templates.length === 0 && (
+                            <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>
+                         )}
+                        </>
                     )}
-                     { !isLoading && templates.length === 0 && (
-                        <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>
-                     )}
                 </CardContent>
             </Card>
             

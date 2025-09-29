@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Form, FormItem, FormLabel } from '@/components/ui/form';
+import { Form, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 
 
 interface ReminderTiming {
@@ -203,7 +203,9 @@ export default function RecordatoriosPage() {
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>Horas antes</FormLabel>
-                                                        <Input type="number" min="1" max="23" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                                        <FormControl>
+                                                          <Input type="number" min="1" max="23" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                                        </FormControl>
                                                     </FormItem>
                                                 )}
                                             />
@@ -212,7 +214,7 @@ export default function RecordatoriosPage() {
                                 </div>
                                 )
                             })}
-
+                            
                             {reviewTemplates.map((template) => (
                                 <div key={template.id} className="p-4 border rounded-lg space-y-3">
                                     <div className="flex items-center justify-between">

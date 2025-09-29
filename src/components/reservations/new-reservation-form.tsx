@@ -128,9 +128,9 @@ const statusOptions = [
     { value: 'Reservado', label: 'Reservado', color: 'bg-blue-500' },
     { value: 'Confirmado', label: 'Confirmado', color: 'bg-yellow-500' },
     { value: 'Asiste', label: 'Asiste', color: 'bg-pink-500' },
-    { value: 'No asiste', label: 'No asiste', color: 'bg-orange-500' },
+    { value: 'No asiste', label: 'No Asistió', color: 'bg-orange-500' },
     { value: 'Pendiente', label: 'Pendiente', color: 'bg-red-500' },
-    { value: 'En espera', label: 'En espera', color: 'bg-green-500' },
+    { value: 'En espera', label: 'En Espera', color: 'bg-green-500' },
 ];
 
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
@@ -494,8 +494,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }));
   }, [clients]);
 
-  const isNotificationEnabled = reminderSettings?.notifications?.['template_notificacion']?.enabled ?? false;
-  const isReminderEnabled = reminderSettings?.notifications?.['template_recordatorio']?.enabled ?? false;
+  const isNotificationEnabled = reminderSettings?.notifications?.['notificacion-de-citas']?.enabled ?? false;
+  const isReminderEnabled = reminderSettings?.notifications?.['recordatorio-de-cita']?.enabled ?? false;
 
   const FormContent = () => (
     <>

@@ -84,6 +84,14 @@ export default function RecordatoriosPage() {
     const reminderTemplates = useMemo(() => {
         return templates.filter(t => t.name.toLowerCase().includes('recordatorio de cita'));
     }, [templates]);
+    
+    const reviewTemplates = useMemo(() => {
+        return templates.filter(t => t.name.toLowerCase().includes('opinion de google maps'));
+    }, [templates]);
+
+    const birthdayTemplates = useMemo(() => {
+        return templates.filter(t => t.name.toLowerCase().includes('cumpleaños'));
+    }, [templates]);
 
 
   return (
@@ -104,7 +112,7 @@ export default function RecordatoriosPage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {isLoading ? (
-                            Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
+                            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
                         ) : (
                             <>
                             {notificationTemplates.map((template) => (
@@ -204,6 +212,72 @@ export default function RecordatoriosPage() {
                                 </div>
                                 )
                             })}
+
+                            {reviewTemplates.map((template) => (
+                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                        <Controller
+                                            name={`notifications.${template.id}.enabled`}
+                                            control={form.control}
+                                            defaultValue={false}
+                                            render={({ field }) => (
+                                                <Switch
+                                                    id={`enabled-${template.id}`}
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                    <Controller
+                                        name={`notifications.${template.id}.rules`}
+                                        control={form.control}
+                                        defaultValue=""
+                                        render={({ field }) => (
+                                            <Textarea 
+                                                {...field}
+                                                className="text-sm"
+                                                rows={2}
+                                                placeholder="Define las reglas para esta notificación..."
+                                            />
+                                        )}
+                                    />
+                                </div>
+                            ))}
+
+                            {birthdayTemplates.map((template) => (
+                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                        <Controller
+                                            name={`notifications.${template.id}.enabled`}
+                                            control={form.control}
+                                            defaultValue={false}
+                                            render={({ field }) => (
+                                                <Switch
+                                                    id={`enabled-${template.id}`}
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                    <Controller
+                                        name={`notifications.${template.id}.rules`}
+                                        control={form.control}
+                                        defaultValue=""
+                                        render={({ field }) => (
+                                            <Textarea 
+                                                {...field}
+                                                className="text-sm"
+                                                rows={2}
+                                                placeholder="Define las reglas para esta notificación..."
+                                            />
+                                        )}
+                                    />
+                                </div>
+                            ))}
 
                             { !templatesLoading && templates.length === 0 && (
                                 <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>

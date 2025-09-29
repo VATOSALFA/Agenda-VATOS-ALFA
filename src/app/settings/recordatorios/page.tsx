@@ -217,7 +217,7 @@ export default function RecordatoriosPage() {
                                 )
                             })}
                             
-                             {birthdayTemplates.map((template) => (
+                            {birthdayTemplates.map((template) => (
                                 <div key={template.id} className="p-4 border rounded-lg space-y-3">
                                     <div className="flex items-center justify-between">
                                         <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
@@ -302,5 +302,3 @@ export default function RecordatoriosPage() {
     </div>
   );
 }
-
-    

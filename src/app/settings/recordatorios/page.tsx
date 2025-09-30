@@ -111,8 +111,7 @@ export default function RecordatoriosPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Notificaciones automáticas de reserva por WhatsApp</CardTitle>
-                        <CardDescription>Activa o desactiva las notificaciones y define cuándo deben enviarse.</CardDescription>
+                        <CardTitle>Activa o desactiva las notificaciones y define cuándo deben enviarse.</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {isLoading ? (
@@ -205,12 +204,11 @@ export default function RecordatoriosPage() {
                                             <Controller
                                                 name={`notifications.${template.id}.timing.hours_before`}
                                                 control={form.control}
-                                                defaultValue={2}
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>Horas antes</FormLabel>
                                                         <FormControl>
-                                                          <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10) || undefined)} />
+                                                          <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10))} />
                                                         </FormControl>
                                                     </FormItem>
                                                 )}

@@ -52,9 +52,6 @@ const createClientSchema = (settings?: AgendaSettings) => {
         ? z.string().email('El correo electrónico no es válido.')
         : z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
       fecha_nacimiento: z.date().optional().nullable(),
-      direccion: fieldSettings.address?.required
-        ? z.string().min(1, 'La dirección es requerida.')
-        : z.string().optional(),
       notas: z.string().optional(),
     });
 };
@@ -109,7 +106,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
       telefono: '',
       correo: '',
       notas: '',
-      direccion: ''
     },
   });
   
@@ -201,7 +197,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         telefono: '',
         correo: '',
         notas: '',
-        direccion: '',
         fecha_nacimiento: undefined,
       });
     }
@@ -217,7 +212,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
           apellido: data.apellido,
           telefono: data.telefono,
           correo: data.correo,
-          direccion: data.direccion,
           notas: data.notas,
           fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
         };
@@ -422,19 +416,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
               </FormItem>
             )}
           />
-          )}
-          {fieldSettings?.address?.use && (
-            <FormField
-                control={form.control}
-                name="direccion"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4" /> Dirección {fieldSettings.address.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.address.required && <OptionalLabel />}</FormLabel>
-                    <FormControl><Input placeholder="Calle, número, ciudad..." {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
           )}
           {fieldSettings?.notes?.use && (
           <FormField

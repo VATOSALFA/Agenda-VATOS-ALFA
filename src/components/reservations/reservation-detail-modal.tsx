@@ -164,7 +164,8 @@ export function ReservationDetailModal({
 
     try {
         const local = locales.find(l => l.id === reservation.local_id);
-        const professional = professionals.find(p => p.id === reservation.barbero_id);
+        const professionalId = reservation.items?.[0]?.barbero_id;
+        const professional = professionalId ? professionals.find(p => p.id === professionalId) : null;
 
         if(!local || !professional) {
             throw new Error("No se pudo encontrar el local o el profesional asociado.");

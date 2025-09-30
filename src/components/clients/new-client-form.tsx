@@ -214,22 +214,29 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     try {
       if (!db) throw new Error("Database not available.");
       
-      const dataToSave: any = {
+      const dataToSave: Partial<Client> = {
         ...data,
         fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
       };
 
       if (isEditMode && client) {
+        // In edit mode, we don't want to overwrite the creation date or other historical fields
+        // that are not part of the form.
+        const { creado_en, ...updateData } = dataToSave as Partial<Client> & { creado_en?: any };
+
         const clientRef = doc(db, 'clientes', client.id);
-        await updateDoc(clientRef, dataToSave);
+        await updateDoc(clientRef, updateData);
         toast({
           title: '¡Cliente Actualizado!',
           description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
         });
         onFormSubmit(client.id);
       } else {
-        dataToSave.creado_en = Timestamp.now();
-        const docRef = await addDoc(collection(db, 'clientes'), dataToSave);
+        const fullData = {
+          ...dataToSave,
+          creado_en: Timestamp.now(),
+        };
+        const docRef = await addDoc(collection(db, 'clientes'), fullData);
         toast({
           title: '¡Cliente Creado!',
           description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,

@@ -13,12 +13,10 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Template } from '@/components/admin/whatsapp/template-selection-modal';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import { Form, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Form, FormItem, FormLabel, FormControl } from '@/components/ui/form';
 
 
 interface ReminderTiming {
@@ -28,7 +26,6 @@ interface ReminderTiming {
 
 interface AutomaticNotification {
     enabled: boolean;
-    rules: string;
     timing?: ReminderTiming;
 }
 
@@ -37,7 +34,7 @@ interface ReminderSettings {
 }
 
 const notificationTypes = [
-    { id: 'google_review', name: 'Opinión de Google Maps', description: 'Esta notificación se enviará un día después de la cita del cliente para invitarlo a dejar una opinión.', sid: 'HXe0e696ca1a1178edc8284bab55555e1c' },
+    { id: 'google_review', name: 'Opinión de Google Maps', description: 'Esta notificación se enviará un día después de la cita del cliente para invitarlo a dejar una opinión.' },
     { id: 'appointment_notification', name: 'Notificación de citas', description: 'Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada' },
     { id: 'appointment_reminder', name: 'Recordatorio de cita', description: 'Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda.' },
     { id: 'birthday_notification', name: 'Notificación de Cumpleaños', description: 'Saluda a tus clientes en su día especial.' },
@@ -74,24 +71,26 @@ export default function RecordatoriosPage() {
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             
-            const dataToSave: Partial<ReminderSettings> = {
+            const dataToSave: ReminderSettings = {
                 notifications: {}
             };
 
             for (const type of notificationTypes) {
                 const id = type.id;
-                if (data.notifications && data.notifications[id]) {
-                    const notificationConfig: Partial<AutomaticNotification> = {
-                        enabled: data.notifications[id].enabled,
+                const notificationConfig = data.notifications?.[id];
+                
+                if (notificationConfig) {
+                    const newConfig: AutomaticNotification = {
+                        enabled: notificationConfig.enabled,
                     };
 
-                    if (id === 'appointment_reminder' && data.notifications[id].timing) {
-                        notificationConfig.timing = {
-                            type: data.notifications[id].timing!.type,
-                            hours_before: data.notifications[id].timing!.hours_before || 0,
+                    if (id === 'appointment_reminder' && notificationConfig.timing) {
+                        newConfig.timing = {
+                            type: notificationConfig.timing.type,
+                            hours_before: notificationConfig.timing.hours_before || 0,
                         };
                     }
-                    dataToSave.notifications![id] = notificationConfig as AutomaticNotification;
+                    dataToSave.notifications[id] = newConfig;
                 }
             }
 
@@ -183,7 +182,7 @@ export default function RecordatoriosPage() {
                                                             <FormItem>
                                                                 <FormLabel>Horas antes</FormLabel>
                                                                 <FormControl>
-                                                                <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10) || '')} />
+                                                                <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
                                                                 </FormControl>
                                                             </FormItem>
                                                         )}

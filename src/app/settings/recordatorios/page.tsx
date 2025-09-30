@@ -71,6 +71,7 @@ export default function RecordatoriosPage() {
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             
+            // Build a clean object to save, removing any undefined values
             const dataToSave: ReminderSettings = {
                 notifications: {}
             };
@@ -81,19 +82,23 @@ export default function RecordatoriosPage() {
                 
                 if (notificationConfig) {
                     const newConfig: AutomaticNotification = {
-                        enabled: notificationConfig.enabled,
+                        enabled: notificationConfig.enabled || false,
                     };
 
                     if (id === 'appointment_reminder' && notificationConfig.timing) {
-                        newConfig.timing = {
+                        const timingData: ReminderTiming = {
                             type: notificationConfig.timing.type,
-                            hours_before: notificationConfig.timing.hours_before || 0,
                         };
+                        // Only include hours_before if it's a number
+                        if (typeof notificationConfig.timing.hours_before === 'number') {
+                            timingData.hours_before = notificationConfig.timing.hours_before;
+                        }
+                         newConfig.timing = timingData;
                     }
                     dataToSave.notifications[id] = newConfig;
                 }
             }
-
+            
             await setDoc(settingsRef, dataToSave, { merge: true });
             
             toast({
@@ -182,7 +187,7 @@ export default function RecordatoriosPage() {
                                                             <FormItem>
                                                                 <FormLabel>Horas antes</FormLabel>
                                                                 <FormControl>
-                                                                <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
+                                                                <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10))} />
                                                                 </FormControl>
                                                             </FormItem>
                                                         )}

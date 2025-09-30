@@ -146,7 +146,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
-  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', 'recordatorios');
+  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', where('__name__', '==', 'recordatorios'));
   const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', 'agenda');
   
   const reminderSettings = reminderSettingsData?.[0];
@@ -445,8 +445,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (wasCreation && data.notifications?.whatsapp_notification) {
           const client = clients.find(c => c.id === data.cliente_id);
           const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
-          const activeNotification = reminderSettings?.notifications?.['notification_template_1'];
-          if (client?.telefono && professional && activeNotification?.enabled) {
+          if (client?.telefono && professional) {
               const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
               await sendTemplatedWhatsAppMessage({
                   to: client.telefono,
@@ -494,8 +493,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }));
   }, [clients]);
 
-  const isNotificationEnabled = reminderSettings?.notifications?.['notification_template_1']?.enabled ?? false;
-  const isReminderEnabled = reminderSettings?.notifications?.['recordatorio-de-cita']?.enabled ?? false;
+  const isAppointmentNotificationEnabled = reminderSettings?.notifications?.['appointment_notification']?.enabled ?? false;
+  const isReminderNotificationEnabled = reminderSettings?.notifications?.['appointment_reminder']?.enabled ?? false;
+
+  useEffect(() => {
+    if(!isEditMode){
+      form.setValue('notifications.whatsapp_notification', isAppointmentNotificationEnabled);
+      form.setValue('notifications.whatsapp_reminder', isReminderNotificationEnabled);
+    }
+  }, [isAppointmentNotificationEnabled, isReminderNotificationEnabled, form, isEditMode]);
 
   const FormContent = () => (
     <>
@@ -648,7 +654,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <Checkbox
                                         checked={field.value}
                                         onCheckedChange={field.onChange}
-                                        disabled={!selectedClient?.telefono || !isNotificationEnabled}
+                                        disabled={!selectedClient?.telefono || !isAppointmentNotificationEnabled}
                                     />
                                 </FormControl>
                                 <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
@@ -660,7 +666,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                     <Checkbox
                                         checked={field.value}
                                         onCheckedChange={field.onChange}
-                                        disabled={!selectedClient?.telefono || !isReminderEnabled}
+                                        disabled={!selectedClient?.telefono || !isReminderNotificationEnabled}
                                     />
                                 </FormControl>
                                 <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>

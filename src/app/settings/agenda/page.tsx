@@ -94,7 +94,7 @@ export default function AgendaSettingsPage() {
                 <Controller name="overlappingReservations" control={form.control} render={({ field }) => (
                     <div className="flex items-center justify-between">
                         <div>
-                            <Label htmlFor="overlapping-reservations">Reservas sobrepuestas</Label>
+                            <Label htmlFor="overlapping-reservations" className="font-medium">Reservas sobrepuestas</Label>
                             <p className="text-sm text-muted-foreground">Si habilitas esta opción, los profesionales pueden tener dos reservas en un mismo horario. Esto es válido para reservas ingresadas internamente.</p>
                         </div>
                         <Switch id="overlapping-reservations" checked={field.value} onCheckedChange={field.onChange} />
@@ -103,7 +103,7 @@ export default function AgendaSettingsPage() {
                  <Controller name="simultaneousReservations" control={form.control} render={({ field }) => (
                     <div className="flex items-center justify-between">
                         <div>
-                            <Label htmlFor="simultaneous-reservations">Reservas simultáneas de clientes</Label>
+                            <Label htmlFor="simultaneous-reservations" className="font-medium">Reservas simultáneas de clientes</Label>
                             <p className="text-sm text-muted-foreground">Si habilitas esta opción, los clientes pueden tener dos o más reservas en un mismo horario.</p>
                         </div>
                         <Switch id="simultaneous-reservations" checked={field.value} onCheckedChange={field.onChange} />
@@ -112,7 +112,7 @@ export default function AgendaSettingsPage() {
                  <Controller name="resourceOverload" control={form.control} render={({ field }) => (
                     <div className="flex items-center justify-between">
                         <div>
-                            <Label htmlFor="resource-overload">Sobrecargo de recursos</Label>
+                            <Label htmlFor="resource-overload" className="font-medium">Sobrecargo de recursos</Label>
                             <p className="text-sm text-muted-foreground">Al habilitar esta opción, podrás hacer reservas incluso cuando los recursos no estén siendo utilizados o no estén disponibles.</p>
                         </div>
                         <Switch id="resource-overload" checked={field.value} onCheckedChange={field.onChange} />
@@ -121,7 +121,7 @@ export default function AgendaSettingsPage() {
             </CardContent>
         </Card>
         
-        <Accordion type="multiple" className="w-full space-y-4">
+        <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="item-2" className="border rounded-lg bg-card">
                 <AccordionTrigger className="p-6 font-semibold text-base">Configuración de campos adicionales</AccordionTrigger>
                 <AccordionContent className="p-6 pt-0">

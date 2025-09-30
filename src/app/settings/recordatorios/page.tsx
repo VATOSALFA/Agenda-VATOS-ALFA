@@ -118,6 +118,39 @@ export default function RecordatoriosPage() {
                             Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
                         ) : (
                             <div className="space-y-6">
+                                {reviewTemplates.map((template) => (
+                                    <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                            <Controller
+                                                name={`notifications.${template.id}.enabled`}
+                                                control={form.control}
+                                                defaultValue={false}
+                                                render={({ field }) => (
+                                                    <Switch
+                                                        id={`enabled-${template.id}`}
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                )}
+                                            />
+                                        </div>
+                                        <Controller
+                                            name={`notifications.${template.id}.rules`}
+                                            control={form.control}
+                                            defaultValue=""
+                                            render={({ field }) => (
+                                                <Textarea 
+                                                    {...field}
+                                                    className="text-sm"
+                                                    rows={2}
+                                                    placeholder="Define las reglas para esta notificación..."
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                ))}
+
                                 {notificationTemplates.map((template) => (
                                     <div key={template.id} className="p-4 border rounded-lg space-y-3">
                                         <div className="flex items-center justify-between">
@@ -209,7 +242,7 @@ export default function RecordatoriosPage() {
                                                         <FormItem>
                                                             <FormLabel>Horas antes</FormLabel>
                                                             <FormControl>
-                                                              <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10))} />
+                                                              <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10) || '')} />
                                                             </FormControl>
                                                         </FormItem>
                                                     )}
@@ -253,39 +286,6 @@ export default function RecordatoriosPage() {
                                     </div>
                                 ))}
 
-                                {reviewTemplates.map((template) => (
-                                    <div key={template.id} className="p-4 border rounded-lg space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
-                                            <Controller
-                                                name={`notifications.${template.id}.enabled`}
-                                                control={form.control}
-                                                defaultValue={false}
-                                                render={({ field }) => (
-                                                    <Switch
-                                                        id={`enabled-${template.id}`}
-                                                        checked={field.value}
-                                                        onCheckedChange={field.onChange}
-                                                    />
-                                                )}
-                                            />
-                                        </div>
-                                        <Controller
-                                            name={`notifications.${template.id}.rules`}
-                                            control={form.control}
-                                            defaultValue=""
-                                            render={({ field }) => (
-                                                <Textarea 
-                                                    {...field}
-                                                    className="text-sm"
-                                                    rows={2}
-                                                    placeholder="Define las reglas para esta notificación..."
-                                                />
-                                            )}
-                                        />
-                                    </div>
-                                ))}
-                                
                                 { !templatesLoading && templates.length === 0 && (
                                     <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>
                                 )}

@@ -212,50 +212,53 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
     try {
-      if (!db) throw new Error("Database not available.");
-      
-      const dataToSave: Partial<Client> = {
-        ...data,
-        fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
-      };
-
-      if (isEditMode && client) {
-        // In edit mode, we don't want to overwrite the creation date or other historical fields
-        // that are not part of the form.
-        const { creado_en, ...updateData } = dataToSave as Partial<Client> & { creado_en?: any };
-
-        const clientRef = doc(db, 'clientes', client.id);
-        await updateDoc(clientRef, updateData);
-        toast({
-          title: '¡Cliente Actualizado!',
-          description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
-        });
-        onFormSubmit(client.id);
-      } else {
-        const fullData = {
-          ...dataToSave,
-          creado_en: Timestamp.now(),
+        if (!db) throw new Error("Database not available.");
+        
+        // Explicitly type what goes to Firestore
+        const dataToSave: Partial<Omit<Client, 'id'>> = {
+          nombre: data.nombre,
+          apellido: data.apellido,
+          telefono: data.telefono,
+          correo: data.correo,
+          direccion: data.direccion,
+          notas: data.notas,
+          // Format date to string if present, otherwise set as null for Firestore
+          fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
         };
-        const docRef = await addDoc(collection(db, 'clientes'), fullData);
-        toast({
-          title: '¡Cliente Creado!',
-          description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,
-        });
-        onFormSubmit(docRef.id);
-      }
-      form.reset();
+
+        if (isEditMode && client) {
+            const clientRef = doc(db, 'clientes', client.id);
+            await updateDoc(clientRef, dataToSave);
+            toast({
+                title: '¡Cliente Actualizado!',
+                description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
+            });
+            onFormSubmit(client.id);
+        } else {
+            const fullData = {
+                ...dataToSave,
+                creado_en: Timestamp.now(), // Only add creation date for new clients
+            };
+            const docRef = await addDoc(collection(db, 'clientes'), fullData);
+            toast({
+                title: '¡Cliente Creado!',
+                description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,
+            });
+            onFormSubmit(docRef.id);
+        }
+        form.reset();
 
     } catch (error) {
-      console.error('Error saving client: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo guardar el cliente. Inténtalo de nuevo.',
-      });
+        console.error('Error saving client: ', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'No se pudo guardar el cliente. Inténtalo de nuevo.',
+        });
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
-  }
+}
   
   const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string | number) => {
     const currentDate = form.getValues('fecha_nacimiento') || new Date();

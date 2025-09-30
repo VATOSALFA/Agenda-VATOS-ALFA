@@ -75,14 +75,6 @@ export default function RecordatoriosPage() {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             await setDoc(settingsRef, data, { merge: true });
             
-            // Also save the SID for google_review template
-            const googleReviewTemplateRef = doc(db, 'whatsapp_templates', 'google_review');
-            await setDoc(googleReviewTemplateRef, {
-                name: "Opinión Google Maps",
-                contentSid: "HXe0e696ca1a1178edc8284bab55555e1c",
-                body: "¡Que tal [[Nombre cliente]]!\nDe parte de todo el equipo de [[Nombre local]], queremos agradecerte por tu visita.\nNos ayudas mucho con tu opinión de ⭐⭐⭐⭐⭐ en:\nhttps://g.page/r/CcEDOMuVLF_IEBM/review\n\nQuejas y sugerencias al WhatsApp 4425596138"
-            }, { merge: true });
-
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en tus recordatorios han sido guardados."

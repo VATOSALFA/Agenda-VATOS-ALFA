@@ -37,10 +37,10 @@ interface ReminderSettings {
 }
 
 const notificationTypes = [
-  { id: 'google_review', name: 'Opinión de Google Maps', description: 'Esta notificación se enviará un día después de la cita del cliente para invitarlo a dejar una opinión.' },
-  { id: 'appointment_notification', name: 'Notificación de citas', description: 'Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada' },
-  { id: 'appointment_reminder', name: 'Recordatorio de cita', description: 'Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda.' },
-  { id: 'birthday_notification', name: 'Notificación de Cumpleaños', description: 'Saluda a tus clientes en su día especial.' },
+    { id: 'google_review', name: 'Opinión de Google Maps', description: 'Esta notificación se enviará un día después de la cita del cliente para invitarlo a dejar una opinión.', sid: 'HXe0e696ca1a1178edc8284bab55555e1c' },
+    { id: 'appointment_notification', name: 'Notificación de citas', description: 'Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada' },
+    { id: 'appointment_reminder', name: 'Recordatorio de cita', description: 'Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda.' },
+    { id: 'birthday_notification', name: 'Notificación de Cumpleaños', description: 'Saluda a tus clientes en su día especial.' },
 ];
 
 export default function RecordatoriosPage() {
@@ -74,6 +74,15 @@ export default function RecordatoriosPage() {
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             await setDoc(settingsRef, data, { merge: true });
+            
+            // Also save the SID for google_review template
+            const googleReviewTemplateRef = doc(db, 'whatsapp_templates', 'google_review');
+            await setDoc(googleReviewTemplateRef, {
+                name: "Opinión Google Maps",
+                contentSid: "HXe0e696ca1a1178edc8284bab55555e1c",
+                body: "¡Que tal [[Nombre cliente]]!\nDe parte de todo el equipo de [[Nombre local]], queremos agradecerte por tu visita.\nNos ayudas mucho con tu opinión de ⭐⭐⭐⭐⭐ en:\nhttps://g.page/r/CcEDOMuVLF_IEBM/review\n\nQuejas y sugerencias al WhatsApp 4425596138"
+            }, { merge: true });
+
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en tus recordatorios han sido guardados."

@@ -111,6 +111,7 @@ export default function RecordatoriosPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
                 <Card>
                     <CardHeader>
+                        <CardTitle>Notificaciones automáticas de reserva por whatsapp</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {isLoading ? (

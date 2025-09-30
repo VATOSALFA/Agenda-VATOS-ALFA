@@ -92,36 +92,40 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
     inputSchema: AppointmentReminderInputSchema,
     outputSchema: AppointmentReminderOutputSchema,
   },
-  async ({ clientId = "sCjC264aNuzwWrVfC5u6" }) => { // Hardcoded client ID for testing
+  async ({ clientId }) => {
     try {
-        // FOR ON-DEMAND TESTING to a specific client
-        if (clientId) {
-            // Find the client with phone number 4425596138 to get their ID
-            const clientQuery = query(collection(db, 'clientes'), where('telefono', '==', '4425596138'), limit(1));
-            const clientSnapshot = await getDocs(clientQuery);
+        // --- FOR ON-DEMAND TESTING to a specific client ---
+        // Find the client with phone number 4425596138 to get their ID
+        const clientQuery = query(collection(db, 'clientes'), where('telefono', '==', '4425596138'), limit(1));
+        const clientSnapshot = await getDocs(clientQuery);
 
-            if(clientSnapshot.empty) {
-                return { success: false, remindersSent: 0, message: `Test client with phone 4425596138 not found.` };
-            }
-            const testClientId = clientSnapshot.docs[0].id;
-
-
-            const clientReservationsQuery = query(
-                collection(db, 'reservas'),
-                where('cliente_id', '==', testClientId),
-                where('fecha', '>=', format(new Date(), 'yyyy-MM-dd')),
-                orderBy('fecha'),
-                orderBy('hora_inicio'),
-                limit(1)
-            );
-            const snapshot = await getDocs(clientReservationsQuery);
-            if (snapshot.empty) {
-                return { success: false, remindersSent: 0, message: `No upcoming appointments found for test client.` };
-            }
-            const reservation = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Reservation;
-            const sent = await sendReminder(reservation);
-            return { success: sent, remindersSent: sent ? 1 : 0, message: `Sent test reminder to client ${testClientId}.` };
+        if(clientSnapshot.empty) {
+            return { success: false, remindersSent: 0, message: `Test client with phone 4425596138 not found.` };
         }
+        const testClientId = clientSnapshot.docs[0].id;
+
+
+        const clientReservationsQuery = query(
+            collection(db, 'reservas'),
+            where('cliente_id', '==', testClientId),
+            where('fecha', '>=', format(new Date(), 'yyyy-MM-dd')),
+            orderBy('fecha'),
+            orderBy('hora_inicio'),
+            limit(1)
+        );
+        const snapshot = await getDocs(clientReservationsQuery);
+        if (snapshot.empty) {
+            return { success: false, remindersSent: 0, message: `No upcoming appointments found for test client with phone 4425596138.` };
+        }
+        const reservation = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Reservation;
+        const sent = await sendReminder(reservation);
+        
+        if (sent) {
+            return { success: true, remindersSent: 1, message: `Sent test reminder to client ${testClientId}.` };
+        } else {
+            return { success: false, remindersSent: 0, message: `Failed to send test reminder to client ${testClientId}.` };
+        }
+
 
         // --- SCHEDULED JOB LOGIC (currently bypassed for testing) ---
       const settingsRef = doc(db, 'configuracion', 'recordatorios');

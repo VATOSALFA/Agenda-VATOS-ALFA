@@ -8,10 +8,10 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { collection, query, where, getDocs, doc, getDoc, Timestamp, limit, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
-import type { Reservation, Client, Local } from '@/lib/types';
+import type { Reservation, Client, Local, Profesional } from '@/lib/types';
 import { addHours, subDays, startOfHour, setHours, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -50,6 +50,8 @@ export async function sendAppointmentReminders(
 
 // Helper function to send a single reminder
 async function sendReminder(reservation: Reservation) {
+    if (!reservation.cliente_id) return false;
+    
     const clientRef = doc(db, 'clientes', reservation.cliente_id);
     const clientSnap = await getDoc(clientRef);
     
@@ -57,13 +59,17 @@ async function sendReminder(reservation: Reservation) {
     const localRef = doc(db, 'locales', reservation.local_id || 'main');
     const localSnap = await getDoc(localRef);
 
-    const professionalRef = doc(db, 'profesionales', reservation.barbero_id);
+    // Assuming the first item's barbero_id represents the main professional for the notification.
+    const professionalId = reservation.items?.[0]?.barbero_id;
+    if (!professionalId) return false;
+
+    const professionalRef = doc(db, 'profesionales', professionalId);
     const professionalSnap = await getDoc(professionalRef);
 
     if (clientSnap.exists() && localSnap.exists() && professionalSnap.exists()) {
         const client = clientSnap.data() as Client;
         const local = localSnap.data() as Local;
-        const professional = professionalSnap.data() as any;
+        const professional = professionalSnap.data() as Profesional;
 
         if (client.telefono) {
             const fullDateStr = `${format(parse(reservation.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${reservation.hora_inicio}`;
@@ -94,40 +100,6 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
   },
   async ({ clientId }) => {
     try {
-        // --- FOR ON-DEMAND TESTING to a specific client ---
-        // Find the client with phone number 4425596138 to get their ID
-        const clientQuery = query(collection(db, 'clientes'), where('telefono', '==', '4425596138'), limit(1));
-        const clientSnapshot = await getDocs(clientQuery);
-
-        if(clientSnapshot.empty) {
-            return { success: false, remindersSent: 0, message: `Test client with phone 4425596138 not found.` };
-        }
-        const testClientId = clientSnapshot.docs[0].id;
-
-
-        const clientReservationsQuery = query(
-            collection(db, 'reservas'),
-            where('cliente_id', '==', testClientId),
-            where('fecha', '>=', format(new Date(), 'yyyy-MM-dd')),
-            orderBy('fecha'),
-            orderBy('hora_inicio'),
-            limit(1)
-        );
-        const snapshot = await getDocs(clientReservationsQuery);
-        if (snapshot.empty) {
-            return { success: false, remindersSent: 0, message: `No upcoming appointments found for test client with phone 4425596138.` };
-        }
-        const reservation = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Reservation;
-        const sent = await sendReminder(reservation);
-        
-        if (sent) {
-            return { success: true, remindersSent: 1, message: `Sent test reminder to client ${testClientId}.` };
-        } else {
-            return { success: false, remindersSent: 0, message: `Failed to send test reminder to client ${testClientId}.` };
-        }
-
-
-        // --- SCHEDULED JOB LOGIC (currently bypassed for testing) ---
       const settingsRef = doc(db, 'configuracion', 'recordatorios');
       const settingsSnap = await getDoc(settingsRef);
       
@@ -150,7 +122,7 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
         const reminderTime = addHours(now, reminderConfig.timing.hours_before);
         targetTimeStart = startOfHour(reminderTime);
         targetTimeEnd = new Date(targetTimeStart.getTime() + 59 * 60 * 1000); 
-      } else { // 'day_before'
+      } else { // 'day_before' or default
         targetTimeStart = addDays(now, 1);
         targetTimeEnd = addDays(now, 1);
         targetTimeStart.setHours(0, 0, 0, 0);

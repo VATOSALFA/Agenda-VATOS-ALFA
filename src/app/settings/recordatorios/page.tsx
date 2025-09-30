@@ -117,178 +117,179 @@ export default function RecordatoriosPage() {
                         {isLoading ? (
                             Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
                         ) : (
-                            <>
-                            {notificationTemplates.map((template) => (
-                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
-                                        <Controller
-                                            name={`notifications.${template.id}.enabled`}
-                                            control={form.control}
-                                            defaultValue={false}
-                                            render={({ field }) => (
-                                                <Switch
-                                                    id={`enabled-${template.id}`}
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
-                                                />
-                                            )}
-                                        />
-                                    </div>
-                                    <Controller
-                                        name={`notifications.${template.id}.rules`}
-                                        control={form.control}
-                                        defaultValue="Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada"
-                                        render={({ field }) => (
-                                            <Textarea 
-                                                {...field}
-                                                className="text-sm text-muted-foreground"
-                                                rows={2}
-                                            />
-                                        )}
-                                    />
-                                </div>
-                            ))}
-                            {reminderTemplates.map((template) => {
-                                const timingType = watchedTimings?.[template.id]?.timing?.type;
-                                return (
-                                <div key={template.id} className="p-4 border rounded-lg space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
-                                        <Controller
-                                            name={`notifications.${template.id}.enabled`}
-                                            control={form.control}
-                                            defaultValue={false}
-                                            render={({ field }) => (
-                                                <Switch
-                                                    id={`enabled-${template.id}`}
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
-                                                />
-                                            )}
-                                        />
-                                    </div>
-                                    <Controller
-                                        name={`notifications.${template.id}.rules`}
-                                        control={form.control}
-                                        defaultValue="Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda."
-                                        render={({ field }) => (
-                                            <Textarea 
-                                                {...field}
-                                                className="text-sm text-muted-foreground"
-                                                rows={2}
-                                            />
-                                        )}
-                                    />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end pt-2">
-                                        <Controller
-                                            name={`notifications.${template.id}.timing.type`}
-                                            control={form.control}
-                                            defaultValue="day_before"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Cuándo enviar</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger><SelectValue/></SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="day_before">Un día antes de la cita</SelectItem>
-                                                            <SelectItem value="same_day">El mismo día de la cita</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        {timingType === 'same_day' && (
+                            <div className="space-y-6">
+                                {notificationTemplates.map((template) => (
+                                    <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
                                             <Controller
-                                                name={`notifications.${template.id}.timing.hours_before`}
+                                                name={`notifications.${template.id}.enabled`}
                                                 control={form.control}
+                                                defaultValue={false}
+                                                render={({ field }) => (
+                                                    <Switch
+                                                        id={`enabled-${template.id}`}
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                )}
+                                            />
+                                        </div>
+                                        <Controller
+                                            name={`notifications.${template.id}.rules`}
+                                            control={form.control}
+                                            defaultValue="Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada"
+                                            render={({ field }) => (
+                                                <Textarea 
+                                                    {...field}
+                                                    className="text-sm text-muted-foreground"
+                                                    rows={2}
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                ))}
+
+                                {reminderTemplates.map((template) => {
+                                    const timingType = watchedTimings?.[template.id]?.timing?.type;
+                                    return (
+                                    <div key={template.id} className="p-4 border rounded-lg space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                            <Controller
+                                                name={`notifications.${template.id}.enabled`}
+                                                control={form.control}
+                                                defaultValue={false}
+                                                render={({ field }) => (
+                                                    <Switch
+                                                        id={`enabled-${template.id}`}
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                )}
+                                            />
+                                        </div>
+                                        <Controller
+                                            name={`notifications.${template.id}.rules`}
+                                            control={form.control}
+                                            defaultValue="Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda."
+                                            render={({ field }) => (
+                                                <Textarea 
+                                                    {...field}
+                                                    className="text-sm text-muted-foreground"
+                                                    rows={2}
+                                                />
+                                            )}
+                                        />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end pt-2">
+                                            <Controller
+                                                name={`notifications.${template.id}.timing.type`}
+                                                control={form.control}
+                                                defaultValue="day_before"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>Horas antes</FormLabel>
-                                                        <FormControl>
-                                                          <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10))} />
-                                                        </FormControl>
+                                                        <FormLabel>Cuándo enviar</FormLabel>
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="day_before">Un día antes de la cita</SelectItem>
+                                                                <SelectItem value="same_day">El mismo día de la cita</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
                                                     </FormItem>
                                                 )}
                                             />
-                                        )}
+                                            {timingType === 'same_day' && (
+                                                <Controller
+                                                    name={`notifications.${template.id}.timing.hours_before`}
+                                                    control={form.control}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Horas antes</FormLabel>
+                                                            <FormControl>
+                                                              <Input type="number" min="1" max="23" {...field} value={field.value || ''} onChange={e => field.onChange(parseInt(e.target.value, 10))} />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                                )
-                            })}
-                            
-                            {birthdayTemplates.map((template) => (
-                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                    )
+                                })}
+                                
+                                {birthdayTemplates.map((template) => (
+                                    <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                            <Controller
+                                                name={`notifications.${template.id}.enabled`}
+                                                control={form.control}
+                                                defaultValue={false}
+                                                render={({ field }) => (
+                                                    <Switch
+                                                        id={`enabled-${template.id}`}
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                )}
+                                            />
+                                        </div>
                                         <Controller
-                                            name={`notifications.${template.id}.enabled`}
+                                            name={`notifications.${template.id}.rules`}
                                             control={form.control}
-                                            defaultValue={false}
+                                            defaultValue=""
                                             render={({ field }) => (
-                                                <Switch
-                                                    id={`enabled-${template.id}`}
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
+                                                <Textarea 
+                                                    {...field}
+                                                    className="text-sm"
+                                                    rows={2}
+                                                    placeholder="Define las reglas para esta notificación..."
                                                 />
                                             )}
                                         />
                                     </div>
-                                    <Controller
-                                        name={`notifications.${template.id}.rules`}
-                                        control={form.control}
-                                        defaultValue=""
-                                        render={({ field }) => (
-                                            <Textarea 
-                                                {...field}
-                                                className="text-sm"
-                                                rows={2}
-                                                placeholder="Define las reglas para esta notificación..."
-                                            />
-                                        )}
-                                    />
-                                </div>
-                            ))}
+                                ))}
 
-                            {reviewTemplates.map((template) => (
-                                <div key={template.id} className="p-4 border rounded-lg space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                {reviewTemplates.map((template) => (
+                                    <div key={template.id} className="p-4 border rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor={`enabled-${template.id}`} className="font-semibold">{template.name}</Label>
+                                            <Controller
+                                                name={`notifications.${template.id}.enabled`}
+                                                control={form.control}
+                                                defaultValue={false}
+                                                render={({ field }) => (
+                                                    <Switch
+                                                        id={`enabled-${template.id}`}
+                                                        checked={field.value}
+                                                        onCheckedChange={field.onChange}
+                                                    />
+                                                )}
+                                            />
+                                        </div>
                                         <Controller
-                                            name={`notifications.${template.id}.enabled`}
+                                            name={`notifications.${template.id}.rules`}
                                             control={form.control}
-                                            defaultValue={false}
+                                            defaultValue=""
                                             render={({ field }) => (
-                                                <Switch
-                                                    id={`enabled-${template.id}`}
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
+                                                <Textarea 
+                                                    {...field}
+                                                    className="text-sm"
+                                                    rows={2}
+                                                    placeholder="Define las reglas para esta notificación..."
                                                 />
                                             )}
                                         />
                                     </div>
-                                    <Controller
-                                        name={`notifications.${template.id}.rules`}
-                                        control={form.control}
-                                        defaultValue=""
-                                        render={({ field }) => (
-                                            <Textarea 
-                                                {...field}
-                                                className="text-sm"
-                                                rows={2}
-                                                placeholder="Define las reglas para esta notificación..."
-                                            />
-                                        )}
-                                    />
-                                </div>
-                            ))}
-                            
-                            { !templatesLoading && templates.length === 0 && (
-                                <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>
-                            )}
-                            </>
+                                ))}
+                                
+                                { !templatesLoading && templates.length === 0 && (
+                                    <p className="text-center text-muted-foreground py-8">No has creado ninguna plantilla de WhatsApp todavía. Ve a la sección de WhatsApp para empezar.</p>
+                                )}
+                            </div>
                         )}
                     </CardContent>
                 </Card>

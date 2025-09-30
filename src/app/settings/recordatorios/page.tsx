@@ -57,7 +57,7 @@ export default function RecordatoriosPage() {
 
     useEffect(() => {
         if (!settingsLoading && settingsData.length > 0) {
-            const recordatoriosSettings = settingsData[0];
+            const recordatoriosSettings = settingsData.find(s => (s as any).id === 'recordatorios');
             if (recordatoriosSettings) {
                 form.reset(recordatoriosSettings);
             }
@@ -73,7 +73,16 @@ export default function RecordatoriosPage() {
         setIsSubmitting(true);
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
-            await setDoc(settingsRef, data, { merge: true });
+            // Ensure we only save the relevant parts of the data
+            const dataToSave = {
+                notifications: {
+                    google_review: data.notifications.google_review,
+                    appointment_notification: data.notifications.appointment_notification,
+                    appointment_reminder: data.notifications.appointment_reminder,
+                    birthday_notification: data.notifications.birthday_notification,
+                }
+            };
+            await setDoc(settingsRef, dataToSave, { merge: true });
             
             toast({
                 title: "Configuración guardada con éxito",

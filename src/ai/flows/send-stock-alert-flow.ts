@@ -48,3 +48,4 @@ export async function sendStockAlert(input: StockAlertInput): Promise<string> {
 
     return fullEmailText;
 }
+

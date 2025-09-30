@@ -111,7 +111,6 @@ export default function RecordatoriosPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Activa o desactiva las notificaciones y define cuándo deben enviarse.</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {isLoading ? (

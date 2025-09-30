@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -32,7 +33,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import type { Reservation, Sale } from '@/lib/types';
-import { format, parseISO } from 'date-fns';
+import { format, parse, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -44,6 +45,8 @@ import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
 import Link from 'next/link';
+import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 
 interface ReservationDetailModalProps {
@@ -80,6 +83,9 @@ export function ReservationDetailModal({
 
   const { toast } = useToast();
   const { db } = useAuth();
+  
+  const { data: locales } = useFirestoreQuery('locales');
+  const { data: professionals } = useFirestoreQuery('profesionales');
 
   if (!reservation) return null;
   
@@ -153,9 +159,43 @@ export function ReservationDetailModal({
         toast({ variant: 'destructive', title: 'Sin teléfono', description: 'El cliente no tiene un número de teléfono registrado.'});
         return;
     }
+    
     setIsSending(true);
-    toast({ variant: 'destructive', title: 'Función desactivada', description: 'El envío de recordatorios está temporalmente desactivado.'});
-    setIsSending(false);
+
+    try {
+        const local = locales.find(l => l.id === reservation.local_id);
+        const professional = professionals.find(p => p.id === reservation.barbero_id);
+
+        if(!local || !professional) {
+            throw new Error("No se pudo encontrar el local o el profesional asociado.");
+        }
+        
+        const fullDateStr = `${format(parse(reservation.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${reservation.hora_inicio}`;
+
+        const result = await sendTemplatedWhatsAppMessage({
+            to: reservation.customer.telefono,
+            contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
+            contentVariables: {
+                '1': reservation.customer.nombre,
+                '2': local.name,
+                '3': fullDateStr,
+                '4': reservation.servicio,
+                '5': professional.name,
+            },
+        });
+        
+        if (result.success) {
+            toast({ title: 'Recordatorio enviado', description: 'El mensaje de recordatorio ha sido enviado al cliente.' });
+        } else {
+            throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
+        }
+
+    } catch(error: any) {
+        console.error("Error sending reminder:", error);
+        toast({ variant: 'destructive', title: 'Error de envío', description: error.message });
+    } finally {
+        setIsSending(false);
+    }
   }
 
   const clientNameParam = encodeURIComponent(`${reservation.customer?.nombre} ${reservation.customer?.apellido}`);

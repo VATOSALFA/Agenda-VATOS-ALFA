@@ -213,24 +213,23 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     setIsSubmitting(true);
     try {
       if (!db) throw new Error("Database not available.");
-      const dataToSave = {
+      
+      const dataToSave: any = {
         ...data,
         fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
       };
 
       if (isEditMode && client) {
         const clientRef = doc(db, 'clientes', client.id);
-        await updateDoc(clientRef, dataToSave as any);
+        await updateDoc(clientRef, dataToSave);
         toast({
           title: '¡Cliente Actualizado!',
           description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
         });
         onFormSubmit(client.id);
       } else {
-        const docRef = await addDoc(collection(db, 'clientes'), {
-          ...dataToSave,
-          creado_en: Timestamp.now(),
-        });
+        dataToSave.creado_en = Timestamp.now();
+        const docRef = await addDoc(collection(db, 'clientes'), dataToSave);
         toast({
           title: '¡Cliente Creado!',
           description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,

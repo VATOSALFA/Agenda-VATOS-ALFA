@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import type { Service, Profesional, Client } from '@/lib/types';
+import type { Service, Profesional, Client, Local } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,6 +47,7 @@ function ConfirmPageContent() {
 
     const { data: allServices, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: allProfessionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
 
     const selectedServices = useMemo(() => allServices.filter(s => serviceIds.includes(s.id)), [allServices, serviceIds]);
     const selectedProfessional = useMemo(() => allProfessionals.find(p => p.id === professionalId), [allProfessionals, professionalId]);
@@ -60,7 +61,7 @@ function ConfirmPageContent() {
         defaultValues: { nombre: '', apellido: '', correo: '', telefono: '' }
     });
 
-    const isLoading = servicesLoading || professionalsLoading;
+    const isLoading = servicesLoading || professionalsLoading || localesLoading;
 
     const handleConfirm = async (data: ConfirmFormData) => {
         setIsSubmitting(true);
@@ -91,6 +92,8 @@ function ConfirmPageContent() {
                 clientId = querySnapshot.docs[0].id;
             }
             
+            const local = locales.find(l => l.id === selectedProfessional.local_id);
+            
             const reservationData = {
                 cliente_id: clientId,
                 barbero_id: professionalId,
@@ -109,6 +112,7 @@ function ConfirmPageContent() {
                 estado: 'Reservado',
                 canal_reserva: 'sitio_web',
                 pago_estado: 'Pendiente',
+                local_id: selectedProfessional.local_id,
                 creado_en: Timestamp.now()
             };
 
@@ -122,15 +126,16 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // 'agendada' template SID
+                    const contentSid = 'HX6162105c1002a6cf84fa345393869746';
                     await sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,
                         contentVariables: {
                             '1': data.nombre,
-                            '2': reservationData.servicio,
+                            '2': local?.name || 'nuestro local',
                             '3': fullDateStr,
-                            '4': selectedProfessional.name,
+                            '4': reservationData.servicio,
+                            '5': selectedProfessional.name,
                         },
                     });
                 } catch (waError) {

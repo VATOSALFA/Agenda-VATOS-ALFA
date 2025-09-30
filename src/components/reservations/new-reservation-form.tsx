@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -146,6 +145,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', where('__name__', '==', 'recordatorios'));
   const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', 'agenda');
   
@@ -445,16 +445,18 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (wasCreation && data.notifications?.whatsapp_notification) {
           const client = clients.find(c => c.id === data.cliente_id);
           const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
+          const local = locales.find(l => l.id === data.local_id);
           if (client?.telefono && professional) {
               const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
               await sendTemplatedWhatsAppMessage({
                   to: client.telefono,
-                  contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada' template SID
+                  contentSid: 'HX6162105c1002a6cf84fa345393869746',
                   contentVariables: {
                       '1': client.nombre,
-                      '2': dataToSave.servicio!,
+                      '2': local?.name || 'nuestro local',
                       '3': fullDateStr,
-                      '4': professional.name,
+                      '4': dataToSave.servicio!,
+                      '5': professional.name,
                   }
               });
               // Do not show a toast here to avoid spamming the user

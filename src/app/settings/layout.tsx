@@ -19,6 +19,7 @@ import {
   UserCircle,
   Users,
   Store,
+  MessageCircle,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -30,7 +31,7 @@ const settingsLinks = [
   { href: '/settings/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_configuracion_agenda' },
   { href: '/settings/pagos', label: 'Agenda VATOS ALFA', icon: DollarSign, permission: 'ver_configuracion_pagos' },
   { href: '/settings/sistema-caja', label: 'Sistemas de Caja', icon: Calculator, permission: 'ver_configuracion_caja' },
-  { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
+  { href: '/admin/whatsapp', label: 'Whatsapp', icon: MessageCircle, permission: 'ver_whatsapp' },
 ];
 
 const advancedLinks = [

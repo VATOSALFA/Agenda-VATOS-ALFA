@@ -71,7 +71,7 @@ export default function RecordatoriosPage() {
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             
-            // Build a clean object to save, removing any undefined values
+            // Build a clean object to save, removing any undefined or empty values before sending to Firestore
             const dataToSave: ReminderSettings = {
                 notifications: {}
             };
@@ -87,10 +87,11 @@ export default function RecordatoriosPage() {
 
                     if (id === 'appointment_reminder' && notificationConfig.timing) {
                         const timingData: ReminderTiming = {
-                            type: notificationConfig.timing.type,
+                            type: notificationConfig.timing.type || 'day_before',
                         };
-                        // Only include hours_before if it's a number
-                        if (typeof notificationConfig.timing.hours_before === 'number') {
+
+                        // Only include hours_before if it's a valid number and type is 'same_day'
+                        if (notificationConfig.timing.type === 'same_day' && typeof notificationConfig.timing.hours_before === 'number' && !isNaN(notificationConfig.timing.hours_before)) {
                             timingData.hours_before = notificationConfig.timing.hours_before;
                         }
                          newConfig.timing = timingData;

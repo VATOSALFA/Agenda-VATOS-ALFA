@@ -8,7 +8,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Reservation, Client, Local } from '@/lib/types';
@@ -29,7 +29,9 @@ interface ReminderSettings {
 }
 
 const AppointmentReminderInputSchema = z.object({
-  // This flow can be triggered without specific input, it will check all upcoming appointments.
+  // This flow can be triggered without specific input for scheduled jobs,
+  // or with a clientId for on-demand testing.
+  clientId: z.string().optional().describe("The ID of a specific client to send a reminder to, for testing purposes."),
 });
 export type AppointmentReminderInput = z.infer<typeof AppointmentReminderInputSchema>;
 
@@ -46,14 +48,72 @@ export async function sendAppointmentReminders(
   return sendAppointmentRemindersFlow(input);
 }
 
+// Helper function to send a single reminder
+async function sendReminder(reservation: Reservation) {
+    const clientRef = doc(db, 'clientes', reservation.cliente_id);
+    const clientSnap = await getDoc(clientRef);
+    
+    // Fallback to 'main' or handle error if local_id is missing
+    const localRef = doc(db, 'locales', reservation.local_id || 'main');
+    const localSnap = await getDoc(localRef);
+
+    const professionalRef = doc(db, 'profesionales', reservation.barbero_id);
+    const professionalSnap = await getDoc(professionalRef);
+
+    if (clientSnap.exists() && localSnap.exists() && professionalSnap.exists()) {
+        const client = clientSnap.data() as Client;
+        const local = localSnap.data() as Local;
+        const professional = professionalSnap.data() as any;
+
+        if (client.telefono) {
+            const fullDateStr = `${format(parse(reservation.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${reservation.hora_inicio}`;
+            
+            await sendTemplatedWhatsAppMessage({
+                to: client.telefono,
+                contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
+                contentVariables: {
+                    '1': client.nombre,
+                    '2': local.name,
+                    '3': fullDateStr,
+                    '4': reservation.servicio,
+                    '5': professional.name,
+                },
+            });
+            return true;
+        }
+    }
+    return false;
+}
+
+
 const sendAppointmentRemindersFlow = ai.defineFlow(
   {
     name: 'sendAppointmentRemindersFlow',
     inputSchema: AppointmentReminderInputSchema,
     outputSchema: AppointmentReminderOutputSchema,
   },
-  async () => {
+  async ({ clientId }) => {
     try {
+        // FOR ON-DEMAND TESTING to a specific client
+        if (clientId) {
+            const clientReservationsQuery = query(
+                collection(db, 'reservas'),
+                where('cliente_id', '==', clientId),
+                where('fecha', '>=', format(new Date(), 'yyyy-MM-dd')),
+                orderBy('fecha'),
+                orderBy('hora_inicio'),
+                limit(1)
+            );
+            const snapshot = await getDocs(clientReservationsQuery);
+            if (snapshot.empty) {
+                return { success: false, remindersSent: 0, message: `No upcoming appointments found for client ${clientId}.` };
+            }
+            const reservation = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Reservation;
+            const sent = await sendReminder(reservation);
+            return { success: sent, remindersSent: sent ? 1 : 0, message: `Sent test reminder to client ${clientId}.` };
+        }
+
+        // --- SCHEDULED JOB LOGIC ---
       const settingsRef = doc(db, 'configuracion', 'recordatorios');
       const settingsSnap = await getDoc(settingsRef);
       
@@ -100,37 +160,8 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
         const appointmentTime = setHours(new Date(res.fecha), hour, minute);
         
         if (appointmentTime >= targetTimeStart && appointmentTime <= targetTimeEnd) {
-            const clientRef = doc(db, 'clientes', res.cliente_id);
-            const clientSnap = await getDoc(clientRef);
-            
-            const localRef = doc(db, 'locales', res.local_id || 'main'); // Fallback to 'main' or handle error
-            const localSnap = await getDoc(localRef);
-
-            const professionalRef = doc(db, 'profesionales', res.barbero_id);
-            const professionalSnap = await getDoc(professionalRef);
-
-            if (clientSnap.exists() && localSnap.exists() && professionalSnap.exists()) {
-                const client = clientSnap.data() as Client;
-                const local = localSnap.data() as Local;
-                const professional = professionalSnap.data() as any;
-
-                if (client.telefono) {
-                    const fullDateStr = `${format(parse(res.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${res.hora_inicio}`;
-                    
-                    await sendTemplatedWhatsAppMessage({
-                        to: client.telefono,
-                        contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
-                        contentVariables: {
-                            '1': client.nombre,
-                            '2': local.name,
-                            '3': fullDateStr,
-                            '4': res.servicio,
-                            '5': professional.name,
-                        },
-                    });
-                    sentCount++;
-                }
-            }
+           const sent = await sendReminder(res);
+           if (sent) sentCount++;
         }
       }
 

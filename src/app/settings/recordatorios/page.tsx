@@ -53,7 +53,7 @@ export default function RecordatoriosPage() {
         }
     });
 
-    const { data: settingsData, loading: settingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', 'recordatorios');
+    const { data: settingsData, loading: settingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion');
 
     useEffect(() => {
         if (!settingsLoading && settingsData.length > 0) {
@@ -73,15 +73,28 @@ export default function RecordatoriosPage() {
         setIsSubmitting(true);
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
-            // Ensure we only save the relevant parts of the data
-            const dataToSave = {
-                notifications: {
-                    google_review: data.notifications.google_review,
-                    appointment_notification: data.notifications.appointment_notification,
-                    appointment_reminder: data.notifications.appointment_reminder,
-                    birthday_notification: data.notifications.birthday_notification,
-                }
+            
+            const dataToSave: Partial<ReminderSettings> = {
+                notifications: {}
             };
+
+            for (const type of notificationTypes) {
+                const id = type.id;
+                if (data.notifications && data.notifications[id]) {
+                    const notificationConfig: Partial<AutomaticNotification> = {
+                        enabled: data.notifications[id].enabled,
+                    };
+
+                    if (id === 'appointment_reminder' && data.notifications[id].timing) {
+                        notificationConfig.timing = {
+                            type: data.notifications[id].timing!.type,
+                            hours_before: data.notifications[id].timing!.hours_before || 0,
+                        };
+                    }
+                    dataToSave.notifications![id] = notificationConfig as AutomaticNotification;
+                }
+            }
+
             await setDoc(settingsRef, dataToSave, { merge: true });
             
             toast({
@@ -129,24 +142,17 @@ export default function RecordatoriosPage() {
                                                 render={({ field }) => (
                                                     <Switch
                                                         id={`enabled-${notification.id}`}
-                                                        checked={field.value}
+                                                        checked={!!field.value}
                                                         onCheckedChange={field.onChange}
                                                     />
                                                 )}
                                             />
                                         </div>
-                                        <Controller
-                                            name={`notifications.${notification.id}.rules`}
-                                            control={form.control}
+                                        <Textarea 
                                             defaultValue={notification.description}
-                                            render={({ field }) => (
-                                                <Textarea 
-                                                    {...field}
-                                                    className="text-sm text-muted-foreground"
-                                                    rows={2}
-                                                    readOnly
-                                                />
-                                            )}
+                                            className="text-sm text-muted-foreground"
+                                            rows={2}
+                                            readOnly
                                         />
                                         {notification.id === 'appointment_reminder' && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end pt-2">

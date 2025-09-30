@@ -51,9 +51,7 @@ const createClientSchema = (settings?: AgendaSettings) => {
       correo: fieldSettings.email?.required
         ? z.string().email('El correo electrónico no es válido.')
         : z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
-      fecha_nacimiento: fieldSettings.dob?.required
-        ? z.date({ required_error: 'La fecha de nacimiento es obligatoria.' })
-        : z.date().optional(),
+      fecha_nacimiento: z.date().optional().nullable(),
       direccion: fieldSettings.address?.required
         ? z.string().min(1, 'La dirección es requerida.')
         : z.string().optional(),
@@ -184,7 +182,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
 
   useEffect(() => {
     if (isEditMode && client) {
-      let birthDate = undefined;
+      let birthDate: Date | null = null;
       if (client.fecha_nacimiento) {
         if (typeof client.fecha_nacimiento === 'string') {
           birthDate = parseISO(client.fecha_nacimiento);
@@ -214,15 +212,13 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     try {
         if (!db) throw new Error("Database not available.");
         
-        // Explicitly type what goes to Firestore
-        const dataToSave: Partial<Omit<Client, 'id'>> = {
+        const dataToSave: Partial<Client> = {
           nombre: data.nombre,
           apellido: data.apellido,
           telefono: data.telefono,
           correo: data.correo,
           direccion: data.direccion,
           notas: data.notas,
-          // Format date to string if present, otherwise set as null for Firestore
           fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
         };
 
@@ -237,7 +233,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         } else {
             const fullData = {
                 ...dataToSave,
-                creado_en: Timestamp.now(), // Only add creation date for new clients
+                creado_en: Timestamp.now(),
             };
             const docRef = await addDoc(collection(db, 'clientes'), fullData);
             toast({
@@ -356,7 +352,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             name="fecha_nacimiento"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.dob.required && <OptionalLabel />}</FormLabel>
+                <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}</FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -373,7 +369,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                             className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
                             onClick={(e) => {
                               e.stopPropagation();
-                              field.onChange(undefined);
+                              field.onChange(null);
                             }}
                           />
                         ) : (

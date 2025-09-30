@@ -1,8 +1,58 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import Twilio from 'twilio';
+import { format } from 'date-fns';
+
+
+async function handleConfirmation(from: string, messageBody: string) {
+    const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
+    const normalizedMessage = messageBody.trim().toLowerCase();
+
+    if (!confirmationKeywords.includes(normalizedMessage)) {
+        return false;
+    }
+
+    const clientPhone = from.replace('whatsapp:+521', '').replace(/\D/g, '');
+
+    // 1. Find the client by phone number
+    const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
+    const clientsSnapshot = await clientsQuery.get();
+
+    if (clientsSnapshot.empty) {
+        console.log(`No se encontró cliente con el teléfono: ${clientPhone}`);
+        return false;
+    }
+
+    const clientDoc = clientsSnapshot.docs[0];
+    const clientId = clientDoc.id;
+
+    // 2. Find the client's upcoming reservation
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const reservationsQuery = db.collection('reservas')
+        .where('cliente_id', '==', clientId)
+        .where('fecha', '>=', today)
+        .where('estado', '==', 'Reservado')
+        .orderBy('fecha', 'asc')
+        .limit(1);
+    
+    const reservationsSnapshot = await reservationsQuery.get();
+    
+    if (reservationsSnapshot.empty) {
+        console.log(`No se encontraron reservas pendientes para el cliente: ${clientId}`);
+        return false;
+    }
+    
+    // 3. Update the reservation status
+    const reservationDoc = reservationsSnapshot.docs[0];
+    await reservationDoc.ref.update({ estado: 'Confirmado' });
+
+    console.log(`Reserva ${reservationDoc.id} actualizada a "Confirmado" para el cliente ${clientId}.`);
+
+    return true;
+}
+
 
 /**
  * Handles GET requests to the Twilio webhook URL.
@@ -48,6 +98,9 @@ export async function POST(req: NextRequest) {
       console.error('Twilio Webhook: No "From" number provided in the request.');
       return new NextResponse("Missing 'From' parameter", { status: 400 });
     }
+
+    // Attempt to handle confirmation logic
+    await handleConfirmation(from, messageBody);
 
     const conversationId = from;
     const conversationRef = db.collection('conversations').doc(conversationId);

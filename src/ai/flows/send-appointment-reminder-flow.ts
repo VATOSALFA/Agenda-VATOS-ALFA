@@ -92,13 +92,23 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
     inputSchema: AppointmentReminderInputSchema,
     outputSchema: AppointmentReminderOutputSchema,
   },
-  async ({ clientId }) => {
+  async ({ clientId = "sCjC264aNuzwWrVfC5u6" }) => { // Hardcoded client ID for testing
     try {
         // FOR ON-DEMAND TESTING to a specific client
         if (clientId) {
+            // Find the client with phone number 4425596138 to get their ID
+            const clientQuery = query(collection(db, 'clientes'), where('telefono', '==', '4425596138'), limit(1));
+            const clientSnapshot = await getDocs(clientQuery);
+
+            if(clientSnapshot.empty) {
+                return { success: false, remindersSent: 0, message: `Test client with phone 4425596138 not found.` };
+            }
+            const testClientId = clientSnapshot.docs[0].id;
+
+
             const clientReservationsQuery = query(
                 collection(db, 'reservas'),
-                where('cliente_id', '==', clientId),
+                where('cliente_id', '==', testClientId),
                 where('fecha', '>=', format(new Date(), 'yyyy-MM-dd')),
                 orderBy('fecha'),
                 orderBy('hora_inicio'),
@@ -106,14 +116,14 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
             );
             const snapshot = await getDocs(clientReservationsQuery);
             if (snapshot.empty) {
-                return { success: false, remindersSent: 0, message: `No upcoming appointments found for client ${clientId}.` };
+                return { success: false, remindersSent: 0, message: `No upcoming appointments found for test client.` };
             }
             const reservation = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Reservation;
             const sent = await sendReminder(reservation);
-            return { success: sent, remindersSent: sent ? 1 : 0, message: `Sent test reminder to client ${clientId}.` };
+            return { success: sent, remindersSent: sent ? 1 : 0, message: `Sent test reminder to client ${testClientId}.` };
         }
 
-        // --- SCHEDULED JOB LOGIC ---
+        // --- SCHEDULED JOB LOGIC (currently bypassed for testing) ---
       const settingsRef = doc(db, 'configuracion', 'recordatorios');
       const settingsSnap = await getDoc(settingsRef);
       

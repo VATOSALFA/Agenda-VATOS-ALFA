@@ -266,7 +266,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       // Only validate when a relevant field changes
-      if (name && (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name))) {
+      if (name && (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name as string))) {
         validateItemsAvailability(value as ReservationFormData);
       }
     });
@@ -454,9 +454,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   contentVariables: {
                       '1': client.nombre,
                       '2': local?.name || 'nuestro local',
-                      '3': fullDateStr,
-                      '4': dataToSave.servicio!,
-                      '5': professional.name,
+                      '3': dataToSave.servicio!,
+                      '4': fullDateStr,
+                      '5': local?.address || 'nuestra sucursal',
+                      '6': professional.name,
                   }
               });
               // Do not show a toast here to avoid spamming the user

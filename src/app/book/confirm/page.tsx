@@ -133,9 +133,10 @@ function ConfirmPageContent() {
                         contentVariables: {
                             '1': data.nombre,
                             '2': local?.name || 'nuestro local',
-                            '3': fullDateStr,
-                            '4': reservationData.servicio,
-                            '5': selectedProfessional.name,
+                            '3': reservationData.servicio,
+                            '4': fullDateStr,
+                            '5': local?.address || 'nuestra sucursal',
+                            '6': selectedProfessional.name,
                         },
                     });
                 } catch (waError) {

@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Missing 'From' parameter", { status: 400 });
     }
     
-    const { clientId } = await handleClientResponse(from, messageBody);
+    const { handled, clientId } = await handleClientResponse(from, messageBody);
 
     const conversationId = from;
     const conversationRef = doc(db, 'conversations', conversationId);
@@ -166,24 +166,22 @@ export async function POST(req: NextRequest) {
     
     const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
     
-    const conversationData: { [key: string]: any } = {
-        lastMessageText: lastMessagePreview,
-        lastMessageTimestamp: Timestamp.now(),
-        unreadCount: increment(1),
-        clientName: from.replace('whatsapp:', '')
-    };
-    
-    if (clientId) {
-      conversationData.clientId = clientId;
-    }
-    
-    const docSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', conversationId)));
-    if (docSnap.empty) {
-      await runTransaction(db, async (transaction) => {
-        transaction.set(conversationRef, conversationData);
-      });
+    const conversationDocSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', conversationId), limit(1)));
+
+    if (conversationDocSnap.empty) {
+        await setDoc(conversationRef, {
+            lastMessageText: lastMessagePreview,
+            lastMessageTimestamp: Timestamp.now(),
+            unreadCount: 1,
+            clientId: clientId || null,
+        });
     } else {
-      await updateDoc(conversationRef, conversationData);
+        await updateDoc(conversationRef, {
+            lastMessageText: lastMessagePreview,
+            lastMessageTimestamp: Timestamp.now(),
+            unreadCount: increment(1),
+            clientId: clientId || null,
+        });
     }
     
     const twiml = new Twilio.twiml.MessagingResponse();

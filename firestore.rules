@@ -2,36 +2,46 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Reglas para colecciones públicas (necesarias para el sitio de reservas)
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Public read-only for booking flow
     match /locales/{localId} {
-      allow read: if true;
-      allow write: if request.auth != null; 
+      allow read;
+      allow write: if isSignedIn();
+    }
+    match /servicios/{serviceId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+    match /profesionales/{professionalId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+    match /categorias_servicios/{categoryId} {
+      allow read;
+      allow write: if isSignedIn();
     }
 
-    match /profesionales/{profesionalId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Authenticated users can manage reservations and blocks
+    match /reservas/{reservationId} {
+      allow read, write: if isSignedIn();
+    }
+    match /bloqueos_horario/{blockId} {
+      allow read, write: if isSignedIn();
     }
 
-    match /servicios/{servicioId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    match /categorias_servicios/{categoriaId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    match /empresa/{empresaId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Conversations can be written to by anyone (for webhooks) but only read by signed-in users
+    match /conversations/{conversationId}/{message=**} {
+      allow read: if isSignedIn();
+      allow write;
     }
 
-    // El resto de las colecciones requieren autenticación
+    // All other collections require authentication
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
   }
 }

@@ -59,16 +59,21 @@ async function handleClientResponse(from: string, messageBody: string) {
     }
     
     const reservationDoc = reservationsSnapshot.docs[0];
+    const currentStatus = reservationDoc.data().estado;
 
     // 3. Update reservation based on action
     switch(action) {
         case 'confirm':
-            await reservationDoc.ref.update({ estado: 'Confirmado' });
-            console.log(`Reservation ${reservationDoc.id} updated to "Confirmado" for client ${clientId}.`);
+            if (currentStatus !== 'Confirmado') {
+                await reservationDoc.ref.update({ estado: 'Confirmado' });
+                console.log(`Reservation ${reservationDoc.id} updated to "Confirmado" for client ${clientId}.`);
+            }
             break;
         case 'reschedule':
-            await reservationDoc.ref.update({ estado: 'Pendiente' });
-            console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);
+            if (currentStatus !== 'Pendiente') {
+                await reservationDoc.ref.update({ estado: 'Pendiente' });
+                console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);
+            }
             break;
         case 'cancel':
              // Using a transaction to ensure atomicity

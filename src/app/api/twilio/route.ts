@@ -45,11 +45,10 @@ async function handleClientResponse(from: string, messageBody: string) {
     // 2. Find the client's upcoming reservation
     const today = format(new Date(), 'yyyy-MM-dd');
     
-    // The query should find the closest reservation that is not already cancelled to act upon
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today)
-        .where('estado', '!=', 'Cancelado') // Exclude already cancelled appointments
+        .where('estado', 'in', ['Reservado', 'Pendiente'])
         .orderBy('fecha', 'asc')
         .limit(1);
     

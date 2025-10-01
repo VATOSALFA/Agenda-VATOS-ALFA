@@ -1,7 +1,7 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { initializeAuth, browserLocalPersistence } from "firebase/auth";
-import { getFirestore, initializeFirestore } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 
@@ -21,8 +21,6 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = initializeAuth(app, {
   persistence: browserLocalPersistence
 });
-export const db = initializeFirestore(app, {
-  ignoreUndefinedProperties: true,
-});
+export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import Twilio from 'twilio';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 
 async function handleClientResponse(from: string, messageBody: string) {
@@ -42,15 +42,13 @@ async function handleClientResponse(from: string, messageBody: string) {
     const clientDoc = clientsSnapshot.docs[0];
     const clientId = clientDoc.id;
 
-    // 2. Find the client's upcoming reservation
+    // 2. Find the client's upcoming reservation (most robust way)
     const today = format(new Date(), 'yyyy-MM-dd');
     
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today)
-        .where('estado', '!=', 'Cancelado')
-        .orderBy('fecha', 'asc')
-        .limit(1);
+        .where('estado', '!=', 'Cancelado'); // Find any future, non-cancelled reservation
     
     const reservationsSnapshot = await reservationsQuery.get();
     
@@ -58,28 +56,38 @@ async function handleClientResponse(from: string, messageBody: string) {
         console.log(`No pending reservations found for client: ${clientId}`);
         return { handled: true, clientId: clientId }; // Handled because we understood the keyword, but no reservation to act on.
     }
+
+    // Find the closest upcoming reservation from the results
+    const upcomingReservations = reservationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    upcomingReservations.sort((a, b) => {
+        const dateA = parseISO(`${a.fecha}T${a.hora_inicio}`);
+        const dateB = parseISO(`${b.fecha}T${b.hora_inicio}`);
+        return dateA.getTime() - dateB.getTime();
+    });
     
-    const reservationDoc = reservationsSnapshot.docs[0];
+    const reservationToUpdate = upcomingReservations[0];
+    const reservationDocRef = db.collection('reservas').doc(reservationToUpdate.id);
+
 
     // 3. Update reservation based on action
     switch(action) {
         case 'confirm':
-            await reservationDoc.ref.update({ estado: 'Confirmado' });
-            console.log(`Reservation ${reservationDoc.id} updated to "Confirmado" for client ${clientId}.`);
+            await reservationDocRef.update({ estado: 'Confirmado' });
+            console.log(`Reservation ${reservationToUpdate.id} updated to "Confirmado" for client ${clientId}.`);
             break;
         case 'reschedule':
-            await reservationDoc.ref.update({ estado: 'Pendiente' });
-            console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);
+            await reservationDocRef.update({ estado: 'Pendiente' });
+            console.log(`Reservation ${reservationToUpdate.id} updated to "Pendiente" for client ${clientId}.`);
             break;
         case 'cancel':
              // Using a transaction to ensure atomicity
             await db.runTransaction(async (transaction) => {
-                transaction.update(reservationDoc.ref, { estado: 'Cancelado' });
+                transaction.update(reservationDocRef, { estado: 'Cancelado' });
                 transaction.update(clientDoc.ref, { 
                     citas_canceladas: FieldValue.increment(1)
                 });
             });
-            console.log(`Reservation ${reservationDoc.id} updated to "Cancelado" for client ${clientId}.`);
+            console.log(`Reservation ${reservationToUpdate.id} updated to "Cancelado" for client ${clientId}.`);
             break;
     }
 

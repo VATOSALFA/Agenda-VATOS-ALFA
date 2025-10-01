@@ -15,7 +15,7 @@ interface UseFirestoreQuery<T> {
 
 export function useFirestoreQuery<T>(
   collectionName: string,
-  keyOrConstraint?: any,
+  keyOrConstraints?: any | QueryConstraint | (QueryConstraint | undefined)[],
   ...queryConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> & { key: any, setKey: React.Dispatch<React.SetStateAction<any>> } {
   const { db } = useAuth();
@@ -27,17 +27,22 @@ export function useFirestoreQuery<T>(
   let effectiveKey: any;
   let constraints: (QueryConstraint | undefined)[];
 
-  // Determine how arguments were passed
-  if (keyOrConstraint === undefined || typeof keyOrConstraint === 'string' || typeof keyOrConstraint === 'number' || (keyOrConstraint && Object.prototype.toString.call(keyOrConstraint) === '[object Object]' && !keyOrConstraint.type)) {
-      effectiveKey = keyOrConstraint !== undefined ? keyOrConstraint : internalKey;
-      constraints = queryConstraints;
+  // Argument handling logic
+  if (typeof keyOrConstraints === 'string' || typeof keyOrConstraints === 'number' || keyOrConstraints === undefined) {
+    effectiveKey = keyOrConstraints !== undefined ? keyOrConstraints : internalKey;
+    constraints = queryConstraints;
   } else {
-      effectiveKey = internalKey;
-      constraints = [keyOrConstraint as QueryConstraint, ...queryConstraints];
+    effectiveKey = internalKey;
+    if (Array.isArray(keyOrConstraints)) {
+      constraints = [...keyOrConstraints, ...queryConstraints];
+    } else {
+      constraints = [keyOrConstraints, ...queryConstraints];
+    }
   }
   
   const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
-  const isQueryActive = constraints.every(c => c !== undefined);
+  const isQueryActive = finalConstraints.length === constraints.length;
+
 
   useEffect(() => {
     if (!db || !isQueryActive) {

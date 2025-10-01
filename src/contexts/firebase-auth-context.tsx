@@ -28,14 +28,18 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<Partial<AuthContextType>>({
-  db,
-  auth,
-  storage,
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  db: db,
+  auth: auth,
+  storage: storage,
+  signIn: async () => { throw new Error('signIn function not ready'); },
+  signOut: async () => { throw new Error('signOut function not ready'); },
 });
 
 export const useAuth = () => {
-  return useContext(AuthContext) as AuthContextType;
+  return useContext(AuthContext);
 };
 
 interface AuthProviderProps {
@@ -126,7 +130,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     auth,
     db,
     storage,
-  } as AuthContextType;
+  };
 
   const isAuthPage = pathname === '/login';
   const isPublicBookingPage = pathname.startsWith('/book');

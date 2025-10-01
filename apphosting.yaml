@@ -1,5 +1,4 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
+# apphosting.yaml
 
 run:
   build:
@@ -9,29 +8,29 @@ run:
     - next start
 
 runConfig:
-  minInstances: 1
+  minInstances: 0
   maxInstances: 2
   cpu: 1
-  memoryMiB: 1024
+  memoryMiB: 512
 
 env:
-  - variable: FIREBASE_API_KEY
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     secret: NEXT_PUBLIC_FIREBASE_API_KEY
-  - variable: FIREBASE_APP_ID
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     secret: NEXT_PUBLIC_FIREBASE_APP_ID
-  - variable: FIREBASE_AUTH_DOMAIN
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-  - variable: FIREBASE_MESSAGING_SENDER_ID
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
     secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-  - variable: FIREBASE_PROJECT_ID
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     secret: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  - variable: FIREBASE_STORAGE_BUCKET
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-  - variable: FIREBASE_MEASUREMENT_ID
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     secret: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-  - variable: TWILIO_ACCOUNT_SID
+  - variable: NEXT_PUBLIC_TWILIO_ACCOUNT_SID
     secret: NEXT_PUBLIC_TWILIO_ACCOUNT_SID
-  - variable: TWILIO_AUTH_TOKEN
+  - variable: NEXT_PUBLIC_TWILIO_AUTH_TOKEN
     secret: NEXT_PUBLIC_TWILIO_AUTH_TOKEN
-  - variable: TWILIO_PHONE_NUMBER
+  - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER

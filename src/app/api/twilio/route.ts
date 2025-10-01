@@ -70,6 +70,7 @@ async function handleClientResponse(from: string, messageBody: string) {
             }
             break;
         case 'reschedule':
+            // For now, we don't have a specific "Reagendar" status, so we mark it as "Pendiente" as an alert.
             if (currentStatus !== 'Pendiente') {
                 await reservationDoc.ref.update({ estado: 'Pendiente' });
                 console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);

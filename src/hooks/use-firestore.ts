@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, QueryConstraint, onSnapshot, Firestore } from 'firebase/firestore';
+import { collection, query, onSnapshot, QueryConstraint } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface UseFirestoreQuery<T> {
@@ -40,8 +40,7 @@ export function useFirestoreQuery<T>(
   const isQueryActive = constraints.every(c => c !== undefined);
 
   useEffect(() => {
-    // Wait for a valid db instance.
-    if (!db || !(db instanceof Firestore) || !isQueryActive) {
+    if (!db || !isQueryActive) {
       setLoading(true);
       return;
     }

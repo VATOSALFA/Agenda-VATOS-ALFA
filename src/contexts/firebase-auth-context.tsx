@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
@@ -28,7 +28,11 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<Partial<AuthContextType>>({});
+const AuthContext = createContext<Partial<AuthContextType>>({
+  db,
+  auth,
+  storage,
+});
 
 export const useAuth = () => {
   return useContext(AuthContext) as AuthContextType;

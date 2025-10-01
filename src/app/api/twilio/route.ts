@@ -6,12 +6,25 @@ import Twilio from 'twilio';
 import { format } from 'date-fns';
 
 
-async function handleConfirmation(from: string, messageBody: string) {
-    const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
+async function handleClientResponse(from: string, messageBody: string) {
     const normalizedMessage = messageBody.trim().toLowerCase();
+    
+    const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
+    const rescheduleKeywords = ['reagendar'];
+    const cancellationKeywords = ['cancelar la cita', 'cancelar'];
 
-    if (!confirmationKeywords.includes(normalizedMessage)) {
-        return false;
+    let action: 'confirm' | 'reschedule' | 'cancel' | null = null;
+
+    if (confirmationKeywords.includes(normalizedMessage)) {
+        action = 'confirm';
+    } else if (rescheduleKeywords.includes(normalizedMessage)) {
+        action = 'reschedule';
+    } else if (cancellationKeywords.includes(normalizedMessage)) {
+        action = 'cancel';
+    }
+
+    if (!action) {
+        return false; // Not a keyword we handle automatically
     }
 
     const clientPhone = from.replace('whatsapp:+521', '').replace(/\D/g, '');
@@ -21,7 +34,7 @@ async function handleConfirmation(from: string, messageBody: string) {
     const clientsSnapshot = await clientsQuery.get();
 
     if (clientsSnapshot.empty) {
-        console.log(`No se encontró cliente con el teléfono: ${clientPhone}`);
+        console.log(`Client not found with phone: ${clientPhone}`);
         return false;
     }
 
@@ -30,6 +43,7 @@ async function handleConfirmation(from: string, messageBody: string) {
 
     // 2. Find the client's upcoming reservation
     const today = format(new Date(), 'yyyy-MM-dd');
+    // Find a reservation that is still 'Reservado' to act upon
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today)
@@ -40,15 +54,33 @@ async function handleConfirmation(from: string, messageBody: string) {
     const reservationsSnapshot = await reservationsQuery.get();
     
     if (reservationsSnapshot.empty) {
-        console.log(`No se encontraron reservas pendientes para el cliente: ${clientId}`);
+        console.log(`No pending reservations found for client: ${clientId}`);
         return false;
     }
     
-    // 3. Update the reservation status
     const reservationDoc = reservationsSnapshot.docs[0];
-    await reservationDoc.ref.update({ estado: 'Confirmado' });
 
-    console.log(`Reserva ${reservationDoc.id} actualizada a "Confirmado" para el cliente ${clientId}.`);
+    // 3. Update reservation based on action
+    switch(action) {
+        case 'confirm':
+            await reservationDoc.ref.update({ estado: 'Confirmado' });
+            console.log(`Reservation ${reservationDoc.id} updated to "Confirmado" for client ${clientId}.`);
+            break;
+        case 'reschedule':
+            await reservationDoc.ref.update({ estado: 'Pendiente' });
+            console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);
+            break;
+        case 'cancel':
+             // Using a transaction to ensure atomicity
+            await db.runTransaction(async (transaction) => {
+                transaction.update(reservationDoc.ref, { estado: 'Cancelado' });
+                transaction.update(clientDoc.ref, { 
+                    citas_canceladas: FieldValue.increment(1)
+                });
+            });
+            console.log(`Reservation ${reservationDoc.id} updated to "Cancelado" for client ${clientId}.`);
+            break;
+    }
 
     return true;
 }
@@ -99,8 +131,8 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Missing 'From' parameter", { status: 400 });
     }
 
-    // Attempt to handle confirmation logic
-    await handleConfirmation(from, messageBody);
+    // Attempt to handle automated responses
+    await handleClientResponse(from, messageBody);
 
     const conversationId = from;
     const conversationRef = db.collection('conversations').doc(conversationId);

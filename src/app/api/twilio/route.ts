@@ -24,11 +24,11 @@ async function handleClientResponse(from: string, messageBody: string) {
     }
 
     if (!action) {
-        return false; // Not a keyword we handle automatically
+        return { handled: false };
     }
 
     // Clean the phone number from Twilio format (whatsapp:+521...) to match Firestore format (just digits)
-    const clientPhone = from.replace(/\D/g, '').slice(-10); // Get last 10 digits to be safe
+    const clientPhone = from.replace(/\D/g, '').slice(-10);
 
     // 1. Find the client by phone number
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
@@ -36,7 +36,7 @@ async function handleClientResponse(from: string, messageBody: string) {
 
     if (clientsSnapshot.empty) {
         console.log(`Client not found with phone: ${clientPhone}`);
-        return false;
+        return { handled: false };
     }
 
     const clientDoc = clientsSnapshot.docs[0];
@@ -56,7 +56,7 @@ async function handleClientResponse(from: string, messageBody: string) {
     
     if (reservationsSnapshot.empty) {
         console.log(`No pending reservations found for client: ${clientId}`);
-        return false; // No relevant reservation to update
+        return { handled: true, clientId: clientId }; // Handled because we understood the keyword, but no reservation to act on.
     }
     
     const reservationDoc = reservationsSnapshot.docs[0];
@@ -83,7 +83,7 @@ async function handleClientResponse(from: string, messageBody: string) {
             break;
     }
 
-    return true;
+    return { handled: true, clientId: clientId };
 }
 
 
@@ -132,8 +132,8 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Missing 'From' parameter", { status: 400 });
     }
 
-    // Attempt to handle automated responses
-    await handleClientResponse(from, messageBody);
+    // Attempt to handle automated responses and get clientId
+    const { clientId } = await handleClientResponse(from, messageBody);
 
     const conversationId = from;
     const conversationRef = db.collection('conversations').doc(conversationId);
@@ -167,12 +167,18 @@ export async function POST(req: NextRequest) {
     // Unified logic to create or update the conversation document
     const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
     
-    await conversationRef.set({
+    const conversationData: { [key: string]: any } = {
         lastMessageText: lastMessagePreview,
         lastMessageTimestamp: FieldValue.serverTimestamp(),
         unreadCount: FieldValue.increment(1),
-        clientName: from.replace('whatsapp:', '') // Set a default name, can be updated later
-    }, { merge: true });
+        clientName: from.replace('whatsapp:', '') // Default name, can be updated
+    };
+
+    if (clientId) {
+      conversationData.clientId = clientId;
+    }
+    
+    await conversationRef.set(conversationData, { merge: true });
 
 
     // Twilio expects an empty TwiML response to prevent it from sending a reply.

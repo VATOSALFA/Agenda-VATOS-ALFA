@@ -1,34 +1,107 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // REGLAS PÚBLICAS: Necesarias para el sitio de agendamiento.
-    // Cualquiera puede leer, solo los usuarios autenticados pueden escribir.
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // PUBLIC: Collections that anyone can read for booking purposes
     match /locales/{localId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSignedIn();
     }
-    
+
     match /profesionales/{profesionalId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSignedIn();
     }
 
     match /servicios/{servicioId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSignedIn();
     }
     
     match /categorias_servicios/{categoriaId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSignedIn();
+    }
+    
+    match /empresa/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
-    // REGLAS PRIVADAS: Solo usuarios autenticados (tu equipo) pueden acceder.
-    // Esto protege la información sensible de clientes, ventas, etc.
+    // PROTECTED: Collections that require authentication
+    match /clientes/{clienteId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /reservas/{reservaId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /bloqueos_horario/{bloqueoId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /ventas/{ventaId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /egresos/{egresoId} {
+        allow read, write: if isSignedIn();
+    }
+    
+    match /ingresos_manuales/{ingresoId} {
+        allow read, write: if isSignedIn();
+    }
+    
+    match /cortes_caja/{corteId} {
+        allow read, write: if isSignedIn();
+    }
+
+    match /usuarios/{userId} {
+        allow read, write: if isSignedIn();
+    }
+    
+    match /roles/{roleId} {
+        allow read, write: if isSignedIn();
+    }
+
+    match /productos/{productoId} {
+        allow read, write: if isSignedIn();
+    }
+    
+    match /categorias_productos/{catId} {
+        allow read, write: if isSignedIn();
+    }
+
+    match /marcas_productos/{marcaId} {
+        allow read, write: if isSignedIn();
+    }
+
+    match /formatos_productos/{formatoId} {
+        allow read, write: if isSignedIn();
+    }
+
+    match /codigos_autorizacion/{codigoId} {
+        allow read, write: if isSignedIn();
+    }
+    
+    match /conversations/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /configuracion/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Default deny: Disallow any other access
     match /{path=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

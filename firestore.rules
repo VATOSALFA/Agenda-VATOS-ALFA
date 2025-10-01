@@ -1,22 +1,18 @@
-
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reglas por defecto: Nadie puede leer o escribir.
-    // match /{document=**} {
-    //   allow read, write: if false;
-    // }
-
-    // El sitio público de agendamiento necesita leer estas colecciones.
+  
+    // Reglas para colecciones públicas (lectura para todos)
     match /servicios/{serviceId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null; // Solo autenticados pueden escribir
     }
     match /categorias_servicios/{categoryId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-    match /profesionales/{professionalId} {
+    match /profesionales/{profesionalId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
@@ -25,15 +21,11 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // Los clientes pueden crear su propia reserva.
-    match /reservas/{reservationId} {
-      allow read: if request.auth != null;
-      allow create: if true; // Permite que cualquiera cree una reserva
-      allow update, delete: if request.auth != null;
-    }
-
-    // Los usuarios autenticados pueden gestionar el resto de los datos.
+    // Reglas para colecciones privadas (solo usuarios autenticados)
     match /clientes/{clientId} {
+      allow read, write: if request.auth != null;
+    }
+    match /reservas/{reservationId} {
       allow read, write: if request.auth != null;
     }
     match /ventas/{saleId} {
@@ -42,7 +34,10 @@ service cloud.firestore {
     match /egresos/{egresoId} {
       allow read, write: if request.auth != null;
     }
-     match /ingresos_manuales/{ingresoId} {
+    match /ingresos_manuales/{ingresoId} {
+      allow read, write: if request.auth != null;
+    }
+    match /cortes_caja/{corteId} {
       allow read, write: if request.auth != null;
     }
     match /bloqueos_horario/{blockId} {
@@ -54,25 +49,32 @@ service cloud.firestore {
     match /marcas_productos/{brandId} {
       allow read, write: if request.auth != null;
     }
-    match /formatos_productos/{presentationId} {
+    match /categorias_productos/{prodCategoryId} {
       allow read, write: if request.auth != null;
     }
-    match /categorias_productos/{categoryId} {
+    match /formatos_productos/{formatId} {
+      allow read, write: if request.auth != null;
+    }
+    match /conversations/{conversationId}/{messageId=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Reglas para colecciones de configuración
+    match /configuracion/{configId} {
+      allow read: if true; // Permitir lectura pública para configuraciones como recordatorios
+      allow write: if request.auth != null;
+    }
+    match /empresa/{empresaId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+    }
+    match /codigos_autorizacion/{codeId} {
       allow read, write: if request.auth != null;
     }
     match /usuarios/{userId} {
       allow read, write: if request.auth != null;
     }
     match /roles/{roleId} {
-      allow read, write: if request.auth != null;
-    }
-    match /codigos_autorizacion/{codeId} {
-      allow read, write: if request.auth != null;
-    }
-    match /configuracion/{configId} {
-      allow read, write: if request.auth != null;
-    }
-    match /conversations/{conversationId}/{messageId=**} {
       allow read, write: if request.auth != null;
     }
   }

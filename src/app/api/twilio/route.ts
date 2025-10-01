@@ -15,11 +15,11 @@ async function handleClientResponse(from: string, messageBody: string) {
 
     let action: 'confirm' | 'reschedule' | 'cancel' | null = null;
 
-    if (confirmationKeywords.includes(normalizedMessage)) {
+    if (confirmationKeywords.some(keyword => normalizedMessage.includes(keyword))) {
         action = 'confirm';
-    } else if (rescheduleKeywords.includes(normalizedMessage)) {
+    } else if (rescheduleKeywords.some(keyword => normalizedMessage.includes(keyword))) {
         action = 'reschedule';
-    } else if (cancellationKeywords.includes(normalizedMessage)) {
+    } else if (cancellationKeywords.some(keyword => normalizedMessage.includes(keyword))) {
         action = 'cancel';
     }
 
@@ -27,7 +27,8 @@ async function handleClientResponse(from: string, messageBody: string) {
         return false; // Not a keyword we handle automatically
     }
 
-    const clientPhone = from.replace('whatsapp:+521', '').replace(/\D/g, '');
+    // Clean the phone number from Twilio format (whatsapp:+521...) to match Firestore format (just digits)
+    const clientPhone = from.replace(/\D/g, '').slice(-10); // Get last 10 digits to be safe
 
     // 1. Find the client by phone number
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
@@ -43,38 +44,33 @@ async function handleClientResponse(from: string, messageBody: string) {
 
     // 2. Find the client's upcoming reservation
     const today = format(new Date(), 'yyyy-MM-dd');
-    // Find an upcoming reservation that is not already cancelled to act upon
+    
+    // The query should find the closest reservation that is not already cancelled to act upon
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today)
-        .where('estado', '!=', 'Cancelado')
+        .where('estado', '==', 'Reservado') // Only update if it's currently 'Reservado'
         .orderBy('fecha', 'asc')
         .limit(1);
     
     const reservationsSnapshot = await reservationsQuery.get();
     
     if (reservationsSnapshot.empty) {
-        console.log(`No pending reservations found for client: ${clientId}`);
-        return false;
+        console.log(`No pending reservations with status 'Reservado' found for client: ${clientId}`);
+        return false; // No relevant reservation to update
     }
     
     const reservationDoc = reservationsSnapshot.docs[0];
-    const currentStatus = reservationDoc.data().estado;
 
     // 3. Update reservation based on action
     switch(action) {
         case 'confirm':
-            if (currentStatus !== 'Confirmado') {
-                await reservationDoc.ref.update({ estado: 'Confirmado' });
-                console.log(`Reservation ${reservationDoc.id} updated to "Confirmado" for client ${clientId}.`);
-            }
+            await reservationDoc.ref.update({ estado: 'Confirmado' });
+            console.log(`Reservation ${reservationDoc.id} updated to "Confirmado" for client ${clientId}.`);
             break;
         case 'reschedule':
-            // For now, we don't have a specific "Reagendar" status, so we mark it as "Pendiente" as an alert.
-            if (currentStatus !== 'Pendiente') {
-                await reservationDoc.ref.update({ estado: 'Pendiente' });
-                console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);
-            }
+            await reservationDoc.ref.update({ estado: 'Pendiente' });
+            console.log(`Reservation ${reservationDoc.id} updated to "Pendiente" for client ${clientId}.`);
             break;
         case 'cancel':
              // Using a transaction to ensure atomicity

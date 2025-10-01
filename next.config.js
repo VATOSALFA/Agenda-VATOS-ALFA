@@ -15,13 +15,6 @@ const nextConfig = {
       topLevelAwait: true,
     };
     
-    // Agregamos esta configuración para resolver el problema de la instancia duplicada de Firebase.
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      // Forzamos a que todas las referencias a Firebase usen la misma instancia.
-      firebase: require.resolve('firebase'),
-    };
-
     return config;
   },
   images: {

@@ -48,7 +48,7 @@ async function handleClientResponse(from: string, messageBody: string) {
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today)
-        .where('estado', 'not-in', ['Cancelado'])
+        .where('estado', '!=', 'Cancelado')
         .orderBy('fecha', 'asc')
         .limit(1);
     

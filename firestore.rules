@@ -1,75 +1,36 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
+    
     // Reglas para colecciones públicas (necesarias para el sitio de reservas)
-    match /servicios/{serviceId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /categorias_servicios/{categoryId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /profesionales/{professionalId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
     match /locales/{localId} {
       allow read: if true;
+      allow write: if request.auth != null; 
+    }
+
+    match /profesionales/{profesionalId} {
+      allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // Reglas para colecciones privadas (solo usuarios autenticados)
-    match /clientes/{clientId} {
-      allow read, write: if request.auth != null;
+    match /servicios/{servicioId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-    match /reservas/{reservationId} {
-      // Permitir crear reservas a cualquiera (desde el sitio público)
-      allow create: if true;
-      // Solo usuarios autenticados pueden leer, actualizar o borrar
-      allow read, update, delete: if request.auth != null;
+    
+    match /categorias_servicios/{categoriaId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-    match /ventas/{saleId} {
-      allow read, write: if request.auth != null;
+    
+    match /empresa/{empresaId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-    match /egresos/{egresoId} {
-      allow read, write: if request.auth != null;
-    }
-     match /ingresos_manuales/{ingresoId} {
-      allow read, write: if request.auth != null;
-    }
-    match /bloqueos_horario/{blockId} {
-      allow read, write: if request.auth != null;
-    }
-    match /productos/{productId} {
-      allow read, write: if request.auth != null;
-    }
-    match /categorias_productos/{catId} {
-        allow read, write: if request.auth != null;
-    }
-    match /marcas_productos/{brandId} {
-        allow read, write: if request.auth != null;
-    }
-    match /formatos_productos/{formatId} {
-        allow read, write: if request.auth != null;
-    }
-    match /configuracion/{configId} {
-      allow read, write: if request.auth != null;
-    }
-    match /usuarios/{userId} {
-      allow read, write: if request.auth != null;
-    }
-     match /roles/{roleId} {
-      allow read, write: if request.auth != null;
-    }
-    match /conversations/{conversationId}/{message=**} {
-        allow read, write: if request.auth != null;
-    }
-    match /codigos_autorizacion/{codeId} {
-      allow read, write: if request.auth != null;
-    }
-     match /cortes_caja/{corteId} {
+
+    // El resto de las colecciones requieren autenticación
+    match /{document=**} {
       allow read, write: if request.auth != null;
     }
   }

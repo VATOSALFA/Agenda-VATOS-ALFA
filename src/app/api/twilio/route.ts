@@ -1,10 +1,9 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/firebase-admin';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit } from 'firebase/firestore';
 import Twilio from 'twilio';
-import { format, parseISO } from 'date-fns';
-
+import { parseISO, format } from 'date-fns';
 
 async function handleClientResponse(from: string, messageBody: string) {
     const normalizedMessage = messageBody.trim().toLowerCase();
@@ -26,13 +25,11 @@ async function handleClientResponse(from: string, messageBody: string) {
     if (!action) {
         return { handled: false };
     }
-
-    // Clean the phone number from Twilio format (whatsapp:+521...) to match Firestore format (just digits)
+    
     const clientPhone = from.replace(/\D/g, '').slice(-10);
 
-    // 1. Find the client by phone number
-    const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
-    const clientsSnapshot = await clientsQuery.get();
+    const clientsQuery = query(collection(db, 'clientes'), where('telefono', '==', clientPhone), limit(1));
+    const clientsSnapshot = await getDocs(clientsQuery);
 
     if (clientsSnapshot.empty) {
         console.log(`Client not found with phone: ${clientPhone}`);
@@ -41,24 +38,30 @@ async function handleClientResponse(from: string, messageBody: string) {
 
     const clientDoc = clientsSnapshot.docs[0];
     const clientId = clientDoc.id;
-
-    // 2. Find the client's upcoming reservation (most robust way)
+    
     const today = format(new Date(), 'yyyy-MM-dd');
+    const reservationsQuery = query(
+        collection(db, 'reservas'),
+        where('cliente_id', '==', clientId),
+        where('fecha', '>=', today)
+    );
     
-    const reservationsQuery = db.collection('reservas')
-        .where('cliente_id', '==', clientId)
-        .where('fecha', '>=', today)
-        .where('estado', '!=', 'Cancelado'); // Find any future, non-cancelled reservation
-    
-    const reservationsSnapshot = await reservationsQuery.get();
+    const reservationsSnapshot = await getDocs(reservationsQuery);
     
     if (reservationsSnapshot.empty) {
         console.log(`No pending reservations found for client: ${clientId}`);
-        return { handled: true, clientId: clientId }; // Handled because we understood the keyword, but no reservation to act on.
+        return { handled: true, clientId: clientId };
+    }
+    
+    const upcomingReservations = reservationsSnapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(r => r.estado !== 'Cancelado');
+
+    if (upcomingReservations.length === 0) {
+      console.log(`No non-cancelled upcoming reservations found for client: ${clientId}`);
+      return { handled: true, clientId: clientId };
     }
 
-    // Find the closest upcoming reservation from the results
-    const upcomingReservations = reservationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     upcomingReservations.sort((a, b) => {
         const dateA = parseISO(`${a.fecha}T${a.hora_inicio}`);
         const dateB = parseISO(`${b.fecha}T${b.hora_inicio}`);
@@ -66,25 +69,22 @@ async function handleClientResponse(from: string, messageBody: string) {
     });
     
     const reservationToUpdate = upcomingReservations[0];
-    const reservationDocRef = db.collection('reservas').doc(reservationToUpdate.id);
+    const reservationDocRef = doc(db, 'reservas', reservationToUpdate.id);
 
-
-    // 3. Update reservation based on action
     switch(action) {
         case 'confirm':
-            await reservationDocRef.update({ estado: 'Confirmado' });
+            await updateDoc(reservationDocRef, { estado: 'Confirmado' });
             console.log(`Reservation ${reservationToUpdate.id} updated to "Confirmado" for client ${clientId}.`);
             break;
         case 'reschedule':
-            await reservationDocRef.update({ estado: 'Pendiente' });
+            await updateDoc(reservationDocRef, { estado: 'Pendiente' });
             console.log(`Reservation ${reservationToUpdate.id} updated to "Pendiente" for client ${clientId}.`);
             break;
         case 'cancel':
-             // Using a transaction to ensure atomicity
-            await db.runTransaction(async (transaction) => {
+            await runTransaction(db, async (transaction) => {
                 transaction.update(reservationDocRef, { estado: 'Cancelado' });
                 transaction.update(clientDoc.ref, { 
-                    citas_canceladas: FieldValue.increment(1)
+                    citas_canceladas: increment(1)
                 });
             });
             console.log(`Reservation ${reservationToUpdate.id} updated to "Cancelado" for client ${clientId}.`);
@@ -94,11 +94,6 @@ async function handleClientResponse(from: string, messageBody: string) {
     return { handled: true, clientId: clientId };
 }
 
-
-/**
- * Handles GET requests to the Twilio webhook URL.
- * This is used for simple verification from a browser.
- */
 export async function GET(req: NextRequest) {
   return new NextResponse(
     'Webhook de Twilio activo y escuchando. Listo para recibir mensajes POST.',
@@ -106,16 +101,15 @@ export async function GET(req: NextRequest) {
   );
 }
 
-
-/**
- * Handles POST requests from Twilio when a message is received.
- */
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const body = Object.fromEntries(formData);
     const signature = req.headers.get('X-Twilio-Signature') || '';
-    const url = req.url;
+    
+    const url = process.env.NODE_ENV === 'development'
+      ? `https://${req.headers.get('host')}/api/twilio`
+      : req.url;
 
     const authToken = process.env.NEXT_PUBLIC_TWILIO_AUTH_TOKEN;
     if (!authToken) {
@@ -123,8 +117,7 @@ export async function POST(req: NextRequest) {
         return new NextResponse('Internal Server Error: Auth Token missing', { status: 500 });
     }
     
-    // Validate request signature
-    const isValid = Twilio.validateRequest(authToken, signature, url, body);
+    const isValid = Twilio.validateRequest(authToken, signature, url, body as { [key: string]: string });
 
     if (!isValid) {
       console.warn('Twilio Webhook: Invalid request signature received.');
@@ -139,17 +132,17 @@ export async function POST(req: NextRequest) {
       console.error('Twilio Webhook: No "From" number provided in the request.');
       return new NextResponse("Missing 'From' parameter", { status: 400 });
     }
-
-    // Attempt to handle automated responses and get clientId
+    
     const { clientId } = await handleClientResponse(from, messageBody);
 
     const conversationId = from;
-    const conversationRef = db.collection('conversations').doc(conversationId);
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const messagesCollectionRef = collection(conversationRef, 'messages');
 
     const messageData: { [key: string]: any } = {
       senderId: 'client',
       text: messageBody,
-      timestamp: FieldValue.serverTimestamp(),
+      timestamp: Timestamp.now(),
       read: false,
     };
 
@@ -169,27 +162,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Add the message to the subcollection
-    await conversationRef.collection('messages').add(messageData);
+    await addDoc(messagesCollectionRef, messageData);
     
-    // Unified logic to create or update the conversation document
     const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
     
     const conversationData: { [key: string]: any } = {
         lastMessageText: lastMessagePreview,
-        lastMessageTimestamp: FieldValue.serverTimestamp(),
-        unreadCount: FieldValue.increment(1),
-        clientName: from.replace('whatsapp:', '') // Default name, can be updated
+        lastMessageTimestamp: Timestamp.now(),
+        unreadCount: increment(1),
+        clientName: from.replace('whatsapp:', '')
     };
-
+    
     if (clientId) {
       conversationData.clientId = clientId;
     }
     
-    await conversationRef.set(conversationData, { merge: true });
-
-
-    // Twilio expects an empty TwiML response to prevent it from sending a reply.
+    const docSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', conversationId)));
+    if (docSnap.empty) {
+      await runTransaction(db, async (transaction) => {
+        transaction.set(conversationRef, conversationData);
+      });
+    } else {
+      await updateDoc(conversationRef, conversationData);
+    }
+    
     const twiml = new Twilio.twiml.MessagingResponse();
     
     return new NextResponse(twiml.toString(), {
@@ -199,6 +195,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('Twilio Webhook Error:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return new NextResponse(`Internal Server Error: ${error.message}`, { status: 500 });
   }
 }

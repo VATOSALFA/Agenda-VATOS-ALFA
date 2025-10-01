@@ -49,14 +49,14 @@ async function handleClientResponse(from: string, messageBody: string) {
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today)
-        .where('estado', '==', 'Reservado') // Only update if it's currently 'Reservado'
+        .where('estado', '!=', 'Cancelado') // Exclude already cancelled appointments
         .orderBy('fecha', 'asc')
         .limit(1);
     
     const reservationsSnapshot = await reservationsQuery.get();
     
     if (reservationsSnapshot.empty) {
-        console.log(`No pending reservations with status 'Reservado' found for client: ${clientId}`);
+        console.log(`No pending reservations found for client: ${clientId}`);
         return false; // No relevant reservation to update
     }
     

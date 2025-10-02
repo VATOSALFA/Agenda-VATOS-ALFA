@@ -2,8 +2,11 @@
 'use client';
 
 import { useState, useEffect, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { usePathname, useRouter } from 'next/navigation';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { allPermissions } from '@/lib/permissions';
 import { NewReservationForm } from '@/components/reservations/new-reservation-form';
 import { BlockScheduleForm } from '@/components/reservations/block-schedule-form';
 import { NewSaleSheet } from '@/components/sales/new-sale-sheet';
@@ -11,6 +14,8 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import Header from '@/components/layout/header';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { AuthProvider, useAuth } from '@/contexts/firebase-auth-context';
+
 
 export default function AppInitializer({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -100,5 +105,3 @@ export default function AppInitializer({ children }: { children: ReactNode }) {
     </>
   );
 };
-
-    

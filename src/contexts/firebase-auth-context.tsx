@@ -3,13 +3,10 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, type Firestore } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
-import { auth, db, storage } from '@/lib/firebase';
-import type { FirebaseStorage } from "firebase/storage";
-
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -17,81 +14,67 @@ export interface CustomUser extends FirebaseUser {
     local_id?: string;
     avatarUrl?: string;
 }
-
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  db: Firestore;
-  auth: Auth;
-  storage: FirebaseStorage;
+  db: typeof db;
+  storage: any;
+  authInstance: Auth;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  db: db,
-  auth: auth,
-  storage: storage,
-  signIn: async () => { throw new Error('signIn function not ready'); },
-  signOut: async () => { throw new Error('signOut function not ready'); },
-});
+const AuthContext = createContext<Partial<AuthContextType>>({});
 
 export const useAuth = () => {
   return useContext(AuthContext);
 };
 
-interface AuthProviderProps {
-    children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   const pathname = usePathname();
-
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        try {
-            let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-            let userDoc = await getDoc(userDocRef);
-            let customData;
+        let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+        let userDoc = await getDoc(userDocRef);
+        let customData;
 
+        if (userDoc.exists()) {
+            customData = userDoc.data();
+        } else {
+            // Fallback to check professionals collection if not found in usuarios
+            userDocRef = doc(db, 'profesionales', firebaseUser.uid);
+            userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 customData = userDoc.data();
-            } else {
-                userDocRef = doc(db, 'profesionales', firebaseUser.uid);
-                userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    customData = userDoc.data();
-                    if (!customData.role) customData.role = 'Staff (Sin edición)';
+                // Assign a default role if not specified for professionals
+                if (!customData.role) {
+                  customData.role = 'Staff';
                 }
             }
-            
-            if (customData) {
-              const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
+        }
+        
+        if (customData) {
+          const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
 
-              setUser({
-                ...(firebaseUser as FirebaseUser),
-                displayName: customData.name || firebaseUser.displayName,
-                role: isSuperAdmin ? 'Administrador general' : customData.role,
-                permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
-                local_id: customData.local_id,
-                avatarUrl: customData.avatarUrl,
-                uid: firebaseUser.uid
-              });
+          setUser({
+            ...(firebaseUser as FirebaseUser),
+            displayName: customData.name || firebaseUser.displayName,
+            role: isSuperAdmin ? 'Administrador general' : customData.role,
+            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
+            local_id: customData.local_id,
+            avatarUrl: customData.avatarUrl,
+            uid: firebaseUser.uid
+          });
 
-            } else {
-                 console.warn(`No user document found for UID: ${firebaseUser.uid}. Treating as guest.`);
-                 setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
-            }
-        } catch (error) {
-            console.error("Error fetching user data:", error);
-            setUser(null);
+        } else {
+             console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid} en 'usuarios' o 'profesionales'.`);
+             // Set a default guest user if no data found to avoid app crash
+             setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
         }
       } else {
         setUser(null);
@@ -111,38 +94,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, [user, loading, pathname, router]);
 
-  const signIn = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    return userCredential.user;
-  };
-
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null); 
     router.push('/login');
   }
-
-  const value: AuthContextType = {
-    user,
-    loading,
-    signIn,
-    signOut,
-    auth,
-    db,
-    storage,
+  
+  const signIn = async (email: string, pass: string) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    return userCredential.user;
   };
 
-  const isAuthPage = pathname === '/login';
-  const isPublicBookingPage = pathname.startsWith('/book');
-
-  if (loading && !isAuthPage && !isPublicBookingPage) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
+  const value = {
+    user,
+    loading,
+    db,
+    authInstance: auth,
+    signIn,
+    signOut,
+  };
+  
   return (
     <AuthContext.Provider value={value}>
       {children}

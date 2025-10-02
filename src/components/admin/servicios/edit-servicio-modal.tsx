@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -97,10 +96,9 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   };
 
   const onSubmit = async (data: any) => {
+    if(!db) return;
     setIsSubmitting(true);
     try {
-        if(!db) throw new Error("Database not available");
-
         const dataToSave = {
             ...data,
             price: Number(data.price),
@@ -341,7 +339,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
      <CategoryModal 
       isOpen={isCategoryModalOpen}
       onClose={() => setIsCategoryModalOpen(false)}
-      onCategoryCreated={handleCategoryCreated}
+      onDataSaved={handleCategoryCreated}
       existingCategories={categories}
     />
     </>

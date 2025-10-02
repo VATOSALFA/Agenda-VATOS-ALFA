@@ -25,7 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Service } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface EditDefaultServiceComisionModalProps {
   service: Service;
@@ -36,6 +36,7 @@ interface EditDefaultServiceComisionModalProps {
 
 export function EditDefaultServiceComisionModal({ service, isOpen, onClose, onDataSaved }: EditDefaultServiceComisionModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { control, handleSubmit, reset } = useForm({
@@ -52,6 +53,7 @@ export function EditDefaultServiceComisionModal({ service, isOpen, onClose, onDa
 
 
   const onSubmit = async (data: any) => {
+    if (!db) return;
     setIsSubmitting(true);
     try {
         const serviceRef = doc(db, 'servicios', service.id);

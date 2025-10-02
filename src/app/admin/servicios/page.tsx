@@ -60,7 +60,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, doc, addDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -92,6 +92,7 @@ export default function ServicesPage() {
   const [queryKey, setQueryKey] = useState(0);
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios', queryKey);
+  const { db } = useAuth();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -151,6 +152,7 @@ export default function ServicesPage() {
 
 
   const handleSaveCategory = async () => {
+    if (!db) return;
     if (newCategoryName.trim() === '') {
         toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la categoría no puede estar vacío.' });
         return;
@@ -175,6 +177,7 @@ export default function ServicesPage() {
   }
 
   const handleToggleActive = async (service: Service) => {
+    if (!db) return;
     const newStatus = !service.active;
     try {
         const serviceRef = doc(db, 'servicios', service.id);
@@ -188,6 +191,7 @@ export default function ServicesPage() {
   };
 
   const handleDuplicateService = async (serviceToDuplicate: Service) => {
+    if (!db) return;
     try {
         await addDoc(collection(db, 'servicios'), {
             ...serviceToDuplicate,
@@ -204,7 +208,7 @@ export default function ServicesPage() {
   };
 
   const handleDeleteService = async () => {
-    if (!serviceToDelete) return;
+    if (!serviceToDelete || !db) return;
     try {
         await deleteDoc(doc(db, 'servicios', serviceToDelete.id));
         toast({ title: "Servicio eliminado con éxito" });

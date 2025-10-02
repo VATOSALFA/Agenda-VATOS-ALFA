@@ -25,7 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Product, Professional, Commission } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Separator } from '@/components/ui/separator';
 
 interface EditProductComisionModalProps {
@@ -46,6 +46,7 @@ const getDefaultValues = (product: Product, professionals: Professional[]) => {
 
 export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved, professionals }: EditProductComisionModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [masterValue, setMasterValue] = useState<number | ''>('');
   const [masterType, setMasterType] = useState<'%' | '$'>('%');
@@ -61,6 +62,7 @@ export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved
   }, [product, professionals, isOpen, reset]);
 
   const onSubmit = async (data: any) => {
+    if (!db) return;
     setIsSubmitting(true);
     try {
         const productRef = doc(db, 'productos', product.id);

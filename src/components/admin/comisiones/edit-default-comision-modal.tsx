@@ -25,7 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Professional } from '@/app/admin/comisiones/page';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface EditDefaultComisionModalProps {
   professional: Professional;
@@ -36,6 +36,7 @@ interface EditDefaultComisionModalProps {
 
 export function EditDefaultComisionModal({ professional, isOpen, onClose, onDataSaved }: EditDefaultComisionModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { control, handleSubmit, reset } = useForm({
@@ -51,6 +52,7 @@ export function EditDefaultComisionModal({ professional, isOpen, onClose, onData
   }, [professional, isOpen, reset]);
 
   const onSubmit = async (data: any) => {
+    if (!db) return;
     setIsSubmitting(true);
     try {
         const professionalRef = doc(db, 'profesionales', professional.id);

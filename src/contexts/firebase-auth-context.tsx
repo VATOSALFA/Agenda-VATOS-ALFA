@@ -42,19 +42,33 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [app, setApp] = useState<FirebaseApp | null>(null);
+  const [auth, setAuth] = useState<Auth | null>(null);
+  const [db, setDb] = useState<Firestore | null>(null);
+  const [storage, setStorage] = useState<FirebaseStorage | null>(null);
+
   const pathname = usePathname();
   const router = useRouter();
 
-  const app = getFirebaseApp();
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // This effect ensures Firebase is initialized on the client side.
+    const firebaseApp = getFirebaseApp();
+    const firebaseAuth = getAuth(firebaseApp);
+    const firestoreDb = getFirestore(firebaseApp);
+    const firebaseStorage = getStorage(firebaseApp);
+
+    setApp(firebaseApp);
+    setAuth(firebaseAuth);
+    setDb(firestoreDb);
+    setStorage(firebaseStorage);
+
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            if (!firestoreDb) {
+              throw new Error("Firestore is not initialized yet.");
+            }
+            const userDocRef = doc(firestoreDb, 'usuarios', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
             
             if (userDoc.exists()) {
@@ -85,7 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, [auth, db]);
+  }, []);
   
   useEffect(() => {
     if (loading) return;
@@ -100,10 +114,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user, loading, pathname, router]);
 
   const signIn = (email: string, pass: string) => {
+    if (!auth) throw new Error("Firebase Auth not initialized");
     return signInWithEmailAndPassword(auth, email, pass).then(cred => cred.user);
   };
 
   const signOut = async () => {
+    if (!auth) throw new Error("Firebase Auth not initialized");
     await firebaseSignOut(auth);
   };
 
@@ -118,7 +134,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
   };
 
-  if (loading) {
+  if (loading || !db || !auth || !storage || !app) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -127,7 +143,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
   
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={value as AuthContextType}>
       {children}
     </AuthContext.Provider>
   );

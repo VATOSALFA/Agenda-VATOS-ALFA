@@ -1,8 +1,5 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 // ESTE ARCHIVO ES PARA USO DEL LADO DEL SERVIDOR (cuando sea necesario) Y CONFIGURACIÓN BASE.
 // LA INICIALIZACIÓN DEL CLIENTE SE MANEJA EN `firebase-client.ts`.
@@ -18,15 +15,5 @@ export const firebaseConfig: FirebaseOptions = {
 };
 
 // --- INICIO DE DIAGNÓSTICO ---
-console.log("✅ Pilar 1/4 [Credenciales]: La configuración de Firebase se ha cargado:", firebaseConfig);
+console.log("✅ Pilar 1/4 [Credenciales]: La configuración de Firebase se ha cargado:", firebaseConfig.projectId ? "OK" : "¡FALLÓ! projectId está vacío.");
 // --- FIN DE DIAGNÓSTICO ---
-
-
-// Inicialización segura para evitar duplicados.
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-export { app, auth, db, storage };

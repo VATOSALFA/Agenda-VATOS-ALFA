@@ -1,7 +1,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin'; // Usar admin-sdk aquí
+import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit, setDoc } from 'firebase/firestore';
 import Twilio from 'twilio';
 import { parseISO, format } from 'date-fns';
 
@@ -23,7 +23,7 @@ async function handleClientResponse(from: string, messageBody: string) {
     }
 
     if (!action) {
-        return { handled: false };
+        return { handled: false, clientId: null };
     }
     
     const clientPhone = from.replace(/\D/g, '').slice(-10);
@@ -33,7 +33,7 @@ async function handleClientResponse(from: string, messageBody: string) {
 
     if (clientsSnapshot.empty) {
         console.log(`Client not found with phone: ${clientPhone}`);
-        return { handled: false };
+        return { handled: false, clientId: null };
     }
 
     const clientDoc = clientsSnapshot.docs[0];
@@ -62,7 +62,7 @@ async function handleClientResponse(from: string, messageBody: string) {
       return { handled: true, clientId: clientId };
     }
 
-    upcomingReservations.sort((a, b) => {
+    upcomingReservations.sort((a: any, b: any) => {
         const dateA = parseISO(`${a.fecha}T${a.hora_inicio}`);
         const dateB = parseISO(`${b.fecha}T${b.hora_inicio}`);
         return dateA.getTime() - dateB.getTime();
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
 
     const conversationId = from;
     const conversationRef = doc(db, 'conversations', conversationId);
-    const messagesCollectionRef = collection(conversationRef, 'messages');
+    const messagesCollectionRef = collection(db, 'conversations', conversationId, 'messages');
 
     const messageData: { [key: string]: any } = {
       senderId: 'client',
@@ -166,7 +166,8 @@ export async function POST(req: NextRequest) {
     
     const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
     
-    const conversationDocSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', conversationId), limit(1)));
+    const conversationDocSnap = await getDocs(query(collection(db, 'conversations'), where(doc(db, 'conversations', conversationId).id, '==', conversationId), limit(1)));
+
 
     if (conversationDocSnap.empty) {
         await setDoc(conversationRef, {

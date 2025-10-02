@@ -1,9 +1,11 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-import { initializeAuth, browserLocalPersistence } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+
+// ESTE ARCHIVO ES PARA USO DEL LADO DEL SERVIDOR (cuando sea necesario) Y CONFIGURACIÓN BASE.
+// LA INICIALIZACIÓN DEL CLIENTE SE MANEJA EN `firebase-client.ts`.
 
 const firebaseConfig: FirebaseOptions = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -15,30 +17,11 @@ const firebaseConfig: FirebaseOptions = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Log para depuración en el navegador del cliente
-if (typeof window !== 'undefined') {
-    console.log("Firebase Config:", firebaseConfig);
-    console.log("reCAPTCHA Key:", process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
-}
-
+// Inicialización segura para evitar duplicados.
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Inicializar App Check solo en el cliente
-if (typeof window !== 'undefined') {
-  try {
-    const appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!),
-      isTokenAutoRefreshEnabled: true
-    });
-    console.log("Firebase App Check inicializado.");
-  } catch (error) {
-    console.error("Error inicializando Firebase App Check:", error);
-  }
-}
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
-export const auth = initializeAuth(app, {
-  persistence: browserLocalPersistence
-});
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-export default app;
+export { app, auth, db, storage, firebaseConfig };

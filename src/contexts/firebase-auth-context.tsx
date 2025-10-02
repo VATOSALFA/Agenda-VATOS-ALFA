@@ -3,11 +3,14 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, doc, getDoc, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getFirebaseApp } from '@/lib/firebase-client';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { FirebaseApp } from 'firebase/app';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -18,9 +21,10 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  db: typeof db;
-  storage: any; // Mantener como any si no se usa mucho
-  authInstance: Auth;
+  db: Firestore;
+  storage: FirebaseStorage;
+  auth: Auth;
+  app: FirebaseApp;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -28,7 +32,11 @@ interface AuthContextType {
 const AuthContext = createContext<Partial<AuthContextType>>({});
 
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -36,6 +44,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+
+  const app = getFirebaseApp();
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -63,7 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
-            // Si hay un error, aún así establece al usuario para que no se quede bloqueado
             setUser(firebaseUser as CustomUser);
         }
       } else {
@@ -73,10 +85,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [auth, db]);
   
   useEffect(() => {
-    if (loading) return; // No hacer nada hasta que la carga inicial termine
+    if (loading) return;
 
     const isAuthPage = pathname === '/login';
     const isPublicPage = pathname.startsWith('/book');
@@ -99,7 +111,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     loading,
     db,
-    authInstance: auth,
+    storage,
+    auth,
+    app,
     signIn,
     signOut,
   };

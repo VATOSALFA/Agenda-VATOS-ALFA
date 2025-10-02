@@ -6,8 +6,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { LocalProvider } from '@/contexts/local-context';
 import Header from '@/components/layout/header';
-import { cn } from '@/lib/utils';
-import { usePathname } from 'next/navigation';
 import AppInitializer from '@/components/layout/app-initializer';
 
 
@@ -24,7 +22,9 @@ export default function RootLayout({
       <body>
           <AuthProvider>
             <LocalProvider>
-                <AppInitializer>{children}</AppInitializer>
+                <AppInitializer>
+                    {children}
+                </AppInitializer>
             </LocalProvider>
           </AuthProvider>
         <Toaster />

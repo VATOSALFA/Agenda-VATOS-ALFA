@@ -146,9 +146,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
   
+  // If not loading, and no user, and not on a public page, it must be the login page.
+  // Or, if there is a user, show the content.
+  // This logic ensures protected routes are not rendered until user is confirmed.
   return (
     <AuthContext.Provider value={value as AuthContextType}>
-      {children}
+      {(!loading && !user && !isPublicPage && !isAuthPage) ? null : children}
     </AuthContext.Provider>
   );
 };

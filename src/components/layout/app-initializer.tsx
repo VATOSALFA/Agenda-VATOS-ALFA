@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 export default function AppInitializer({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);

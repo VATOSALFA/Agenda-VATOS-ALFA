@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { doc, deleteDoc, updateDoc, increment, collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/firebase-auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { sendStockAlert } from "@/ai/flows/send-stock-alert-flow";
@@ -47,6 +47,7 @@ export default function InventoryPage() {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
+  const { db } = useAuth();
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -100,7 +101,7 @@ export default function InventoryPage() {
   }
 
   const handleDeleteProduct = async () => {
-    if (!productToDelete) return;
+    if (!productToDelete || !db) return;
     try {
       await deleteDoc(doc(db, "productos", productToDelete.id));
       toast({
@@ -121,6 +122,7 @@ export default function InventoryPage() {
   };
   
   const handleToggleActive = async (product: Product) => {
+    if (!db) return;
     try {
         const productRef = doc(db, 'productos', product.id);
         await updateDoc(productRef, { active: !product.active });
@@ -135,6 +137,7 @@ export default function InventoryPage() {
   };
 
   const handleStockChange = async (product: Product, amount: number) => {
+      if (!db) return;
       const newStock = (product.stock || 0) + amount;
       if (newStock < 0) {
           toast({ variant: 'destructive', title: 'Stock insuficiente' });
@@ -195,7 +198,7 @@ export default function InventoryPage() {
   };
   
   const handleDownloadRequest = async () => {
-    if (!authCode) {
+    if (!authCode || !db) {
         toast({ variant: 'destructive', title: 'Código requerido' });
         return;
     }

@@ -9,61 +9,82 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2, Loader2 } from 'lucide-react';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { ProductCategory } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, addDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
 
 interface CategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: (newCategoryId: string) => void;
+  existingCategories: ProductCategory[];
 }
 
-export function CategoryModal({ isOpen, onClose, onDataSaved }: CategoryModalProps) {
+export function CategoryModal({ isOpen, onClose, onDataSaved, existingCategories }: CategoryModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [queryKey, setQueryKey] = useState(0);
-
-  const { data: categories, loading } = useFirestoreQuery<ProductCategory>('categorias_productos', queryKey);
 
   const handleAddCategory = async () => {
     if (newCategoryName.trim() === '') {
-        toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la categoría no puede estar vacío.' });
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'El nombre de la categoría no puede estar vacío.',
+        });
         return;
     }
     
     setIsSubmitting(true);
     try {
-        const querySnapshot = await getDocs(collection(db, 'categorias_productos'));
-        const order = querySnapshot.size;
-
+      if(!db) throw new Error("Database not available");
         const docRef = await addDoc(collection(db, 'categorias_productos'), {
             name: newCategoryName.trim(),
-            order,
+            order: existingCategories.length,
             created_at: Timestamp.now(),
         });
+        
         setNewCategoryName('');
-        toast({ title: 'Categoría agregada' });
         onDataSaved(docRef.id);
+        toast({
+            title: 'Categoría agregada',
+            description: `La categoría "${newCategoryName.trim()}" ha sido creada.`,
+        });
         onClose();
     } catch (error) {
         console.error("Error creating category:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear la categoría.' });
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'No se pudo crear la categoría.',
+        });
     } finally {
         setIsSubmitting(false);
     }
   };
   
   const handleDeleteCategory = async (idToDelete: string) => {
-     try {
-        await deleteDoc(doc(db, 'categorias_productos', idToDelete));
-        toast({ title: 'Categoría eliminada' });
-        setQueryKey(prev => prev + 1);
-     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar la categoría.' });
-     }
+    const categoryToDelete = existingCategories.find(c => c.id === idToDelete);
+    if (categoryToDelete) {
+        try {
+            if(!db) throw new Error("Database not available");
+            await deleteDoc(doc(db, 'categorias_productos', idToDelete));
+            toast({
+                title: 'Categoría eliminada',
+                description: `La categoría "${categoryToDelete.name}" ha sido eliminada.`,
+            });
+            // Refetch is handled by parent's onDataSaved which triggers a queryKey update
+            onDataSaved(''); // Pass empty string or a specific signal to refetch
+        } catch (error) {
+            console.error("Error deleting category:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'No se pudo eliminar la categoría.',
+            });
+        }
+    }
   };
 
   return (
@@ -82,10 +103,9 @@ export function CategoryModal({ isOpen, onClose, onDataSaved }: CategoryModalPro
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                        disabled={isSubmitting}
                     />
                     <Button variant="outline" onClick={handleAddCategory} disabled={isSubmitting}>
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4"/>}
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
                         Agregar
                     </Button>
                 </div>
@@ -93,8 +113,7 @@ export function CategoryModal({ isOpen, onClose, onDataSaved }: CategoryModalPro
 
             <ScrollArea className="h-48 rounded-md border">
                 <div className="p-4">
-                {loading && <div className="flex justify-center items-center h-full"><Loader2 className="h-6 w-6 animate-spin"/></div>}
-                {!loading && categories.map((category) => (
+                {existingCategories.map((category) => (
                     <div key={category.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
                         <span className="text-sm">{category.name}</span>
                         <Button 
@@ -107,7 +126,7 @@ export function CategoryModal({ isOpen, onClose, onDataSaved }: CategoryModalPro
                         </Button>
                     </div>
                 ))}
-                 {!loading && categories.length === 0 && (
+                 {existingCategories.length === 0 && (
                     <p className="text-center text-sm text-muted-foreground py-4">No hay categorías creadas.</p>
                  )}
                 </div>

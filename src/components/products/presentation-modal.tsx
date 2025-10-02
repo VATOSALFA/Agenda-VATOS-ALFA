@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2, Loader2 } from 'lucide-react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { ProductPresentation } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, addDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
 
 interface PresentationModalProps {
@@ -25,10 +25,12 @@ export function PresentationModal({ isOpen, onClose, onDataSaved }: Presentation
   const [newPresentationName, setNewPresentationName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [queryKey, setQueryKey] = useState(0);
+  const { db } = useAuth();
 
   const { data: presentations, loading } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
 
   const handleAddPresentation = async () => {
+    if(!db) return;
     if (newPresentationName.trim() === '') {
         toast({ variant: 'destructive', title: 'Error', description: 'El nombre del formato no puede estar vacío.' });
         return;
@@ -57,6 +59,7 @@ export function PresentationModal({ isOpen, onClose, onDataSaved }: Presentation
   };
   
   const handleDeletePresentation = async (idToDelete: string) => {
+     if(!db) return;
      try {
         await deleteDoc(doc(db, 'formatos_productos', idToDelete));
         toast({ title: 'Formato eliminado' });

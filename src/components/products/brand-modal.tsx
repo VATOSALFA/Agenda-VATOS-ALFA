@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2, Loader2 } from 'lucide-react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { ProductBrand } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, addDoc, deleteDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
 
 interface BrandModalProps {
@@ -25,10 +25,12 @@ export function BrandModal({ isOpen, onClose, onDataSaved }: BrandModalProps) {
   const [newBrandName, setNewBrandName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [queryKey, setQueryKey] = useState(0);
+  const { db } = useAuth();
 
   const { data: brands, loading } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
 
   const handleAddBrand = async () => {
+    if (!db) return;
     if (newBrandName.trim() === '') {
         toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la marca no puede estar vacío.' });
         return;
@@ -57,6 +59,7 @@ export function BrandModal({ isOpen, onClose, onDataSaved }: BrandModalProps) {
   };
   
   const handleDeleteBrand = async (idToDelete: string) => {
+     if (!db) return;
      try {
         await deleteDoc(doc(db, 'marcas_productos', idToDelete));
         toast({ title: 'Marca eliminada' });

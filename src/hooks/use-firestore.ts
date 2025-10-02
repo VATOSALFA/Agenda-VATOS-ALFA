@@ -55,6 +55,7 @@ export function useFirestoreQuery<T>(
     
     try {
         const q = query(collection(db, collectionName), ...finalConstraints);
+        console.log(`✅ Pilar 4/4 [Petición de Datos]: Ejecutando consulta para la colección: "${collectionName}"`);
         
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
           const items = querySnapshot.docs.map((doc) => ({
@@ -65,14 +66,14 @@ export function useFirestoreQuery<T>(
           setLoading(false);
         }, (err) => {
           setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-          console.error(`Error fetching from ${collectionName}:`, err);
+          console.error(`❌ Pilar 4/4 [Petición de Datos]: Error escuchando la colección ${collectionName}:`, err);
           setLoading(false);
         });
 
         return () => unsubscribe();
 
     } catch (err: any) {
-        console.error(`Firestore query setup error for ${collectionName}:`, err);
+        console.error(`❌ Pilar 4/4 [Petición de Datos]: Error en la configuración de la consulta para ${collectionName}:`, err);
         setError(err);
         setLoading(false);
     }

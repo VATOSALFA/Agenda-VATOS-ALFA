@@ -42,33 +42,32 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [app, setApp] = useState<FirebaseApp | null>(null);
-  const [auth, setAuth] = useState<Auth | null>(null);
-  const [db, setDb] = useState<Firestore | null>(null);
-  const [storage, setStorage] = useState<FirebaseStorage | null>(null);
+  
+  // Firebase services are initialized once and memoized.
+  const [firebaseServices, setFirebaseServices] = useState<{
+    app: FirebaseApp;
+    auth: Auth;
+    db: Firestore;
+    storage: FirebaseStorage;
+  } | null>(null);
 
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    // This effect ensures Firebase is initialized on the client side.
-    const firebaseApp = getFirebaseApp();
-    const firebaseAuth = getAuth(firebaseApp);
-    const firestoreDb = getFirestore(firebaseApp);
-    const firebaseStorage = getStorage(firebaseApp);
+    // This effect initializes Firebase and sets up the auth state listener.
+    // It runs only once.
+    const app = getFirebaseApp();
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    setFirebaseServices({ app, auth, db, storage });
 
-    setApp(firebaseApp);
-    setAuth(firebaseAuth);
-    setDb(firestoreDb);
-    setStorage(firebaseStorage);
-
-    const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setLoading(true); // Set loading to true whenever auth state might change
       if (firebaseUser) {
         try {
-            if (!firestoreDb) {
-              throw new Error("Firestore is not initialized yet.");
-            }
-            const userDocRef = doc(firestoreDb, 'usuarios', firebaseUser.uid);
+            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
             
             if (userDoc.exists()) {
@@ -90,18 +89,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
-            setUser(firebaseUser as CustomUser);
+            setUser(firebaseUser as CustomUser); // Fallback to basic user
         }
       } else {
         setUser(null);
       }
-      setLoading(false);
+      setLoading(false); // Set loading to false after user state is resolved
     });
 
     return () => unsubscribe();
   }, []);
   
   useEffect(() => {
+    // This effect handles redirection based on auth state.
     if (loading) return;
 
     const isAuthPage = pathname === '/login';
@@ -114,27 +114,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user, loading, pathname, router]);
 
   const signIn = (email: string, pass: string) => {
-    if (!auth) throw new Error("Firebase Auth not initialized");
-    return signInWithEmailAndPassword(auth, email, pass).then(cred => cred.user);
+    if (!firebaseServices?.auth) throw new Error("Firebase Auth not initialized");
+    return signInWithEmailAndPassword(firebaseServices.auth, email, pass).then(cred => cred.user);
   };
 
   const signOut = async () => {
-    if (!auth) throw new Error("Firebase Auth not initialized");
-    await firebaseSignOut(auth);
+    if (!firebaseServices?.auth) throw new Error("Firebase Auth not initialized");
+    await firebaseSignOut(firebaseServices.auth);
   };
 
   const value = {
     user,
     loading,
-    db,
-    storage,
-    auth,
-    app,
+    db: firebaseServices?.db,
+    storage: firebaseServices?.storage,
+    auth: firebaseServices?.auth,
+    app: firebaseServices?.app,
     signIn,
     signOut,
   };
+  
+  const isAuthPage = pathname === '/login';
+  const isPublicPage = pathname.startsWith('/book');
 
-  if (loading || !db || !auth || !storage || !app) {
+  // While loading, and not on a public or auth page, show a full-screen loader.
+  if (loading && !isAuthPage && !isPublicPage) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

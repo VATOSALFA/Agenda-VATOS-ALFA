@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -81,6 +80,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
   }
 
   const onSubmit = async () => {
+    if (!db) return;
     if (specialDays.length === 0) {
         toast({ variant: 'destructive', title: 'No hay días para guardar.' });
         return;

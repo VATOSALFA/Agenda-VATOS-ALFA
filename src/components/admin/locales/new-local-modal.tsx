@@ -131,6 +131,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
   }, [local, form]);
 
   const onSubmit = async (data: LocalFormData) => {
+    if (!db) return;
     setIsSubmitting(true);
     try {
       if (isEditMode && local) {

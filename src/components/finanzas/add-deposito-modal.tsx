@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ interface AddDepositoModalProps {
 export function AddDepositoModal({ isOpen, onOpenChange }: AddDepositoModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user } = useAuth();
 
   const form = useForm<DepositoFormData>({
     resolver: zodResolver(depositoSchema),
@@ -143,4 +145,3 @@ export function AddDepositoModal({ isOpen, onOpenChange }: AddDepositoModalProps
     </Dialog>
   );
 }
-

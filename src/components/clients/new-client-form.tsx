@@ -31,7 +31,6 @@ import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sp
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
-import { db } from '@/lib/firebase';
 import { Skeleton } from '../ui/skeleton';
 
 
@@ -117,6 +116,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   
   useEffect(() => {
     const fetchSettings = async () => {
+        if(!db) return;
         setIsLoadingSettings(true);
         const settingsRef = doc(db, 'configuracion', 'agenda');
         const docSnap = await getDoc(settingsRef);
@@ -137,7 +137,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         setIsLoadingSettings(false);
     };
     fetchSettings();
-  }, []);
+  }, [db]);
 
   const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
     if (!text || text.trim().length <= 2) return;

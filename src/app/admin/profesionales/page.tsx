@@ -73,7 +73,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Local } from '@/components/admin/locales/new-local-modal';
 
@@ -207,6 +207,7 @@ export default function ProfessionalsPage() {
   const { data: professionalsData, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const [professionals, setProfessionals] = useState<Profesional[]>([]);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+  const { db } = useAuth();
 
   const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
   const [specialDayProfessional, setSpecialDayProfessional] = useState<Profesional | null>(null);
@@ -254,6 +255,7 @@ export default function ProfessionalsPage() {
   };
 
   const handleToggleActive = async (id: string, active: boolean) => {
+    if (!db) return;
     try {
         const profRef = doc(db, 'profesionales', id);
         await updateDoc(profRef, { active });
@@ -281,6 +283,7 @@ export default function ProfessionalsPage() {
       const newOrder = arrayMove(professionals, oldIndex, newIndex);
       setProfessionals(newOrder);
 
+      if (!db) return;
       try {
         const batch = writeBatch(db);
         newOrder.forEach((prof, index) => {

@@ -46,7 +46,9 @@ export function useFirestoreQuery<T>(
 
   useEffect(() => {
     if (!db || !isQueryActive) {
-      setLoading(true);
+      // Don't start fetching if db is not ready or query is not active
+      // but ensure loading is false if it was previously true
+      if(loading) setLoading(false);
       return;
     }
 
@@ -55,7 +57,6 @@ export function useFirestoreQuery<T>(
     
     try {
         const q = query(collection(db, collectionName), ...finalConstraints);
-        console.log(`✅ Pilar 4/4 [Petición de Datos]: Ejecutando consulta para la colección: "${collectionName}"`);
         
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
           const items = querySnapshot.docs.map((doc) => ({
@@ -66,14 +67,14 @@ export function useFirestoreQuery<T>(
           setLoading(false);
         }, (err) => {
           setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-          console.error(`❌ Pilar 4/4 [Petición de Datos]: Error escuchando la colección ${collectionName}:`, err);
+          console.error(`Error listening to collection ${collectionName}:`, err);
           setLoading(false);
         });
 
         return () => unsubscribe();
 
     } catch (err: any) {
-        console.error(`❌ Pilar 4/4 [Petición de Datos]: Error en la configuración de la consulta para ${collectionName}:`, err);
+        console.error(`Error setting up query for ${collectionName}:`, err);
         setError(err);
         setLoading(false);
     }

@@ -4,7 +4,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { initializeAuth, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,8 +16,15 @@ const firebaseConfig = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Initialize App Check
+if (typeof window !== 'undefined') {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!),
+    isTokenAutoRefreshEnabled: true
+  });
+}
 
 export const auth = initializeAuth(app, {
   persistence: browserLocalPersistence
@@ -25,4 +32,3 @@ export const auth = initializeAuth(app, {
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;
-

@@ -3,7 +3,6 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDoc, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFirebaseApp } from '@/lib/firebase-client';
@@ -43,7 +42,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Firebase services are initialized once and memoized.
   const [firebaseServices, setFirebaseServices] = useState<{
     app: FirebaseApp;
     auth: Auth;
@@ -55,8 +53,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
 
   useEffect(() => {
-    // This effect initializes Firebase and sets up the auth state listener.
-    // It runs only once.
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -64,7 +60,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setFirebaseServices({ app, auth, db, storage });
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true); // Set loading to true whenever auth state might change
       if (firebaseUser) {
         try {
             const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
@@ -72,7 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             if (userDoc.exists()) {
                 const customData = userDoc.data();
-                const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
+                const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'vatosalfa@gmail.com';
 
                 setUser({
                     ...(firebaseUser as FirebaseUser),
@@ -89,29 +84,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
-            setUser(firebaseUser as CustomUser); // Fallback to basic user
+            setUser(firebaseUser as CustomUser);
         }
       } else {
         setUser(null);
       }
-      setLoading(false); // Set loading to false after user state is resolved
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
   
-  useEffect(() => {
-    // This effect handles redirection based on auth state.
-    if (loading) return;
+  const isPublicPage = pathname.startsWith('/book');
+  const isAuthPage = pathname === '/login';
 
-    const isAuthPage = pathname === '/login';
-    const isPublicPage = pathname.startsWith('/book');
+  useEffect(() => {
+    if (loading) return; 
 
     if (!user && !isAuthPage && !isPublicPage) {
         router.push('/login');
     }
-    
-  }, [user, loading, pathname, router]);
+    if (user && isAuthPage) {
+        router.push('/');
+    }
+  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signIn = (email: string, pass: string) => {
     if (!firebaseServices?.auth) throw new Error("Firebase Auth not initialized");
@@ -134,11 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
   };
   
-  const isAuthPage = pathname === '/login';
-  const isPublicPage = pathname.startsWith('/book');
-
-  // While loading, and not on a public or auth page, show a full-screen loader.
-  if (loading && !isAuthPage && !isPublicPage) {
+  if (loading) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -146,12 +138,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
   
-  // If not loading, and no user, and not on a public page, it must be the login page.
-  // Or, if there is a user, show the content.
-  // This logic ensures protected routes are not rendered until user is confirmed.
+  if (!user && !isAuthPage && !isPublicPage) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-muted/40">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
   return (
     <AuthContext.Provider value={value as AuthContextType}>
-      {(!loading && !user && !isPublicPage && !isAuthPage) ? null : children}
+      {children}
     </AuthContext.Provider>
   );
 };

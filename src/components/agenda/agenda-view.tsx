@@ -55,6 +55,7 @@ import Image from 'next/image';
 import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock } from '@/lib/types';
 
 interface EmpresaSettings {
+    logo_url?: string;
     receipt_logo_url?: string;
 }
 
@@ -151,7 +152,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
-  const receiptLogoUrl = empresaData?.[0]?.receipt_logo_url;
+  const logoUrl = empresaData?.[0]?.logo_url;
 
 
   useEffect(() => {
@@ -596,9 +597,9 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
           )}
           <div className="mt-auto p-4 flex justify-center">
             {empresaLoading ? (
-                <Skeleton className="h-24 w-24 rounded-full" />
-            ) : receiptLogoUrl ? (
-                <Image src={receiptLogoUrl} alt="Logo de la empresa" width={300} height={300} className="object-contain" />
+                <Skeleton className="h-24 w-full" />
+            ) : logoUrl ? (
+                <Image src={logoUrl} alt="Logo de la empresa" width={150} height={75} className="object-contain" />
             ) : null}
           </div>
         </aside>
@@ -793,14 +794,14 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
       
       <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
           <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-            <NewReservationForm
+              <NewReservationForm
               isOpen={isReservationModalOpen}
               onOpenChange={setIsReservationModalOpen}
               isDialogChild
               onFormSubmit={onDataRefresh}
               initialData={reservationInitialData}
               isEditMode={!!reservationInitialData?.id}
-            />
+              />
           </DialogContent>
       </Dialog>
       
@@ -861,4 +862,3 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   );
 }
 
-    

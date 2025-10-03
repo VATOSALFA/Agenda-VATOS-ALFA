@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -35,7 +36,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Local } from '@/lib/types';
 import { collection, addDoc, deleteDoc, doc, Timestamp, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +69,7 @@ const whatsappSchema = z.object({
 type WhatsappFormData = z.infer<typeof whatsappSchema>;
 
 export default function WhatsappPage() {
+  const { db } = useAuth();
   const [queryKey, setQueryKey] = useState(0);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
   const { data: whatsappConfigs, loading: configsLoading } = useFirestoreQuery<WhatsappConfig>('whatsapp_configuraciones', queryKey);
@@ -87,6 +89,7 @@ export default function WhatsappPage() {
   });
 
   const onSubmit = async (data: WhatsappFormData) => {
+    if (!db) return;
     try {
       await addDoc(collection(db, 'whatsapp_configuraciones'), {
         ...data,
@@ -102,7 +105,7 @@ export default function WhatsappPage() {
   };
   
   const handleDelete = async () => {
-    if (!configToDelete) return;
+    if (!configToDelete || !db) return;
     try {
         await deleteDoc(doc(db, 'whatsapp_configuraciones', configToDelete.id));
         toast({ title: 'Configuración eliminada' });
@@ -121,6 +124,7 @@ export default function WhatsappPage() {
   }
 
   const handleSaveTemplate = async (templateId: string, data: { name: string, body: string, contentSid: string }) => {
+    if (!db) return;
     try {
         const templateRef = doc(db, 'whatsapp_templates', templateId);
         await setDoc(templateRef, data, { merge: true });

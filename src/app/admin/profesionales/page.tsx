@@ -72,7 +72,7 @@ import { SpecialDayModal } from '@/components/admin/profesionales/special-day-mo
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Local } from '@/components/admin/locales/new-local-modal';

@@ -7,7 +7,7 @@ import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import type { Product } from '@/lib/types';
 
 import {
@@ -36,6 +36,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
   const [parsedData, setParsedData] = useState<ParsedProduct[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
+  const { db } = useAuth();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -113,6 +114,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
   });
 
   const handleUpload = async () => {
+    if (!db) return;
     if (parsedData.length === 0) {
         toast({ variant: 'destructive', title: 'No hay datos', description: 'No hay productos válidos para importar.' });
         return;

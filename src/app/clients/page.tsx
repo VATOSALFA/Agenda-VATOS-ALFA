@@ -29,7 +29,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { deleteDoc, doc, where, Timestamp, collection, query, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -119,7 +118,7 @@ const FiltersSidebar = ({
 }
 
 export default function ClientsPage() {
-  const { user } = useAuth();
+  const { user, db } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -268,7 +267,7 @@ export default function ClientsPage() {
   }
 
   const handleDeleteClient = async () => {
-    if (!clientToDelete || deleteConfirmationText !== 'ELIMINAR') return;
+    if (!clientToDelete || deleteConfirmationText !== 'ELIMINAR' || !db) return;
     try {
       await deleteDoc(doc(db, "clientes", clientToDelete.id));
       toast({
@@ -366,7 +365,7 @@ export default function ClientsPage() {
   };
 
   const handleDownloadRequest = async () => {
-    if (!authCode) {
+    if (!authCode || !db) {
         toast({ variant: 'destructive', title: 'Código requerido' });
         return;
     }

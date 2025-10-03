@@ -1,9 +1,9 @@
-
 // src/lib/firebase.ts
-import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
+// THIS FILE IS FOR SERVER-SIDE USE (when necessary) AND BASE CONFIGURATION.
+// CLIENT-SIDE INITIALIZATION IS HANDLED IN `firebase-client.ts`.
+// DO NOT EXPORT `db` OR `auth` FROM THIS FILE FOR CLIENT-SIDE USE.
 
-// ESTE ARCHIVO ES PARA USO DEL LADO DEL SERVIDOR (cuando sea necesario) Y CONFIGURACIÓN BASE.
-// LA INICIALIZACIÓN DEL CLIENTE SE MANEJA EN `firebase-client.ts`.
+import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 
 export const firebaseConfig: FirebaseOptions = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -15,6 +15,6 @@ export const firebaseConfig: FirebaseOptions = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// --- INICIO DE DIAGNÓSTICO ---
+// --- STARTUP DIAGNOSTIC ---
 console.log("✅ Pilar 1/4 [Credenciales]: La configuración de Firebase se ha cargado:", firebaseConfig.projectId ? "OK" : "¡FALLÓ! projectId está vacío.");
-// --- FIN DE DIAGNÓSTICO ---
+// --- END DIAGNOSTIC ---

@@ -3,13 +3,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check for authenticated users (staff, admin, etc.)
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // --- PUBLIC BOOKING FLOW ---
-    // These collections need to be publicly readable for the client booking process.
+    // Public read-only for booking flow
     match /locales/{localId} {
       allow read;
       allow write: if isSignedIn();
@@ -18,46 +16,38 @@ service cloud.firestore {
       allow read;
       allow write: if isSignedIn();
     }
-    match /profesionales/{professionalId} {
+     match /categorias_servicios/{categoryId} {
       allow read;
       allow write: if isSignedIn();
     }
-    match /categorias_servicios/{categoryId} {
-      allow read;
-      allow write: if isSignedIn();
-    }
-    match /bloqueos_horario/{blockId} {
-      allow read; // Public read is needed to check for available slots
-      allow write: if isSignedIn();
+    match /profesionales/{profesionalId} {
+        allow read;
+        allow write: if isSignedIn();
     }
 
-    // --- RESERVATIONS ---
-    // Anyone can create a reservation (public booking flow).
-    // Only signed-in users can read, update, or delete them.
+    // Authenticated users can create reservations
     match /reservas/{reservationId} {
-      allow create; // Allows public booking
+      allow create;
       allow read, update, delete: if isSignedIn();
     }
     
-    // --- CLIENTS ---
-    // Anyone can create a client record during booking.
-    // Only signed-in users can view or modify client data.
-    match /clientes/{clienteId} {
-       allow create;
-       allow read, update, delete: if isSignedIn();
+    match /bloqueos_horario/{blockId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // Clients can be created by anyone during booking, but only read/updated by auth users.
+    match /clientes/{clientId} {
+        allow create;
+        allow read, update, delete: if isSignedIn();
     }
 
-    // --- CONVERSATIONS ---
-    // The Twilio webhook writes here, so it must be public.
-    // Only signed-in users can read the conversation history.
+    // Conversations can be written to by anyone (for webhooks) but only read by signed-in users
     match /conversations/{conversationId}/{message=**} {
       allow read: if isSignedIn();
       allow write;
     }
 
-    // --- DEFAULT SECURE RULE ---
-    // All other collections not specified above require authentication
-    // for any type of access. This is a secure default.
+    // All other collections require authentication
     match /{document=**} {
       allow read, write: if isSignedIn();
     }

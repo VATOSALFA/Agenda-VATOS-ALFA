@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -31,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { db } from "@/lib/firebase";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import * as XLSX from 'xlsx';
@@ -118,7 +115,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
 }
 
 export default function InvoicedSalesPage() {
-    const { user } = useAuth();
+    const { user, db } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
@@ -304,7 +301,7 @@ export default function InvoicedSalesPage() {
     };
 
     const handleDeleteSale = async () => {
-        if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR') return;
+        if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR' || !db) return;
         try {
             await deleteDoc(doc(db, 'ventas', saleToDelete.id));
             toast({
@@ -359,7 +356,7 @@ export default function InvoicedSalesPage() {
     };
     
     const handleDownloadRequest = async () => {
-        if (!authCode) {
+        if (!authCode || !db) {
             toast({ variant: 'destructive', title: 'Código requerido' });
             return;
         }
@@ -394,7 +391,7 @@ export default function InvoicedSalesPage() {
     }
 
     const handleAuthCodeSubmit = async () => {
-        if (!authCode) {
+        if (!authCode || !db) {
             toast({ variant: 'destructive', title: 'Código requerido' });
             return;
         }

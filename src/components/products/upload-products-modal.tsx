@@ -7,8 +7,8 @@ import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
 import type { Product } from '@/lib/types';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 import {
   Dialog,
@@ -23,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface UploadProductsModalProps {
   isOpen: boolean;

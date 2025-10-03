@@ -2,39 +2,33 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Helper function to check if a user is signed in
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // Publicly readable folders for website assets
-    match /empresa/{fileName} {
+    // PUBLIC READ: Allow public read access for logos and avatars
+    match /empresa/{allPaths=**} {
       allow read;
-      allow write: if isSignedIn();
+      allow write: if request.auth != null;
     }
-    match /receipt_logos/{fileName} {
+    match /receipt_logos/{allPaths=**} {
       allow read;
-      allow write: if isSignedIn();
+      allow write: if request.auth != null;
     }
-    match /profesionales/{fileName} {
+    match /profesionales/{allPaths=**} {
       allow read;
-      allow write: if isSignedIn();
+      allow write: if request.auth != null;
     }
-     match /productos/{allPaths=**} {
+    match /productos/{allPaths=**} {
       allow read;
-      allow write: if isSignedIn();
+      allow write: if request.auth != null;
     }
 
-    // Webhooks from Twilio can write here, but reading is restricted
-    match /whatsapp_media/{fileName} {
+    // PUBLIC WRITE for WhatsApp media from webhooks
+    match /whatsapp_media/{allPaths=**} {
       allow write;
-      allow read: if isSignedIn();
+      allow read: if request.auth != null;
     }
 
-    // Default deny for any other path not explicitly defined
+    // DEFAULT DENY: Deny read/write access to all other paths by default
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
   }
 }

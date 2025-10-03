@@ -1,9 +1,10 @@
-
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Regla general: Solo permitir acceso si el usuario está autenticado Y la petición viene de una app validada por App Check.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.app != null;
     }
   }
 }

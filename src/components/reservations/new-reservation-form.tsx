@@ -155,7 +155,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(createReservationSchema(isEditMode)),
-    mode: 'onChange',
+    mode: 'onBlur',
     defaultValues: {
       notas: '',
       nota_interna: '',
@@ -204,7 +204,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     const hora_fin = `${hora_fin_hora}:${hora_fin_minuto}`;
     const formattedDate = format(fecha, 'yyyy-MM-dd');
     
-    // Check for client simultaneous reservations
     if (!agendaSettings?.simultaneousReservations && values.cliente_id) {
         const clientConflict = allReservations.some(r => {
             if(r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
@@ -218,7 +217,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             return;
         }
     }
-
 
     items.forEach((item, index) => {
       if (!item.barbero_id) return;
@@ -262,17 +260,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     });
     setAvailabilityErrors(errors);
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
+  
+  const watchedValues = form.watch();
 
   useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      // Only validate when a relevant field changes
-      if (name && (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name as string))) {
-        validateItemsAvailability(value as ReservationFormData);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, validateItemsAvailability]);
-
+    validateItemsAvailability(watchedValues as ReservationFormData);
+  }, [watchedValues, validateItemsAvailability]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -339,7 +332,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
   }, [initialData, form, isOpen, services, isEditMode, selectedLocalId]);
   
-  // Recalculate price and end time when items change
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (
@@ -386,7 +378,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   async function onSubmit(data: any) {
     setIsSubmitting(true);
     
-    // Final validation check before submitting
     if (Object.keys(availabilityErrors).length > 0) {
         toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado."});
         setIsSubmitting(false);
@@ -402,7 +393,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           const service = services.find(s => s.id === item.servicio);
           return {
               servicio: service?.name || '',
-              nombre: service?.name || '', // Add 'nombre' for consistency
+              nombre: service?.name || '',
               barbero_id: item.barbero_id,
               precio: service?.price || 0,
               duracion: service?.duration || 0,
@@ -441,7 +432,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
       }
 
-      // Send WhatsApp notification on creation if checkbox is checked
       if (wasCreation && data.notifications?.whatsapp_notification) {
           const client = clients.find(c => c.id === data.cliente_id);
           const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
@@ -460,7 +450,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                       '6': professional.name,
                   }
               });
-              // Do not show a toast here to avoid spamming the user
           }
       }
 
@@ -481,7 +470,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    if(setClientQueryKey) setClientQueryKey(prev => prev + 1); // Refetch clients
+    if(setClientQueryKey) setClientQueryKey(prev => prev + 1);
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
@@ -554,7 +543,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         </div>
 
         <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
-          {/* Main reservation fields */}
           <div className="space-y-4">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
               <FormField
@@ -720,7 +708,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             </div>
           </div>
 
-          {/* Additional Info */}
           <Accordion type="single" collapsible className="px-6">
             <AccordionItem value="item-1">
                 <AccordionTrigger>Información adicional</AccordionTrigger>
@@ -791,3 +778,5 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
+
+    

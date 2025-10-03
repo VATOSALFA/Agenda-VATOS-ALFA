@@ -35,7 +35,7 @@ const settingsLinks = [
 ];
 
 const advancedLinks = [
-  { href: '/settings/emails', label: 'E-Mails', icon: Mail, permission: 'ver_configuracion_emails' },
+  { href: '/settings/recordatorios', label: 'E-Mails y Recordatorios', icon: Mail, permission: 'ver_configuracion_emails' },
   { href: '/settings/integrations', label: 'Integraciones', icon: Component, permission: 'ver_configuracion_integraciones' },
   { href: '/settings/clients-settings', label: 'Clientes', icon: Users, permission: 'ver_configuracion_clientes' },
   { href: '/settings/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },

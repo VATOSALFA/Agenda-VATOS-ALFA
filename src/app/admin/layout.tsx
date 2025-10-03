@@ -30,7 +30,7 @@ const adminLinks = [
 ];
 
 const advancedLinks = [
-  { href: '/admin/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
+  { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
   { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
 ]
 

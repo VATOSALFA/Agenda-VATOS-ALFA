@@ -7,17 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Form, FormItem, FormLabel, FormControl } from '@/components/ui/form';
-
 
 interface ReminderTiming {
     type: 'day_before' | 'same_day';
@@ -43,6 +41,7 @@ const notificationTypes = [
 export default function RecordatoriosPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     
     const form = useForm<ReminderSettings>({
         defaultValues: {
@@ -50,19 +49,19 @@ export default function RecordatoriosPage() {
         }
     });
 
-    const { data: settingsData, loading: settingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion');
-
     useEffect(() => {
-        if (!settingsLoading && settingsData.length > 0) {
-            const recordatoriosSettings = settingsData.find(s => (s as any).id === 'recordatorios');
-            if (recordatoriosSettings) {
-                form.reset(recordatoriosSettings);
+        const fetchSettings = async () => {
+            setIsLoading(true);
+            const settingsRef = doc(db, 'configuracion', 'recordatorios');
+            const docSnap = await getDoc(settingsRef);
+            if (docSnap.exists()) {
+                form.reset(docSnap.data() as ReminderSettings);
             }
-        }
-    }, [settingsData, settingsLoading, form]);
+            setIsLoading(false);
+        };
+        fetchSettings();
+    }, [form]);
 
-
-    const isLoading = settingsLoading;
 
     const watchedNotifications = useWatch({ control: form.control, name: "notifications" });
 
@@ -71,7 +70,6 @@ export default function RecordatoriosPage() {
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             
-            // Build a clean object to save, removing any undefined or empty values before sending to Firestore
             const dataToSave: ReminderSettings = {
                 notifications: {}
             };
@@ -90,7 +88,6 @@ export default function RecordatoriosPage() {
                             type: notificationConfig.timing.type || 'day_before',
                         };
 
-                        // Only include hours_before if it's a valid number and type is 'same_day'
                         if (notificationConfig.timing.type === 'same_day' && typeof notificationConfig.timing.hours_before === 'number' && !isNaN(notificationConfig.timing.hours_before)) {
                             timingData.hours_before = notificationConfig.timing.hours_before;
                         }

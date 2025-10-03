@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AuthCode } from '@/lib/types';
 
@@ -69,6 +70,7 @@ export default function AuthCodesSettingsPage() {
     const [queryKey, setQueryKey] = useState(0);
 
     const { data: authCodes, loading } = useFirestoreQuery<AuthCode>('codigos_autorizacion', queryKey);
+    const { db } = useAuth();
 
     const form = useForm({
         defaultValues: {
@@ -106,7 +108,7 @@ export default function AuthCodesSettingsPage() {
     }
     
     const handleDeleteCode = async () => {
-        if (!codeToDelete) return;
+        if (!codeToDelete || !db) return;
         try {
             await deleteDoc(doc(db, 'codigos_autorizacion', codeToDelete.id));
             toast({
@@ -123,6 +125,7 @@ export default function AuthCodesSettingsPage() {
     }
 
     const handleToggleActive = async (codeId: string, active: boolean) => {
+        if(!db) return;
         try {
             const codeRef = doc(db, 'codigos_autorizacion', codeId);
             await updateDoc(codeRef, { active });

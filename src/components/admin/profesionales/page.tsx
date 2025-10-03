@@ -72,7 +72,7 @@ import { SpecialDayModal } from '@/components/admin/profesionales/special-day-mo
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Local } from '@/components/admin/locales/new-local-modal';
@@ -283,8 +283,8 @@ export default function ProfessionalsPage() {
       const newOrder = arrayMove(professionals, oldIndex, newIndex);
       setProfessionals(newOrder);
 
+      if (!db) return;
       try {
-        if (!db) return;
         const batch = writeBatch(db);
         newOrder.forEach((prof, index) => {
           const profRef = doc(db, 'profesionales', prof.id);

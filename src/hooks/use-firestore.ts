@@ -10,36 +10,27 @@ interface UseFirestoreQuery<T> {
   loading: boolean;
   error: Error | null;
   key?: any;
-  setKey?: React.Dispatch<React.SetStateAction<any>>;
+  setKey: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export function useFirestoreQuery<T>(
   collectionName: string,
-  keyOrConstraints?: any | QueryConstraint | (QueryConstraint | undefined)[] | undefined,
-  ...queryConstraints: (QueryConstraint | undefined)[]
-): UseFirestoreQuery<T> & { key: any, setKey: React.Dispatch<React.SetStateAction<any>> } {
+  keyOrFirstConstraint?: any | QueryConstraint,
+  ...otherConstraints: (QueryConstraint | undefined)[]
+): UseFirestoreQuery<T> {
   const { db } = useAuth();
-  const [internalKey, setInternalKey] = useState(0);
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
-  
-  let effectiveKey: any;
-  let constraints: (QueryConstraint | undefined)[];
+  const [manualKey, setManualKey] = useState(0);
 
-  // Argument handling logic
-  if (keyOrConstraints === undefined || typeof keyOrConstraints === 'string' || typeof keyOrConstraints === 'number' ) {
-    effectiveKey = keyOrConstraints !== undefined ? keyOrConstraints : internalKey;
-    constraints = queryConstraints;
-  } else {
-    effectiveKey = internalKey;
-    if (Array.isArray(keyOrConstraints)) {
-      constraints = [...keyOrConstraints, ...queryConstraints];
-    } else {
-      constraints = [keyOrConstraints, ...queryConstraints];
-    }
-  }
+  let constraints: (QueryConstraint | undefined)[] = [];
   
+  if (keyOrFirstConstraint !== undefined && typeof keyOrFirstConstraint !== 'string' && typeof keyOrFirstConstraint !== 'number' && typeof keyOrFirstConstraint !== 'boolean') {
+    constraints.push(keyOrFirstConstraint as QueryConstraint);
+  }
+  constraints.push(...otherConstraints);
+
   const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
   const isQueryActive = constraints.every(c => c !== undefined);
 
@@ -78,7 +69,7 @@ export function useFirestoreQuery<T>(
         setLoading(false);
     }
     
-  }, [db, collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, loading]);
+  }, [db, collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive]);
 
-  return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
+  return { data, loading, error, setKey: setManualKey };
 }

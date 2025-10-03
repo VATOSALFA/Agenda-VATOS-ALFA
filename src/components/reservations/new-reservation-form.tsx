@@ -161,7 +161,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
   const { db } = useAuth();
   
-  const { data: clients, loading: clientsLoading, key: clientQueryKey, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
+  const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
@@ -286,11 +286,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const watchedValues = form.watch();
 
   useEffect(() => {
-      const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = watchedValues;
-      if (items && fecha && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto) {
-        validateItemsAvailability(watchedValues as ReservationFormData);
-      }
-  }, [watchedValues, validateItemsAvailability]);
+    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = watchedValues;
+    if (items && fecha && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto) {
+      validateItemsAvailability(watchedValues as ReservationFormData);
+    }
+  }, [watchedValues.items, watchedValues.fecha, watchedValues.hora_inicio_hora, watchedValues.hora_inicio_minuto, watchedValues.hora_fin_hora, watchedValues.hora_fin_minuto, validateItemsAvailability]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -795,4 +795,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-

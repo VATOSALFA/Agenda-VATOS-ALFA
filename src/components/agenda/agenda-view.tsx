@@ -69,7 +69,9 @@ const useCurrentTime = () => {
     const [time, setTime] = useState<Date | null>(null);
 
     useEffect(() => {
-        setTime(new Date());
+        // Set time on mount to avoid server/client mismatch
+        setTime(new Date()); 
+        
         const timer = setInterval(() => {
             setTime(new Date());
         }, 60000); // Update every minute
@@ -514,8 +516,8 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     return { top: `${top}px`, height: `${HOURLY_SLOT_HEIGHT / (60 / slotDurationMinutes)}px`};
   }
 
-  const calculateCurrentTimePosition = () => {
-    if (!currentTime) return -1;
+  const currentTimeTop = useMemo(() => {
+    if (!currentTime || !isToday(date || new Date()) || startHour === undefined) return -1;
     const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
@@ -525,7 +527,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
 
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
     return (elapsedMinutes / totalMinutesInGrid) * gridHeight;
-  }
+  }, [currentTime, date, startHour, endHour]);
 
   const formatHour = (hour: number) => {
       const h = Math.floor(hour);
@@ -545,8 +547,6 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   const selectedDateFormatted = date 
     ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
     : 'Cargando...';
-
-  const currentTimeTop = calculateCurrentTimePosition();
 
   return (
     <TooltipProvider>
@@ -699,7 +699,8 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                             <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b" />
                                         ))}
                                     </div>
-
+                                    {currentTimeTop > -1 && <div className="absolute w-full h-0.5 bg-red-500 z-20" style={{top: `${currentTimeTop}px`}}></div>}
+                                    
                                     {!isWorking && (
                                         <NonWorkBlock
                                           top={0}
@@ -861,4 +862,3 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
-

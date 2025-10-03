@@ -154,7 +154,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
-  const logoUrl = empresaData?.[0]?.logo_url;
+  const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
 
   useEffect(() => {

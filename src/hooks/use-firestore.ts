@@ -15,7 +15,7 @@ interface UseFirestoreQuery<T> {
 
 export function useFirestoreQuery<T>(
   collectionName: string,
-  keyOrConstraints?: any | QueryConstraint | (QueryConstraint | undefined)[],
+  keyOrConstraints?: any | QueryConstraint | (QueryConstraint | undefined)[] | undefined,
   ...queryConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> & { key: any, setKey: React.Dispatch<React.SetStateAction<any>> } {
   const { db } = useAuth();
@@ -28,7 +28,7 @@ export function useFirestoreQuery<T>(
   let constraints: (QueryConstraint | undefined)[];
 
   // Argument handling logic
-  if (typeof keyOrConstraints === 'string' || typeof keyOrConstraints === 'number' || keyOrConstraints === undefined) {
+  if (keyOrConstraints === undefined || typeof keyOrConstraints === 'string' || typeof keyOrConstraints === 'number' ) {
     effectiveKey = keyOrConstraints !== undefined ? keyOrConstraints : internalKey;
     constraints = queryConstraints;
   } else {
@@ -41,14 +41,13 @@ export function useFirestoreQuery<T>(
   }
   
   const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
-  const isQueryActive = finalConstraints.length === constraints.length;
+  const isQueryActive = constraints.every(c => c !== undefined);
 
 
   useEffect(() => {
     if (!db || !isQueryActive) {
-      // Don't start fetching if db is not ready or query is not active
-      // but ensure loading is false if it was previously true
       if(loading) setLoading(false);
+      setData([]); // Clear data if query is not active
       return;
     }
 
@@ -79,7 +78,7 @@ export function useFirestoreQuery<T>(
         setLoading(false);
     }
     
-  }, [collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, db]);
+  }, [db, collectionName, JSON.stringify(finalConstraints), effectiveKey, isQueryActive, loading]);
 
   return { data, loading, error, key: effectiveKey, setKey: setInternalKey };
 }

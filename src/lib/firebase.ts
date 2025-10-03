@@ -1,3 +1,4 @@
+
 // src/lib/firebase.ts
 // THIS FILE IS FOR SERVER-SIDE USE (when necessary) AND BASE CONFIGURATION.
 // CLIENT-SIDE INITIALIZATION IS HANDLED IN `firebase-client.ts`.

@@ -595,11 +595,11 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                 />
               </div>
           )}
-          <div className="mt-auto p-4 flex justify-center">
+          <div className="mt-auto p-4 flex justify-center h-40">
             {empresaLoading ? (
-                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-full w-full" />
             ) : logoUrl ? (
-                <Image src={logoUrl} alt="Logo de la empresa" width={150} height={75} className="object-contain" />
+                <Image src={logoUrl} alt="Logo de la empresa" width={250} height={125} className="object-contain" />
             ) : null}
           </div>
         </aside>

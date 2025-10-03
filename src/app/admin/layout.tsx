@@ -26,11 +26,11 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 const adminLinks = [
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
-  { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
 ];
 
 const advancedLinks = [
+  { href: '/admin/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
   { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
 ]
 

@@ -132,6 +132,27 @@ const statusOptions = [
     { value: 'En espera', label: 'En Espera', color: 'bg-green-500' },
 ];
 
+const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
+    const clientOptions = useMemo(() => {
+        return clients.map(client => ({
+            value: client.id,
+            label: `${client.nombre} ${client.apellido}`,
+        }));
+    }, [clients]);
+
+    return (
+        <Combobox
+            options={clientOptions}
+            value={value}
+            onChange={onChange}
+            placeholder="Busca o selecciona un cliente..."
+            loading={loading}
+        />
+    );
+});
+ClientCombobox.displayName = 'ClientCombobox';
+
+
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -264,7 +285,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const watchedValues = form.watch();
 
   useEffect(() => {
-    validateItemsAvailability(watchedValues as ReservationFormData);
+      const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = watchedValues;
+      if (items && fecha && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto) {
+        validateItemsAvailability(watchedValues as ReservationFormData);
+      }
   }, [watchedValues, validateItemsAvailability]);
 
   useEffect(() => {
@@ -477,14 +501,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const selectedStatus = form.watch('estado');
   const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
   const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
-
-  const clientOptions = useMemo(() => {
-    return clients.map(client => ({
-      value: client.id,
-      label: `${client.nombre} ${client.apellido}`,
-    }));
-  }, [clients]);
-
+  
   const isAppointmentNotificationEnabled = reminderSettings?.notifications?.['appointment_notification']?.enabled ?? false;
   const isReminderNotificationEnabled = reminderSettings?.notifications?.['appointment_reminder']?.enabled ?? false;
 
@@ -622,13 +639,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                 <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                         </Button>
                         </div>
-                         <Combobox
-                            options={clientOptions}
+                         <ClientCombobox
+                            clients={clients}
+                            loading={clientsLoading}
                             value={field.value}
                             onChange={field.onChange}
-                            placeholder="Busca o selecciona un cliente..."
-                            loading={clientsLoading}
-                        />
+                         />
                         <FormMessage />
                     </FormItem>
                 )}/>
@@ -778,5 +794,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-
-    

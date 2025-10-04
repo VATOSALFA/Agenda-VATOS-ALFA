@@ -81,7 +81,7 @@ export function ImageUploader({
     }
     
     setIsUploading(true);
-    onUploadStateChange?.(true);
+    if(onUploadStateChange) onUploadStateChange(true);
     setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
@@ -100,14 +100,14 @@ export function ImageUploader({
             description: `Hubo un problema al subir la imagen. Código: ${error.code}`,
         });
         setIsUploading(false);
-        onUploadStateChange?.(false);
+        if(onUploadStateChange) onUploadStateChange(false);
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
           if(onUpload) onUpload(downloadURL);
           if(onUploadEnd) onUploadEnd(downloadURL);
           setIsUploading(false);
-          onUploadStateChange?.(false);
+          if(onUploadStateChange) onUploadStateChange(false);
           setUploadProgress(0);
         });
       }

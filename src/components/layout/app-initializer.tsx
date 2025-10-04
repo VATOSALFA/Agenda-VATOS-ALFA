@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 export default function AppInitializer({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { user, signOut } = useAuth();
   
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [reservationInitialData, setReservationInitialData] = useState<any>(null);
@@ -25,6 +25,13 @@ export default function AppInitializer({ children }: { children: ReactNode }) {
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
   const refreshData = () => setDataRefreshKey(prev => prev + 1);
+
+  useEffect(() => {
+    // This effect runs only once on initial mount to ensure any persisted session is logged out.
+    if (signOut) {
+      signOut();
+    }
+  }, [signOut]);
 
   useEffect(() => {
     const handleNewReservation = (e: CustomEvent) => {

@@ -20,7 +20,7 @@ interface AuthContextType {
   loading: boolean;
   db: typeof db;
   storage: any; // Add storage to context if needed elsewhere
-  signIn: (email: string, pass: string) => Promise<FirebaseUser>;
+  signInAndSetup: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
 
@@ -40,11 +40,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const pathname = usePathname();
   const router = useRouter();
-  
-  const signOut = React.useCallback(async () => {
-    await firebaseSignOut(auth);
-    setUser(null);
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -59,14 +54,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     ...(firebaseUser as FirebaseUser),
                     displayName: userData.name || firebaseUser.displayName,
                     email: userData.email,
-                    role: userData.role || 'Staff (Sin edición)', // Default role
-                    permissions: allPermissions.map(p => p.key), // Full permissions
+                    role: userData.role || 'Staff (Sin edición)',
+                    permissions: allPermissions.map(p => p.key),
                     uid: firebaseUser.uid,
                     local_id: userData.local_id,
                     avatarUrl: userData.avatarUrl,
                 });
             } else {
-                 // Fallback for original admin or users not in 'usuarios'
                  setUser({
                     ...(firebaseUser as FirebaseUser),
                     displayName: firebaseUser.displayName || 'Usuario',
@@ -78,7 +72,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
-            // Fallback to a super user in case of error, ensuring access
             setUser({ 
               ...(firebaseUser as FirebaseUser), 
               role: 'Administrador general', 
@@ -99,36 +92,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuthPage = pathname === '/login';
 
   useEffect(() => {
-    if (loading) return; 
-
-    // On initial load, sign out any existing session
-    // 初回読み込み時に既存のセッションをサインアウトする
-    if (user) {
-        const sessionInitialized = sessionStorage.getItem('sessionInitialized');
-        if (!sessionInitialized) {
-            signOut();
-            sessionStorage.setItem('sessionInitialized', 'true');
-        }
-    }
-
-    // If not logged in and not on a public page, redirect to login
-    if (!user && !isAuthPage && !isPublicPage) {
+    if (!loading && !user && !isAuthPage && !isPublicPage) {
         router.push('/login');
     }
+  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
-  }, [user, loading, pathname, router, isAuthPage, isPublicPage, signOut]);
+  const signOut = async () => {
+    await firebaseSignOut(auth);
+    setUser(null);
+  };
 
-  const signIn = (email: string, pass: string) => {
-    sessionStorage.removeItem('sessionInitialized');
-    return signInWithEmailAndPassword(auth, email, pass).then(cred => cred.user);
+  const signInAndSetup = async (email: string, pass: string) => {
+    // First, ensure any lingering session is cleared
+    await signOut(); 
+    // Then, sign in with the new credentials
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    return userCredential.user;
   };
 
   const value = {
     user,
     loading,
-    signIn,
+    signInAndSetup,
     signOut,
-    db // Pass db instance through context
+    db
   };
   
   if (loading && !isAuthPage && !isPublicPage) {

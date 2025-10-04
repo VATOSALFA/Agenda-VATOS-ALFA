@@ -21,7 +21,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { signIn, user, loading: authLoading } = useAuth();
+    const { signInAndSetup, user, loading: authLoading } = useAuth();
 
     useEffect(() => {
         if (!authLoading && user) {
@@ -34,14 +34,14 @@ export default function LoginPage() {
         setIsLoading(true);
         setError(null);
 
-        if (!signIn) {
+        if (!signInAndSetup) {
             setError("El servicio de autenticación no está disponible. Por favor, recarga la página.");
             setIsLoading(false);
             return;
         }
 
         try {
-            await signIn(email, password);
+            await signInAndSetup(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
             router.push('/');
         } catch (err: any) {

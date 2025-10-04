@@ -17,6 +17,8 @@ interface ImageUploaderProps {
   onUpload?: (url: string) => void;
   onRemove?: () => void;
   className?: string;
+  onUploadStateChange?: (isUploading: boolean) => void;
+  onUploadEnd?: (url: string) => void;
 }
 
 export function ImageUploader({ 
@@ -24,7 +26,9 @@ export function ImageUploader({
   currentImageUrl, 
   onUpload,
   onRemove,
-  className 
+  className,
+  onUploadStateChange,
+  onUploadEnd
 }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -77,6 +81,7 @@ export function ImageUploader({
     }
     
     setIsUploading(true);
+    onUploadStateChange?.(true);
     setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
@@ -95,17 +100,20 @@ export function ImageUploader({
             description: `Hubo un problema al subir la imagen. Código: ${error.code}`,
         });
         setIsUploading(false);
+        onUploadStateChange?.(false);
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
           if(onUpload) onUpload(downloadURL);
+          if(onUploadEnd) onUploadEnd(downloadURL);
           setIsUploading(false);
+          onUploadStateChange?.(false);
           setUploadProgress(0);
         });
       }
     );
 
-  }, [folder, onUpload, toast, storage]);
+  }, [folder, onUpload, toast, storage, onUploadStateChange, onUploadEnd]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

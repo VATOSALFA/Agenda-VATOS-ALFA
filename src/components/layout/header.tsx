@@ -206,11 +206,7 @@ export default function Header() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-            {logoUrl ? (
-                <Image src={logoUrl} alt="Logo" width={125} height={60} className="h-[60px] w-auto" />
-            ) : (
-                <span className="font-bold text-lg text-white whitespace-nowrap">AGENDA VATOS ALFA</span>
-            )}
+            <span className="font-bold text-lg text-white whitespace-nowrap">AGENDA VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
             {mainNavLinks.map(({ href, label, permission }) => (
@@ -453,9 +449,9 @@ export default function Header() {
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.displayName || 'Admin'}</p>
+                    <p className="text-sm font-medium leading-none">{user?.displayName}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      {user?.email || 'admin@vatosalfa.com'}
+                      {user?.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>

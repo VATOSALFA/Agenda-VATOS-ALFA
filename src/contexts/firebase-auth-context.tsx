@@ -51,13 +51,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (firebaseUser) {
         try {
             // Grant full permissions to any logged-in user
-            setUser({
-                ...(firebaseUser as FirebaseUser),
-                displayName: 'Admin',
-                role: 'Administrador general',
-                permissions: allPermissions.map(p => p.key),
-                uid: firebaseUser.uid
-            });
+            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                setUser({
+                    ...(firebaseUser as FirebaseUser),
+                    displayName: userData.name || firebaseUser.displayName,
+                    email: userData.email,
+                    role: userData.role,
+                    permissions: allPermissions.map(p => p.key),
+                    uid: firebaseUser.uid,
+                    local_id: userData.local_id,
+                    avatarUrl: userData.avatarUrl,
+                });
+            } else {
+                 setUser({
+                    ...(firebaseUser as FirebaseUser),
+                    displayName: firebaseUser.displayName || 'Usuario',
+                    role: 'Administrador general',
+                    permissions: allPermissions.map(p => p.key),
+                    uid: firebaseUser.uid
+                });
+            }
 
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
@@ -84,13 +100,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading) return; 
 
-    // Always require login unless it's a public page
-    if (!user && !isAuthPage && !isPublicPage) {
+    // Force sign-out on initial load if not on login/public page
+    if (user && !isAuthPage && !isPublicPage) {
+        // This logic is now handled inside onAuthStateChanged
+    } else if (!user && !isAuthPage && !isPublicPage) {
         router.push('/login');
     }
-  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
+    
+    // On initial load, sign out any existing session
+    const初回読み込み時に既存のセッションをサインアウトする
+    if (user) {
+        const sessionInitialized = sessionStorage.getItem('sessionInitialized');
+        if (!sessionInitialized) {
+            signOut();
+            sessionStorage.setItem('sessionInitialized', 'true');
+        }
+    }
+
+
+  }, [user, loading, pathname, router, isAuthPage, isPublicPage, signOut]);
 
   const signIn = (email: string, pass: string) => {
+    sessionStorage.removeItem('sessionInitialized');
     return signInWithEmailAndPassword(auth, email, pass).then(cred => cred.user);
   };
 

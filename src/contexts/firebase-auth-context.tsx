@@ -121,6 +121,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
+    // Clear any potential session remnants that might cause a loop
+    await firebaseSignOut(auth); 
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
   };

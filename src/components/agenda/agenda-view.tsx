@@ -624,7 +624,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                 </div>
             </div>
             
-            <ScrollArea className="flex-grow" orientation="both">
+            <div className="flex-grow overflow-auto">
                 {/* Professional Headers */}
                 <div className="sticky top-0 z-20 grid gap-2 bg-background" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
                     <div className="sticky left-0 bg-background z-30">
@@ -786,7 +786,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                         )
                     })}
                 </div>
-            </ScrollArea>
+            </div>
         </div>
       </div>
       
@@ -859,3 +859,4 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
+

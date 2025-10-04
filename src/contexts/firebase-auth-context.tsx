@@ -18,6 +18,8 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
+  db: typeof db;
+  storage: any; // Add storage to context if needed elsewhere
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -43,10 +45,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await firebaseSignOut(auth);
     setUser(null);
   }, []);
-
-  useEffect(() => {
-    signOut();
-  }, [signOut]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -101,6 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     signIn,
     signOut,
+    db // Pass db instance through context
   };
   
   if (loading && !isAuthPage) {

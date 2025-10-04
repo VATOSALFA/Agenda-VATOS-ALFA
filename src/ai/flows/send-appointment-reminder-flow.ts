@@ -9,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Reservation, Client, Local, Profesional } from '@/lib/types';
 import { addHours, subDays, startOfHour, setHours, format, parse } from 'date-fns';

@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { startOfMonth, endOfMonth, format, parse, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';

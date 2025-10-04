@@ -1,47 +1,25 @@
 
 // src/lib/firebase-client.ts
-import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
-import { firebaseConfig } from "./firebase";
 
-let app: FirebaseApp;
+const firebaseConfig: FirebaseOptions = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+};
 
-// This function ensures Firebase is initialized only once (singleton pattern)
-// and ONLY on the client-side.
-function getFirebaseApp(): FirebaseApp {
-  if (getApps().length > 0) {
-    return getApp();
-  }
 
-  const newApp = initializeApp(firebaseConfig);
-  console.log("✅ Pilar 2/4 [Conexión]: Firebase App inicializada correctamente.");
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-  // Initialize App Check only on the client
-  if (typeof window !== 'undefined') {
-    try {
-      if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
-        initializeAppCheck(newApp, {
-          provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
-          isTokenAutoRefreshEnabled: true
-        });
-        console.log("✅ Pilar 3/4 [Seguridad]: App Check con reCAPTCHA inicializado.");
-      } else {
-        console.warn("⚠️ Pilar 3/4 [Seguridad]: NO se encontró clave reCAPTCHA. App Check no inicializado.");
-      }
-    } catch(e) {
-      console.error("❌ Pilar 3/4 [Seguridad]: Error inicializando Firebase App Check:", e);
-    }
-  }
+console.log("✅ Firebase App del cliente inicializada.");
 
-  return newApp;
-}
-
-app = getFirebaseApp();
-
-// Export client-side services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

@@ -25,13 +25,19 @@ export function useFirestoreQuery<T>(
 
   let constraints: (QueryConstraint | undefined)[] = [];
   
-  if (keyOrFirstConstraint !== undefined && typeof keyOrFirstConstraint !== 'string' && typeof keyOrFirstConstraint !== 'number' && typeof keyOrFirstConstraint !== 'boolean') {
+  // Handle overloaded function signature
+  let depsKey: any = manualKey;
+  if (typeof keyOrFirstConstraint === 'string' || typeof keyOrFirstConstraint === 'number' || typeof keyOrFirstConstraint === 'boolean' || keyOrFirstConstraint === undefined) {
+    depsKey = keyOrFirstConstraint ?? manualKey;
+    constraints.push(...otherConstraints);
+  } else {
     constraints.push(keyOrFirstConstraint as QueryConstraint);
+    constraints.push(...otherConstraints);
   }
-  constraints.push(...otherConstraints);
+
 
   const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
-  const isQueryActive = keyOrFirstConstraint === undefined || constraints.every(c => c !== undefined);
+  const isQueryActive = depsKey !== undefined;
 
 
   useEffect(() => {
@@ -68,7 +74,7 @@ export function useFirestoreQuery<T>(
         setLoading(false);
     }
     
-  }, [db, collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive]);
+  }, [db, collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive, depsKey]);
 
   return { data, loading, error, setKey: setManualKey };
 }

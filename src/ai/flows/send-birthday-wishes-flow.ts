@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to send birthday wishes to clients.
@@ -8,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Client } from '@/lib/types';
 import { format } from 'date-fns';

@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import type { Client } from '@/lib/types';
 
 const GoogleReviewRequestInputSchema = z.object({

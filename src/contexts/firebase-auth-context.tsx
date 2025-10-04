@@ -101,11 +101,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading) return; 
 
+    // Always require login unless it's a public page
     if (!user && !isAuthPage && !isPublicPage) {
         router.push('/login');
-    }
-    if (user && isAuthPage) {
-        router.push('/');
     }
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
@@ -130,16 +128,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
   };
   
-  if (loading) {
+  if (loading && !isAuthPage) {
      return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-  
-  if (!user && !isAuthPage && !isPublicPage) {
-    return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>

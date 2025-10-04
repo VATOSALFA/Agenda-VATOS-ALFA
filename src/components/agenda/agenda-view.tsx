@@ -517,7 +517,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   }
 
   const currentTimeTop = useMemo(() => {
-    if (!currentTime || !isToday(date || new Date()) || startHour === undefined) return -1;
+    if (!currentTime || !date || !isToday(date) || startHour === undefined) return -1;
     const totalMinutesNow = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
@@ -528,6 +528,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
     return (elapsedMinutes / totalMinutesInGrid) * gridHeight;
   }, [currentTime, date, startHour, endHour]);
+
 
   const formatHour = (hour: number) => {
       const h = Math.floor(hour);
@@ -550,7 +551,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-[288px_1fr] h-full bg-muted/40 gap-2">
+      <div className="grid grid-cols-[288px_1fr] h-[calc(100vh-4rem)] bg-muted/40 gap-2">
         {/* Left Panel */}
         <aside className="bg-white border-r flex flex-col">
           <div className="p-4 space-y-4">
@@ -623,46 +624,44 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                 </div>
             </div>
             
-            {/* Professional Headers */}
-            <div className="flex-shrink-0 grid gap-2" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
-                <div className="sticky left-0 bg-background z-30">
-                    <div className="h-28 flex items-center justify-center p-2 border-b">
-                        <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            {[5, 10, 15, 30, 40, 45, 60].map(min => (
-                                <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
-                                    {min} minutos
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
-                {filteredProfessionals.map(barber => (
-                    <div key={barber.id} className="sticky top-0 z-20 bg-background p-2 h-28 flex flex-col items-center justify-center border-b">
-                       <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group">
-                           <Avatar className="h-[60px] w-[60px] group-hover:ring-2 group-hover:ring-primary transition-all">
-                               <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
-                               <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
-                           </Avatar>
-                           <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
-                       </Link>
-                   </div>
-                ))}
-            </div>
-
-
-            {/* Scrollable Grid */}
             <ScrollArea className="flex-grow" orientation="both">
+                {/* Professional Headers */}
+                <div className="sticky top-0 z-20 grid gap-2 bg-background" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
+                    <div className="sticky left-0 bg-background z-30">
+                        <div className="h-28 flex items-center justify-center p-2 border-b">
+                            <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon"><Clock className="h-5 w-5"/></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                {[5, 10, 15, 30, 40, 45, 60].map(min => (
+                                    <DropdownMenuItem key={min} onSelect={() => setSlotDurationMinutes(min)}>
+                                        {min} minutos
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </div>
+                    {filteredProfessionals.map(barber => (
+                        <div key={barber.id} className="p-2 h-28 flex flex-col items-center justify-center border-b">
+                           <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group">
+                               <Avatar className="h-[60px] w-[60px] group-hover:ring-2 group-hover:ring-primary transition-all">
+                                   <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                   <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                               </Avatar>
+                               <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
+                           </Link>
+                       </div>
+                    ))}
+                </div>
+
                 <div className="grid gap-2" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
                     {/* Time Column */}
-                    <div className="flex-shrink-0 sticky left-0 z-20">
+                    <div className="flex-shrink-0 sticky left-0 z-10 bg-white">
                         <div className="flex flex-col">
                             {timeSlots.slice(0, -1).map((time, index) => (
-                                <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="bg-white border-b flex items-center justify-center text-center">
+                                <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT}px`}} className="border-b flex items-center justify-center text-center">
                                     <span className="text-xs text-muted-foreground font-semibold">{time}</span>
                                 </div>
                             ))}
@@ -686,7 +685,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                         return (
                         <div key={barber.id} className="relative">
                             <div 
-                                className="relative"
+                                className="relative h-full"
                                 ref={el => gridRefs.current[barber.id] = el}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
@@ -860,4 +859,3 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
-

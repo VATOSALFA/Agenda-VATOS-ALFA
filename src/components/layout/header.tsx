@@ -121,9 +121,11 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
   const [unreadCount, setUnreadCount] = useState(0);
-  
+
+  const isAuthPage = pathname === '/login';
+
   useEffect(() => {
-    if (!db) return;
+    if (!db || !user) return;
     const q = query(
       collection(db, 'conversations'),
       where('unreadCount', '>', 0)
@@ -138,7 +140,7 @@ export default function Header() {
     });
 
     return () => unsubscribe();
-  }, [db]);
+  }, [db, user]);
 
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
@@ -193,6 +195,10 @@ export default function Header() {
 
   const dispatchCustomEvent = (eventName: string) => {
     document.dispatchEvent(new CustomEvent(eventName));
+  }
+  
+  if (!user || isAuthPage) {
+    return null;
   }
 
   return (

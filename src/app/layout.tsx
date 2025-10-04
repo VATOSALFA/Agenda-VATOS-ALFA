@@ -6,7 +6,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { LocalProvider } from '@/contexts/local-context';
 import Header from '@/components/layout/header';
-import AppInitializer from '@/components/layout/app-initializer';
 
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -22,9 +21,10 @@ export default function RootLayout({
       <body>
           <AuthProvider>
             <LocalProvider>
-                <AppInitializer>
+                <Header />
+                <main className="pt-16">
                     {children}
-                </AppInitializer>
+                </main>
             </LocalProvider>
           </AuthProvider>
         <Toaster />

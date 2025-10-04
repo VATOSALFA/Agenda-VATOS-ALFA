@@ -38,23 +38,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const pathname = usePathname();
   const router = useRouter();
+  
+  const signOut = React.useCallback(async () => {
+    await firebaseSignOut(auth);
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    signOut();
+  }, [signOut]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            
             // Grant full permissions to any logged-in user
-            const customData = userDoc.exists() ? userDoc.data() : {};
             setUser({
                 ...(firebaseUser as FirebaseUser),
-                displayName: customData.name || firebaseUser.displayName,
+                displayName: 'Admin',
                 role: 'Administrador general',
                 permissions: allPermissions.map(p => p.key),
-                local_id: customData.local_id,
-                avatarUrl: customData.avatarUrl,
                 uid: firebaseUser.uid
             });
 
@@ -91,10 +94,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = (email: string, pass: string) => {
     return signInWithEmailAndPassword(auth, email, pass).then(cred => cred.user);
-  };
-
-  const signOut = async () => {
-    await firebaseSignOut(auth);
   };
 
   const value = {

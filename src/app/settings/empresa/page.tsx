@@ -4,14 +4,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { useForm, Controller } from "react-hook-form";
-import { doc, updateDoc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
+import { useAuth } from "@/contexts/firebase-auth-context";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
@@ -27,9 +26,9 @@ interface EmpresaSettings {
 
 export default function EmpresaPage() {
     const { toast } = useToast();
+    const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Assuming a single document for company settings
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
     const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
     
@@ -54,6 +53,14 @@ export default function EmpresaPage() {
     }
 
     const onSubmit = async (formData: EmpresaSettings) => {
+        if (!db) {
+             toast({
+                variant: "destructive",
+                title: "Error de base de datos",
+                description: "No se pudo conectar con la base de datos.",
+            });
+            return;
+        }
         setIsSubmitting(true);
         try {
             const settingsRef = doc(db, 'empresa', settings.id);
@@ -124,14 +131,8 @@ export default function EmpresaPage() {
                       <ImageUploader
                           folder="empresa"
                           currentImageUrl={field.value}
-                          onUpload={(url) => {
-                            field.onChange(url);
-                            form.handleSubmit(onSubmit)();
-                          }}
-                          onRemove={() => {
-                            field.onChange('');
-                            form.handleSubmit(onSubmit)();
-                          }}
+                          onUpload={(url) => field.onChange(url)}
+                          onRemove={() => field.onChange('')}
                       />
                   )}
                />
@@ -151,14 +152,8 @@ export default function EmpresaPage() {
                       <ImageUploader
                           folder="receipt_logos"
                           currentImageUrl={field.value}
-                          onUpload={(url) => {
-                            field.onChange(url);
-                            form.handleSubmit(onSubmit)();
-                          }}
-                          onRemove={() => {
-                            field.onChange('');
-                            form.handleSubmit(onSubmit)();
-                          }}
+                          onUpload={(url) => field.onChange(url)}
+                          onRemove={() => field.onChange('')}
                       />
                   )}
                />

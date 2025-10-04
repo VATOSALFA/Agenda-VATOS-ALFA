@@ -14,53 +14,50 @@ import { Progress } from '../ui/progress';
 interface ImageUploaderProps {
   folder: string;
   currentImageUrl?: string | null;
-  onUploadStateChange: (isUploading: boolean) => void;
-  onUploadEnd: (url: string) => void;
-  onRemove: () => void;
+  onUpload?: (url: string) => void;
+  onRemove?: () => void;
   className?: string;
 }
 
 export function ImageUploader({ 
   folder, 
   currentImageUrl, 
-  onUploadStateChange, 
-  onUploadEnd,
+  onUpload,
   onRemove,
   className 
 }: ImageUploaderProps) {
+  const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
   const { storage } = useAuth();
 
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!currentImageUrl) return;
+    if (!currentImageUrl || !storage) return;
 
-    // Immediately update UI
-    onRemove(); 
-    
-    // Check if it's a Firebase URL before trying to delete
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
-    
-    if (isFirebaseUrl && storage) {
-        try {
-            const imageRef = ref(storage, currentImageUrl);
-            await deleteObject(imageRef);
-            toast({ title: "Imagen eliminada" });
-        } catch (error: any) {
-            // If the object doesn't exist, it's not a critical error.
-            if (error.code !== 'storage/object-not-found') {
-                 toast({
-                    variant: "destructive",
-                    title: "Error al eliminar",
-                    description: "No se pudo eliminar la imagen del almacenamiento.",
-                });
-                // Revert UI change if deletion fails for a real object
-                onUploadEnd(currentImageUrl);
-            }
+    if (!isFirebaseUrl) {
+      if (onRemove) onRemove();
+      return;
+    }
+
+    try {
+        const imageRef = ref(storage, currentImageUrl);
+        await deleteObject(imageRef);
+        if (onRemove) onRemove();
+        toast({ title: "Imagen eliminada" });
+    } catch (error: any) {
+        if (error.code !== 'storage/object-not-found') {
+             toast({
+                variant: "destructive",
+                title: "Error al eliminar",
+                description: "No se pudo eliminar la imagen del almacenamiento.",
+            });
+        } else {
+             if (onRemove) onRemove(); // Remove from UI even if it's already gone from storage
         }
     }
-  }, [currentImageUrl, onRemove, onUploadEnd, toast, storage]);
+  }, [currentImageUrl, onRemove, storage, toast]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -80,7 +77,7 @@ export function ImageUploader({
         return;
     }
     
-    onUploadStateChange(true);
+    setIsUploading(true);
     setUploadProgress(0);
 
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
@@ -98,17 +95,18 @@ export function ImageUploader({
             title: "Error al subir",
             description: `Hubo un problema al subir la imagen. Código: ${error.code}`,
         });
-        onUploadStateChange(false);
+        setIsUploading(false);
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          onUploadEnd(downloadURL);
-          onUploadStateChange(false);
+          if(onUpload) onUpload(downloadURL);
+          setIsUploading(false);
+          setUploadProgress(0);
         });
       }
     );
 
-  }, [folder, onUploadEnd, onUploadStateChange, toast, storage]);
+  }, [folder, onUpload, toast, storage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -116,7 +114,7 @@ export function ImageUploader({
     multiple: false,
   });
   
-  if (uploadProgress > 0 && uploadProgress < 100) {
+  if (isUploading) {
     return (
       <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

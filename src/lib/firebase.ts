@@ -3,8 +3,7 @@
 // THIS FILE IS FOR SERVER-SIDE USE (when necessary) AND BASE CONFIGURATION.
 // CLIENT-SIDE INITIALIZATION IS HANDLED IN `firebase-client.ts`.
 // DO NOT EXPORT `db` OR `auth` FROM THIS FILE FOR CLIENT-SIDE USE.
-
-import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
+import type { FirebaseOptions } from "firebase/app";
 
 export const firebaseConfig: FirebaseOptions = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

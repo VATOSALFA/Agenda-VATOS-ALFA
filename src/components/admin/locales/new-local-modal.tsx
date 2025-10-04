@@ -19,6 +19,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import type { Schedule } from '@/app/admin/profesionales/page';
+import { db } from '@/lib/firebase-client';
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
@@ -75,7 +76,6 @@ interface NewLocalModalProps {
 
 export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLocalModalProps) {
   const { toast } = useToast();
-  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!local;
 
@@ -136,7 +136,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
     try {
       if (isEditMode && local) {
         const localRef = doc(db, 'locales', local.id);
-        await updateDoc(localRef, data);
+        await updateDoc(localRef, data as any);
         toast({ title: "Local actualizado con éxito" });
       } else {
         const dataToSave = {
@@ -194,17 +194,17 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
                           <h4 className="font-semibold">Horario de atención</h4>
                           {daysOfWeek.map((day) => (
                           <div key={day.id} className="grid grid-cols-6 items-center gap-4">
-                            <Controller name={`schedule.${day.id}.enabled`} control={form.control} render={({ field }) => (
+                            <Controller name={`schedule.${day.id}.enabled` as any} control={form.control} render={({ field }) => (
                                 <div className="flex items-center space-x-2 col-span-2">
                                   <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} />
                                   <Label htmlFor={`switch-${day.id}`} className="capitalize font-bold">{day.label}</Label>
                                 </div>
                             )}/>
                             <div className="col-span-4 grid grid-cols-2 gap-2 items-center">
-                              <Controller name={`schedule.${day.id}.start`} control={form.control} render={({ field }) => (
+                              <Controller name={`schedule.${day.id}.start` as any} control={form.control} render={({ field }) => (
                                 <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled`)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}</SelectContent></Select>
                               )}/>
-                              <Controller name={`schedule.${day.id}.end`} control={form.control} render={({ field }) => (
+                              <Controller name={`schedule.${day.id}.end` as any} control={form.control} render={({ field }) => (
                                 <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled`)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}</SelectContent></Select>
                               )}/>
                             </div>

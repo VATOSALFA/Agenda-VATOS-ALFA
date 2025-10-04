@@ -17,7 +17,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Copy, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useAuth } from '@/contexts/firebase-auth-context';
 import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc } from 'firebase/firestore';
 import {
   AlertDialog,
@@ -32,6 +31,7 @@ import {
 import type { Local } from '@/components/admin/locales/new-local-modal';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { db, auth } from '@/lib/firebase-client';
 
 
 interface EditProfesionalModalProps {
@@ -65,7 +65,6 @@ const defaultSchedule: Schedule = {
 
 export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved, local }: EditProfesionalModalProps) {
   const { toast } = useToast();
-  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -408,8 +407,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                <ImageUploader 
                                 folder="profesionales"
                                 currentImageUrl={field.value}
-                                onUploadStateChange={setIsUploading}
-                                onUploadEnd={(url) => {
+                                onUpload={(url) => {
                                     form.setValue('avatar', url, { shouldDirty: true });
                                 }}
                                 onRemove={() => form.setValue('avatar', '', { shouldDirty: true })}

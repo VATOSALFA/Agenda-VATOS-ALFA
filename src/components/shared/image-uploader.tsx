@@ -8,7 +8,7 @@ import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { storage } from '@/lib/firebase-client';
 import { Progress } from '../ui/progress';
 
 interface ImageUploaderProps {
@@ -29,7 +29,6 @@ export function ImageUploader({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
-  const { storage } = useAuth();
 
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();

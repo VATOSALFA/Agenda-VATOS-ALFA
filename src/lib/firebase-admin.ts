@@ -10,8 +10,9 @@ if (!admin.apps.length) {
     // Para desarrollo local, podrías necesitar un archivo de credenciales.
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      ...firebaseConfig
+      databaseURL: `https://${firebaseConfig.projectId}.firebaseio.com`
     });
+     console.log("✅ Firebase Admin SDK inicializado correctamente.");
   } catch (error: any) {
     // Ignorar el error de "ya existe" que puede ocurrir en el hot-reload de Next.js
     if (!/already exists/i.test(error.message)) {

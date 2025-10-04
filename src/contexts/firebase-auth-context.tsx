@@ -2,14 +2,12 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser, getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDoc, Firestore } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getFirebaseApp } from '@/lib/firebase-client';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase-client';
+import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { FirebaseApp } from 'firebase/app';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -20,10 +18,6 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  db: Firestore;
-  storage: FirebaseStorage;
-  auth: Auth;
-  app: FirebaseApp;
   signIn: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -42,23 +36,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const [firebaseServices, setFirebaseServices] = useState<{
-    app: FirebaseApp;
-    auth: Auth;
-    db: Firestore;
-    storage: FirebaseStorage;
-  } | null>(null);
-
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    const app = getFirebaseApp();
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const storage = getStorage(app);
-    setFirebaseServices({ app, auth, db, storage });
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
@@ -109,22 +90,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signIn = (email: string, pass: string) => {
-    if (!firebaseServices?.auth) throw new Error("Firebase Auth not initialized");
-    return signInWithEmailAndPassword(firebaseServices.auth, email, pass).then(cred => cred.user);
+    return signInWithEmailAndPassword(auth, email, pass).then(cred => cred.user);
   };
 
   const signOut = async () => {
-    if (!firebaseServices?.auth) throw new Error("Firebase Auth not initialized");
-    await firebaseSignOut(firebaseServices.auth);
+    await firebaseSignOut(auth);
   };
 
   const value = {
     user,
     loading,
-    db: firebaseServices?.db,
-    storage: firebaseServices?.storage,
-    auth: firebaseServices?.auth,
-    app: firebaseServices?.app,
     signIn,
     signOut,
   };

@@ -1,6 +1,9 @@
 
 // src/lib/firebase-client.ts
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { firebaseConfig } from "./firebase";
 
@@ -8,19 +11,19 @@ let app: FirebaseApp;
 
 // This function ensures Firebase is initialized only once (singleton pattern)
 // and ONLY on the client-side.
-export function getFirebaseApp(): FirebaseApp {
+function getFirebaseApp(): FirebaseApp {
   if (getApps().length > 0) {
     return getApp();
   }
 
-  app = initializeApp(firebaseConfig);
+  const newApp = initializeApp(firebaseConfig);
   console.log("✅ Pilar 2/4 [Conexión]: Firebase App inicializada correctamente.");
 
   // Initialize App Check only on the client
   if (typeof window !== 'undefined') {
     try {
       if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
-        initializeAppCheck(app, {
+        initializeAppCheck(newApp, {
           provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
           isTokenAutoRefreshEnabled: true
         });
@@ -33,5 +36,13 @@ export function getFirebaseApp(): FirebaseApp {
     }
   }
 
-  return app;
+  return newApp;
 }
+
+app = getFirebaseApp();
+
+// Export client-side services
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+export { app };

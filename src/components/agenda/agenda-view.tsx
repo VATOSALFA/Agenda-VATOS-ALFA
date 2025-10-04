@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, MouseEvent, useEffect, useMemo, useCallback } from 'react';
@@ -624,6 +623,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                 </div>
             </div>
             
+            {/* Esta es la linea que genera el scroll vertical */}
             <div className="flex-grow overflow-auto">
                 {/* Professional Headers */}
                 <div className="sticky top-0 z-20 grid gap-2 bg-background" style={{gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))`}}>
@@ -859,4 +859,3 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     </TooltipProvider>
   );
 }
-

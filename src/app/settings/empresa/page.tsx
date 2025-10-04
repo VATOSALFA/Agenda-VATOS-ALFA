@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy } from "lucide-react";
+import { Copy, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { useForm, Controller } from "react-hook-form";
@@ -14,6 +14,10 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
+import { storage } from "@/lib/firebase-client";
+import { ref, listAll } from "firebase/storage";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+
 
 interface EmpresaSettings {
     id?: string;
@@ -28,6 +32,8 @@ export default function EmpresaPage() {
     const { toast } = useToast();
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
     
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
     const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
@@ -80,6 +86,23 @@ export default function EmpresaPage() {
             setIsSubmitting(false);
         }
     }
+    
+    const handleStorageTest = async () => {
+        setTestResult(null);
+        if (!storage) {
+            setTestResult({ type: 'error', message: 'La instancia de Firebase Storage no está disponible.' });
+            return;
+        }
+
+        try {
+            const listRef = ref(storage);
+            const res = await listAll(listRef);
+            const folderNames = res.prefixes.map(folderRef => folderRef.name).join(', ');
+            setTestResult({ type: 'success', message: `¡Conexión exitosa! Se encontraron las carpetas: ${folderNames || 'ninguna'}. La lectura de Storage funciona.` });
+        } catch (error: any) {
+             setTestResult({ type: 'error', message: `Falló la prueba de conexión: ${error.message} (Código: ${error.code})` });
+        }
+    }
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -89,6 +112,25 @@ export default function EmpresaPage() {
           Configura el nombre de tu empresa, descripción y dirección de tu sitio web de agendamiento.
         </p>
       </div>
+
+       <Card>
+            <CardHeader>
+                <CardTitle>Prueba de Conexión a Storage</CardTitle>
+                <CardDescription>
+                    Usa este botón para verificar si la aplicación puede comunicarse con Firebase Storage.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button onClick={handleStorageTest}>Realizar Prueba de Conexión</Button>
+                {testResult && (
+                    <Alert variant={testResult.type === 'error' ? 'destructive' : 'default'} className="mt-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>{testResult.type === 'success' ? 'Éxito' : 'Error'}</AlertTitle>
+                        <AlertDescription>{testResult.message}</AlertDescription>
+                    </Alert>
+                )}
+            </CardContent>
+        </Card>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
         <Card>

@@ -6,13 +6,13 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig: FirebaseOptions = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+    apiKey: "YOUR_API_KEY", // Reemplaza con la clave de API real de tu proyecto
+    authDomain: "agenda-1ae08.firebaseapp.com",
+    projectId: "agenda-1ae08",
+    storageBucket: "agenda-1ae08.appspot.com",
+    messagingSenderId: "34221543030", // Asumiendo que es el número del proyecto
+    appId: "YOUR_APP_ID", // Reemplaza con el App ID real
+    measurementId: "YOUR_MEASUREMENT_ID" // Opcional, reemplaza si lo tienes
 };
 
 

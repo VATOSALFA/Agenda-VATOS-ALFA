@@ -100,15 +100,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading) return; 
 
-    // Force sign-out on initial load if not on login/public page
-    if (user && !isAuthPage && !isPublicPage) {
-        // This logic is now handled inside onAuthStateChanged
-    } else if (!user && !isAuthPage && !isPublicPage) {
-        router.push('/login');
-    }
-    
     // On initial load, sign out any existing session
-    const初回読み込み時に既存のセッションをサインアウトする
+    // const初回読み込み時に既存のセッションをサインアウトする
     if (user) {
         const sessionInitialized = sessionStorage.getItem('sessionInitialized');
         if (!sessionInitialized) {

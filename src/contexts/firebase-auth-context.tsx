@@ -45,25 +45,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            
+            let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            let userDoc = await getDoc(userDocRef);
+            let customData;
+
             if (userDoc.exists()) {
-                const userData = userDoc.data();
+                customData = userDoc.data();
+            } else {
+                // Fallback to check professionals collection if not found in usuarios
+                userDocRef = doc(db, 'profesionales', firebaseUser.uid);
+                userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    customData = userDoc.data();
+                    // Assign a default role if not specified for professionals
+                    if (!customData.role) {
+                      customData.role = 'Staff'; // Default role for professionals
+                    }
+                }
+            }
+            
+            if (customData) {
+                const isSuperAdmin = customData.role === 'Administrador general';
                 setUser({
                     ...(firebaseUser as FirebaseUser),
-                    displayName: userData.name || firebaseUser.displayName,
-                    email: userData.email,
-                    role: userData.role || 'Staff (Sin edición)',
-                    permissions: allPermissions.map(p => p.key),
+                    displayName: customData.name || firebaseUser.displayName,
+                    email: customData.email,
+                    role: isSuperAdmin ? 'Administrador general' : customData.role,
+                    permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
                     uid: firebaseUser.uid,
-                    local_id: userData.local_id,
-                    avatarUrl: userData.avatarUrl,
+                    local_id: customData.local_id,
+                    avatarUrl: customData.avatarUrl,
                 });
             } else {
+                 // If user is not in 'usuarios' or 'profesionales', treat as super admin for initial setup
                  setUser({
                     ...(firebaseUser as FirebaseUser),
-                    displayName: firebaseUser.displayName || 'Usuario',
+                    displayName: firebaseUser.displayName || 'Super Admin',
                     role: 'Administrador general',
                     permissions: allPermissions.map(p => p.key),
                     uid: firebaseUser.uid
@@ -72,6 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
+            // Fallback to super admin on error to prevent being locked out
             setUser({ 
               ...(firebaseUser as FirebaseUser), 
               role: 'Administrador general', 
@@ -103,9 +121,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
-    // First, ensure any lingering session is cleared
-    await signOut(); 
-    // Then, sign in with the new credentials
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
   };

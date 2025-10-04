@@ -7,11 +7,11 @@ import { getStorage } from "firebase/storage";
 
 const firebaseConfig: FirebaseOptions = {
     apiKey: "YOUR_API_KEY",
-    authDomain: "studio-7585847630.firebaseapp.com",
-    projectId: "studio-7585847630",
-    storageBucket: "studio-7585847630.appspot.com",
-    messagingSenderId: "34221543030",
-    appId: "1:34221543030:web:d6d4593452290d9f018d0c",
+    authDomain: "agenda-1ae08.firebaseapp.com",
+    projectId: "agenda-1ae08",
+    storageBucket: "agenda-1ae08.appspot.com",
+    messagingSenderId: "59388998399",
+    appId: "1:59388998399:web:73c1d3319045832d20b633",
     measurementId: "G-J61G1R3Y2E"
 };
 

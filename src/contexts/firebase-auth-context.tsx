@@ -65,26 +65,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
             
-            if (userDoc.exists()) {
-                const customData = userDoc.data();
-                const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'vatosalfa@gmail.com';
+            // Grant full permissions to any logged-in user
+            const customData = userDoc.exists() ? userDoc.data() : {};
+            setUser({
+                ...(firebaseUser as FirebaseUser),
+                displayName: customData.name || firebaseUser.displayName,
+                role: 'Administrador general',
+                permissions: allPermissions.map(p => p.key),
+                local_id: customData.local_id,
+                avatarUrl: customData.avatarUrl,
+                uid: firebaseUser.uid
+            });
 
-                setUser({
-                    ...(firebaseUser as FirebaseUser),
-                    displayName: customData.name || firebaseUser.displayName,
-                    role: isSuperAdmin ? 'Administrador general' : customData.role,
-                    permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
-                    local_id: customData.local_id,
-                    avatarUrl: customData.avatarUrl,
-                    uid: firebaseUser.uid
-                });
-            } else {
-                 console.warn(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid}.`);
-                 setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid });
-            }
         } catch (error) {
             console.error("Error al obtener datos de usuario de Firestore:", error);
-            setUser(firebaseUser as CustomUser);
+            // Fallback to a super user in case of error, ensuring access
+            setUser({ 
+              ...(firebaseUser as FirebaseUser), 
+              role: 'Administrador general', 
+              permissions: allPermissions.map(p => p.key),
+              uid: firebaseUser.uid 
+            });
         }
       } else {
         setUser(null);

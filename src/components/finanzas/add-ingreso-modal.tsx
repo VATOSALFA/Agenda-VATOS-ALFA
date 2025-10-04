@@ -25,7 +25,7 @@ import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit } fr
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import type { IngresoManual, User } from '@/lib/types';
 import { useLocal } from '@/contexts/local-context';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';

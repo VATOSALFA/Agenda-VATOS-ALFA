@@ -7,7 +7,7 @@ import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import type { Client } from '@/lib/types';
 
 import {

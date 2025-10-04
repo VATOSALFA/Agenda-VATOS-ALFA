@@ -35,7 +35,7 @@ import { Textarea } from '../ui/textarea';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Profesional, Local, Egreso, User as AppUser } from '@/lib/types';
 import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 

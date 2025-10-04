@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';

@@ -2,54 +2,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // Public read-only for booking flow
-    match /locales/{localId} {
-      allow read;
-      allow write: if isSignedIn();
-    }
-    match /servicios/{serviceId} {
-      allow read;
-      allow write: if isSignedIn();
-    }
-     match /categorias_servicios/{categoryId} {
-      allow read;
-      allow write: if isSignedIn();
-    }
-    match /profesionales/{profesionalId} {
-        allow read;
-        allow write: if isSignedIn();
-    }
-
-    // Authenticated users can create reservations
-    match /reservas/{reservationId} {
-      allow create;
-      allow read, update, delete: if isSignedIn();
-    }
-    
-    match /bloqueos_horario/{blockId} {
-      allow read, write: if isSignedIn();
-    }
-    
-    // Clients can be created by anyone during booking, but only read/updated by auth users.
-    match /clientes/{clientId} {
-        allow create;
-        allow read, update, delete: if isSignedIn();
-    }
-
-    // Conversations can be written to by anyone (for webhooks) but only read by signed-in users
-    match /conversations/{conversationId}/{message=**} {
-      allow read: if isSignedIn();
-      allow write;
-    }
-
-    // All other collections require authentication
+    // Allow read/write access to all documents for any authenticated user
     match /{document=**} {
-      allow read, write: if isSignedIn();
+      allow read, write: if request.auth != null;
     }
   }
 }

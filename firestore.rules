@@ -2,25 +2,39 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      // Allow anyone to read images (e.g., for public profiles)
-      allow read;
-      
-      // Allow authenticated users to upload files, but only if they are images under 3MB
-      allow create: if request.auth != null 
-                    && request.resource.size < 3 * 1024 * 1024
-                    && request.resource.contentType.matches('image/.*');
-
-      // Allow authenticated users to delete files.
-      // We don't check for resource size on delete as it's not available.
-      allow delete: if request.auth != null;
+    // Regla para las imágenes de los profesionales
+    match /profesionales/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-  }
-}
+    
+    // Regla para las imágenes de la empresa (logos)
+    match /empresa/{fileName} {
+       allow read: if true;
+       allow write: if request.auth != null;
+    }
 
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
+    // Regla para logos en recibos
+    match /receipt_logos/{fileName} {
+       allow read: if true;
+       allow write: if request.auth != null;
+    }
+    
+    // Regla para las imágenes de los productos
+    match /productos/{fileName} {
+        allow read: if true;
+        allow write: if request.auth != null && request.resource.size < 3 * 1024 * 1024;
+    }
+
+    // Regla para media de WhatsApp
+    match /whatsapp_media/{fileName} {
+       allow read: if true;
+       allow write: if request.auth != null;
+    }
+
+    // Regla general más restrictiva como fallback.
+    // Solo permite operaciones si no coincide con ninguna de las rutas más específicas de arriba.
+    match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
   }

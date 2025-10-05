@@ -3,7 +3,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -31,7 +31,6 @@ export function ImageUploader({
   onUploadEnd
 }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
@@ -95,7 +94,6 @@ export function ImageUploader({
     
     setIsUploading(true);
     if(onUploadStateChange) onUploadStateChange(true);
-    setUploadProgress(0);
 
     // Immediately remove the old image if it exists
     if (currentImageUrl) {
@@ -105,18 +103,9 @@ export function ImageUploader({
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
     
     try {
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-            }
-        );
-
-        await uploadTask;
-
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        // Use simpler uploadBytes function
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
 
         if(onUpload) onUpload(downloadURL);
         if(onUploadEnd) onUploadEnd(downloadURL);
@@ -128,12 +117,11 @@ export function ImageUploader({
         toast({
             variant: "destructive",
             title: "Error al subir la imagen",
-            description: `No se pudo subir la imagen. Causa: ${error.code}`,
+            description: `No se pudo subir la imagen. Causa: ${error.message || error.code}`,
         });
     } finally {
         setIsUploading(false);
         if(onUploadStateChange) onUploadStateChange(false);
-        setUploadProgress(0);
     }
 
   }, [folder, onUpload, toast, onUploadStateChange, onUploadEnd, currentImageUrl, handleRemoveImage]);
@@ -149,7 +137,6 @@ export function ImageUploader({
       <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm mt-2">Subiendo...</p>
-        <Progress value={uploadProgress} className="w-[80%] h-1 mt-2" />
       </div>
     );
   }

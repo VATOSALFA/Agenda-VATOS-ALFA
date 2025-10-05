@@ -171,7 +171,7 @@ export default function EmpresaPage() {
                   control={form.control}
                   render={({ field }) => (
                       <ImageUploader
-                          folder="empresa"
+                          folder="empresa_logos"
                           currentImageUrl={field.value}
                           onUpload={(url) => field.onChange(url)}
                           onRemove={() => field.onChange('')}

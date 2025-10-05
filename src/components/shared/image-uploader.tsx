@@ -3,13 +3,12 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, getMetadata } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { storage } from '@/lib/firebase-client';
-import { Progress } from '../ui/progress';
 
 interface ImageUploaderProps {
   folder: string;
@@ -17,8 +16,6 @@ interface ImageUploaderProps {
   onUpload?: (url: string) => void;
   onRemove?: () => void;
   className?: string;
-  onUploadStateChange?: (isUploading: boolean) => void;
-  onUploadEnd?: (url: string) => void;
 }
 
 export function ImageUploader({ 
@@ -27,8 +24,6 @@ export function ImageUploader({
   onUpload,
   onRemove,
   className,
-  onUploadStateChange,
-  onUploadEnd
 }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
@@ -36,13 +31,6 @@ export function ImageUploader({
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!currentImageUrl) return;
-
-    // Check if the URL is a Firebase Storage URL
-    const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
-    if (!isFirebaseUrl) {
-      if (onRemove) onRemove();
-      return;
-    }
 
     if (!storage) {
         toast({
@@ -55,21 +43,26 @@ export function ImageUploader({
 
     try {
         const imageRef = ref(storage, currentImageUrl);
+        // Check if the file exists before trying to delete it
+        await getMetadata(imageRef);
         await deleteObject(imageRef);
-        if (onRemove) onRemove();
         toast({ title: "Imagen eliminada" });
     } catch (error: any) {
         if (error.code === 'storage/object-not-found') {
-            console.warn("Image not found in storage, removing from UI.");
-            if (onRemove) onRemove();
+            console.warn("La imagen no existía en Storage, pero se limpiará la referencia.");
         } else {
-            console.error("Error deleting image:", error);
+            console.error("Error al eliminar la imagen:", error);
             toast({
                 variant: "destructive",
                 title: "Error al eliminar",
-                description: `No se pudo eliminar la imagen. Código: ${error.code}`,
+                description: `No se pudo eliminar la imagen. Causa: ${error.message}`,
             });
+            // Do not proceed if deletion fails for reasons other than not found
+            return;
         }
+    } finally {
+        // Always call onRemove to clear the URL from the state/form
+        if (onRemove) onRemove();
     }
   }, [currentImageUrl, onRemove, toast]);
 
@@ -93,22 +86,18 @@ export function ImageUploader({
     }
     
     setIsUploading(true);
-    if(onUploadStateChange) onUploadStateChange(true);
-
-    // Immediately remove the old image if it exists
-    if (currentImageUrl) {
-        await handleRemoveImage();
-    }
-
-    const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
     
     try {
-        // Use simpler uploadBytes function
+        // If there's an old image URL, attempt to delete it first.
+        if (currentImageUrl) {
+            await handleRemoveImage();
+        }
+
+        const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, file);
         const downloadURL = await getDownloadURL(snapshot.ref);
 
         if(onUpload) onUpload(downloadURL);
-        if(onUploadEnd) onUploadEnd(downloadURL);
         
         toast({ title: "¡Imagen subida con éxito!" });
 
@@ -121,10 +110,9 @@ export function ImageUploader({
         });
     } finally {
         setIsUploading(false);
-        if(onUploadStateChange) onUploadStateChange(false);
     }
 
-  }, [folder, onUpload, toast, onUploadStateChange, onUploadEnd, currentImageUrl, handleRemoveImage]);
+  }, [folder, onUpload, toast, currentImageUrl, handleRemoveImage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

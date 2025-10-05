@@ -41,7 +41,6 @@ export function ImageUploader({
     // Check if the URL is a Firebase Storage URL
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
     if (!isFirebaseUrl) {
-      // If it's not a Firebase URL (e.g., placehold.co), just remove it from the UI
       if (onRemove) onRemove();
       return;
     }
@@ -61,7 +60,6 @@ export function ImageUploader({
         if (onRemove) onRemove();
         toast({ title: "Imagen eliminada" });
     } catch (error: any) {
-        // If the object does not exist, it's fine. Just remove it from UI.
         if (error.code === 'storage/object-not-found') {
             console.warn("Image not found in storage, removing from UI.");
             if (onRemove) onRemove();
@@ -74,7 +72,7 @@ export function ImageUploader({
             });
         }
     }
-  }, [currentImageUrl, onRemove, storage, toast]);
+  }, [currentImageUrl, onRemove, toast]);
 
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -95,46 +93,50 @@ export function ImageUploader({
         return;
     }
     
+    setIsUploading(true);
+    if(onUploadStateChange) onUploadStateChange(true);
+    setUploadProgress(0);
+
     // Immediately remove the old image if it exists
     if (currentImageUrl) {
         await handleRemoveImage();
     }
 
-    setIsUploading(true);
-    if(onUploadStateChange) onUploadStateChange(true);
-    setUploadProgress(0);
-
     const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    
+    try {
+        const uploadTask = uploadBytesResumable(storageRef, file);
 
-    uploadTask.on('state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      },
-      (error) => {
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+            }
+        );
+
+        await uploadTask;
+
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+
+        if(onUpload) onUpload(downloadURL);
+        if(onUploadEnd) onUploadEnd(downloadURL);
+        
+        toast({ title: "¡Imagen subida con éxito!" });
+
+    } catch(error: any) {
         console.error("Error en la subida:", error);
         toast({
             variant: "destructive",
             title: "Error al subir la imagen",
             description: `No se pudo subir la imagen. Causa: ${error.code}`,
         });
+    } finally {
         setIsUploading(false);
         if(onUploadStateChange) onUploadStateChange(false);
-      },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          if(onUpload) onUpload(downloadURL);
-          if(onUploadEnd) onUploadEnd(downloadURL);
-          setIsUploading(false);
-          if(onUploadStateChange) onUploadStateChange(false);
-          setUploadProgress(0);
-          toast({ title: "¡Imagen subida con éxito!" });
-        });
-      }
-    );
+        setUploadProgress(0);
+    }
 
-  }, [folder, onUpload, toast, storage, onUploadStateChange, onUploadEnd, currentImageUrl, handleRemoveImage]);
+  }, [folder, onUpload, toast, onUploadStateChange, onUploadEnd, currentImageUrl, handleRemoveImage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

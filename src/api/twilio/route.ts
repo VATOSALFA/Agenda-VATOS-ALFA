@@ -1,6 +1,6 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/firebase-client';
+import { db } from '@/lib/firebase-admin'; // Usar admin-sdk aquí
 import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit, setDoc } from 'firebase/firestore';
 import Twilio from 'twilio';
 import { parseISO, format } from 'date-fns';

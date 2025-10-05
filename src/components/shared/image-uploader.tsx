@@ -36,12 +36,23 @@ export function ImageUploader({
 
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!currentImageUrl || !storage) return;
+    if (!currentImageUrl) return;
 
+    // Check if the URL is a Firebase Storage URL
     const isFirebaseUrl = currentImageUrl.includes('firebasestorage.googleapis.com');
     if (!isFirebaseUrl) {
+      // If it's not a Firebase URL (e.g., placehold.co), just remove it from the UI
       if (onRemove) onRemove();
       return;
+    }
+
+    if (!storage) {
+        toast({
+            variant: "destructive",
+            title: "Error de Configuración",
+            description: "El servicio de almacenamiento no está disponible.",
+        });
+        return;
     }
 
     try {
@@ -50,17 +61,21 @@ export function ImageUploader({
         if (onRemove) onRemove();
         toast({ title: "Imagen eliminada" });
     } catch (error: any) {
-        if (error.code !== 'storage/object-not-found') {
-             toast({
+        // If the object does not exist, it's fine. Just remove it from UI.
+        if (error.code === 'storage/object-not-found') {
+            console.warn("Image not found in storage, removing from UI.");
+            if (onRemove) onRemove();
+        } else {
+            console.error("Error deleting image:", error);
+            toast({
                 variant: "destructive",
                 title: "Error al eliminar",
-                description: "No se pudo eliminar la imagen del almacenamiento.",
+                description: `No se pudo eliminar la imagen. Código: ${error.code}`,
             });
-        } else {
-             if (onRemove) onRemove(); // Remove from UI even if it's already gone from storage
         }
     }
   }, [currentImageUrl, onRemove, storage, toast]);
+
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -80,6 +95,11 @@ export function ImageUploader({
         return;
     }
     
+    // Immediately remove the old image if it exists
+    if (currentImageUrl) {
+        await handleRemoveImage();
+    }
+
     setIsUploading(true);
     if(onUploadStateChange) onUploadStateChange(true);
     setUploadProgress(0);
@@ -93,11 +113,11 @@ export function ImageUploader({
         setUploadProgress(progress);
       },
       (error) => {
-        console.error("Upload error:", error);
+        console.error("Error en la subida:", error);
         toast({
             variant: "destructive",
-            title: "Error al subir",
-            description: `Hubo un problema al subir la imagen. Código: ${error.code}`,
+            title: "Error al subir la imagen",
+            description: `No se pudo subir la imagen. Causa: ${error.code}`,
         });
         setIsUploading(false);
         if(onUploadStateChange) onUploadStateChange(false);
@@ -109,11 +129,12 @@ export function ImageUploader({
           setIsUploading(false);
           if(onUploadStateChange) onUploadStateChange(false);
           setUploadProgress(0);
+          toast({ title: "¡Imagen subida con éxito!" });
         });
       }
     );
 
-  }, [folder, onUpload, toast, storage, onUploadStateChange, onUploadEnd]);
+  }, [folder, onUpload, toast, storage, onUploadStateChange, onUploadEnd, currentImageUrl, handleRemoveImage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

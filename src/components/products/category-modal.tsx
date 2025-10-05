@@ -17,10 +17,10 @@ interface CategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: (newCategoryId: string) => void;
-  existingCategories: ProductCategory[];
+  existingCategories?: ProductCategory[];
 }
 
-export function CategoryModal({ isOpen, onClose, onDataSaved, existingCategories }: CategoryModalProps) {
+export function CategoryModal({ isOpen, onClose, onDataSaved, existingCategories = [] }: CategoryModalProps) {
   const { toast } = useToast();
   const { db } = useAuth();
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -113,7 +113,7 @@ export function CategoryModal({ isOpen, onClose, onDataSaved, existingCategories
 
             <ScrollArea className="h-48 rounded-md border">
                 <div className="p-4">
-                {existingCategories.map((category) => (
+                {existingCategories && existingCategories.map((category) => (
                     <div key={category.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
                         <span className="text-sm">{category.name}</span>
                         <Button 
@@ -126,7 +126,7 @@ export function CategoryModal({ isOpen, onClose, onDataSaved, existingCategories
                         </Button>
                     </div>
                 ))}
-                 {existingCategories.length === 0 && (
+                 {(!existingCategories || existingCategories.length === 0) && (
                     <p className="text-center text-sm text-muted-foreground py-4">No hay categorías creadas.</p>
                  )}
                 </div>

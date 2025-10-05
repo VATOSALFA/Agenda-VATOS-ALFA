@@ -16,11 +16,11 @@ import { collection, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestor
 interface CategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCategoryCreated: (category: ServiceCategory) => void;
-  existingCategories: ServiceCategory[];
+  onDataSaved: (newCategory: ServiceCategory) => void;
+  existingCategories?: ServiceCategory[];
 }
 
-export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCategories }: CategoryModalProps) {
+export function CategoryModal({ isOpen, onClose, onDataSaved, existingCategories = [] }: CategoryModalProps) {
   const { toast } = useToast();
   const { db } = useAuth();
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -44,7 +44,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
         });
         const newCategory = { id: docRef.id, name: newCategoryName.trim(), order: existingCategories.length };
         setNewCategoryName('');
-        onCategoryCreated(newCategory);
+        if(onDataSaved) onDataSaved(newCategory);
         toast({
             title: 'Categoría agregada',
             description: `La categoría "${newCategory.name}" ha sido creada.`,
@@ -108,7 +108,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
 
             <ScrollArea className="h-48 rounded-md border">
                 <div className="p-4">
-                {existingCategories.map((category) => (
+                {existingCategories && existingCategories.map((category) => (
                     <div key={category.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
                         <span className="text-sm">{category.name}</span>
                         <Button 
@@ -121,7 +121,7 @@ export function CategoryModal({ isOpen, onClose, onCategoryCreated, existingCate
                         </Button>
                     </div>
                 ))}
-                 {existingCategories.length === 0 && (
+                 {(!existingCategories || existingCategories.length === 0) && (
                     <p className="text-center text-sm text-muted-foreground py-4">No hay categorías creadas.</p>
                  )}
                 </div>

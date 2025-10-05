@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, MouseEvent, useEffect, useMemo, useCallback } from 'react';
@@ -55,7 +56,6 @@ import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, Tim
 
 interface EmpresaSettings {
     logo_url?: string;
-    receipt_logo_url?: string;
 }
 
 interface AgendaViewProps {
@@ -153,7 +153,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
-  const logoUrl = empresaData?.[0]?.receipt_logo_url;
+  const logoUrl = empresaData?.[0]?.logo_url;
 
 
   useEffect(() => {

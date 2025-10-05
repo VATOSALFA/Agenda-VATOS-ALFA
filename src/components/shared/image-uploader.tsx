@@ -2,19 +2,20 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { ref, uploadBytes, getDownloadURL, deleteObject, getMetadata } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '../ui/button';
 import { storage } from '@/lib/firebase-client';
+import { useDropzone } from 'react-dropzone';
 
 interface ImageUploaderProps {
   folder: string;
   currentImageUrl?: string | null;
   onUpload?: (url: string) => void;
   onRemove?: () => void;
+  onUploadStateChange?: (isUploading: boolean) => void;
   className?: string;
 }
 
@@ -23,9 +24,10 @@ export function ImageUploader({
   currentImageUrl, 
   onUpload,
   onRemove,
+  onUploadStateChange,
   className,
 }: ImageUploaderProps) {
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
   const handleRemoveImage = useCallback(async (e?: React.MouseEvent) => {
@@ -33,23 +35,22 @@ export function ImageUploader({
     if (!currentImageUrl) return;
 
     if (!storage) {
-        toast({
-            variant: "destructive",
-            title: "Error de Configuración",
-            description: "El servicio de almacenamiento no está disponible.",
-        });
+        toast({ variant: "destructive", title: "Error de Configuración", description: "El servicio de almacenamiento no está disponible." });
         return;
     }
+    
+    setIsProcessing(true);
+    onUploadStateChange?.(true);
 
     try {
         const imageRef = ref(storage, currentImageUrl);
-        // Check if the file exists before trying to delete it
-        await getMetadata(imageRef);
         await deleteObject(imageRef);
         toast({ title: "Imagen eliminada" });
+        if (onRemove) onRemove();
     } catch (error: any) {
         if (error.code === 'storage/object-not-found') {
             console.warn("La imagen no existía en Storage, pero se limpiará la referencia.");
+            if (onRemove) onRemove();
         } else {
             console.error("Error al eliminar la imagen:", error);
             toast({
@@ -57,15 +58,12 @@ export function ImageUploader({
                 title: "Error al eliminar",
                 description: `No se pudo eliminar la imagen. Causa: ${error.message}`,
             });
-            // Do not proceed if deletion fails for reasons other than not found
-            return;
         }
     } finally {
-        // Always call onRemove to clear the URL from the state/form
-        if (onRemove) onRemove();
+        setIsProcessing(false);
+        onUploadStateChange?.(false);
     }
-  }, [currentImageUrl, onRemove, toast]);
-
+  }, [currentImageUrl, onRemove, toast, onUploadStateChange]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -77,18 +75,14 @@ export function ImageUploader({
     }
 
     if (file.size > 3 * 1024 * 1024) { // 3MB limit
-        toast({
-            variant: "destructive",
-            title: "Archivo demasiado grande",
-            description: "El tamaño máximo de la imagen es de 3MB.",
-        });
+        toast({ variant: "destructive", title: "Archivo demasiado grande", description: "El tamaño máximo es de 3MB." });
         return;
     }
     
-    setIsUploading(true);
+    setIsProcessing(true);
+    onUploadStateChange?.(true);
     
     try {
-        // If there's an old image URL, attempt to delete it first.
         if (currentImageUrl) {
             await handleRemoveImage();
         }
@@ -106,13 +100,14 @@ export function ImageUploader({
         toast({
             variant: "destructive",
             title: "Error al subir la imagen",
-            description: `No se pudo subir la imagen. Causa: ${error.message || error.code}`,
+            description: `No se pudo subir la imagen. Causa: ${error.code || error.message}`,
         });
     } finally {
-        setIsUploading(false);
+        setIsProcessing(false);
+        onUploadStateChange?.(false);
     }
 
-  }, [folder, onUpload, toast, currentImageUrl, handleRemoveImage]);
+  }, [folder, onUpload, toast, currentImageUrl, handleRemoveImage, onUploadStateChange]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -120,11 +115,11 @@ export function ImageUploader({
     multiple: false,
   });
   
-  if (isUploading) {
+  if (isProcessing) {
     return (
       <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-full text-center h-32 w-32 ${className}`}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm mt-2">Subiendo...</p>
+        <p className="text-sm mt-2">Procesando...</p>
       </div>
     );
   }

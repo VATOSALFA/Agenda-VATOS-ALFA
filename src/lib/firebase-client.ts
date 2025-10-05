@@ -18,8 +18,6 @@ const firebaseConfig: FirebaseOptions = {
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-console.log("✅ Firebase App del cliente inicializada.");
-
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

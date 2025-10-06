@@ -6,9 +6,7 @@
  * - sendTemplatedWhatsAppMessage - A function that sends a message using a specific Content SID and variables.
  * - TemplatedWhatsAppMessageInput - The input schema for the flow.
  */
-if (process.env.NODE_ENV === 'development') {
-  require('dotenv').config();
-}
+
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';

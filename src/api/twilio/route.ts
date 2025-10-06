@@ -5,10 +5,6 @@ import { collection, query, where, getDocs, updateDoc, doc, runTransaction, incr
 import Twilio from 'twilio';
 import { parseISO, format } from 'date-fns';
 
-if (process.env.NODE_ENV === 'development') {
-  require('dotenv').config();
-}
-
 async function handleClientResponse(from: string, messageBody: string) {
     const normalizedMessage = messageBody.trim().toLowerCase();
     

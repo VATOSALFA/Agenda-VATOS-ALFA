@@ -3,9 +3,7 @@
 /**
  * @fileOverview A flow to send a WhatsApp message using Twilio.
  */
-if (process.env.NODE_ENV === 'development') {
-  require('dotenv').config();
-}
+
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';

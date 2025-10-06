@@ -407,11 +407,8 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                <ImageUploader 
                                 folder="profesionales"
                                 currentImageUrl={field.value}
-                                onUploadStateChange={setIsUploading}
-                                onUploadEnd={(url) => {
-                                    form.setValue('avatar', url, { shouldDirty: true });
-                                }}
-                                onRemove={() => form.setValue('avatar', '', { shouldDirty: true })}
+                                onUpload={(url) => field.onChange(url)}
+                                onRemove={() => field.onChange('')}
                                />
                             )}
                          />

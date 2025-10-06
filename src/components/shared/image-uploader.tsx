@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '@/lib/firebase-client';
@@ -17,7 +17,6 @@ interface ImageUploaderProps {
   currentImageUrl?: string | null;
   onUpload?: (url: string) => void;
   onRemove?: () => void;
-  onUploadStateChange?: (isUploading: boolean) => void;
   className?: string;
 }
 
@@ -26,53 +25,49 @@ export function ImageUploader({
   currentImageUrl, 
   onUpload,
   onRemove,
-  onUploadStateChange,
   className,
 }: ImageUploaderProps) {
   
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
-  const currentImageRef = useRef<string | null>(currentImageUrl || null);
 
-  const handleUpload = useCallback((file: File) => {
+  const handleUpload = useCallback(async (file: File) => {
     if (!storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'El servicio de almacenamiento no está disponible.' });
         return;
     }
     
-    if (onUploadStateChange) onUploadStateChange(true);
-    setUploadProgress(0);
+    setIsUploading(true);
 
-    const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on('state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      },
-      (error) => {
-        console.error("Error al subir imagen:", error);
-        toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.message}` });
-        setUploadProgress(null);
-        if (onUploadStateChange) onUploadStateChange(false);
-      },
-      async () => {
-        try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            if (onUpload) onUpload(downloadURL);
-            currentImageRef.current = downloadURL;
-            toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
-        } catch (error) {
-            console.error("Error al obtener la URL de descarga:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo obtener la URL de la imagen subida.' });
-        } finally {
-            setUploadProgress(null);
-            if (onUploadStateChange) onUploadStateChange(false);
+    try {
+        if (currentImageUrl) {
+            try {
+                const oldImageRef = ref(storage, currentImageUrl);
+                await deleteObject(oldImageRef);
+            } catch (error: any) {
+                if (error.code !== 'storage/object-not-found') {
+                    console.warn("No se pudo borrar la imagen anterior, puede que ya no exista:", error);
+                }
+            }
         }
-      }
-    );
-  }, [folder, onUpload, onUploadStateChange, toast]);
+
+        const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
+        const uploadTask = await uploadBytesResumable(storageRef, file);
+        const downloadURL = await getDownloadURL(uploadTask.ref);
+
+        if (onUpload) {
+            onUpload(downloadURL);
+        }
+        
+        toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
+
+    } catch (error: any) {
+        console.error("Error al subir imagen:", error);
+        toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code} - ${error.message}` });
+    } finally {
+        setIsUploading(false);
+    }
+  }, [folder, currentImageUrl, onUpload, toast]);
 
   const handleRemove = async () => {
     if (!currentImageUrl || !storage) return;
@@ -81,14 +76,12 @@ export function ImageUploader({
       const imageRef = ref(storage, currentImageUrl);
       await deleteObject(imageRef);
       if (onRemove) onRemove();
-      currentImageRef.current = null;
       toast({ title: 'Imagen eliminada', description: 'La imagen ha sido eliminada del almacenamiento.' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al eliminar la imagen:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar la imagen. Puede que ya no exista.' });
        // If deletion fails (e.g. file not found), still clear it from the UI.
       if (onRemove) onRemove();
-      currentImageRef.current = null;
     }
   };
 
@@ -98,12 +91,11 @@ export function ImageUploader({
     multiple: false
   });
 
-  if (uploadProgress !== null) {
+  if (isUploading) {
     return (
         <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-full ${className}`}>
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">Subiendo...</p>
-            <Progress value={uploadProgress} className="w-full mt-2" />
         </div>
     );
   }

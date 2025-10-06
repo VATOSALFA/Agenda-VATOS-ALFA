@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, AlertCircle } from "lucide-react";
+import { Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { useForm, Controller } from "react-hook-form";
@@ -16,7 +16,6 @@ import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
 import { storage } from "@/lib/firebase-client";
 import { ref, listAll } from "firebase/storage";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 
 interface EmpresaSettings {
@@ -32,9 +31,6 @@ export default function EmpresaPage() {
     const { toast } = useToast();
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [isTesting, setIsTesting] = useState(false);
-
     
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
     const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
@@ -87,35 +83,6 @@ export default function EmpresaPage() {
             setIsSubmitting(false);
         }
     }
-    
-    const handleStorageTest = async () => {
-        setTestResult(null);
-        setIsTesting(true);
-        if (!storage) {
-            setTestResult({ type: 'error', message: 'La instancia de Firebase Storage no está disponible en el cliente.' });
-            setIsTesting(false);
-            return;
-        }
-
-        try {
-            const listRef = ref(storage);
-            const res = await listAll(listRef);
-            const folderNames = res.prefixes.map(folderRef => folderRef.name).join(', ');
-            setTestResult({ type: 'success', message: `¡Conexión exitosa! Se pueden leer las carpetas raíz: ${folderNames || 'ninguna'}.` });
-        } catch (error: any) {
-             let errorMessage = `Falló la prueba de conexión: ${error.message}`;
-             if (error.code === 'storage/unauthorized') {
-                errorMessage = "Error de Permisos (storage/unauthorized): No tienes permiso para listar los archivos. Revisa las reglas de Storage en `firestore.rules`.";
-             } else if (error.code === 'storage/object-not-found') {
-                errorMessage = "El objeto no fue encontrado (lo cual es bueno para una prueba de listado, pero inesperado).";
-             } else if (error.code === 'storage/unknown' && error.message.includes('CORS')) {
-                errorMessage = "Error de CORS: El servidor de Storage ha bloqueado la solicitud. Esto es un problema de configuración en la consola de Google Cloud, no en el código. Se debe permitir el origen de la aplicación en la configuración CORS del bucket.";
-             }
-            setTestResult({ type: 'error', message: errorMessage });
-        } finally {
-            setIsTesting(false);
-        }
-    }
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -125,28 +92,6 @@ export default function EmpresaPage() {
           Configura el nombre de tu empresa, descripción y dirección de tu sitio web de agendamiento.
         </p>
       </div>
-
-       <Card>
-            <CardHeader>
-                <CardTitle>Prueba de Conexión a Storage</CardTitle>
-                <CardDescription>
-                    Usa este botón para verificar si la aplicación puede comunicarse con Firebase Storage.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Button onClick={handleStorageTest} disabled={isTesting}>
-                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Realizar Prueba de Conexión
-                </Button>
-                {testResult && (
-                    <Alert variant={testResult.type === 'error' ? 'destructive' : 'default'} className="mt-4">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>{testResult.type === 'success' ? 'Éxito' : 'Error de Conexión'}</AlertTitle>
-                        <AlertDescription>{testResult.message}</AlertDescription>
-                    </Alert>
-                )}
-            </CardContent>
-        </Card>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
         <Card>

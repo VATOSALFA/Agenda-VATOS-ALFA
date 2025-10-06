@@ -123,7 +123,7 @@ export default function EmpresaPage() {
         
         <Card>
             <CardHeader>
-                <CardTitle>Logo para comprobantes de pago</CardTitle>
+                <CardTitle>Logo de la empresa</CardTitle>
                 <CardDescription>Este logo aparecerá en la parte superior de los recibos y comprobantes.</CardDescription>
             </CardHeader>
             <CardContent>

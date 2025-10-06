@@ -33,6 +33,7 @@ export default function EmpresaPage() {
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
 
     
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
@@ -89,8 +90,10 @@ export default function EmpresaPage() {
     
     const handleStorageTest = async () => {
         setTestResult(null);
+        setIsTesting(true);
         if (!storage) {
-            setTestResult({ type: 'error', message: 'La instancia de Firebase Storage no está disponible.' });
+            setTestResult({ type: 'error', message: 'La instancia de Firebase Storage no está disponible en el cliente.' });
+            setIsTesting(false);
             return;
         }
 
@@ -98,9 +101,19 @@ export default function EmpresaPage() {
             const listRef = ref(storage);
             const res = await listAll(listRef);
             const folderNames = res.prefixes.map(folderRef => folderRef.name).join(', ');
-            setTestResult({ type: 'success', message: `¡Conexión exitosa! Se encontraron las carpetas: ${folderNames || 'ninguna'}. La lectura de Storage funciona.` });
+            setTestResult({ type: 'success', message: `¡Conexión exitosa! Se pueden leer las carpetas raíz: ${folderNames || 'ninguna'}.` });
         } catch (error: any) {
-             setTestResult({ type: 'error', message: `Falló la prueba de conexión: ${error.message} (Código: ${error.code})` });
+             let errorMessage = `Falló la prueba de conexión: ${error.message}`;
+             if (error.code === 'storage/unauthorized') {
+                errorMessage = "Error de Permisos (storage/unauthorized): No tienes permiso para listar los archivos. Revisa las reglas de Storage en `firestore.rules`.";
+             } else if (error.code === 'storage/object-not-found') {
+                errorMessage = "El objeto no fue encontrado (lo cual es bueno para una prueba de listado, pero inesperado).";
+             } else if (error.code === 'storage/unknown' && error.message.includes('CORS')) {
+                errorMessage = "Error de CORS: El servidor de Storage ha bloqueado la solicitud. Esto es un problema de configuración en la consola de Google Cloud, no en el código. Se debe permitir el origen de la aplicación en la configuración CORS del bucket.";
+             }
+            setTestResult({ type: 'error', message: errorMessage });
+        } finally {
+            setIsTesting(false);
         }
     }
 
@@ -121,11 +134,14 @@ export default function EmpresaPage() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <Button onClick={handleStorageTest}>Realizar Prueba de Conexión</Button>
+                <Button onClick={handleStorageTest} disabled={isTesting}>
+                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Realizar Prueba de Conexión
+                </Button>
                 {testResult && (
                     <Alert variant={testResult.type === 'error' ? 'destructive' : 'default'} className="mt-4">
                         <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>{testResult.type === 'success' ? 'Éxito' : 'Error'}</AlertTitle>
+                        <AlertTitle>{testResult.type === 'success' ? 'Éxito' : 'Error de Conexión'}</AlertTitle>
                         <AlertDescription>{testResult.message}</AlertDescription>
                     </Alert>
                 )}

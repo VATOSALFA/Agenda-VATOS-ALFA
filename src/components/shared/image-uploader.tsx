@@ -18,6 +18,8 @@ interface ImageUploaderProps {
   onUpload?: (url: string) => void;
   onRemove?: () => void;
   className?: string;
+  onUploadStateChange?: (isUploading: boolean) => void;
+  onUploadEnd?: (url: string) => void; // Added for more specific control
 }
 
 export function ImageUploader({ 
@@ -26,9 +28,12 @@ export function ImageUploader({
   onUpload,
   onRemove,
   className,
+  onUploadStateChange,
+  onUploadEnd
 }: ImageUploaderProps) {
   
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const handleUpload = useCallback(async (file: File) => {
@@ -38,39 +43,65 @@ export function ImageUploader({
     }
     
     setIsUploading(true);
+    if(onUploadStateChange) onUploadStateChange(true);
 
     try {
         if (currentImageUrl) {
             try {
                 const oldImageRef = ref(storage, currentImageUrl);
-                await deleteObject(oldImageRef);
+                await deleteObject(oldImageRef).catch(error => {
+                   if (error.code !== 'storage/object-not-found') {
+                     throw error;
+                   }
+                   console.log("La imagen anterior no se encontró, continuando con la subida.");
+                });
             } catch (error: any) {
-                if (error.code !== 'storage/object-not-found') {
-                    console.warn("No se pudo borrar la imagen anterior, puede que ya no exista:", error);
-                }
+                console.warn("No se pudo borrar la imagen anterior, puede que ya no exista:", error);
             }
         }
 
         const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
-        const uploadTask = await uploadBytesResumable(storageRef, file);
-        const downloadURL = await getDownloadURL(uploadTask.ref);
+        const uploadTask = uploadBytesResumable(storageRef, file);
 
-        if (onUpload) {
-            onUpload(downloadURL);
-        }
-        
-        toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+            },
+            (error) => {
+                console.error("Error al subir imagen:", error);
+                toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code}` });
+                setIsUploading(false);
+                if(onUploadStateChange) onUploadStateChange(false);
+            },
+            async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                if (onUpload) {
+                    onUpload(downloadURL);
+                }
+                if (onUploadEnd) {
+                    onUploadEnd(downloadURL);
+                }
+                toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
+                setIsUploading(false);
+                if(onUploadStateChange) onUploadStateChange(false);
+                setUploadProgress(0);
+            }
+        );
 
     } catch (error: any) {
-        console.error("Error al subir imagen:", error);
-        toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code} - ${error.message}` });
-    } finally {
+        console.error("Error al iniciar la subida:", error);
+        toast({ variant: 'destructive', title: 'Error', description: `No se pudo iniciar la subida: ${error.message}` });
         setIsUploading(false);
+        if(onUploadStateChange) onUploadStateChange(false);
     }
-  }, [folder, currentImageUrl, onUpload, toast]);
+  }, [folder, currentImageUrl, onUpload, onUploadEnd, onUploadStateChange, toast]);
 
   const handleRemove = async () => {
     if (!currentImageUrl || !storage) return;
+    
+    setIsUploading(true); // Reuse uploading state to show loading
+    if(onUploadStateChange) onUploadStateChange(true);
 
     try {
       const imageRef = ref(storage, currentImageUrl);
@@ -79,9 +110,16 @@ export function ImageUploader({
       toast({ title: 'Imagen eliminada', description: 'La imagen ha sido eliminada del almacenamiento.' });
     } catch (error: any) {
       console.error("Error al eliminar la imagen:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar la imagen. Puede que ya no exista.' });
-       // If deletion fails (e.g. file not found), still clear it from the UI.
+      // Even if deletion fails (e.g., file not found), still clear it from the UI.
       if (onRemove) onRemove();
+      if (error.code === 'storage/object-not-found') {
+        toast({ variant: 'default', title: 'Limpiado', description: 'La imagen ya no existía en el almacenamiento y se ha limpiado la referencia.' });
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar la imagen.' });
+      }
+    } finally {
+        setIsUploading(false);
+        if(onUploadStateChange) onUploadStateChange(false);
     }
   };
 
@@ -93,16 +131,17 @@ export function ImageUploader({
 
   if (isUploading) {
     return (
-        <div className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-full ${className}`}>
+        <div className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40', className)}>
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">Subiendo...</p>
+            {uploadProgress > 0 && <Progress value={uploadProgress} className="w-full mt-2 h-2" />}
         </div>
     );
   }
   
   if (currentImageUrl) {
     return (
-        <div className={`relative w-40 h-40 rounded-lg overflow-hidden group ${className}`}>
+        <div className={cn('relative w-40 h-40 rounded-lg overflow-hidden group', className)}>
             <Image src={currentImageUrl} alt="Imagen subida" layout="fill" objectFit="cover" />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Button variant="destructive" size="icon" onClick={handleRemove}>
@@ -116,13 +155,13 @@ export function ImageUploader({
   return (
     <div
       {...getRootProps()}
-      className={cn(`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-full cursor-pointer hover:border-primary transition-colors ${className}`, {
+      className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40 cursor-pointer hover:border-primary transition-colors', className, {
         'border-primary bg-primary/5': isDragActive,
       })}
     >
       <input {...getInputProps()} />
       <UploadCloud className="h-8 w-8 text-muted-foreground" />
-      <p className="mt-2 text-sm text-muted-foreground">Arrastra una imagen o haz clic para seleccionarla</p>
+      <p className="mt-2 text-sm text-muted-foreground text-center">Arrastra o haz clic para subir</p>
     </div>
   );
 }

@@ -107,24 +107,22 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
         const { commission_value, commission_type, ...restOfData } = data;
 
         // Clean up numeric fields that might be NaN if left empty
-        const cleanData = Object.fromEntries(
-          Object.entries(restOfData).map(([key, value]) => {
-            if (typeof value === 'number' && isNaN(value)) {
-              return [key, null]; // Or undefined, depending on your DB schema. null is safer for Firestore.
-            }
-            return [key, value];
-          })
-        );
+        const cleanedData = {
+          ...restOfData,
+          purchase_cost: isNaN(Number(restOfData.purchase_cost)) ? null : Number(restOfData.purchase_cost),
+          internal_price: isNaN(Number(restOfData.internal_price)) ? null : Number(restOfData.internal_price),
+          stock_alarm_threshold: isNaN(Number(restOfData.stock_alarm_threshold)) ? null : Number(restOfData.stock_alarm_threshold),
+        };
         
         const dataToSave = {
-            ...cleanData,
+            ...cleanedData,
             commission: {
-                value: commission_value || 0,
+                value: isNaN(Number(commission_value)) ? 0 : Number(commission_value),
                 type: commission_type
             },
             created_at: product ? product.created_at : Timestamp.now(),
             updated_at: Timestamp.now(),
-            images: data.images ? data.images.map(img => img.value) : []
+            images: data.images ? data.images.map(img => img.value).filter(Boolean) : []
         };
 
 

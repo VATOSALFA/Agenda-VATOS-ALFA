@@ -83,18 +83,23 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
    });
 
   useEffect(() => {
-    form.reset(product ? { 
+    if (product) {
+      form.reset({
         ...product,
         commission_value: product.commission?.value,
         commission_type: product.commission?.type,
-        images: product.images?.map(img => ({value: img})) || []
-    } : {
+        images: product.images?.map(imgUrl => ({ value: imgUrl })) || []
+      });
+    } else {
+      form.reset({
         nombre: '', barcode: '', brand_id: '', category_id: '', presentation_id: '',
         public_price: 0, stock: 0, purchase_cost: 0, internal_price: 0, commission_value: 0,
         commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: 0, notification_email: '',
         images: []
-    })
-  }, [product, form]);
+      });
+    }
+  }, [product, form, isOpen]);
+
 
   const handleSubModalDataSaved = (entityType: 'category' | 'brand' | 'presentation', newEntityId: string) => {
     setQueryKey(prev => prev + 1); // Refetch entities
@@ -106,7 +111,8 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     try {
         const { commission_value, commission_type, ...restOfData } = data;
 
-        const parseOptionalNumber = (value: any) => {
+        const parseOptionalNumber = (value: any): number | null => {
+            if (value === '' || value === null || value === undefined) return null;
             const num = Number(value);
             return isNaN(num) ? null : num;
         };
@@ -115,12 +121,12 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
             ...restOfData,
             public_price: Number(restOfData.public_price),
             stock: Number(restOfData.stock),
-            purchase_cost: parseOptionalNumber(restOfData.purchase_cost),
-            internal_price: parseOptionalNumber(restOfData.internal_price),
-            stock_alarm_threshold: parseOptionalNumber(restOfData.stock_alarm_threshold),
+            purchase_cost: parseOptionalNumber(restOfData.purchase_cost) ?? undefined,
+            internal_price: parseOptionalNumber(restOfData.internal_price) ?? undefined,
+            stock_alarm_threshold: parseOptionalNumber(restOfData.stock_alarm_threshold) ?? undefined,
             commission: {
                 value: parseOptionalNumber(commission_value) ?? 0,
-                type: commission_type
+                type: commission_type || '%'
             },
             images: data.images?.map(img => img.value).filter(Boolean) || [],
             updated_at: Timestamp.now(),
@@ -155,12 +161,12 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       
       onDataSaved();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving product: ", error);
       toast({
         variant: "destructive",
         title: "Error al guardar",
-        description: "No se pudo guardar el producto. Verifique todos los campos y vuelva a intentarlo.",
+        description: `No se pudo guardar el producto. ${error.message}` || "Verifique todos los campos y vuelva a intentarlo.",
       });
     } finally {
       setIsSubmitting(false);

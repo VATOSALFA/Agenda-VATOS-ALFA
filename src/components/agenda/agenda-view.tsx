@@ -62,7 +62,7 @@ interface AgendaViewProps {
   onDataRefresh: () => void;
 }
 
-const HOURLY_SLOT_HEIGHT = 48; // Each hour slot is 48px tall
+const MINUTE_HEIGHT = 0.8; // 48px for 60 minutes = 0.8px per minute
 
 const useCurrentTime = () => {
     const [time, setTime] = useState<Date | null>(null);
@@ -335,7 +335,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const y = e.clientY - rect.top;
     
     const totalMinutesInGrid = (endHour - startHour) * 60;
-    const gridHeight = (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)) * (endHour - startHour);
+    const gridHeight = totalMinutesInGrid * MINUTE_HEIGHT;
 
     const minutesSinceStart = (y / gridHeight) * totalMinutesInGrid;
     const slotIndex = Math.floor(minutesSinceStart / slotDurationMinutes);
@@ -493,13 +493,9 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   };
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
-    const totalMinutesInGrid = (endHour - startHour) * 60;
-    const gridHeight = (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)) * (endHour - startHour);
-
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / totalMinutesInGrid) * gridHeight;
-    const height = (durationDecimal * 60 / totalMinutesInGrid) * gridHeight;
-    
+    const top = minutesFromAgendaStart * MINUTE_HEIGHT;
+    const height = durationDecimal * 60 * MINUTE_HEIGHT;
     return { top: `${top}px`, height: `${height}px` };
   };
   
@@ -507,12 +503,10 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
 
-    const totalMinutesInGrid = (endHour - startHour) * 60;
-    const gridHeight = (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)) * (endHour - startHour);
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = (minutesFromAgendaStart / totalMinutesInGrid) * gridHeight;
+    const top = minutesFromAgendaStart * MINUTE_HEIGHT;
 
-    return { top: `${top}px`, height: `${HOURLY_SLOT_HEIGHT / (60 / slotDurationMinutes)}px`};
+    return { top: `${top}px`, height: `${slotDurationMinutes * MINUTE_HEIGHT}px` };
   }
 
   const currentTimeTop = useMemo(() => {
@@ -521,12 +515,9 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const totalMinutesStart = startHour * 60;
     if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
     
-    const totalMinutesInGrid = (endHour - startHour) * 60;
-    const gridHeight = (HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)) * (endHour - startHour);
-
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
-    return (elapsedMinutes / totalMinutesInGrid) * gridHeight;
-  }, [currentTime, date, startHour, endHour, slotDurationMinutes]);
+    return elapsedMinutes * MINUTE_HEIGHT;
+  }, [currentTime, date, startHour, endHour]);
 
 
   const formatHour = (hour: number) => {
@@ -661,7 +652,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                     <div className="flex-shrink-0 sticky left-0 z-10 bg-white">
                         <div className="flex flex-col">
                             {timeSlots.slice(0, -1).map((time, index) => (
-                                <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="border-b flex items-center justify-center text-center">
+                                <div key={index} style={{ height: `${slotDurationMinutes * MINUTE_HEIGHT}px`}} className="border-b flex items-center justify-center text-center">
                                     <span className="text-xs text-muted-foreground font-semibold">{time}</span>
                                 </div>
                             ))}
@@ -694,7 +685,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                 {/* Background Grid Cells */}
                                 <div className="flex flex-col">
                                     {timeSlots.slice(0, -1).map((time, index) => (
-                                        <div key={index} style={{ height: `${HOURLY_SLOT_HEIGHT * (60 / slotDurationMinutes)}px`}} className="bg-white border-b" />
+                                        <div key={index} style={{ height: `${slotDurationMinutes * MINUTE_HEIGHT}px`}} className="bg-white border-b" />
                                     ))}
                                 </div>
                                 {currentTimeTop > -1 && <div className="absolute w-full h-0.5 bg-red-500 z-20" style={{top: `${currentTimeTop}px`}}></div>}
@@ -702,7 +693,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                 {!isWorking && (
                                     <NonWorkBlock
                                       top={0}
-                                      height={HOURLY_SLOT_HEIGHT * timeSlots.length}
+                                      height={timeSlots.length * slotDurationMinutes * MINUTE_HEIGHT}
                                       text="Día no laboral"
                                     />
                                 )}

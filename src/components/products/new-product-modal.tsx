@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -44,7 +43,7 @@ const newProductSchema = z.object({
   description: z.string().optional(),
   stock_alarm_threshold: z.coerce.number().optional(),
   notification_email: z.string().email('Email inválido').optional().or(z.literal('')),
-  images: z.array(z.string()).optional().default([]),
+  images: z.array(z.object({ value: z.string() })).optional().default([]),
 });
 
 type NewProductFormData = z.infer<typeof newProductSchema>;
@@ -70,16 +69,11 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
 
   const form = useForm<NewProductFormData>({
     resolver: zodResolver(newProductSchema),
-    defaultValues: product ? {
-        ...product,
-        commission_value: product.commission?.value,
-        commission_type: product.commission?.type,
-        images: product.images || []
-    } : {
+    defaultValues: {
       stock: 0,
       includes_vat: false,
       commission_type: '%',
-      images: []
+      images: [],
     }
   });
 
@@ -93,7 +87,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
         ...product,
         commission_value: product.commission?.value,
         commission_type: product.commission?.type,
-        images: product.images || []
+        images: product.images?.map(img => ({value: img})) || []
     } : {
         nombre: '', barcode: '', brand_id: '', category_id: '', presentation_id: '',
         public_price: 0, stock: 0, purchase_cost: 0, internal_price: 0, commission_value: 0,
@@ -118,7 +112,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
             },
             created_at: product ? product.created_at : Timestamp.now(),
             updated_at: Timestamp.now(),
-            images: data.images || [] // Ensure images is always an array
+            images: data.images?.map(img => img.value) || []
         };
 
         if (product) {
@@ -195,9 +189,9 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                                     currentImageUrl={fields[index]?.value}
                                     onUpload={(url) => {
                                         if (fields[index]) {
-                                            update(index, url);
+                                            update(index, { value: url });
                                         } else {
-                                            append(url);
+                                            append({ value: url });
                                         }
                                     }}
                                     onRemove={() => {

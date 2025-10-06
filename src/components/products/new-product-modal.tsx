@@ -83,7 +83,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     }
   });
 
-   const { fields, append, remove } = useFieldArray({
+   const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "images"
    });
@@ -118,6 +118,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
             },
             created_at: product ? product.created_at : Timestamp.now(),
             updated_at: Timestamp.now(),
+            images: data.images || [] // Ensure images is always an array
         };
 
         if (product) {
@@ -187,13 +188,23 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {[0, 1, 2].map(index => (
+                             {[...Array(3)].map((_, index) => (
                                 <ImageUploader
-                                    key={index}
+                                    key={fields[index]?.id || `placeholder-${index}`}
                                     folder="productos"
-                                    currentImageUrl={form.getValues(`images.${index}`)}
-                                    onUpload={(url) => form.setValue(`images.${index}`, url)}
-                                    onRemove={() => form.setValue(`images.${index}`, '')}
+                                    currentImageUrl={fields[index]?.value}
+                                    onUpload={(url) => {
+                                        if (fields[index]) {
+                                            update(index, url);
+                                        } else {
+                                            append(url);
+                                        }
+                                    }}
+                                    onRemove={() => {
+                                        if (fields[index]) {
+                                            remove(index);
+                                        }
+                                    }}
                                 />
                             ))}
                         </div>

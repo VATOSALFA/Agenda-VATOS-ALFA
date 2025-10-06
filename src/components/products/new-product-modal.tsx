@@ -18,7 +18,6 @@ import { Info, Loader2, Plus } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Product, ProductCategory, ProductBrand, ProductPresentation } from '@/lib/types';
-import { db } from '@/lib/firebase';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { BrandModal } from './brand-modal';
 import { CategoryModal } from './category-modal';
@@ -26,6 +25,7 @@ import { PresentationModal } from './presentation-modal';
 import { ImageUploader } from '../shared/image-uploader';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 const newProductSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
@@ -35,13 +35,13 @@ const newProductSchema = z.object({
   presentation_id: z.string().min(1, 'El formato es requerido.'),
   public_price: z.coerce.number({invalid_type_error: 'El precio es requerido.'}).min(0, 'El precio debe ser un número positivo.'),
   stock: z.coerce.number({invalid_type_error: 'El stock es requerido.'}).min(0, 'El stock debe ser un número positivo.'),
-  purchase_cost: z.coerce.number().optional(),
-  internal_price: z.coerce.number().optional(),
-  commission_value: z.coerce.number().optional(),
+  purchase_cost: z.coerce.number().optional().nullable(),
+  internal_price: z.coerce.number().optional().nullable(),
+  commission_value: z.coerce.number().optional().nullable(),
   commission_type: z.enum(['%', '$']).default('%'),
   includes_vat: z.boolean().default(false),
   description: z.string().optional(),
-  stock_alarm_threshold: z.coerce.number().optional(),
+  stock_alarm_threshold: z.coerce.number().optional().nullable(),
   notification_email: z.string().email('Email inválido').optional().or(z.literal('')),
   images: z.array(z.object({ value: z.string() })).optional().default([]),
 });
@@ -57,6 +57,7 @@ interface NewProductModalProps {
 
 export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewProductModalProps) {
   const { toast } = useToast();
+  const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -84,17 +85,19 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
 
   useEffect(() => {
     if (product) {
-      form.reset({
-        ...product,
-        commission_value: product.commission?.value,
-        commission_type: product.commission?.type,
-        images: product.images?.map(imgUrl => ({ value: imgUrl })) || []
-      });
+        form.reset({
+            ...product,
+            public_price: product.public_price || 0,
+            stock: product.stock || 0,
+            commission_value: product.commission?.value,
+            commission_type: product.commission?.type,
+            images: Array.isArray(product.images) ? product.images.map(imgUrl => ({ value: imgUrl })) : [],
+        });
     } else {
       form.reset({
         nombre: '', barcode: '', brand_id: '', category_id: '', presentation_id: '',
-        public_price: 0, stock: 0, purchase_cost: 0, internal_price: 0, commission_value: 0,
-        commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: 0, notification_email: '',
+        public_price: 0, stock: 0, purchase_cost: null, internal_price: null, commission_value: 0,
+        commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: null, notification_email: '',
         images: []
       });
     }
@@ -107,14 +110,17 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
   }
 
   const onSubmit = async (data: NewProductFormData) => {
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Error', description: 'La base de datos no está disponible.' });
+        return;
+    }
     setIsSubmitting(true);
     try {
         const { commission_value, commission_type, ...restOfData } = data;
 
         const parseOptionalNumber = (value: any): number | null => {
-            if (value === '' || value === null || value === undefined) return null;
-            const num = Number(value);
-            return isNaN(num) ? null : num;
+            if (value === '' || value === null || value === undefined || isNaN(Number(value))) return null;
+            return Number(value);
         };
         
         const dataToSave: Partial<Product> = {
@@ -146,10 +152,12 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
             toast({ title: "Producto agregado con éxito" });
         }
 
-        if (data.stock_alarm_threshold && data.stock <= data.stock_alarm_threshold && data.notification_email) {
+        const currentStock = Number(data.stock);
+        const alarmThreshold = parseOptionalNumber(data.stock_alarm_threshold);
+        if (alarmThreshold !== null && currentStock <= alarmThreshold && data.notification_email) {
             await sendStockAlert({
                 productName: data.nombre,
-                currentStock: data.stock,
+                currentStock: currentStock,
                 recipientEmail: data.notification_email,
             });
             toast({
@@ -166,7 +174,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       toast({
         variant: "destructive",
         title: "Error al guardar",
-        description: `No se pudo guardar el producto. ${error.message}` || "Verifique todos los campos y vuelva a intentarlo.",
+        description: `No se pudo guardar el producto. Verifique que todos los campos numéricos tengan un valor.`,
       });
     } finally {
       setIsSubmitting(false);
@@ -228,16 +236,16 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
 
                 <div className="space-y-4 pt-6 border-t"><h3 className="text-lg font-semibold">Opciones avanzadas</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField name="purchase_cost" control={form.control} render={({ field }) => (<FormItem><FormLabel>Costo de compra</FormLabel><FormControl><Input type="number" placeholder="$ 0" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField name="internal_price" control={form.control} render={({ field }) => (<FormItem><FormLabel>Precio de venta interna</FormLabel><FormControl><Input type="number" placeholder="$ 0" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField name="purchase_cost" control={form.control} render={({ field }) => (<FormItem><FormLabel>Costo de compra</FormLabel><FormControl><Input type="number" placeholder="$ 0" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField name="internal_price" control={form.control} render={({ field }) => (<FormItem><FormLabel>Precio de venta interna</FormLabel><FormControl><Input type="number" placeholder="$ 0" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
-                    <FormField name="commission_value" control={form.control} render={({ field }) => (<FormItem><FormLabel>Comisión de venta</FormLabel><div className="flex gap-2"><FormControl><Input type="number" placeholder="0" className="flex-grow" {...field} /></FormControl><Controller name="commission_type" control={form.control} render={({ field: selectField }) => (<Select onValueChange={selectField.onChange} value={selectField.value}><SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="%">%</SelectItem><SelectItem value="$">$</SelectItem></SelectContent></Select>)} /></div><FormMessage /></FormItem>)} />
+                    <FormField name="commission_value" control={form.control} render={({ field }) => (<FormItem><FormLabel>Comisión de venta</FormLabel><div className="flex gap-2"><FormControl><Input type="number" placeholder="0" className="flex-grow" {...field} value={field.value ?? ''} /></FormControl><Controller name="commission_type" control={form.control} render={({ field: selectField }) => (<Select onValueChange={selectField.onChange} value={selectField.value}><SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="%">%</SelectItem><SelectItem value="$">$</SelectItem></SelectContent></Select>)} /></div><FormMessage /></FormItem>)} />
                     <FormField name="includes_vat" control={form.control} render={({ field }) => (<FormItem className="flex items-center space-x-2 pt-2"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} id="includes_vat" /></FormControl><FormLabel htmlFor="includes_vat" className="!mt-0 font-normal">Precio incluye IVA en comprobante de caja</FormLabel></FormItem>)} />
                     <FormField name="description" control={form.control} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea placeholder="Describe el producto..." {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                 <div className="space-y-4 pt-6 border-t"><Alert><Info className="h-4 w-4" /><AlertTitle>¿Para qué sirven las alarmas de stock?</AlertTitle><AlertDescription>Las alarmas de stock te ayudan a mantener un inventario saludable. Cuando el stock de un producto llegue al mínimo que definas, te enviaremos una notificación para que no te quedes sin unidades.</AlertDescription></Alert><h3 className="text-lg font-semibold">Alarma de stock</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField name="stock_alarm_threshold" control={form.control} render={({ field }) => (<FormItem><FormLabel>Stock en locales</FormLabel><FormControl><Input type="number" placeholder="Ej: 5" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField name="stock_alarm_threshold" control={form.control} render={({ field }) => (<FormItem><FormLabel>Stock en locales</FormLabel><FormControl><Input type="number" placeholder="Ej: 5" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField name="notification_email" control={form.control} render={({ field }) => (<FormItem><FormLabel>Email para notificaciones</FormLabel><FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                 </div>

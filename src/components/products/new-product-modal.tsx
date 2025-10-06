@@ -104,11 +104,13 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
   const onSubmit = async (data: NewProductFormData) => {
     setIsSubmitting(true);
     try {
+        const { commission_value, commission_type, ...restOfData } = data;
+
         const dataToSave = {
-            ...data,
+            ...restOfData,
             commission: {
-                value: data.commission_value || 0,
-                type: data.commission_type
+                value: commission_value || 0,
+                type: commission_type
             },
             created_at: product ? product.created_at : Timestamp.now(),
             updated_at: Timestamp.now(),
@@ -124,7 +126,6 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
             toast({ title: "Producto agregado con éxito" });
         }
 
-        // Check stock alarm after manual update
         if (data.stock_alarm_threshold && data.stock <= data.stock_alarm_threshold && data.notification_email) {
             await sendStockAlert({
                 productName: data.nombre,

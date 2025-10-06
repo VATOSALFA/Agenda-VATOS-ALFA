@@ -33,8 +33,8 @@ const newProductSchema = z.object({
   brand_id: z.string().min(1, 'La marca es requerida.'),
   category_id: z.string().min(1, 'La categoría es requerida.'),
   presentation_id: z.string().min(1, 'El formato es requerido.'),
-  public_price: z.coerce.number().min(0, 'El precio debe ser positivo.'),
-  stock: z.coerce.number().min(0, 'El stock debe ser positivo.').default(0),
+  public_price: z.coerce.number({invalid_type_error: 'El precio es requerido.'}).min(0, 'El precio debe ser un número positivo.'),
+  stock: z.coerce.number({invalid_type_error: 'El stock es requerido.'}).min(0, 'El stock debe ser un número positivo.'),
   purchase_cost: z.coerce.number().optional(),
   internal_price: z.coerce.number().optional(),
   commission_value: z.coerce.number().optional(),
@@ -106,32 +106,37 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     try {
         const { commission_value, commission_type, ...restOfData } = data;
 
-        // Clean up numeric fields that might be NaN if left empty
-        const cleanedData = {
-          ...restOfData,
-          purchase_cost: isNaN(Number(restOfData.purchase_cost)) ? null : Number(restOfData.purchase_cost),
-          internal_price: isNaN(Number(restOfData.internal_price)) ? null : Number(restOfData.internal_price),
-          stock_alarm_threshold: isNaN(Number(restOfData.stock_alarm_threshold)) ? null : Number(restOfData.stock_alarm_threshold),
+        const parseOptionalNumber = (value: any) => {
+            const num = Number(value);
+            return isNaN(num) ? null : num;
         };
         
-        const dataToSave = {
-            ...cleanedData,
+        const dataToSave: Partial<Product> = {
+            ...restOfData,
+            public_price: Number(restOfData.public_price),
+            stock: Number(restOfData.stock),
+            purchase_cost: parseOptionalNumber(restOfData.purchase_cost),
+            internal_price: parseOptionalNumber(restOfData.internal_price),
+            stock_alarm_threshold: parseOptionalNumber(restOfData.stock_alarm_threshold),
             commission: {
-                value: isNaN(Number(commission_value)) ? 0 : Number(commission_value),
+                value: parseOptionalNumber(commission_value) ?? 0,
                 type: commission_type
             },
-            created_at: product ? product.created_at : Timestamp.now(),
+            images: data.images?.map(img => img.value).filter(Boolean) || [],
             updated_at: Timestamp.now(),
-            images: data.images ? data.images.map(img => img.value).filter(Boolean) : []
         };
-
 
         if (product) {
             const productRef = doc(db, 'productos', product.id);
             await updateDoc(productRef, dataToSave as any);
             toast({ title: "Producto actualizado con éxito" });
         } else {
-            await addDoc(collection(db, 'productos'), dataToSave);
+            await addDoc(collection(db, 'productos'), {
+                ...dataToSave,
+                active: true,
+                order: 99,
+                created_at: Timestamp.now(),
+            });
             toast({ title: "Producto agregado con éxito" });
         }
 
@@ -154,8 +159,8 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       console.error("Error saving product: ", error);
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "No se pudo guardar el producto. Verifique que todos los campos numéricos tengan un valor.",
+        title: "Error al guardar",
+        description: "No se pudo guardar el producto. Verifique todos los campos y vuelva a intentarlo.",
       });
     } finally {
       setIsSubmitting(false);

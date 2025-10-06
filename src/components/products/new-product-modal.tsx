@@ -106,20 +106,31 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     try {
         const { commission_value, commission_type, ...restOfData } = data;
 
+        // Clean up numeric fields that might be NaN if left empty
+        const cleanData = Object.fromEntries(
+          Object.entries(restOfData).map(([key, value]) => {
+            if (typeof value === 'number' && isNaN(value)) {
+              return [key, null]; // Or undefined, depending on your DB schema. null is safer for Firestore.
+            }
+            return [key, value];
+          })
+        );
+        
         const dataToSave = {
-            ...restOfData,
+            ...cleanData,
             commission: {
                 value: commission_value || 0,
                 type: commission_type
             },
             created_at: product ? product.created_at : Timestamp.now(),
             updated_at: Timestamp.now(),
-            images: data.images?.map(img => img.value) || []
+            images: data.images ? data.images.map(img => img.value) : []
         };
+
 
         if (product) {
             const productRef = doc(db, 'productos', product.id);
-            await updateDoc(productRef, dataToSave);
+            await updateDoc(productRef, dataToSave as any);
             toast({ title: "Producto actualizado con éxito" });
         } else {
             await addDoc(collection(db, 'productos'), dataToSave);
@@ -146,7 +157,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       toast({
         variant: "destructive",
         title: "Error",
-        description: "No se pudo guardar el producto.",
+        description: "No se pudo guardar el producto. Verifique que todos los campos numéricos tengan un valor.",
       });
     } finally {
       setIsSubmitting(false);
@@ -212,7 +223,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                         <FormField name="internal_price" control={form.control} render={({ field }) => (<FormItem><FormLabel>Precio de venta interna</FormLabel><FormControl><Input type="number" placeholder="$ 0" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                     <FormField name="commission_value" control={form.control} render={({ field }) => (<FormItem><FormLabel>Comisión de venta</FormLabel><div className="flex gap-2"><FormControl><Input type="number" placeholder="0" className="flex-grow" {...field} /></FormControl><Controller name="commission_type" control={form.control} render={({ field: selectField }) => (<Select onValueChange={selectField.onChange} value={selectField.value}><SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="%">%</SelectItem><SelectItem value="$">$</SelectItem></SelectContent></Select>)} /></div><FormMessage /></FormItem>)} />
-                    <FormField name="includes_vat" control={form.control} render={({ field }) => (<FormItem className="flex items-center space-x-2 pt-2"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} id="includes_vat" /></FormControl><FormLabel htmlFor="includes_vat" className="!mt-0">Precio incluye IVA en comprobante de caja</FormLabel></FormItem>)} />
+                    <FormField name="includes_vat" control={form.control} render={({ field }) => (<FormItem className="flex items-center space-x-2 pt-2"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} id="includes_vat" /></FormControl><FormLabel htmlFor="includes_vat" className="!mt-0 font-normal">Precio incluye IVA en comprobante de caja</FormLabel></FormItem>)} />
                     <FormField name="description" control={form.control} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea placeholder="Describe el producto..." {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                 <div className="space-y-4 pt-6 border-t"><Alert><Info className="h-4 w-4" /><AlertTitle>¿Para qué sirven las alarmas de stock?</AlertTitle><AlertDescription>Las alarmas de stock te ayudan a mantener un inventario saludable. Cuando el stock de un producto llegue al mínimo que definas, te enviaremos una notificación para que no te quedes sin unidades.</AlertDescription></Alert><h3 className="text-lg font-semibold">Alarma de stock</h3>

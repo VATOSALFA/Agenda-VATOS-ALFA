@@ -19,7 +19,7 @@ interface ImageUploaderProps {
   onRemove?: () => void;
   className?: string;
   onUploadStateChange?: (isUploading: boolean) => void;
-  onUploadEnd?: (url: string) => void; // Added for more specific control
+  onUploadEnd?: (url: string) => void; 
 }
 
 export function ImageUploader({ 
@@ -107,7 +107,7 @@ export function ImageUploader({
       const imageRef = ref(storage, currentImageUrl);
       await deleteObject(imageRef);
       if (onRemove) onRemove();
-      toast({ title: 'Imagen eliminada', description: 'La imagen ha sido eliminada del almacenamiento.' });
+      toast({ title: 'Foto del profesional eliminada' });
     } catch (error: any) {
       console.error("Error al eliminar la imagen:", error);
       // Even if deletion fails (e.g., file not found), still clear it from the UI.

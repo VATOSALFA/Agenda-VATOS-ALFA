@@ -408,7 +408,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
         const cartItems = selectedReservation.items.map(item => {
             const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
             return service ? { ...service, barbero_id: item.barbero_id, nombre: service.name } : null;
-        }).filter((i): i is Service & { barbero_id: string } => !!i);
+        }).filter((i): i is ServiceType & { barbero_id: string } => !!i);
 
         setSaleInitialData({
             client,

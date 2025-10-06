@@ -62,7 +62,8 @@ interface AgendaViewProps {
   onDataRefresh: () => void;
 }
 
-const MINUTE_HEIGHT = 0.8; // 48px for 60 minutes = 0.8px per minute
+const ROW_HEIGHT = 48; // Fixed height for a 60-minute slot visually.
+const MINUTE_HEIGHT = ROW_HEIGHT / 60;
 
 const useCurrentTime = () => {
     const [time, setTime] = useState<Date | null>(null);
@@ -334,14 +335,14 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const rect = gridEl.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    const totalMinutesInGrid = (endHour - startHour) * 60;
-    const gridHeight = totalMinutesInGrid * MINUTE_HEIGHT;
+    const totalGridHeight = (endHour - startHour) * ROW_HEIGHT;
+    const minutesFromStart = (y / totalGridHeight) * (endHour - startHour) * 60;
 
-    const minutesSinceStart = (y / gridHeight) * totalMinutesInGrid;
-    const slotIndex = Math.floor(minutesSinceStart / slotDurationMinutes);
-    const time = format(addMinutes(set(new Date(), { hours: startHour, minutes: 0 }), slotIndex * slotDurationMinutes), 'HH:mm');
+    const slotIndex = Math.floor(minutesFromStart / 15); // Use a fixed 15min interval for hover detection for precision
+    const time = format(addMinutes(set(new Date(), { hours: startHour, minutes: 0 }), slotIndex * 15), 'HH:mm');
 
-    if (slotIndex < 0 || slotIndex >= timeSlots.length -1) {
+    const totalSlots = (endHour - startHour) * (60 / 15);
+    if (slotIndex < 0 || slotIndex >= totalSlots) {
         setHoveredSlot(null);
         return;
     }
@@ -652,7 +653,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                     <div className="flex-shrink-0 sticky left-0 z-10 bg-white">
                         <div className="flex flex-col">
                             {timeSlots.slice(0, -1).map((time, index) => (
-                                <div key={index} style={{ height: `${slotDurationMinutes * MINUTE_HEIGHT}px`}} className="border-b flex items-center justify-center text-center">
+                                <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="border-b flex items-center justify-center text-center">
                                     <span className="text-xs text-muted-foreground font-semibold">{time}</span>
                                 </div>
                             ))}
@@ -685,7 +686,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                 {/* Background Grid Cells */}
                                 <div className="flex flex-col">
                                     {timeSlots.slice(0, -1).map((time, index) => (
-                                        <div key={index} style={{ height: `${slotDurationMinutes * MINUTE_HEIGHT}px`}} className="bg-white border-b" />
+                                        <div key={index} style={{ height: `${ROW_HEIGHT}px`}} className="bg-white border-b" />
                                     ))}
                                 </div>
                                 {currentTimeTop > -1 && <div className="absolute w-full h-0.5 bg-red-500 z-20" style={{top: `${currentTimeTop}px`}}></div>}
@@ -693,7 +694,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                 {!isWorking && (
                                     <NonWorkBlock
                                       top={0}
-                                      height={timeSlots.length * slotDurationMinutes * MINUTE_HEIGHT}
+                                      height={timeSlots.length * ROW_HEIGHT}
                                       text="Día no laboral"
                                     />
                                 )}

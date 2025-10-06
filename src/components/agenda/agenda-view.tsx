@@ -62,8 +62,7 @@ interface AgendaViewProps {
   onDataRefresh: () => void;
 }
 
-const ROW_HEIGHT = 48; // Fixed height for a 60-minute slot visually.
-const MINUTE_HEIGHT = ROW_HEIGHT / 60;
+const ROW_HEIGHT = 48; // This is the visual height of one time slot row in the agenda.
 
 const useCurrentTime = () => {
     const [time, setTime] = useState<Date | null>(null);
@@ -335,10 +334,10 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     const rect = gridEl.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    const totalGridHeight = (endHour - startHour) * ROW_HEIGHT;
-    const minutesFromStart = (y / totalGridHeight) * (endHour - startHour) * 60;
+    const totalGridHeight = (timeSlots.length -1) * ROW_HEIGHT;
+    const minutesFromStart = (y / totalGridHeight) * (timeSlots.length -1) * slotDurationMinutes;
 
-    const slotIndex = Math.floor(minutesFromStart / 15); // Use a fixed 15min interval for hover detection for precision
+    const slotIndex = Math.floor(minutesFromStart / 15);
     const time = format(addMinutes(set(new Date(), { hours: startHour, minutes: 0 }), slotIndex * 15), 'HH:mm');
 
     const totalSlots = (endHour - startHour) * (60 / 15);
@@ -494,20 +493,21 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   };
 
   const calculatePosition = (startDecimal: number, durationDecimal: number) => {
+    const pixelsPerMinute = ROW_HEIGHT / slotDurationMinutes;
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = minutesFromAgendaStart * MINUTE_HEIGHT;
-    const height = durationDecimal * 60 * MINUTE_HEIGHT;
+    const top = minutesFromAgendaStart * pixelsPerMinute;
+    const height = durationDecimal * 60 * pixelsPerMinute;
     return { top: `${top}px`, height: `${height}px` };
   };
   
   const calculatePopoverPosition = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
     const startDecimal = hour + minute / 60;
-
+    const pixelsPerMinute = ROW_HEIGHT / slotDurationMinutes;
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
-    const top = minutesFromAgendaStart * MINUTE_HEIGHT;
+    const top = minutesFromAgendaStart * pixelsPerMinute;
 
-    return { top: `${top}px`, height: `${slotDurationMinutes * MINUTE_HEIGHT}px` };
+    return { top: `${top}px`, height: `${ROW_HEIGHT}px` };
   }
 
   const currentTimeTop = useMemo(() => {
@@ -517,8 +517,9 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     if (totalMinutesNow < totalMinutesStart || totalMinutesNow > endHour * 60) return -1;
     
     const elapsedMinutes = totalMinutesNow - totalMinutesStart;
-    return elapsedMinutes * MINUTE_HEIGHT;
-  }, [currentTime, date, startHour, endHour]);
+    const pixelsPerMinute = ROW_HEIGHT / slotDurationMinutes;
+    return elapsedMinutes * pixelsPerMinute;
+  }, [currentTime, date, startHour, endHour, slotDurationMinutes]);
 
 
   const formatHour = (hour: number) => {
@@ -694,7 +695,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
                                 {!isWorking && (
                                     <NonWorkBlock
                                       top={0}
-                                      height={timeSlots.length * ROW_HEIGHT}
+                                      height={(timeSlots.length || 24) * ROW_HEIGHT}
                                       text="Día no laboral"
                                     />
                                 )}

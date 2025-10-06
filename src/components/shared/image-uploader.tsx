@@ -3,7 +3,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '@/lib/firebase-client';
 import { UploadCloud, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -61,37 +61,22 @@ export function ImageUploader({
         }
 
         const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
+        const uploadTask = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(uploadTask.ref);
 
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-            },
-            (error) => {
-                console.error("Error al subir imagen:", error);
-                toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code}` });
-                setIsUploading(false);
-                if(onUploadStateChange) onUploadStateChange(false);
-            },
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                if (onUpload) {
-                    onUpload(downloadURL);
-                }
-                if (onUploadEnd) {
-                    onUploadEnd(downloadURL);
-                }
-                toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
-                setIsUploading(false);
-                if(onUploadStateChange) onUploadStateChange(false);
-                setUploadProgress(0);
-            }
-        );
+        if (onUpload) {
+            onUpload(downloadURL);
+        }
+        if (onUploadEnd) {
+            onUploadEnd(downloadURL);
+        }
 
+        toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
+        
     } catch (error: any) {
-        console.error("Error al iniciar la subida:", error);
-        toast({ variant: 'destructive', title: 'Error', description: `No se pudo iniciar la subida: ${error.message}` });
+        console.error("Error al subir imagen:", error);
+        toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code}` });
+    } finally {
         setIsUploading(false);
         if(onUploadStateChange) onUploadStateChange(false);
     }
@@ -107,7 +92,7 @@ export function ImageUploader({
       const imageRef = ref(storage, currentImageUrl);
       await deleteObject(imageRef);
       if (onRemove) onRemove();
-      toast({ title: 'Foto del profesional eliminada' });
+      toast({ title: 'Imagen eliminada con éxito' });
     } catch (error: any) {
       console.error("Error al eliminar la imagen:", error);
       // Even if deletion fails (e.g., file not found), still clear it from the UI.
@@ -133,8 +118,7 @@ export function ImageUploader({
     return (
         <div className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40', className)}>
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">Subiendo...</p>
-            {uploadProgress > 0 && <Progress value={uploadProgress} className="w-full mt-2 h-2" />}
+            <p className="mt-4 text-sm text-muted-foreground">Procesando...</p>
         </div>
     );
   }

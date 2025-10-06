@@ -111,6 +111,7 @@ const finanzasNavLinks = [
 interface EmpresaSettings {
     id?: string;
     logo_url?: string;
+    receipt_logo_url?: string;
 }
 
 export default function Header() {
@@ -119,7 +120,7 @@ export default function Header() {
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
-  const logoUrl = empresaData?.[0]?.logo_url;
+  const logoUrl = empresaData?.[0]?.receipt_logo_url;
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isAuthPage = pathname === '/login';

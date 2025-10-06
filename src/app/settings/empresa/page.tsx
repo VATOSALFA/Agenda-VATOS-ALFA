@@ -120,27 +120,6 @@ export default function EmpresaPage() {
             />
           </CardContent>
         </Card>
-
-        <Card>
-            <CardHeader>
-                <CardTitle>Logo de plataforma</CardTitle>
-                <CardDescription>Este logo aparecerá en el encabezado principal de la aplicación.</CardDescription>
-            </CardHeader>
-            <CardContent>
-               <Controller
-                  name="logo_url"
-                  control={form.control}
-                  render={({ field }) => (
-                      <ImageUploader
-                          folder="empresa_logos"
-                          currentImageUrl={field.value}
-                          onUpload={(url) => field.onChange(url)}
-                          onRemove={() => field.onChange('')}
-                      />
-                  )}
-               />
-            </CardContent>
-        </Card>
         
         <Card>
             <CardHeader>

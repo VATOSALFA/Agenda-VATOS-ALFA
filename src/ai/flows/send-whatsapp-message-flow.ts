@@ -3,7 +3,9 @@
 /**
  * @fileOverview A flow to send a WhatsApp message using Twilio.
  */
-
+if (process.env.NODE_ENV === 'development') {
+  require('dotenv').config();
+}
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
@@ -37,9 +39,9 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (input) => {
-    const accountSid = process.env.NEXT_PUBLIC_TWILIO_ACCOUNT_SID;
-    const authToken = process.env.NEXT_PUBLIC_TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
     if (!accountSid || !authToken || !fromNumber) {
       return {
@@ -60,7 +62,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
       
       const messageData: any = {
         from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+521${input.to}`,
+        to: `whatsapp:+52${input.to}`,
         body: input.text || '',
       };
       

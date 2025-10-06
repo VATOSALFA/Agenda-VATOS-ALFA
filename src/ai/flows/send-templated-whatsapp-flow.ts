@@ -6,7 +6,9 @@
  * - sendTemplatedWhatsAppMessage - A function that sends a message using a specific Content SID and variables.
  * - TemplatedWhatsAppMessageInput - The input schema for the flow.
  */
-
+if (process.env.NODE_ENV === 'development') {
+  require('dotenv').config();
+}
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
@@ -40,9 +42,9 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (input) => {
-    const accountSid = process.env.NEXT_PUBLIC_TWILIO_ACCOUNT_SID;
-    const authToken = process.env.NEXT_PUBLIC_TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
     if (!accountSid || !authToken || !fromNumber) {
       return {
@@ -56,7 +58,7 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
       
       const messageData: any = {
         from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+521${input.to}`,
+        to: `whatsapp:+52${input.to}`,
         contentSid: input.contentSid,
         contentVariables: JSON.stringify(input.contentVariables),
       };

@@ -1,9 +1,13 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/firebase-admin'; // Usar admin-sdk aquí
-import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit, setDoc, addDoc } from 'firebase/firestore';
 import Twilio from 'twilio';
 import { parseISO, format } from 'date-fns';
+
+if (process.env.NODE_ENV === 'development') {
+  require('dotenv').config();
+}
 
 async function handleClientResponse(from: string, messageBody: string) {
     const normalizedMessage = messageBody.trim().toLowerCase();
@@ -107,11 +111,9 @@ export async function POST(req: NextRequest) {
     const body = Object.fromEntries(formData);
     const signature = req.headers.get('X-Twilio-Signature') || '';
     
-    const url = process.env.NODE_ENV === 'development'
-      ? `https://${req.headers.get('host')}/api/twilio`
-      : req.url;
+    const url = req.url;
 
-    const authToken = process.env.NEXT_PUBLIC_TWILIO_AUTH_TOKEN;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!authToken) {
         console.error('Twilio Webhook: Auth Token no está configurado.');
         return new NextResponse('Internal Server Error: Auth Token missing', { status: 500 });

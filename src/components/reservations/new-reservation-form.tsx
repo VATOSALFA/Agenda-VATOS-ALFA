@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -392,7 +393,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
       
        // Re-validate availability on relevant changes
-      if (type === 'change' && name && ['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name) || name.startsWith('items')) {
+      if (type === 'change' && name && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name) || name.startsWith('items'))) {
         validateItemsAvailability(value as ReservationFormData);
       }
     });

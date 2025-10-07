@@ -42,6 +42,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
     if (!accountSid || !authToken || !fromNumber) {
+      console.error('Twilio credentials not configured.');
       return {
         success: false,
         error: 'Twilio credentials are not configured in environment variables.',

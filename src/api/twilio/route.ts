@@ -107,15 +107,18 @@ export async function POST(req: NextRequest) {
     const body = Object.fromEntries(formData);
     const signature = req.headers.get('X-Twilio-Signature') || '';
     
-    const url = req.url;
-
+    // Construct the full URL for validation
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const url = `${proto}://${host}${req.nextUrl.pathname}`;
+    
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!authToken) {
         console.error('Twilio Webhook: Auth Token no está configurado.');
         return new NextResponse('Internal Server Error: Auth Token missing', { status: 500 });
     }
     
-    const isValid = Twilio.validateRequest(authToken, signature, url, body as { [key: string]: string });
+    const isValid = Twilio.validateRequest(authToken, signature, url.toString(), body as { [key: string]: string });
 
     if (!isValid) {
       console.warn('Twilio Webhook: Invalid request signature received.');

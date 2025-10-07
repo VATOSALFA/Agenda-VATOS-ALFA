@@ -229,7 +229,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     
     if (!agendaSettings?.simultaneousReservations && values.cliente_id) {
         const clientConflict = allReservations.some(r => {
-            if(r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+            if (r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
             return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
         });
         if (clientConflict) {
@@ -402,12 +402,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
 
   async function onSubmit(data: any) {
+    setIsSubmitting(true);
     if (!validateItemsAvailability(data)) {
         toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado."});
+        setIsSubmitting(false);
         return;
     }
-    
-    setIsSubmitting(true);
     
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
@@ -478,9 +478,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             }
         }
         
-        onFormSubmit();
-        if(onOpenChange) onOpenChange(false);
-        
     } catch (error) {
         console.error('Error guardando la reserva: ', error);
         toast({
@@ -489,6 +486,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             description: 'No se pudo guardar la reserva. Inténtalo de nuevo.',
         });
     } finally {
+        onFormSubmit();
+        if(onOpenChange) onOpenChange(false);
         setIsSubmitting(false);
     }
   }
@@ -795,4 +794,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-

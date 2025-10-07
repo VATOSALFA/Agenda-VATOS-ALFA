@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -392,8 +393,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         }
       }
       
-       // Re-validate availability on relevant changes
-      if (type === 'change' && name && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name) || name.startsWith('items'))) {
+      if (type === 'change' && name && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name as string) || name.startsWith('items'))) {
         validateItemsAvailability(value as ReservationFormData);
       }
     });
@@ -414,82 +414,82 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     const formattedDate = format(data.fecha, 'yyyy-MM-dd');
     
     try {
-      const itemsToSave = data.items.map((item: any) => {
-          const service = services.find(s => s.id === item.servicio);
-          return {
-              servicio: service?.name || '',
-              nombre: service?.name || '',
-              barbero_id: item.barbero_id,
-              precio: service?.price || 0,
-              duracion: service?.duration || 0,
-          }
-      });
-
-      const dataToSave: Partial<Reservation> & {hora_inicio?: string, hora_fin?: string} = {
-        cliente_id: data.cliente_id,
-        items: itemsToSave,
-        servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
-        fecha: formattedDate,
-        hora_inicio: hora_inicio,
-        hora_fin: hora_fin,
-        estado: data.estado || 'Reservado',
-        precio: data.precio,
-        notas: data.notas || '',
-        nota_interna: data.nota_interna || '',
-        notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
-        local_id: data.local_id
-      };
-      
-      let wasCreation = false;
-      if (isEditMode && initialData?.id) {
-         const resRef = doc(db, 'reservas', initialData.id);
-         await updateDoc(resRef, dataToSave);
-         toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
-      } else {
-        wasCreation = true;
-        await addDoc(collection(db, 'reservas'), {
-            ...dataToSave,
-            pago_estado: 'Pendiente',
-            canal_reserva: 'agenda',
-            creada_por: 'admin',
-            creado_en: Timestamp.now(),
+        const itemsToSave = data.items.map((item: any) => {
+            const service = services.find(s => s.id === item.servicio);
+            return {
+                servicio: service?.name || '',
+                nombre: service?.name || '',
+                barbero_id: item.barbero_id,
+                precio: service?.price || 0,
+                duracion: service?.duration || 0,
+            }
         });
-        toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
-      }
 
-      if (wasCreation && data.notifications?.whatsapp_notification) {
-          const client = clients.find(c => c.id === data.cliente_id);
-          const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
-          const local = locales.find(l => l.id === data.local_id);
-          if (client?.telefono && professional) {
-              const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
-              await sendTemplatedWhatsAppMessage({
-                  to: client.telefono,
-                  contentSid: 'HX6162105c1002a6cf84fa345393869746',
-                  contentVariables: {
-                      '1': client.nombre,
-                      '2': local?.name || 'nuestro local',
-                      '3': dataToSave.servicio!,
-                      '4': fullDateStr,
-                      '5': local?.address || 'nuestra sucursal',
-                      '6': professional.name,
-                  }
-              });
-          }
-      }
-
-      onFormSubmit();
-      if(onOpenChange) onOpenChange(false);
+        const dataToSave: Partial<Reservation> & {hora_inicio?: string, hora_fin?: string} = {
+          cliente_id: data.cliente_id,
+          items: itemsToSave,
+          servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
+          fecha: formattedDate,
+          hora_inicio: hora_inicio,
+          hora_fin: hora_fin,
+          estado: data.estado || 'Reservado',
+          precio: data.precio,
+          notas: data.notas || '',
+          nota_interna: data.nota_interna || '',
+          notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
+          local_id: data.local_id
+        };
       
+        let wasCreation = false;
+        if (isEditMode && initialData?.id) {
+            const resRef = doc(db, 'reservas', initialData.id);
+            await updateDoc(resRef, dataToSave);
+            toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
+        } else {
+          wasCreation = true;
+          await addDoc(collection(db, 'reservas'), {
+              ...dataToSave,
+              pago_estado: 'Pendiente',
+              canal_reserva: 'agenda',
+              creada_por: 'admin',
+              creado_en: Timestamp.now(),
+          });
+          toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
+        }
+
+        if (wasCreation && data.notifications?.whatsapp_notification) {
+            const client = clients.find(c => c.id === data.cliente_id);
+            const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
+            const local = locales.find(l => l.id === data.local_id);
+            if (client?.telefono && professional) {
+                const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
+                await sendTemplatedWhatsAppMessage({
+                    to: client.telefono,
+                    contentSid: 'HX6162105c1002a6cf84fa345393869746',
+                    contentVariables: {
+                        '1': client.nombre,
+                        '2': local?.name || 'nuestro local',
+                        '3': dataToSave.servicio!,
+                        '4': fullDateStr,
+                        '5': local?.address || 'nuestra sucursal',
+                        '6': professional.name,
+                    }
+                });
+            }
+        }
+        
+        onFormSubmit();
+        if(onOpenChange) onOpenChange(false);
+        
     } catch (error) {
-      console.error('Error guardando la reserva: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo guardar la reserva. Inténtalo de nuevo.',
-      });
+        console.error('Error guardando la reserva: ', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'No se pudo guardar la reserva. Inténtalo de nuevo.',
+        });
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   }
 
@@ -795,3 +795,4 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
+

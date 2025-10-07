@@ -89,7 +89,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
 import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';

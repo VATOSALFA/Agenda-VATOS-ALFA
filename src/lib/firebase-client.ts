@@ -1,3 +1,4 @@
+
 // src/lib/firebase-client.ts
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
@@ -21,3 +22,4 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export { app };
+

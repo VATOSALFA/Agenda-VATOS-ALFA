@@ -27,10 +27,17 @@ interface ComboboxProps {
   onChange: (value: string) => void;
   placeholder?: string;
   loading?: boolean;
+  filter?: (value: string, search: string) => number;
 }
 
-export function Combobox({ options, value, onChange, placeholder = "Select an option...", loading = false }: ComboboxProps) {
+export function Combobox({ options, value, onChange, placeholder = "Select an option...", loading = false, filter }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+
+  const defaultFilter = (value: string, search: string) => {
+    const option = options.find(o => o.value === value);
+    if (option?.label.toLowerCase().includes(search.toLowerCase())) return 1;
+    return 0;
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -55,16 +62,10 @@ export function Combobox({ options, value, onChange, placeholder = "Select an op
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command
-            filter={(value, search) => {
-                const option = options.find(o => o.value === value);
-                if (option?.label.toLowerCase().includes(search.toLowerCase())) return 1;
-                return 0;
-            }}
-        >
-          <CommandInput placeholder="Buscar cliente..." />
+        <Command filter={filter || defaultFilter}>
+          <CommandInput placeholder="Buscar..." />
           <CommandList>
-            <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem

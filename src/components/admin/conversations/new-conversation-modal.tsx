@@ -61,6 +61,24 @@ export function NewConversationModal({ isOpen, onOpenChange, onClientSelected }:
     }
   };
 
+  const filterFunction = (value: string, search: string) => {
+    const option = clients.find(o => o.id === value);
+    if (!option) return 0;
+
+    const clientDataString = [
+        option.nombre,
+        option.apellido,
+        option.telefono,
+    ].join(' ').toLowerCase();
+
+    const searchTerms = search.toLowerCase().split(' ').filter(Boolean);
+
+    if (searchTerms.every(term => clientDataString.includes(term))) {
+        return 1;
+    }
+    return 0;
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -85,6 +103,7 @@ export function NewConversationModal({ isOpen, onOpenChange, onClientSelected }:
                       onChange={field.onChange}
                       placeholder="Busca un cliente..."
                       loading={clientsLoading}
+                      filter={filterFunction}
                     />
                     <FormMessage />
                   </FormItem>

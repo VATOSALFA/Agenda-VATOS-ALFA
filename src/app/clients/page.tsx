@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -234,11 +235,17 @@ export default function ClientsPage() {
 
 
     if (searchTerm) {
-        filtered = filtered.filter(client =>
-          (client.nombre?.toLowerCase() + ' ' + client.apellido?.toLowerCase()).includes(searchTerm.toLowerCase()) ||
-          (client.telefono && client.telefono.includes(searchTerm)) ||
-          (client.correo && client.correo.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
+        const searchTerms = searchTerm.toLowerCase().split(' ').filter(Boolean);
+        filtered = filtered.filter(client => {
+            const clientDataString = [
+                client.nombre,
+                client.apellido,
+                client.telefono,
+                client.correo
+            ].join(' ').toLowerCase();
+
+            return searchTerms.every(term => clientDataString.includes(term));
+        });
     }
     
     return filtered;

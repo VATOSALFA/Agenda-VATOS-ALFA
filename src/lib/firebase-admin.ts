@@ -6,19 +6,20 @@ import { getAuth } from 'firebase-admin/auth';
 let app: App;
 
 if (!getApps().length) {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-        : undefined;
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
-    if (serviceAccount) {
-        app = initializeApp({
-            credential: cert(serviceAccount)
-        });
+    if (serviceAccountKey) {
+        try {
+            const serviceAccount = JSON.parse(serviceAccountKey);
+            app = initializeApp({
+                credential: cert(serviceAccount)
+            });
+        } catch (error) {
+             console.error("Failed to parse Firebase service account key. Initializing default app.", error);
+             app = initializeApp();
+        }
     } else {
-        console.warn("Firebase Admin SDK service account key is not available. Some backend features may not work.");
-        // We can initialize a default app instance if needed, but it will have limited permissions.
-        // For local development where admin SDK might not be strictly needed for all paths,
-        // this can prevent crashes.
+        console.warn("Firebase Admin SDK service account key is not available. Some backend features may not work. This is expected in client-side rendering.");
         app = initializeApp(); 
     }
 } else {

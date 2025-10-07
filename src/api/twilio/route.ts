@@ -107,10 +107,8 @@ export async function POST(req: NextRequest) {
     const body = Object.fromEntries(formData);
     const signature = req.headers.get('X-Twilio-Signature') || '';
     
-    // Use x-forwarded-host and x-forwarded-proto to reconstruct the URL correctly behind proxies
-    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-    const protocol = req.headers.get('x-forwarded-proto') || 'https';
-    const fullUrl = new URL(req.url, `${protocol}://${host}`).toString();
+    // This is the production URL provided by Firebase App Hosting.
+    const fullUrl = `https://${process.env.APP_HOST}/api/twilio`;
     
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!authToken) {

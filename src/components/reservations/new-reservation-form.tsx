@@ -411,8 +411,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
     const formattedDate = format(data.fecha, 'yyyy-MM-dd');
+    let wasCreation = false;
     
     try {
+        if(!db) throw new Error("Database not available.");
         const itemsToSave = data.items.map((item: any) => {
             const service = services.find(s => s.id === item.servicio);
             return {
@@ -439,11 +441,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           local_id: data.local_id
         };
       
-        let wasCreation = false;
         if (isEditMode && initialData?.id) {
             const resRef = doc(db, 'reservas', initialData.id);
             await updateDoc(resRef, dataToSave);
-            toast({ title: '¡Éxito!', description: 'La reserva ha sido actualizada.'});
         } else {
           wasCreation = true;
           await addDoc(collection(db, 'reservas'), {
@@ -453,7 +453,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               creada_por: 'admin',
               creado_en: Timestamp.now(),
           });
-          toast({ title: '¡Éxito!', description: 'La reserva ha sido creada.' });
         }
 
         if (wasCreation && data.notifications?.whatsapp_notification) {
@@ -477,6 +476,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             }
         }
         
+        toast({ title: '¡Éxito!', description: isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.' });
+        onFormSubmit();
+        if(onOpenChange) onOpenChange(false);
+        
     } catch (error) {
         console.error('Error guardando la reserva: ', error);
         toast({
@@ -485,8 +488,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             description: 'No se pudo guardar la reserva. Inténtalo de nuevo.',
         });
     } finally {
-        onFormSubmit();
-        if(onOpenChange) onOpenChange(false);
         setIsSubmitting(false);
     }
   }

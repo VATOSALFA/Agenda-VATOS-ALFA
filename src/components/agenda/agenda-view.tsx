@@ -58,10 +58,6 @@ interface EmpresaSettings {
     receipt_logo_url?: string;
 }
 
-interface AgendaViewProps {
-  onDataRefresh: () => void;
-}
-
 const ROW_HEIGHT = 48; // This is the visual height of one time slot row in the agenda.
 
 const useCurrentTime = () => {
@@ -112,7 +108,7 @@ const getStatusColor = (status: string | undefined) => {
 }
 
 
-export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
+export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
@@ -142,6 +138,7 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
   const { toast } = useToast();
   
   const [queryKey, setQueryKey] = useState(0);
+  const onDataRefresh = () => setQueryKey(prev => prev + 1);
 
   useEffect(() => {
     setIsClientMounted(true)
@@ -206,8 +203,8 @@ export default function AgendaView({ onDataRefresh }: AgendaViewProps) {
     ];
   }, [date, selectedLocalId]);
   
-  const reservationsQueryKey = useMemo(() => `reservations-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, queryKey, selectedLocalId]);
-  const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, queryKey, selectedLocalId]);
+  const reservationsQueryKey = useMemo(() => `reservations-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}`, [date, selectedLocalId]);
+  const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}`, [date, selectedLocalId]);
 
   const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));

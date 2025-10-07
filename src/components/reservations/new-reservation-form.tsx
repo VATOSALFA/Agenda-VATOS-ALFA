@@ -226,7 +226,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     const hora_fin = `${hora_fin_hora}:${hora_fin_minuto}`;
     const formattedDate = format(fecha, 'yyyy-MM-dd');
     
-    if (!agendaSettings?.simultaneousReservations && values.cliente_id) {
+    if (agendaSettings && !agendaSettings.simultaneousReservations && values.cliente_id) {
         const clientConflict = allReservations.some(r => {
             if (r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
             return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
@@ -258,10 +258,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       
       if (!agendaSettings?.overlappingReservations) {
         const reservationConflict = allReservations.some(r => {
-          if (!r.items) return false;
-          const isSameProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
-          if (r.fecha !== formattedDate || !isSameProfessional || (isEditMode && r.id === initialData?.id)) return false;
-          return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
+            if (!r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+            const hasCommonProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
+            if (!hasCommonProfessional) return false;
+            return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
         });
 
         if (reservationConflict) {
@@ -401,13 +401,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
 
   async function onSubmit(data: any) {
-    setIsSubmitting(true);
     if (!validateItemsAvailability(data)) {
         toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado."});
-        setIsSubmitting(false);
         return;
     }
     
+    setIsSubmitting(true);
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
     const formattedDate = format(data.fecha, 'yyyy-MM-dd');
@@ -477,8 +476,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         }
         
         toast({ title: '¡Éxito!', description: isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.' });
-        onFormSubmit();
         if(onOpenChange) onOpenChange(false);
+        onFormSubmit();
         
     } catch (error) {
         console.error('Error guardando la reserva: ', error);

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -393,7 +392,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         }
       }
       
-      if (type === 'change' && name && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name as string) || name.startsWith('items'))) {
+      if (name && (type === 'change' && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name as string) || name.startsWith('items')))) {
         validateItemsAvailability(value as ReservationFormData);
       }
     });

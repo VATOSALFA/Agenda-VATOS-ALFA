@@ -8,7 +8,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Client } from '@/lib/types';
@@ -49,12 +49,14 @@ const sendBirthdayWishesFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const settingsSnap = await getDocs(query(collection(db, 'configuracion'), where('__name__', '==', 'recordatorios')));
-      if (settingsSnap.empty) {
+      const settingsRef = doc(db, 'configuracion', 'recordatorios');
+      const settingsSnap = await getDoc(settingsRef);
+      
+      if (!settingsSnap.exists()) {
         return { success: false, wishesSent: 0, message: 'Birthday notification settings not found.' };
       }
       
-      const settings = settingsSnap.docs[0].data() as BirthdaySettings;
+      const settings = settingsSnap.data() as BirthdaySettings;
       const birthdayConfig = settings.notifications?.birthday_notification;
 
       if (!birthdayConfig || !birthdayConfig.enabled) {
@@ -65,24 +67,20 @@ const sendBirthdayWishesFlow = ai.defineFlow(
       // Format as MM-DD to match the stored format "YYYY-MM-DD"
       const todayMonthDay = format(today, 'MM-dd');
 
-      const q = query(collection(db, 'clientes'));
+      const q = query(
+        collection(db, 'clientes'),
+        where('fecha_nacimiento', '>=', `0000-${todayMonthDay}`),
+        where('fecha_nacimiento', '<=', `9999-${todayMonthDay}`)
+      );
+      
       const clientsSnap = await getDocs(q);
 
-      const clientsWithBirthday: Client[] = [];
-      clientsSnap.forEach(doc => {
-          const client = { id: doc.id, ...doc.data() } as Client;
-          if (client.fecha_nacimiento && typeof client.fecha_nacimiento === 'string') {
-              // Assuming fecha_nacimiento is "YYYY-MM-DD"
-              if (client.fecha_nacimiento.substring(5) === todayMonthDay) {
-                  clientsWithBirthday.push(client);
-              }
-          }
-      });
+      const clientsWithBirthday = clientsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
       
       let sentCount = 0;
 
       for (const client of clientsWithBirthday) {
-        if (client.telefono) {
+        if (client.telefono && client.nombre) {
           await sendTemplatedWhatsAppMessage({
             to: client.telefono,
             contentSid: 'HX61a03ed45a32f9ddf4a46ee5a10fe15b', // Birthday template

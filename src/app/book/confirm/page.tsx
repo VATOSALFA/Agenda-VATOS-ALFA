@@ -126,10 +126,9 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // agendada
                     await sendTemplatedWhatsAppMessage({
-                        to: data.telefono.replace(/\D/g, '').slice(-10),
-                        contentSid: contentSid,
+                        to: data.telefono,
+                        contentSid: 'HX6162105c1002a6cf84fa345393869746', // agendada (CORRECTED)
                         contentVariables: {
                             '1': data.nombre,
                             '2': reservationData.servicio,

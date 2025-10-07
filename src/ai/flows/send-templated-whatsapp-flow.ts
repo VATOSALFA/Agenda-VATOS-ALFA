@@ -10,6 +10,9 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
+import { db } from '@/lib/firebase-admin';
+import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, Timestamp, limit } from 'firebase/firestore';
+
 
 const TemplatedWhatsAppMessageInput = z.object({
   to: z.string().describe("The recipient's phone number in E.164 format, just the digits."),
@@ -26,6 +29,62 @@ const WhatsAppMessageOutputSchema = z.object({
 });
 
 type WhatsAppMessageOutput = z.infer<typeof WhatsAppMessageOutputSchema>;
+
+// This function retrieves the template body from Twilio.
+// In a real app, you might want to cache this.
+async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promise<string> {
+    try {
+        const content = await client.content.v1.contents(contentSid).fetch();
+        // The body can be in `content.types.twilio/text.body` or similar structures.
+        // This is a simplified access pattern.
+        return (content.types as any)['twilio/text']?.body || (content.types as any)['twilio/whatsapp-template']?.body || 'Plantilla no encontrada.';
+    } catch (error) {
+        console.error("Error fetching template body from Twilio:", error);
+        return 'Plantilla no encontrada.';
+    }
+}
+
+async function logMessageToConversation(to: string, messageBody: string) {
+    const fullPhoneNumber = `whatsapp:+52${to}`;
+    const conversationRef = doc(db, 'conversations', fullPhoneNumber);
+    const messagesCollectionRef = collection(db, 'conversations', fullPhoneNumber, 'messages');
+
+    const messageData = {
+        senderId: 'vatosalfa',
+        text: messageBody,
+        timestamp: Timestamp.now(),
+        read: true,
+    };
+    
+    await addDoc(messagesCollectionRef, messageData);
+    
+    const conversationSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', fullPhoneNumber), limit(1)));
+    
+    const conversationData = {
+        lastMessageText: `Tú: ${messageBody}`,
+        lastMessageTimestamp: Timestamp.now(),
+    };
+    
+    if (conversationSnap.empty) {
+        // Attempt to find client name
+        const clientsRef = collection(db, 'clientes');
+        const clientQuery = query(clientsRef, where('telefono', '==', to), limit(1));
+        const clientSnapshot = await getDocs(clientQuery);
+        let clientName = null;
+        if (!clientSnapshot.empty) {
+            const clientData = clientSnapshot.docs[0].data();
+            clientName = `${clientData.nombre} ${clientData.apellido}`;
+        }
+        
+        await setDoc(conversationRef, {
+            ...conversationData,
+            clientName: clientName || `+52${to}`,
+            unreadCount: 0 // Messages sent by us are "read" by default
+        });
+    } else {
+        await updateDoc(conversationRef, conversationData);
+    }
+}
 
 export async function sendTemplatedWhatsAppMessage(
   input: TemplatedWhatsAppMessageInput
@@ -63,6 +122,15 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
       };
       
       const message = await client.messages.create(messageData);
+
+      // Log the sent message to Firestore
+      const templateBody = await getTemplateBody(client, input.contentSid);
+      let renderedBody = templateBody;
+      for (const [key, value] of Object.entries(input.contentVariables)) {
+          renderedBody = renderedBody.replace(`{{${key}}}`, value);
+      }
+      
+      await logMessageToConversation(input.to, renderedBody);
 
       return {
         success: true,

@@ -286,11 +286,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const watchedValues = form.watch();
 
   useEffect(() => {
-    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = watchedValues;
-    if (items && fecha && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto) {
+    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto, cliente_id } = watchedValues;
+    if (items && fecha && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto && cliente_id) {
       validateItemsAvailability(watchedValues as ReservationFormData);
     }
-  }, [watchedValues.items, watchedValues.fecha, watchedValues.hora_inicio_hora, watchedValues.hora_inicio_minuto, watchedValues.hora_fin_hora, watchedValues.hora_fin_minuto, validateItemsAvailability]);
+  }, [watchedValues, validateItemsAvailability]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {

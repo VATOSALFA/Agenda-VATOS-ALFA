@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -219,7 +218,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
     if (!items || !fecha || !hora_inicio_hora || !hora_inicio_minuto || !hora_fin_hora || !hora_fin_minuto) {
       setAvailabilityErrors({});
-      return;
+      return true; // No validation needed yet
     }
 
     const hora_inicio = `${hora_inicio_hora}:${hora_inicio_minuto}`;
@@ -236,10 +235,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 errors[index] = "El cliente ya tiene una cita en este horario.";
             });
             setAvailabilityErrors(errors);
-            return;
+            return false;
         }
     }
 
+    let allItemsValid = true;
     items.forEach((item, index) => {
       if (!item.barbero_id) return;
 
@@ -251,6 +251,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       
       if (!agendaSettings?.resourceOverload && (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end)) {
         errors[index] = `El profesional no está disponible en este horario.`;
+        allItemsValid = false;
         return;
       }
       
@@ -264,6 +265,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         if (reservationConflict) {
           errors[index] = `El profesional ya tiene una cita en este horario.`;
+          allItemsValid = false;
           return;
         }
       }
@@ -276,21 +278,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         if(blockConflict) {
             errors[index] = `El profesional tiene un bloqueo en este horario.`;
+            allItemsValid = false;
             return;
         }
       }
     });
     setAvailabilityErrors(errors);
+    return allItemsValid;
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
-  
-  const watchedValues = form.watch();
-
-  useEffect(() => {
-    const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto, cliente_id } = watchedValues;
-    if (items && fecha && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto && cliente_id) {
-      validateItemsAvailability(watchedValues as ReservationFormData);
-    }
-  }, [watchedValues, validateItemsAvailability]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -395,20 +390,24 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           }
         }
       }
+      
+       // Re-validate availability on relevant changes
+      if (type === 'change' && name && ['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name) || name.startsWith('items')) {
+        validateItemsAvailability(value as ReservationFormData);
+      }
     });
     return () => subscription.unsubscribe();
-  }, [form, servicesMap]);
+  }, [form, servicesMap, validateItemsAvailability]);
 
 
   async function onSubmit(data: any) {
-    setIsSubmitting(true);
-    
-    if (Object.keys(availabilityErrors).length > 0) {
+    if (!validateItemsAvailability(data)) {
         toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado."});
-        setIsSubmitting(false);
         return;
     }
-
+    
+    setIsSubmitting(true);
+    
     const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
     const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
     const formattedDate = format(data.fecha, 'yyyy-MM-dd');

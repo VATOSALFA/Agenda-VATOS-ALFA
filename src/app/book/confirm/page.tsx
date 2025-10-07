@@ -126,17 +126,15 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    const contentSid = 'HX6162105c1002a6cf84fa345393869746'; // SID Proporcionado
+                    const contentSid = 'HX18fff4936a83e0ec91cd5bf3099efaa9'; // agendada
                     await sendTemplatedWhatsAppMessage({
-                        to: data.telefono,
+                        to: data.telefono.replace(/\D/g, '').slice(-10),
                         contentSid: contentSid,
                         contentVariables: {
                             '1': data.nombre,
-                            '2': local?.name || 'nuestro local',
-                            '3': reservationData.servicio,
-                            '4': fullDateStr,
-                            '5': local?.address || 'nuestra sucursal',
-                            '6': selectedProfessional.name,
+                            '2': reservationData.servicio,
+                            '3': fullDateStr,
+                            '4': selectedProfessional.name,
                         },
                     });
                 } catch (waError) {

@@ -126,7 +126,7 @@ function ConfirmPageContent() {
             if (data.telefono) {
                 try {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    const contentSid = 'HX6162105c1002a6cf84fa345393869746';
+                    const contentSid = 'HX6162105c1002a6cf84fa345393869746'; // SID Proporcionado
                     await sendTemplatedWhatsAppMessage({
                         to: data.telefono,
                         contentSid: contentSid,
@@ -141,7 +141,12 @@ function ConfirmPageContent() {
                     });
                 } catch (waError) {
                     console.error("WhatsApp notification failed:", waError);
-                    // Do not block UI for this error
+                    // Do not block UI for this error, just log it.
+                    toast({
+                        variant: 'destructive',
+                        title: 'Error de Notificación',
+                        description: 'La reserva se creó, pero no se pudo enviar la notificación por WhatsApp.',
+                    });
                 }
             }
             

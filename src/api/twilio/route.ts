@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get('X-Twilio-Signature') || '';
     
     // Construct the full URL for validation. This handles both production and development environments.
-    const url = new URL(req.url);
+    const fullUrl = req.headers.get('x-forwarded-proto') + '://' + req.headers.get('host') + req.url;
 
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!authToken) {
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         return new NextResponse('Internal Server Error: Auth Token missing', { status: 500 });
     }
     
-    const isValid = Twilio.validateRequest(authToken, signature, url.toString(), body as { [key: string]: string });
+    const isValid = Twilio.validateRequest(authToken, signature, fullUrl, body as { [key: string]: string });
 
     if (!isValid) {
       console.warn('Twilio Webhook: Invalid request signature received.');
@@ -167,21 +167,17 @@ export async function POST(req: NextRequest) {
     
     const conversationDocSnap = await getDocs(query(collection(db, 'conversations'), where(doc(db, 'conversations', conversationId).id, '==', conversationId), limit(1)));
 
+    const conversationData = {
+        lastMessageText: lastMessagePreview,
+        lastMessageTimestamp: Timestamp.now(),
+        unreadCount: increment(1),
+        clientId: clientId || null,
+    };
 
     if (conversationDocSnap.empty) {
-        await setDoc(conversationRef, {
-            lastMessageText: lastMessagePreview,
-            lastMessageTimestamp: Timestamp.now(),
-            unreadCount: 1,
-            clientId: clientId || null,
-        });
+        await setDoc(conversationRef, conversationData);
     } else {
-        await updateDoc(conversationRef, {
-            lastMessageText: lastMessagePreview,
-            lastMessageTimestamp: Timestamp.now(),
-            unreadCount: increment(1),
-            clientId: clientId || null,
-        });
+        await updateDoc(conversationRef, conversationData);
     }
     
     const twiml = new Twilio.twiml.MessagingResponse();

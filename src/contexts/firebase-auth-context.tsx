@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase-client';
+import { auth, db, storage } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
@@ -19,7 +19,7 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   db: typeof db;
-  storage: any; // Add storage to context if needed elsewhere
+  storage: typeof storage;
   signInAndSetup: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
@@ -52,16 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (userDoc.exists()) {
                 customData = userDoc.data();
             } else {
-                // Fallback to check professionals collection if not found in usuarios
-                userDocRef = doc(db, 'profesionales', firebaseUser.uid);
-                userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    customData = userDoc.data();
-                    // Assign a default role if not specified for professionals
-                    if (!customData.role) {
-                      customData.role = 'Staff'; // Default role for professionals
-                    }
-                }
+                console.warn(`User document not found in 'usuarios' for UID: ${firebaseUser.uid}. This may not be an error if the user is a 'profesional'.`);
             }
             
             if (customData) {
@@ -77,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     avatarUrl: customData.avatarUrl,
                 });
             } else {
-                 // If user is not in 'usuarios' or 'profesionales', treat as super admin for initial setup
+                 // If user is not in 'usuarios', treat as super admin for initial setup or error case
                  setUser({
                     ...(firebaseUser as FirebaseUser),
                     displayName: firebaseUser.displayName || 'Super Admin',
@@ -88,7 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
         } catch (error) {
-            console.error("Error al obtener datos de usuario de Firestore:", error);
+            console.error("Error fetching user data from Firestore:", error);
             // Fallback to super admin on error to prevent being locked out
             setUser({ 
               ...(firebaseUser as FirebaseUser), 
@@ -121,9 +112,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
-    // Clear any potential session remnants that might cause a loop
-    await firebaseSignOut(auth); 
+    await firebaseSignOut(auth).catch(() => {}); // Clear any potential session remnants
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    // The onAuthStateChanged listener will handle setting the user state.
     return userCredential.user;
   };
 
@@ -132,7 +123,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     signInAndSetup,
     signOut,
-    db
+    db,
+    storage,
   };
   
   if (loading && !isAuthPage && !isPublicPage) {

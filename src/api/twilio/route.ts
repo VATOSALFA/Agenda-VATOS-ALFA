@@ -107,11 +107,9 @@ export async function POST(req: NextRequest) {
     const body = Object.fromEntries(formData);
     const signature = req.headers.get('X-Twilio-Signature') || '';
     
-    // Construct the full URL for validation
-    const proto = req.headers.get('x-forwarded-proto') || 'https';
-    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-    const url = `${proto}://${host}${req.nextUrl.pathname}`;
-    
+    // Construct the full URL for validation. This handles both production and development environments.
+    const url = new URL(req.url);
+
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!authToken) {
         console.error('Twilio Webhook: Auth Token no está configurado.');

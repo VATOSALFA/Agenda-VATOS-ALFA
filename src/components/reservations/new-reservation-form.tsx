@@ -356,8 +356,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (
-        type === 'change' && name &&
-        (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name as string))
+        name &&
+        (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name))
       ) {
         const { items, fecha, hora_inicio_hora, hora_inicio_minuto } = value;
 
@@ -392,7 +392,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         }
       }
       
-      if (name && (type === 'change' && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name as string) || name.startsWith('items')))) {
+      if (name && (['cliente_id', 'fecha', 'hora_inicio_hora', 'hora_inicio_minuto', 'hora_fin_hora', 'hora_fin_minuto'].includes(name) || name.startsWith('items'))) {
         validateItemsAvailability(value as ReservationFormData);
       }
     });
@@ -407,13 +407,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
     
     setIsSubmitting(true);
-    const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
-    const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
-    const formattedDate = format(data.fecha, 'yyyy-MM-dd');
-    let wasCreation = false;
+    let success = false;
     
     try {
         if(!db) throw new Error("Database not available.");
+        
+        const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
+        const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
+        const formattedDate = format(data.fecha, 'yyyy-MM-dd');
+        
         const itemsToSave = data.items.map((item: any) => {
             const service = services.find(s => s.id === item.servicio);
             return {
@@ -444,7 +446,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             const resRef = doc(db, 'reservas', initialData.id);
             await updateDoc(resRef, dataToSave);
         } else {
-          wasCreation = true;
           await addDoc(collection(db, 'reservas'), {
               ...dataToSave,
               pago_estado: 'Pendiente',
@@ -453,14 +454,18 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               creado_en: Timestamp.now(),
           });
         }
+        
+        success = true; // Mark as successful if we reach here
 
-        if (wasCreation && data.notifications?.whatsapp_notification) {
+        // Notification logic after successful save
+        if (!isEditMode && data.notifications?.whatsapp_notification) {
             const client = clients.find(c => c.id === data.cliente_id);
             const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
             const local = locales.find(l => l.id === data.local_id);
             if (client?.telefono && professional) {
                 const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
-                await sendTemplatedWhatsAppMessage({
+                // No need to await this, it can run in the background
+                sendTemplatedWhatsAppMessage({
                     to: client.telefono,
                     contentSid: 'HX6162105c1002a6cf84fa345393869746',
                     contentVariables: {
@@ -471,13 +476,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         '5': local?.address || 'nuestra sucursal',
                         '6': professional.name,
                     }
+                }).catch(waError => {
+                    console.warn("WhatsApp notification failed to send:", waError);
+                    // Optionally show a non-blocking warning toast here
                 });
             }
         }
-        
-        toast({ title: '¡Éxito!', description: isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.' });
-        if(onOpenChange) onOpenChange(false);
-        onFormSubmit();
         
     } catch (error) {
         console.error('Error guardando la reserva: ', error);
@@ -488,6 +492,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         });
     } finally {
         setIsSubmitting(false);
+        if (success) {
+            toast({ title: '¡Éxito!', description: isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.' });
+            onFormSubmit();
+            if (onOpenChange) onOpenChange(false);
+        }
     }
   }
 

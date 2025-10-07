@@ -70,7 +70,6 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 const mainNavLinks = [
   { href: '/', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
-  { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
 ];
 
 const salesNavLinks = [
@@ -252,6 +251,20 @@ export default function Header() {
                     ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+
+            {canSee('ver_clientes') && (
+                <Link
+                href='/clients'
+                className={cn(
+                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    pathname === '/clients'
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}
+                >
+                Clientes
+                </Link>
             )}
 
             {canSeeAny(productsNavLinks.map(l => l.permission)) && (

@@ -407,7 +407,7 @@ export default function ConversationsPage() {
                         {file && (
                             <div className="mb-2 p-2 bg-muted rounded-lg flex items-center justify-between text-sm">
                             <span className="truncate">{file.name}</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setFile(null)}>
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setFile(null)}>
                                 <X className="h-4 w-4" />
                             </Button>
                             </div>
@@ -431,7 +431,7 @@ export default function ConversationsPage() {
                                 <Paperclip className="h-5 w-5" />
                                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,audio/*,application/pdf" />
                             </Button>
-                            <Button onClick={handleSendMessage} disabled={isSending || (!currentMessage.trim() && !file)}>
+                            <Button type="button" onClick={handleSendMessage} disabled={isSending || (!currentMessage.trim() && !file)}>
                                 {isSending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4" />}
                             </Button>
                         </div>
@@ -456,12 +456,3 @@ export default function ConversationsPage() {
     </>
   );
 }
-
-    
-
-    
-
-
-
-
-    

@@ -356,8 +356,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (
-        type === 'change' &&
-        (name?.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name as string))
+        type === 'change' && name &&
+        (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name as string))
       ) {
         const { items, fecha, hora_inicio_hora, hora_inicio_minuto } = value;
 

@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-client";
 import { useToast } from "@/hooks/use-toast";
 
 

@@ -34,3 +34,5 @@ env:
     secret: TWILIO_AUTH_TOKEN
   - variable: TWILIO_PHONE_NUMBER
     secret: TWILIO_PHONE_NUMBER
+  - variable: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
+    secret: MERCADO_PAGO_PUBLIC_KEY

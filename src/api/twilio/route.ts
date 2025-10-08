@@ -1,4 +1,3 @@
-
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/firebase-admin'; // Usar admin-sdk aquí
 import { collection, query, where, getDocs, updateDoc, doc, runTransaction, increment, Timestamp, orderBy, limit, setDoc, addDoc } from 'firebase/firestore';
@@ -165,17 +164,29 @@ export async function POST(req: NextRequest) {
     
     const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
     
-    const conversationDocSnap = await getDocs(query(collection(db, 'conversations'), where(doc(db, 'conversations', conversationId).id, '==', conversationId), limit(1)));
+    const conversationDocSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', conversationId), limit(1)));
 
     const conversationData = {
         lastMessageText: lastMessagePreview,
         lastMessageTimestamp: Timestamp.now(),
         unreadCount: increment(1),
-        clientId: clientId || null,
     };
 
     if (conversationDocSnap.empty) {
-        await setDoc(conversationRef, conversationData);
+        // Attempt to find client name
+        const clientsRef = collection(db, 'clientes');
+        const clientQuery = query(clientsRef, where('telefono', '==', from.replace(/\D/g, '').slice(-10)), limit(1));
+        const clientSnapshot = await getDocs(clientQuery);
+        let clientName = null;
+        if (!clientSnapshot.empty) {
+            const clientData = clientSnapshot.docs[0].data();
+            clientName = `${clientData.nombre} ${clientData.apellido}`;
+        }
+        
+        await setDoc(conversationRef, {
+            ...conversationData,
+            clientName: clientName || from,
+        });
     } else {
         await updateDoc(conversationRef, conversationData);
     }

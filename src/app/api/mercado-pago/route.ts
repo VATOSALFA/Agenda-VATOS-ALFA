@@ -1,7 +1,4 @@
-
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/firebase-admin';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 
 // Esta función manejará las notificaciones de Mercado Pago
 export async function POST(req: NextRequest) {

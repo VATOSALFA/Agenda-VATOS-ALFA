@@ -1034,4 +1034,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </>
   );
 }
-

@@ -13,6 +13,7 @@ import type { Client, Product, Service as ServiceType, Profesional, Local, User 
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 import { MercadoPagoProvider } from './mercado-pago-provider';
 import { Payment } from '@mercadopago/sdk-react';
+import { sendGoogleReviewRequest } from '@/ai/flows/send-google-review-flow';
 
 
 import { Button } from '@/components/ui/button';
@@ -565,6 +566,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         title: '¡Venta registrada!',
         description: 'La venta se ha guardado correctamente.',
       });
+
+      // Send Google Review Request
+      const client = clients.find(c => c.id === data.cliente_id);
+      const local = locales.find(l => l.id === data.local_id);
+      if (client?.telefono && local) {
+          setTimeout(() => {
+              sendGoogleReviewRequest({
+                  clientId: client.id,
+                  clientName: client.nombre,
+                  clientPhone: client.telefono,
+                  localName: local.name,
+              }).catch(err => {
+                  console.error("Failed to send Google review request:", err);
+                  // Non-blocking, so we just log the error.
+              });
+          }, 30 * 60 * 1000); // 30 minutes
+      }
+
       resetFlow();
       onOpenChange(false);
       onSaleComplete?.();

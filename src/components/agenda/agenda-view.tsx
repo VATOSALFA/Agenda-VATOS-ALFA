@@ -52,7 +52,7 @@ import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
-import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock } from '@/lib/types';
+import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock, SaleItem } from '@/lib/types';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -152,6 +152,14 @@ export default function AgendaView() {
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
+  useEffect(() => {
+    const handleNewSale = () => {
+      setSaleInitialData(null);
+      setIsSaleSheetOpen(true);
+    };
+    document.addEventListener('new-sale', handleNewSale);
+    return () => document.removeEventListener('new-sale', handleNewSale);
+  }, []);
 
   useEffect(() => {
     // Let the auth context set the localId if needed.
@@ -405,7 +413,7 @@ export default function AgendaView() {
         const cartItems = selectedReservation.items.map(item => {
             const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
             return service ? { ...service, barbero_id: item.barbero_id, nombre: service.name } : null;
-        }).filter((i): i is ServiceType & { barbero_id: string } => !!i);
+        }).filter((i): i is Service & { barbero_id: string } => !!i);
 
         setSaleInitialData({
             client,

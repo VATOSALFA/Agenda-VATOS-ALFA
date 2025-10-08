@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -35,7 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-client";
 
 
 export interface AggregatedProductSale {
@@ -569,3 +568,5 @@ export default function ProductSalesPage() {
         </>
     );
 }
+
+    

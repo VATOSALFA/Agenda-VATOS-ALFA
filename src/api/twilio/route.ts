@@ -107,8 +107,8 @@ export async function POST(req: NextRequest) {
     const body = Object.fromEntries(formData);
     const signature = req.headers.get('X-Twilio-Signature') || '';
     
-    // This is the production URL provided by Firebase App Hosting.
-    const fullUrl = `https://${process.env.APP_HOST}/api/twilio`;
+    // Construct the URL dynamically from the request headers
+    const fullUrl = req.url;
     
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!authToken) {

@@ -958,7 +958,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
                         {paymentMethod === 'tarjeta' ? (
-                             <MercadoPagoProvider>
+                            <MercadoPagoProvider>
                                 <Payment
                                     initialization={{
                                         amount: total,
@@ -997,7 +997,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         ) : (
                              <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
                                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Finalizar Venta
+                                Finalizar Venta por ${total.toLocaleString('es-MX')}
                             </Button>
                         )}
                     </SheetFooter>
@@ -1034,3 +1034,4 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </>
   );
 }
+

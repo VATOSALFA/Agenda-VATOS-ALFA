@@ -1,6 +1,6 @@
 import * as functions from 'firebase-functions';
-// Importamos los tipos directamente desde 'express' que es lo que usa functions.https
-import { Request, Response } from 'express'; 
+import { Request, Response } from 'express';
+import twilio from 'twilio';
 
 // Definimos explícitamente que la función retorna 'void' para satisfacer a TypeScript
 export const mercadoPagoWebhookTest = functions.https.onRequest(
@@ -28,3 +28,45 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
         }
     }
 );
+
+export const twilioWebhook = functions.https.onRequest((request, response) => {
+    const twilioSignature = request.headers['x-twilio-signature'];
+    const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+    
+    // NOTE: The URL must be the one Twilio is configured to hit.
+    // In a real deployed environment, you'd construct this dynamically
+    // or have it in an environment variable. For Functions, it's more complex.
+    // This is a simplified example. We will assume the host and path.
+    const fullUrl = `https://${request.headers.host}${request.originalUrl}`;
+
+    // Twilio sends the body as form-urlencoded, not JSON
+    const params = request.body;
+
+    const requestIsValid = twilio.validateRequest(
+        authToken,
+        twilioSignature as string,
+        fullUrl,
+        params
+    );
+
+    if (!requestIsValid) {
+        functions.logger.warn('Invalid Twilio signature received.');
+        response.status(403).send('Invalid Twilio Signature');
+        return;
+    }
+
+    // Process the message from Twilio
+    const from = params.From;
+    const to = params.To;
+    const body = params.Body;
+    const mediaUrl = params.MediaUrl0; // Example for first media item
+
+    functions.logger.info(`Mensaje de Twilio recibido de ${from} a ${to}:`, { body, mediaUrl });
+    
+    // Create a TwiML response to acknowledge receipt. 
+    // You can add <Message> tags here to send an auto-reply.
+    const twiml = new twilio.twiml.MessagingResponse();
+    
+    response.writeHead(200, { 'Content-Type': 'text/xml' });
+    response.end(twiml.toString());
+});

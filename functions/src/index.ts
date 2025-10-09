@@ -60,7 +60,13 @@ async function handleClientResponse(from: string, messageBody: string) {
         return { handled: false, clientId: null };
     }
     
-    const clientPhone = from.replace(/\D/g, '').slice(-10);
+    // Updated phone number normalization for Mexico
+    let clientPhone = from.replace(/\D/g, '');
+    if (clientPhone.startsWith('521')) {
+      clientPhone = clientPhone.substring(3);
+    } else if (clientPhone.startsWith('52')) {
+      clientPhone = clientPhone.substring(2);
+    }
 
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
     const clientsSnapshot = await clientsQuery.get();

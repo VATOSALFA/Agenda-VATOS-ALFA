@@ -130,9 +130,8 @@ export const twilioWebhook = functions.https.onRequest(async (request, response)
     const twilioSignature = request.headers['x-twilio-signature'] as string;
     const authToken = process.env.TWILIO_AUTH_TOKEN || '';
     
-    // NOTE: This URL construction is crucial for validation. In a real deployment,
-    // you MUST set the correct `host` and `protocol` for your function's URL.
-    const fullUrl = `https://${request.headers.host}${request.originalUrl}`;
+    // Correct URL construction for a Cloud Function environment
+    const fullUrl = `https://${process.env.GCLOUD_PROJECT}.cloudfunctions.net/${process.env.FUNCTION_NAME}`;
 
     // Twilio sends the body as form-urlencoded, not JSON
     const params = request.body;

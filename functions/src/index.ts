@@ -1,4 +1,3 @@
-
 import * as functions from 'firebase-functions';
 import { Request, Response } from 'express';
 import twilio from 'twilio';
@@ -7,27 +6,29 @@ import { parseISO, format } from 'date-fns';
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
-  admin.initializeApp();
+    admin.initializeApp();
 }
 const db = admin.firestore();
 
 
-// Definimos explícitamente que la función retorna 'void' para satisfacer a TypeScript
+// =================================================================================
+// 1. MERCADO PAGO WEBHOOK (Ya funciona y cumple con la tipificación)
+// =================================================================================
+
 export const mercadoPagoWebhookTest = functions.https.onRequest(
     (request: Request, response: Response): void => {
         
         try {
-            // 1. Manejo de error si no es POST
             if (request.method !== 'POST') {
                 functions.logger.warn('Método no permitido. Solo POST.', { method: request.method });
                 response.status(405).send('Método no permitido. Solo POST.');
                 return; 
             }
 
-            // 2. Lógica principal (Webhook)
             functions.logger.info('Notificación de Mercado Pago recibida (TEST):', { body: request.body });
 
-            // 3. Respuesta final 200 OK (requerido por Mercado Pago)
+            // Lógica de validación, consulta a API y actualización de Firestore iría aquí.
+
             response.status(200).send('OK');
             return; 
 
@@ -39,7 +40,12 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
     }
 );
 
-async function handleClientResponse(from: string, messageBody: string) {
+
+// =================================================================================
+// Función de lógica de Citas (handleClientResponse)
+// =================================================================================
+
+async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
     const normalizedMessage = messageBody.trim().toLowerCase();
     
     const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
@@ -72,7 +78,7 @@ async function handleClientResponse(from: string, messageBody: string) {
     const clientsSnapshot = await clientsQuery.get();
 
     if (clientsSnapshot.empty) {
-        console.log(`Client not found with phone: ${clientPhone}`);
+        functions.logger.log(`Client not found with phone: ${clientPhone}`);
         return { handled: false, clientId: null };
     }
 
@@ -87,7 +93,7 @@ async function handleClientResponse(from: string, messageBody: string) {
     const reservationsSnapshot = await reservationsQuery.get();
     
     if (reservationsSnapshot.empty) {
-        console.log(`No pending reservations found for client: ${clientId}`);
+        functions.logger.log(`No pending reservations found for client: ${clientId}`);
         return { handled: true, clientId: clientId };
     }
     
@@ -96,7 +102,7 @@ async function handleClientResponse(from: string, messageBody: string) {
       .filter(r => r.estado !== 'Cancelado');
 
     if (upcomingReservations.length === 0) {
-      console.log(`No non-cancelled upcoming reservations found for client: ${clientId}`);
+      functions.logger.log(`No non-cancelled upcoming reservations found for client: ${clientId}`);
       return { handled: true, clientId: clientId };
     }
 
@@ -112,11 +118,11 @@ async function handleClientResponse(from: string, messageBody: string) {
     switch(action) {
         case 'confirm':
             await reservationDocRef.update({ estado: 'Confirmado' });
-            console.log(`Reservation ${reservationToUpdate.id} updated to "Confirmado" for client ${clientId}.`);
+            functions.logger.log(`Reservation ${reservationToUpdate.id} updated to "Confirmado" for client ${clientId}.`);
             break;
         case 'reschedule':
             await reservationDocRef.update({ estado: 'Pendiente' });
-            console.log(`Reservation ${reservationToUpdate.id} updated to "Pendiente" for client ${clientId}.`);
+            functions.logger.log(`Reservation ${reservationToUpdate.id} updated to "Pendiente" for client ${clientId}.`);
             break;
         case 'cancel':
             await db.runTransaction(async (transaction) => {
@@ -125,111 +131,143 @@ async function handleClientResponse(from: string, messageBody: string) {
                     citas_canceladas: admin.firestore.FieldValue.increment(1)
                 });
             });
-            console.log(`Reservation ${reservationToUpdate.id} updated to "Cancelado" for client ${clientId}.`);
+            functions.logger.log(`Reservation ${reservationToUpdate.id} updated to "Cancelado" for client ${clientId}.`);
             break;
     }
 
     return { handled: true, clientId: clientId };
 }
 
-export const twilioWebhook = functions.https.onRequest(async (request, response) => {
-    const twilioSignature = request.headers['x-twilio-signature'] as string;
-    const authToken = process.env.TWILIO_AUTH_TOKEN || '';
-    
-    // Correct URL construction for a Cloud Function environment
-    const fullUrl = `https://${process.env.GCLOUD_PROJECT}.cloudfunctions.net/${process.env.FUNCTION_NAME}`;
+// =================================================================================
+// 2. TWILIO WEBHOOK (CON CORRECCIONES DE USO DE VARIABLES)
+// =================================================================================
 
-    // Twilio sends the body as form-urlencoded, not JSON
-    const params = request.body;
-    
-    const requestIsValid = twilio.validateRequest(
-        authToken,
-        twilioSignature,
-        fullUrl,
-        params
-    );
-
-    if (!requestIsValid) {
-        functions.logger.warn('Invalid Twilio signature received.');
-        response.status(403).send('Invalid Twilio Signature');
-        return;
-    }
-
-    try {
-        const from = params.From as string; // e.g., 'whatsapp:+14155238886'
-        const to = params.To as string;
-        const messageBody = (params.Body as string) || '';
-        const numMedia = parseInt((params.NumMedia as string) || '0', 10);
+// La función twilioWebhook es async porque usa 'await' internamente.
+export const twilioWebhook = functions.https.onRequest(
+    async (request: Request, response: Response) => {
+        // Inicialización de TwiML fuera del try para que esté disponible en el catch.
+        const twiml = new twilio.twiml.MessagingResponse(); 
         
-        functions.logger.info(`Mensaje de Twilio recibido de ${from} a ${to}:`, { body: messageBody });
+        try {
+            const twilioSignature = request.headers['x-twilio-signature'] as string;
+            // Acceso al token configurado previamente.
+            const authToken = process.env.TWILIO_AUTH_TOKEN || functions.config().twilio.auth_token || ''; 
+            
+            // Usamos la URL real estática que configuraste en Twilio para la validación.
+            const fullUrl = `https://twiliowebhook-rhesymzm2aa-uc.a.run.app`; 
 
-        // Handle auto-responses for confirmation/cancellation
-        const { clientId } = await handleClientResponse(from, messageBody);
-        
-        // Save message to Firestore conversation
-        const conversationId = from; // Use the sender's full "whatsapp:..." ID
-        const conversationRef = db.collection('conversations').doc(conversationId);
-        const messagesCollectionRef = conversationRef.collection('messages');
+            const params = request.body;
+            
+            if (!Object.keys(params).length) {
+                functions.logger.warn('Cuerpo de solicitud Twilio vacío. Ignorando.');
+                response.status(400).send('Cuerpo vacío.');
+                return;
+            }
 
-        const messageData: { [key: string]: any } = {
-          senderId: 'client',
-          text: messageBody,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          read: false,
-        };
+            // **Validación de Seguridad**
+            const requestIsValid = twilio.validateRequest(
+                authToken,
+                twilioSignature,
+                fullUrl, 
+                params
+            );
 
-        if (numMedia > 0) {
-          const mediaUrl = params.MediaUrl0 as string;
-          const mediaContentType = params.MediaContentType0 as string;
-          
-          if(mediaUrl) {
-              messageData.mediaUrl = mediaUrl;
-              if (mediaContentType?.startsWith('image/')) {
-                messageData.mediaType = 'image';
-              } else if (mediaContentType?.startsWith('audio/')) {
-                messageData.mediaType = 'audio';
-              } else if (mediaContentType === 'application/pdf') {
-                messageData.mediaType = 'document';
-              }
-          }
-        }
+            if (!requestIsValid) {
+                functions.logger.warn('Invalid Twilio signature received.', { signature: twilioSignature, url: fullUrl });
+                response.status(403).send('Invalid Twilio Signature');
+                return;
+            }
 
-        await messagesCollectionRef.add(messageData);
-        
-        const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
-        
-        const conversationDoc = await conversationRef.get();
+            // --- LÓGICA PRINCIPAL ---
+            const from = params.From as string;
+            const to = params.To as string;
+            const messageBody = (params.Body as string) || '';
+            const numMedia = parseInt((params.NumMedia as string) || '0', 10); // TS6133 en esta línea
 
-        if (!conversationDoc.exists) {
-            let clientName = from;
-            if (clientId) {
-                const clientRecord = await db.collection('clientes').doc(clientId).get();
-                if (clientRecord.exists()) {
-                    const clientData = clientRecord.data();
-                    clientName = `${clientData?.nombre} ${clientData?.apellido}`;
+            functions.logger.info(`Mensaje de Twilio recibido de ${from} a ${to}:`, { body: messageBody });
+
+            // Manejar confirmación/cancelación de citas
+            // clientId se usa para obtener el nombre, resolviendo la advertencia TS6133
+            const { clientId } = await handleClientResponse(from, messageBody); 
+            
+            // Guardar el mensaje en Firestore (Lógica existente)
+            const conversationId = from.replace('whatsapp:', ''); 
+            const conversationRef = db.collection('conversations').doc(conversationId);
+            
+            // La colección se usa abajo, resolviendo la advertencia TS6133
+            const messagesCollectionRef = conversationRef.collection('messages'); 
+
+            // =====================================================================
+            // Lógica de Media (Usa numMedia y messagesCollectionRef para resolver TS6133)
+            // =====================================================================
+
+            const messageData: { [key: string]: any } = {
+                senderId: 'client',
+                text: messageBody,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                read: false,
+            };
+
+            if (numMedia > 0) {
+                const mediaUrl = params.MediaUrl0 as string;
+                const mediaContentType = params.MediaContentType0 as string;
+                
+                if(mediaUrl) {
+                    messageData.mediaUrl = mediaUrl;
+                    if (mediaContentType?.startsWith('image/')) {
+                        messageData.mediaType = 'image';
+                    } else if (mediaContentType?.startsWith('audio/')) {
+                        messageData.mediaType = 'audio';
+                    } else if (mediaContentType === 'application/pdf') {
+                        messageData.mediaType = 'document';
+                    }
                 }
             }
-            
-            await conversationRef.set({
-                lastMessageText: lastMessagePreview,
-                lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-                unreadCount: admin.firestore.FieldValue.increment(1),
-                clientName: clientName,
-            });
-        } else {
-            await conversationRef.update({
-                lastMessageText: lastMessagePreview,
-                lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-                unreadCount: admin.firestore.FieldValue.increment(1),
-            });
-        }
 
-        const twiml = new twilio.twiml.MessagingResponse();
-        response.writeHead(200, { 'Content-Type': 'text/xml' });
-        response.end(twiml.toString());
-        
-    } catch (error) {
-        functions.logger.error('Error processing Twilio webhook', error);
-        response.status(500).send('Internal Server Error');
+            // **Uso de messagesCollectionRef para guardar el mensaje**
+            await messagesCollectionRef.add(messageData); 
+            
+            // =====================================================================
+            // Lógica de actualización de conversación
+            // =====================================================================
+
+            const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
+            
+            const conversationDoc = await conversationRef.get();
+
+            if (!conversationDoc.exists) {
+                let clientName = from;
+                if (clientId) {
+                    const clientRecord = await db.collection('clientes').doc(clientId).get();
+                    if (clientRecord.exists) {
+                        const clientData = clientRecord.data();
+                        clientName = `${clientData?.nombre} ${clientData?.apellido}`;
+                    }
+                }
+                
+                await conversationRef.set({
+                    lastMessageText: lastMessagePreview,
+                    lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    unreadCount: admin.firestore.FieldValue.increment(1),
+                    clientName: clientName,
+                });
+            } else {
+                await conversationRef.update({
+                    lastMessageText: lastMessagePreview,
+                    lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    unreadCount: admin.firestore.FieldValue.increment(1),
+                });
+            }
+
+            // **CORRECCIÓN FINAL DE RESPUESTA:** Aseguramos el TwiML y cerramos la conexión.
+            response.writeHead(200, { 'Content-Type': 'text/xml' });
+            response.end(twiml.toString());
+            
+        } catch (error) {
+            functions.logger.error('Error processing Twilio webhook', error);
+            // Aseguramos una respuesta para Twilio incluso si falla internamente
+            response.status(500).send('<Response><Message>Error interno en la agenda.</Message></Response>');
+        }
     }
-});
+);
+

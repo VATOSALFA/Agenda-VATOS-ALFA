@@ -18,9 +18,8 @@ const storage = getStorage();
 // =================================================================================
 // GLOBALES Y CONSTANTES (Variables de Entorno)
 // =_================================================================================
-const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'tu_access_token_de_prueba';
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'AC2d44fd1fff9551d5f0f7cb5b1d8d9116';
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'AC2d44fd1fff9551d5f0f7cb5b1d8d9116';
 const MP_POINT_API_BASE = 'https://api.mercadopago.com/point/integrations';
 
 // =================================================================================
@@ -78,12 +77,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
-    let clientPhone = from.replace(/\D/g, '');
-    if (clientPhone.startsWith('521')) {
-      clientPhone = clientPhone.substring(3);
-    } else if (clientPhone.startsWith('52')) {
-      clientPhone = clientPhone.substring(2);
-    }
+    const clientPhone = from.replace(/\D/g, '').slice(-10);
 
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
     const clientsSnapshot = await clientsQuery.get();
@@ -153,7 +147,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN"] }).https.onRequest(
+export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH_TOKEN"] },
     async (request: Request, response: Response) => {
         const twiml = new twilio.twiml.MessagingResponse(); 
         
@@ -167,7 +161,9 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN"] 
                 return;
             }
             
-            const fullUrl = `https://${request.headers.host}${request.originalUrl}`; 
+            const protocol = request.headers['x-forwarded-proto'] || 'https';
+            const host = request.headers.host;
+            const fullUrl = `${protocol}://${host}${request.originalUrl}`;
 
             const params = request.body;
             
@@ -217,7 +213,6 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN"] 
                 
                 if(mediaUrl) {
                     try {
-                        const twilioClient = twilio(TWILIO_ACCOUNT_SID, authToken);
                         const mediaResponse = await axios.get(mediaUrl, {
                             responseType: 'arraybuffer',
                             auth: {

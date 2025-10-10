@@ -1,21 +1,26 @@
+
 import * as functions from 'firebase-functions';
 import { Request, Response } from 'express';
 import twilio from 'twilio';
 import * as admin from 'firebase-admin';
 import { parseISO, format } from 'date-fns';
 import axios from 'axios'; 
+import { getStorage } from 'firebase-admin/storage';
+
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
 const db = admin.firestore();
+const storage = getStorage();
 
 // =================================================================================
 // GLOBALES Y CONSTANTES (Variables de Entorno)
-// =================================================================================
+// =_================================================================================
 const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'tu_access_token_de_prueba';
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '10b85b4dbfb1d484869ff605549d4870';
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const MP_POINT_API_BASE = 'https://api.mercadopago.com/point/integrations';
 
 // =================================================================================
@@ -148,15 +153,21 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-export const twilioWebhook = functions.https.onRequest(
+export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN"] }).https.onRequest(
     async (request: Request, response: Response) => {
         const twiml = new twilio.twiml.MessagingResponse(); 
         
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
-            const authToken = TWILIO_AUTH_TOKEN; 
+            const authToken = process.env.TWILIO_AUTH_TOKEN; 
+
+            if (!authToken) {
+                functions.logger.error("Twilio Auth Token is not configured in secrets.");
+                response.status(500).send('Configuration error.');
+                return;
+            }
             
-            const fullUrl = `https://us-central1-agenda-1ae08.cloudfunctions.net/twilioWebhook`; 
+            const fullUrl = `https://${request.headers.host}${request.originalUrl}`; 
 
             const params = request.body;
             
@@ -205,13 +216,37 @@ export const twilioWebhook = functions.https.onRequest(
                 const mediaContentType = params.MediaContentType0 as string;
                 
                 if(mediaUrl) {
-                    messageData.mediaUrl = mediaUrl;
-                    if (mediaContentType?.startsWith('image/')) {
-                        messageData.mediaType = 'image';
-                    } else if (mediaContentType?.startsWith('audio/')) {
-                        messageData.mediaType = 'audio';
-                    } else if (mediaContentType === 'application/pdf') {
-                        messageData.mediaType = 'document';
+                    try {
+                        const twilioClient = twilio(TWILIO_ACCOUNT_SID, authToken);
+                        const mediaResponse = await axios.get(mediaUrl, {
+                            responseType: 'arraybuffer',
+                            auth: {
+                                username: TWILIO_ACCOUNT_SID!,
+                                password: authToken
+                            }
+                        });
+                        
+                        const fileBuffer = Buffer.from(mediaResponse.data, 'binary');
+                        const fileName = `conversations/${conversationId}/${Date.now()}_media`;
+                        const file = storage.bucket().file(fileName);
+
+                        await file.save(fileBuffer, {
+                            metadata: { contentType: mediaContentType },
+                            public: true,
+                        });
+                        
+                        messageData.mediaUrl = file.publicUrl();
+
+                        if (mediaContentType?.startsWith('image/')) {
+                            messageData.mediaType = 'image';
+                        } else if (mediaContentType?.startsWith('audio/')) {
+                            messageData.mediaType = 'audio';
+                        } else if (mediaContentType === 'application/pdf') {
+                            messageData.mediaType = 'document';
+                        }
+
+                    } catch (mediaError) {
+                        functions.logger.error("Error handling Twilio media:", mediaError);
                     }
                 }
             }

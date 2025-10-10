@@ -43,6 +43,12 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'api.twilio.com',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };

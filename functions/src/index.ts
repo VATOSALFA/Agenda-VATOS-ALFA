@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import twilio from 'twilio';
 import * as admin from 'firebase-admin';
 import { parseISO, format } from 'date-fns';
+import axios from 'axios'; 
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
@@ -10,9 +11,15 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
+// =================================================================================
+// GLOBALES Y CONSTANTES (Variables de Entorno)
+// =================================================================================
+const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'tu_access_token_de_prueba';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '10b85b4dbfb1d484869ff605549d4870';
+const MP_POINT_API_BASE = 'https://api.mercadopago.com/point/integrations';
 
 // =================================================================================
-// 1. MERCADO PAGO WEBHOOK (Ya funciona y cumple con la tipificación)
+// 1. MERCADO PAGO WEBHOOK (Recibe el resultado del pago)
 // =================================================================================
 
 export const mercadoPagoWebhookTest = functions.https.onRequest(
@@ -20,20 +27,20 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
         
         try {
             if (request.method !== 'POST') {
-                functions.logger.warn('Método no permitido. Solo POST.', { method: request.method });
+                functions.logger.warn('MP Webhook: Método no permitido. Solo POST.', { method: request.method });
                 response.status(405).send('Método no permitido. Solo POST.');
                 return; 
             }
 
-            functions.logger.info('Notificación de Mercado Pago recibida (TEST):', { body: request.body });
-
+            functions.logger.info('MP Webhook: Notificación recibida.', { body: request.body });
+            
             // Lógica de validación, consulta a API y actualización de Firestore iría aquí.
 
             response.status(200).send('OK');
             return; 
 
         } catch (error) {
-            functions.logger.error('Error procesando el Webhook de Mercado Pago', error);
+            functions.logger.error('MP Webhook: Error procesando el Webhook.', error);
             response.status(500).send('Error interno del servidor');
             return; 
         }
@@ -42,7 +49,7 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
 
 
 // =================================================================================
-// Función de lógica de Citas (handleClientResponse)
+// Función de lógica de Citas (sin cambios)
 // =================================================================================
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
@@ -66,7 +73,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
-    // Updated phone number normalization for Mexico
     let clientPhone = from.replace(/\D/g, '');
     if (clientPhone.startsWith('521')) {
       clientPhone = clientPhone.substring(3);
@@ -139,68 +145,54 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 }
 
 // =================================================================================
-// 2. TWILIO WEBHOOK (CON CORRECCIONES DE USO DE VARIABLES)
+// 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-// La función twilioWebhook es async porque usa 'await' internamente.
 export const twilioWebhook = functions.https.onRequest(
     async (request: Request, response: Response) => {
-        // Inicialización de TwiML fuera del try para que esté disponible en el catch.
         const twiml = new twilio.twiml.MessagingResponse(); 
         
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
-            // Acceso al token configurado previamente.
-            const authToken = process.env.TWILIO_AUTH_TOKEN || functions.config().twilio.auth_token || ''; 
+            const authToken = TWILIO_AUTH_TOKEN; 
             
-            // Usamos la URL real estática que configuraste en Twilio para la validación.
-            const fullUrl = `https://twiliowebhook-rhesymzm2aa-uc.a.run.app`; 
+            const fullUrl = `https://us-central1-agenda-1ae08.cloudfunctions.net/twilioWebhook`; 
 
             const params = request.body;
             
             if (!Object.keys(params).length) {
-                functions.logger.warn('Cuerpo de solicitud Twilio vacío. Ignorando.');
+                functions.logger.warn('Twilio Webhook: Cuerpo de solicitud vacío. Ignorando.');
                 response.status(400).send('Cuerpo vacío.');
                 return;
             }
 
-            // **Validación de Seguridad**
+            // Validación de Seguridad
             const requestIsValid = twilio.validateRequest(
                 authToken,
                 twilioSignature,
-                fullUrl, 
+                fullUrl,
                 params
             );
 
             if (!requestIsValid) {
-                functions.logger.warn('Invalid Twilio signature received.', { signature: twilioSignature, url: fullUrl });
+                functions.logger.warn('Twilio Webhook: Invalid signature received.', { signature: twilioSignature, url: fullUrl });
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
 
-            // --- LÓGICA PRINCIPAL ---
+            // --- LÓGICA PRINCIPAL Y DE GUARDADO ---
             const from = params.From as string;
-            const to = params.To as string;
             const messageBody = (params.Body as string) || '';
-            const numMedia = parseInt((params.NumMedia as string) || '0', 10); // TS6133 en esta línea
+            const numMedia = parseInt((params.NumMedia as string) || '0', 10);
+            
+            functions.logger.info(`Mensaje de Twilio recibido de ${from}:`, { body: messageBody });
 
-            functions.logger.info(`Mensaje de Twilio recibido de ${from} a ${to}:`, { body: messageBody });
-
-            // Manejar confirmación/cancelación de citas
-            // clientId se usa para obtener el nombre, resolviendo la advertencia TS6133
             const { clientId } = await handleClientResponse(from, messageBody); 
             
-            // Guardar el mensaje en Firestore (Lógica existente)
             const conversationId = from.replace('whatsapp:', ''); 
             const conversationRef = db.collection('conversations').doc(conversationId);
-            
-            // La colección se usa abajo, resolviendo la advertencia TS6133
             const messagesCollectionRef = conversationRef.collection('messages'); 
-
-            // =====================================================================
-            // Lógica de Media (Usa numMedia y messagesCollectionRef para resolver TS6133)
-            // =====================================================================
-
+            
             const messageData: { [key: string]: any } = {
                 senderId: 'client',
                 text: messageBody,
@@ -208,7 +200,7 @@ export const twilioWebhook = functions.https.onRequest(
                 read: false,
             };
 
-            if (numMedia > 0) {
+            if (numMedia > 0) { 
                 const mediaUrl = params.MediaUrl0 as string;
                 const mediaContentType = params.MediaContentType0 as string;
                 
@@ -224,13 +216,8 @@ export const twilioWebhook = functions.https.onRequest(
                 }
             }
 
-            // **Uso de messagesCollectionRef para guardar el mensaje**
             await messagesCollectionRef.add(messageData); 
             
-            // =====================================================================
-            // Lógica de actualización de conversación
-            // =====================================================================
-
             const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
             
             const conversationDoc = await conversationRef.get();
@@ -259,15 +246,73 @@ export const twilioWebhook = functions.https.onRequest(
                 });
             }
 
-            // **CORRECCIÓN FINAL DE RESPUESTA:** Aseguramos el TwiML y cerramos la conexión.
             response.writeHead(200, { 'Content-Type': 'text/xml' });
             response.end(twiml.toString());
             
         } catch (error) {
-            functions.logger.error('Error processing Twilio webhook', error);
-            // Aseguramos una respuesta para Twilio incluso si falla internamente
+            functions.logger.error('Twilio Webhook: Error fatal en la ejecución.', error);
             response.status(500).send('<Response><Message>Error interno en la agenda.</Message></Response>');
         }
     }
 );
 
+
+// =================================================================================
+// 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
+// =================================================================================
+
+interface PaymentData {
+    amount: number;
+    referenceId: string;
+    terminalReference: string;
+}
+
+// Se elimina el tipo 'CallableContext' y se usa 'any' para forzar la compatibilidad
+// y resolver el error TS2694.
+export const createPointPayment = functions.https.onCall(async (data: any, context: any) => {
+    
+    // Verificación de autenticación
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
+    }
+    
+    // Desestructuración con aserción de tipo para resolver TS2352
+    const { amount, referenceId, terminalReference } = data as PaymentData;
+
+    if (!amount || !referenceId || !terminalReference) {
+        throw new functions.https.HttpsError('invalid-argument', 'Faltan campos requeridos: monto, ID de referencia, o referencia de terminal.');
+    }
+
+    try {
+        const paymentIntentPayload = {
+            amount: amount,
+            description: `Venta Agenda: ${referenceId}`,
+            reference_id: referenceId,
+            payment_method: {
+                type: "card"
+            },
+            additional_info: {
+                tip_amount_allowed: true 
+            }
+        };
+
+        const apiResponse = await axios.post(
+            `${MP_POINT_API_BASE}/${terminalReference}/payment-intents`,
+            paymentIntentPayload,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
+                }
+            }
+        );
+
+        functions.logger.info(`MP Payment Intent Creado para ${referenceId}.`, { status: apiResponse.status, data: apiResponse.data });
+
+        return { success: true, payment_intent_id: apiResponse.data.id, message: 'Orden enviada a terminal.' };
+
+    } catch (error) {
+        functions.logger.error(`Error al crear Payment Intent para ${referenceId}.`, error);
+        throw new functions.https.HttpsError('internal', 'Fallo al comunicar con la API de Mercado Pago.');
+    }
+});

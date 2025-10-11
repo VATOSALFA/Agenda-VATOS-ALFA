@@ -45,20 +45,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-            let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-            let userDoc = await getDoc(userDocRef);
-            let customData;
-
+            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            
+            let customData: any;
             if (userDoc.exists()) {
                 customData = userDoc.data();
             } else {
-                console.warn(`User document not found in 'usuarios' for UID: ${firebaseUser.uid}. This may not be an error if the user is a 'profesional'.`);
+                 console.warn(`User document not found in 'usuarios' for UID: ${firebaseUser.uid}. This may not be an error if the user is a 'profesional'.`);
             }
             
             if (customData) {
                 const isSuperAdmin = customData.role === 'Administrador general';
                 setUser({
-                    ...(firebaseUser as FirebaseUser),
+                    ...firebaseUser,
                     displayName: customData.name || firebaseUser.displayName,
                     email: customData.email,
                     role: isSuperAdmin ? 'Administrador general' : customData.role,
@@ -70,11 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             } else {
                  // If user is not in 'usuarios', treat as super admin for initial setup or error case
                  setUser({
-                    ...(firebaseUser as FirebaseUser),
+                    ...firebaseUser,
                     displayName: firebaseUser.displayName || 'Super Admin',
                     role: 'Administrador general',
                     permissions: allPermissions.map(p => p.key),
-                    uid: firebaseUser.uid
+                    uid: firebaseUser.uid 
                 });
             }
 
@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.error("Error fetching user data from Firestore:", error);
             // Fallback to super admin on error to prevent being locked out
             setUser({ 
-              ...(firebaseUser as FirebaseUser), 
+              ...firebaseUser, 
               role: 'Administrador general', 
               permissions: allPermissions.map(p => p.key),
               uid: firebaseUser.uid 
@@ -112,7 +112,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
-    await firebaseSignOut(auth).catch(() => {}); // Clear any potential session remnants
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     // The onAuthStateChanged listener will handle setting the user state.
     return userCredential.user;

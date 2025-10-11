@@ -242,6 +242,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 
                     } catch (mediaError) {
                         functions.logger.error("Error handling Twilio media:", mediaError);
+                        // Don't block message saving if media fails
                     }
                 }
             }

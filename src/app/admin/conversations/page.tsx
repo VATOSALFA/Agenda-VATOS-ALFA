@@ -381,7 +381,15 @@ export default function ConversationsPage() {
                                 )}>
                                     {msg.mediaUrl ? (
                                         <div className="space-y-2">
-                                            {msg.mediaType === 'image' && <Image src={msg.mediaUrl} alt="Imagen adjunta" width={300} height={300} className="rounded-lg object-cover" />}
+                                            {msg.mediaType === 'image' && (
+                                                <Image 
+                                                    src={msg.mediaUrl.startsWith('https://storage.googleapis.com') ? msg.mediaUrl : `https://placehold.co/300x300?text=Error`} 
+                                                    alt="Imagen adjunta" 
+                                                    width={300} 
+                                                    height={300} 
+                                                    className="rounded-lg object-cover" 
+                                                />
+                                            )}
                                             {msg.mediaType === 'audio' && <AudioPlayer src={msg.mediaUrl} />}
                                             {msg.mediaType === 'document' && (
                                                 <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg hover:bg-muted">

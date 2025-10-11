@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -8,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -129,14 +129,25 @@ export default function SistemaCajaPage() {
             const result: any = await getTerminals();
             if (result.data.success) {
                 setTerminals(result.data.devices);
+                 if (result.data.devices.length > 0) {
+                    toast({
+                        title: 'Terminales encontradas',
+                        description: `Se encontraron ${result.data.devices.length} terminales.`,
+                    });
+                } else {
+                     toast({
+                        title: 'Conexión exitosa',
+                        description: 'No se encontraron terminales Point asociadas a tu cuenta.',
+                    });
+                }
             } else {
-                throw new Error(result.data.message || 'Error desconocido');
+                throw new Error(result.data.message || 'Error desconocido al buscar terminales.');
             }
         } catch (error: any) {
             toast({
                 variant: 'destructive',
                 title: 'Error al buscar terminales',
-                description: error.message || 'No se pudieron obtener las terminales de Mercado Pago.',
+                description: error.message,
             });
         } finally {
             setIsLoadingTerminals(false);
@@ -154,7 +165,7 @@ export default function SistemaCajaPage() {
                 });
                 fetchTerminals(); // Refresh the list
             } else {
-                 throw new Error(result.data.message || 'Error desconocido');
+                 throw new Error(result.data.message || 'Error desconocido al activar PDV.');
             }
         } catch (error: any) {
              toast({
@@ -218,7 +229,7 @@ export default function SistemaCajaPage() {
                         {isLoadingTerminals ? (
                             <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow>
                         ) : terminals.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="h-24 text-center">No se encontraron terminales. Haz clic en "Buscar Terminales".</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No se encontraron terminales. Haz clic en "Buscar Terminales".</TableCell></TableRow>
                         ) : (
                             terminals.map(terminal => (
                                 <TableRow key={terminal.id}>
@@ -327,9 +338,10 @@ export default function SistemaCajaPage() {
                             ))}
                         </TableBody>
                     </Table>
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
+                </Grid>
+            </CardContent>
+        </AccordionItem>
+    </Accordion>
         
         <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
             <Button type="submit" disabled={isSubmitting || isLoadingSettings}>

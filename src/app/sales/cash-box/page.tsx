@@ -67,7 +67,8 @@ import {
   MessageCircle,
   ChevronLeft,
   ChevronRight,
-  DollarSign
+  DollarSign,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -89,7 +90,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { db } from '@/lib/firebase-client';
+import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
 import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
@@ -162,6 +163,8 @@ export default function CashBoxPage() {
   const [currentPageIngresos, setCurrentPageIngresos] = useState(10);
   const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
   
+  const [terminalId, setTerminalId] = useState('');
+  const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
 
 
    useEffect(() => {
@@ -473,6 +476,46 @@ export default function CashBoxPage() {
     setAuthCode('');
     setAuthAction(null);
   };
+  
+  const handleChargeWithTerminal = async () => {
+    if (!selectedSale) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No hay una venta seleccionada para cobrar.' });
+      return;
+    }
+    if (!terminalId) {
+      toast({ variant: 'destructive', title: 'ID de Terminal Requerido', description: 'Por favor, ingresa el ID de tu terminal Point.' });
+      return;
+    }
+    
+    setIsSendingToTerminal(true);
+    try {
+        const createPayment = httpsCallable(functions, 'createPointPayment');
+        const result: any = await createPayment({
+            amount: selectedSale.total,
+            referenceId: selectedSale.id,
+            terminalId: terminalId,
+        });
+
+        if (result.data.success) {
+            toast({
+                title: 'Orden enviada a la terminal',
+                description: 'Por favor, completa el pago en el dispositivo.',
+            });
+        } else {
+            throw new Error(result.data.message || 'Error desconocido al enviar a la terminal.');
+        }
+
+    } catch (error: any) {
+        console.error("Error creating payment intent:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al enviar a la terminal",
+            description: error.message || "No se pudo comunicar con la terminal de Mercado Pago.",
+        });
+    } finally {
+        setIsSendingToTerminal(false);
+    }
+  };
 
 
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
@@ -599,6 +642,14 @@ export default function CashBoxPage() {
               <Download className="mr-2 h-4 w-4" />
               Descargar reporte
           </Button>
+           <div className="flex items-center gap-2">
+              <Label htmlFor="terminal-id">ID de Terminal:</Label>
+              <Input id="terminal-id" placeholder="Ej: Point-xxxxxxxx" className="h-9 w-auto" value={terminalId} onChange={(e) => setTerminalId(e.target.value)} />
+              <Button onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !selectedSale || !terminalId}>
+                  {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CreditCard className="mr-2 h-4 w-4" />}
+                  Cobrar con Terminal
+              </Button>
+          </div>
       </div>
       
       {/* Detailed Summary */}
@@ -646,7 +697,7 @@ export default function CashBoxPage() {
                           </TableRow>
                       ) : (
                         paginatedSales.map((sale) => (
-                          <TableRow key={sale.id}>
+                          <TableRow key={sale.id} onClick={() => setSelectedSale(sale)} className={cn("cursor-pointer", selectedSale?.id === sale.id && "bg-muted")}>
                             <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
                             <TableCell>{sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A'}</TableCell>
                             <TableCell>{localMap.get(sale.local_id ?? '') || sale.local_id}</TableCell>

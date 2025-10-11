@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, PlusCircle } from "lucide-react";
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
 
 const paymentMethods = [
   { id: 'efectivo', name: 'Efectivo', active: true, requireCode: false },
@@ -42,6 +44,7 @@ const ToggleField = ({ name, label, control }: { name: string, label: string, co
 export default function SistemaCajaPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const form = useForm({
         defaultValues: {
@@ -65,23 +68,45 @@ export default function SistemaCajaPage() {
             useBranchBilling: false,
             differentiateVat: false,
             receiptSize: '80mm',
+            mercadoPagoTerminalId: '', // Added this field
             paymentMethods: paymentMethods.reduce((acc, method) => {
                 acc[method.id] = { active: method.active, requireCode: method.requireCode };
                 return acc;
             }, {} as any)
         }
     });
+    
+    useEffect(() => {
+        const fetchSettings = async () => {
+            const settingsRef = doc(db, 'configuracion', 'caja');
+            const docSnap = await getDoc(settingsRef);
+            if (docSnap.exists()) {
+                form.reset(docSnap.data());
+            }
+            setIsLoading(false);
+        };
+        fetchSettings();
+    }, [form]);
 
-    const onSubmit = (data: any) => {
+    const onSubmit = async (data: any) => {
         setIsSubmitting(true);
-        console.log("Sistema de Caja settings saved:", data);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            const settingsRef = doc(db, 'configuracion', 'caja');
+            await setDoc(settingsRef, data, { merge: true });
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en el sistema de caja han sido guardados."
-            })
-        }, 1500);
+            });
+        } catch (error) {
+            console.error("Error saving settings:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'No se pudo guardar la configuración.'
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
   return (
@@ -108,6 +133,29 @@ export default function SistemaCajaPage() {
             <ToggleField name="showDecimals" label="Visualizar montos totales con decimales" control={form.control} />
           </CardContent>
         </Card>
+        
+         <Card>
+            <CardHeader>
+                <CardTitle>Configuración de Terminal de Mercado Pago</CardTitle>
+                <CardDescription>Guarda el ID de tu terminal Point para agilizar los cobros con tarjeta.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <FormField
+                  control={form.control}
+                  name="mercadoPagoTerminalId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ID de Dispositivo Point</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: Point-xxxxxxxx" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            </CardContent>
+        </Card>
+
 
         <Accordion type="multiple" className="w-full space-y-4">
             <AccordionItem value="item-1" className="border rounded-lg bg-card">
@@ -199,8 +247,8 @@ export default function SistemaCajaPage() {
         </Accordion>
         
         <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-            <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+            <Button type="submit" disabled={isSubmitting || isLoading}>
+                {(isSubmitting || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                 Guardar Cambios
             </Button>
         </div>

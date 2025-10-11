@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -234,6 +234,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: cajaSettings } = useFirestoreQuery('configuracion', 'caja');
+
+  useEffect(() => {
+    if (cajaSettings && cajaSettings.length > 0) {
+      setTerminalId(cajaSettings[0].mercadoPagoTerminalId || '');
+    }
+  }, [cajaSettings]);
   
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string; name: string }>();
@@ -446,7 +453,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       return;
     }
     if (!terminalId) {
-      toast({ variant: 'destructive', title: 'ID de Terminal Requerido', description: 'Por favor, ingresa el ID de tu terminal Point.' });
+      toast({ variant: 'destructive', title: 'ID de Terminal No Configurado', description: 'Por favor, configura el ID de tu terminal en los ajustes de Sistema de Caja.' });
       return;
     }
     
@@ -464,10 +471,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 title: 'Orden enviada a la terminal',
                 description: 'Por favor, completa el pago en el dispositivo. La venta se guardará automáticamente.',
             });
-            // We don't submit the form here. The webhook will trigger the save.
-            // But we need to save the cart and other details to a temporary place
-            // For simplicity in this flow, we will assume the webhook will have enough data.
-            // Or we could save a "pending" sale here.
+            // Here you might want to optimistically move to a "waiting for payment" state
         } else {
             throw new Error(result.data.message || 'Error desconocido al enviar a la terminal.');
         }
@@ -876,16 +880,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             />
                              {paymentMethod === 'tarjeta' && (
                                 <Card className="p-4 bg-muted/50">
-                                    <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal</FormLabel>
-                                    <div className="space-y-2">
-                                        <div className="flex items-center gap-2">
-                                            <Input id="terminal-id" placeholder="ID de Terminal Point" className="h-9" value={terminalId} onChange={(e) => setTerminalId(e.target.value)} />
-                                            <Button type="button" onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !terminalId || total <= 0}>
-                                                {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                                                Enviar Cobro
-                                            </Button>
-                                        </div>
-                                    </div>
+                                    <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal Point</FormLabel>
+                                    <Button type="button" onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !terminalId || total <= 0} className="w-full">
+                                        {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                                        Cobrar ${total.toLocaleString('es-MX')} en Terminal
+                                    </Button>
+                                    {!terminalId && <p className="text-xs text-muted-foreground mt-2">No hay ID de terminal configurado. Ve a Ajustes &gt; Sistema de Caja.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (

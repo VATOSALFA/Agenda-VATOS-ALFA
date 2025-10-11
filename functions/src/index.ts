@@ -395,3 +395,47 @@ export const createPointPayment = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError('internal', errorMessage);
     }
 });
+
+// =================================================================================
+// 4. OBTENER TERMINALES DE MERCADO PAGO
+// =================================================================================
+
+export const getPointTerminals = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
+    }
+
+    if (!MP_ACCESS_TOKEN) {
+        functions.logger.error('MP Point: Access Token de Mercado Pago no está configurado.');
+        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
+    }
+
+    try {
+        const apiResponse = await axios.get(
+            `https://api.mercadopago.com/point/integration-api/devices`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+                }
+            }
+        );
+        
+        // La respuesta puede contener una lista de dispositivos. La filtramos para obtener solo los que nos interesan.
+        // Ver: https://www.mercadopago.com.mx/developers/es/reference/integrations/point-api/_point_integration-api_devices/get
+        const devices = apiResponse.data.devices.map((device: any) => ({
+            id: device.id,
+            name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`
+        }));
+        
+        return { success: true, devices: devices };
+
+    } catch (error: any) {
+        functions.logger.error(`Error al obtener terminales de MP.`, {
+            errorMessage: error.message,
+            errorResponse: error.response?.data
+        });
+        
+        const errorMessage = error.response?.data?.message || 'Fallo al obtener la lista de terminales.';
+        throw new functions.https.HttpsError('internal', errorMessage);
+    }
+});

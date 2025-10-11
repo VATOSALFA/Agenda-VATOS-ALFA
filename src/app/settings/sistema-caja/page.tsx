@@ -69,7 +69,6 @@ export default function SistemaCajaPage() {
             useBranchBilling: false,
             differentiateVat: false,
             receiptSize: '80mm',
-            mercadoPagoTerminalId: '', // Added this field
             paymentMethods: paymentMethods.reduce((acc, method) => {
                 acc[method.id] = { active: method.active, requireCode: method.requireCode };
                 return acc;
@@ -135,29 +134,6 @@ export default function SistemaCajaPage() {
             <ToggleField name="showDecimals" label="Visualizar montos totales con decimales" control={form.control} />
           </CardContent>
         </Card>
-        
-         <Card>
-            <CardHeader>
-                <CardTitle>Configuración de Terminal de Mercado Pago</CardTitle>
-                <CardDescription>Guarda el ID de tu terminal Point para agilizar los cobros con tarjeta.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <FormField
-                  control={form.control}
-                  name="mercadoPagoTerminalId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ID de Dispositivo Point</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ej: Point-xxxxxxxx" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-            </CardContent>
-        </Card>
-
 
         <Accordion type="multiple" className="w-full space-y-4">
             <AccordionItem value="item-1" className="border rounded-lg bg-card">

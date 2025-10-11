@@ -414,27 +414,22 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 
-    const { token: MP_ACCESS_TOKEN, userId: MP_USER_ID } = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
 
     try {
-        const storesResponse = await axios.get(`${MP_API_BASE}/users/${MP_USER_ID}/stores`, {
-            headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+        const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {
+            headers: {
+                'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+            }
         });
-
-        const stores = storesResponse.data?.results || [];
-        if (stores.length === 0) {
-            return { success: true, devices: [] };
+        
+        // Handle different possible response structures
+        const terminalList = apiResponse.data?.results || apiResponse.data?.terminals || apiResponse.data;
+        
+        if (!Array.isArray(terminalList)) {
+             throw new functions.https.HttpsError('internal', 'La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
         }
-        
-        // Asumimos que las terminales están en la primera sucursal, se podría expandir si hay múltiples
-        const firstStoreId = stores[0].id;
-        
-        const terminalsResponse = await axios.get(`${MP_API_BASE}/point/integration-api/devices?store_id=${firstStoreId}`, {
-            headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
-        });
 
-        const terminalList = terminalsResponse.data?.devices || [];
-        
         const devices = terminalList.map((device: any) => ({
             id: device.id,
             name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,

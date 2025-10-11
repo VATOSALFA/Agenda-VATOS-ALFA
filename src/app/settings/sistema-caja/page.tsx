@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -178,20 +177,20 @@ export default function SistemaCajaPage() {
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-      <div>
+    <div>
         <h2 className="text-3xl font-bold tracking-tight">Sistema de Caja</h2>
         <p className="text-muted-foreground">
-          Configura todo lo relacionado a tu sistema de caja.
+        Configura todo lo relacionado a tu sistema de caja.
         </p>
-      </div>
+    </div>
 
-      <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
+    <Form {...form}>
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
         <Card>
-          <CardHeader>
+        <CardHeader>
             <CardTitle>Configuraciones Generales</CardTitle>
-          </CardHeader>
-          <CardContent>
+        </CardHeader>
+        <CardContent>
             <ToggleField name="enableCashBox" label="Habilitar caja de ventas" control={form.control} />
             <ToggleField name="trackCash" label="Hacer seguimiento del efectivo en caja" control={form.control} />
             <ToggleField name="requireClient" label="Requerir cliente en pago" control={form.control} />
@@ -199,7 +198,7 @@ export default function SistemaCajaPage() {
             <ToggleField name="requireServiceInfo" label="Requerir información de servicios en pagos" control={form.control} />
             <ToggleField name="requireCashierCode" label="Requerir código de cajero para acciones de cajas" control={form.control} />
             <ToggleField name="showDecimals" label="Visualizar montos totales con decimales" control={form.control} />
-          </CardContent>
+        </CardContent>
         </Card>
         
         <Card>
@@ -282,7 +281,7 @@ export default function SistemaCajaPage() {
                         <ToggleField name="useBranchBilling" label="Usar información de facturación distinta por sucursal" control={form.control} />
                         <ToggleField name="differentiateVat" label="Diferenciar IVA de productos en comprobantes de caja" control={form.control} />
                     </div>
-                     <div className="space-y-2 pt-4 border-t">
+                    <div className="space-y-2 pt-4 border-t">
                         <Label>Tamaño del comprobante</Label>
                         <Controller
                             name="receiptSize"
@@ -326,7 +325,7 @@ export default function SistemaCajaPage() {
                                         />
                                     </TableCell>
                                     <TableCell className="text-center">
-                                         <Controller
+                                        <Controller
                                             name={`paymentMethods.${id}.requireCode`}
                                             control={form.control}
                                             render={({ field }) => (
@@ -338,10 +337,9 @@ export default function SistemaCajaPage() {
                             ))}
                         </TableBody>
                     </Table>
-                </Grid>
-            </CardContent>
-        </AccordionItem>
-    </Accordion>
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
         
         <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
             <Button type="submit" disabled={isSubmitting || isLoadingSettings}>
@@ -349,8 +347,8 @@ export default function SistemaCajaPage() {
                 Guardar Cambios
             </Button>
         </div>
-      </form>
-      </Form>
+    </form>
+    </Form>
     </div>
   );
 }

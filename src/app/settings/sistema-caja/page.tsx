@@ -16,6 +16,7 @@ import { useState, useEffect } from "react";
 import { Loader2, PlusCircle } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 const paymentMethods = [
   { id: 'efectivo', name: 'Efectivo', active: true, requireCode: false },
@@ -118,6 +119,7 @@ export default function SistemaCajaPage() {
         </p>
       </div>
 
+      <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
         <Card>
           <CardHeader>
@@ -253,6 +255,7 @@ export default function SistemaCajaPage() {
             </Button>
         </div>
       </form>
+      </Form>
     </div>
   );
 }

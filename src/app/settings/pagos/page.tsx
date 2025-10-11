@@ -26,6 +26,7 @@ interface PagosSettings {
     clabe: string;
     mercadoPagoPublicKey: string;
     mercadoPagoAccessToken: string;
+    mercadoPagoUserId: string;
 }
 
 export default function PagosAgendaProPage() {
@@ -44,6 +45,7 @@ export default function PagosAgendaProPage() {
             clabe: '',
             mercadoPagoPublicKey: '',
             mercadoPagoAccessToken: '',
+            mercadoPagoUserId: '',
         }
     });
     
@@ -192,6 +194,12 @@ export default function PagosAgendaProPage() {
                         <Label htmlFor="mercadoPagoAccessToken">Access Token</Label>
                          <Controller name="mercadoPagoAccessToken" control={form.control} render={({ field }) => (
                            <Input id="mercadoPagoAccessToken" {...field} placeholder="Tu Access Token de MercadoPago" type="password"/>
+                        )}/>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="mercadoPagoUserId">User ID</Label>
+                         <Controller name="mercadoPagoUserId" control={form.control} render={({ field }) => (
+                           <Input id="mercadoPagoUserId" {...field} placeholder="Tu User ID numérico de MercadoPago" />
                         )}/>
                     </div>
                 </AccordionContent>

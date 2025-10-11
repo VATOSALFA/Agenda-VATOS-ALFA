@@ -406,7 +406,7 @@ export const createPointPayment = functions.https.onCall(async (request) => {
 });
 
 // =================================================================================
-// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN CORREGIDA)
+// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN CORREGIDA Y ROBUSTA)
 // =================================================================================
 export const getPointTerminals = functions.https.onCall(async (request) => {
     if (!request.auth) {
@@ -422,6 +422,7 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
             }
         });
         
+        // Handle different possible response structures
         const terminalList = apiResponse.data?.results || apiResponse.data?.terminals || apiResponse.data;
         
         if (!Array.isArray(terminalList)) {

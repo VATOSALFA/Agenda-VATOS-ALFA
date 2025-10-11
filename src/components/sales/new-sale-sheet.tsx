@@ -222,9 +222,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [clientQueryKey, setClientQueryKey] = useState(0);
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
-  const [terminalId, setTerminalId] = useState('');
-  const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
-  const [settingsQueryKey, setSettingsQueryKey] = useState(0);
+  const [selectedTerminal, setSelectedTerminal] = useState('');
+  const [terminals, setTerminals] = useState<any[]>([]);
+  const [isFetchingTerminals, setIsFetchingTerminals] = useState(false);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
@@ -235,20 +235,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: cajaSettings, loading: cajaSettingsLoading } = useFirestoreQuery('configuracion', `caja-${settingsQueryKey}`);
-
-
-  useEffect(() => {
-    if (isOpen) {
-        setSettingsQueryKey(prev => prev + 1); // Force refetch settings when sheet opens
-    }
-  }, [isOpen]);
-  
-  useEffect(() => {
-    if (cajaSettings && cajaSettings.length > 0) {
-      setTerminalId(cajaSettings[0].mercadoPagoTerminalId || '');
-    }
-  }, [cajaSettings]);
   
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string; name: string }>();
@@ -424,6 +410,35 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
   }, [initialData, form, isOpen]);
 
+  useEffect(() => {
+      const fetchTerminals = async () => {
+        if(paymentMethod !== 'tarjeta') return;
+        setIsFetchingTerminals(true);
+        try {
+            const getTerminals = httpsCallable(functions, 'getPointTerminals');
+            const result: any = await getTerminals();
+            if (result.data.success) {
+                const pdvTerminals = result.data.devices.filter((d: any) => d.operating_mode === 'PDV');
+                setTerminals(pdvTerminals);
+                if (pdvTerminals.length === 1) {
+                    setSelectedTerminal(pdvTerminals[0].id);
+                }
+            } else {
+                throw new Error(result.data.message || 'Error desconocido');
+            }
+        } catch (error: any) {
+             toast({
+                variant: 'destructive',
+                title: 'Error al buscar terminales',
+                description: error.message,
+            });
+        } finally {
+            setIsFetchingTerminals(false);
+        }
+    };
+    fetchTerminals();
+  }, [paymentMethod, toast]);
+
   const handleNextStep = () => {
     if (cart.length === 0) {
       toast({ variant: 'destructive', title: 'Carrito vacío', description: 'Debes agregar al menos un ítem para continuar.' });
@@ -453,48 +468,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setClientQueryKey(prev => prev + 1); // Refetch clients
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
-
-    const handleChargeWithTerminal = async () => {
-    const saleId = `sale-${Date.now()}`; // Temporary ID for reference
-    if (cart.length === 0) {
-      toast({ variant: 'destructive', title: 'Error', description: 'No hay items en el carrito.' });
-      return;
-    }
-    if (!terminalId) {
-      toast({ variant: 'destructive', title: 'ID de Terminal No Configurado', description: 'Por favor, configura el ID de tu terminal en los ajustes de Sistema de Caja.' });
-      return;
-    }
-    
-    setIsSendingToTerminal(true);
-    try {
-        const createPayment = httpsCallable(functions, 'createPointPayment');
-        const result: any = await createPayment({
-            amount: total,
-            referenceId: saleId, 
-            terminalId: terminalId,
-        });
-
-        if (result.data.success) {
-            toast({
-                title: 'Orden enviada a la terminal',
-                description: 'Por favor, completa el pago en el dispositivo. La venta se guardará automáticamente.',
-            });
-            // Here you might want to optimistically move to a "waiting for payment" state
-        } else {
-            throw new Error(result.data.message || 'Error desconocido al enviar a la terminal.');
-        }
-
-    } catch (error: any) {
-        console.error("Error creating payment intent:", error);
-        toast({
-            variant: "destructive",
-            title: "Error al enviar a la terminal",
-            description: error.message || "No se pudo comunicar con la terminal de Mercado Pago.",
-        });
-    } finally {
-        setIsSendingToTerminal(false);
-    }
-  };
 
   async function onSubmit(data: SaleFormData, paymentId?: string) {
      setIsSubmitting(true);
@@ -886,14 +859,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </FormItem>
                             )}
                             />
-                             {paymentMethod === 'tarjeta' && (
+                            
+                            {paymentMethod === 'tarjeta' && (
                                 <Card className="p-4 bg-muted/50">
                                     <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal Point</FormLabel>
-                                    <Button type="button" onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || cajaSettingsLoading || !terminalId || total <= 0} className="w-full">
-                                        {isSendingToTerminal || cajaSettingsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                                        Cobrar ${total.toLocaleString('es-MX')} en Terminal
-                                    </Button>
-                                    {!terminalId && !cajaSettingsLoading && <p className="text-xs text-muted-foreground mt-2">No hay ID de terminal configurado. Ve a Ajustes &gt; Sistema de Caja.</p>}
+                                    <div className="space-y-2">
+                                        <Select value={selectedTerminal} onValueChange={setSelectedTerminal} disabled={isFetchingTerminals}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder={isFetchingTerminals ? "Buscando terminales..." : "Selecciona una terminal"} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {terminals.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button type="button" onClick={() => { /* Implement on submit */ }} disabled={isSubmitting || isFetchingTerminals || !selectedTerminal || total <= 0} className="w-full">
+                                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                                            Cobrar ${total.toLocaleString('es-MX')} en Terminal
+                                        </Button>
+                                    </div>
+                                    {!terminals.length && !isFetchingTerminals && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes &gt; Sistema de Caja para activarlas.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (

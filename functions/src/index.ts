@@ -321,64 +321,77 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 // 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
 // =================================================================================
 
-interface PaymentData {
-    amount: number;
-    referenceId: string;
-    terminalReference: string;
-}
-
-// Se elimina el tipo 'CallableContext' y se usa 'any' para forzar la compatibilidad
-// y resolver el error TS2694.
-export const createPointPayment = functions.https.onCall(async (data: any, context: any) => {
-    
-    // Verificación de autenticación
+export const createPointPayment = functions.https.onCall(async (data, context) => {
+    // 1. Verificación de autenticación
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
     }
     
+    // 2. Verificación del Access Token de Mercado Pago
     if (!MP_ACCESS_TOKEN) {
+        functions.logger.error('MP Point: Access Token de Mercado Pago no está configurado en las variables de entorno.');
         throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
     }
 
-    // Desestructuración con aserción de tipo para resolver TS2352
-    const { amount, referenceId, terminalReference } = data as PaymentData;
-
-    if (!amount || !referenceId || !terminalReference) {
-        throw new functions.https.HttpsError('invalid-argument', 'Faltan campos requeridos: monto, ID de referencia, o referencia de terminal.');
+    // 3. Validación de datos de entrada
+    const { amount, referenceId, terminalId } = data;
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+        throw new functions.https.HttpsError('invalid-argument', 'El campo "amount" es requerido y debe ser un número positivo.');
+    }
+    if (!referenceId || typeof referenceId !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'El campo "referenceId" (ID de la venta) es requerido.');
+    }
+    if (!terminalId || typeof terminalId !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'El campo "terminalId" (ID del dispositivo) es requerido.');
     }
 
     try {
+        // 4. Construcción del payload para la API de Mercado Pago
         const paymentIntentPayload = {
             amount: amount,
-            description: `Venta Agenda: ${referenceId}`,
-            reference_id: referenceId,
-            payment_method: {
-                type: "card"
+            description: `Venta en Agenda VATOS ALFA: ${referenceId}`,
+            payment: {
+                type: "point",
+                installments: 1 // Solo se permite un pago (sin cuotas)
             },
             additional_info: {
-                tip_amount_allowed: true 
+                external_reference: referenceId, // Vincula el pago a nuestra venta
+                print_on_terminal: true // Imprimir comprobante en la terminal
             }
         };
 
+        const idempotencyKey = `payment-${referenceId}-${Date.now()}`;
+
+        // 5. Llamada a la API de Mercado Pago para crear la intención de pago
         const apiResponse = await axios.post(
-            `${MP_POINT_API_BASE}/${terminalReference}/payment-intents`,
+            `https://api.mercadopago.com/point/payment-intents/devices/${terminalId}`,
             paymentIntentPayload,
             {
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
+                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+                    'X-Idempotency-Key': idempotencyKey,
                 }
             }
         );
 
-        functions.logger.info(`MP Payment Intent Creado para ${referenceId}.`, { status: apiResponse.status, data: apiResponse.data });
+        functions.logger.info(`Intención de pago de MP creada para ${referenceId}.`, { status: apiResponse.status, data: apiResponse.data });
 
-        return { success: true, payment_intent_id: apiResponse.data.id, message: 'Orden enviada a terminal.' };
+        // 6. Devolver una respuesta exitosa
+        return { 
+            success: true, 
+            payment_intent_id: apiResponse.data.id, 
+            message: 'Orden enviada a la terminal correctamente.' 
+        };
 
-    } catch (error) {
-        functions.logger.error(`Error al crear Payment Intent para ${referenceId}.`, error);
-        throw new functions.https.HttpsError('internal', 'Fallo al comunicar con la API de Mercado Pago.');
+    } catch (error: any) {
+        functions.logger.error(`Error al crear Payment Intent para ${referenceId}.`, {
+            errorMessage: error.message,
+            errorResponse: error.response?.data
+        });
+        
+        // 7. Manejo de errores de la API
+        const errorMessage = error.response?.data?.message || 'Fallo al comunicar con la API de Mercado Pago.';
+        throw new functions.https.HttpsError('internal', errorMessage);
     }
 });
-
-    

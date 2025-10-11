@@ -16,10 +16,21 @@ const db = admin.firestore();
 const storage = getStorage();
 
 // =================================================================================
-// GLOBALES Y CONSTANTES (Variables de Entorno)
-// =_================================================================================
-const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+// HELPERS
+// =================================================================================
+async function getMercadoPagoAccessToken(): Promise<string> {
+    const settingsDoc = await db.collection('configuracion').doc('pagos').get();
+    if (!settingsDoc.exists) {
+        throw new functions.https.HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida.');
+    }
+    const settings = settingsDoc.data();
+    const token = settings?.mercadoPagoAccessToken;
+    if (!token) {
+        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
+    }
+    return token;
+}
+
 const MP_API_BASE = 'https://api.mercadopago.com';
 
 
@@ -35,6 +46,7 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
             if (request.body.type === 'payment') {
                 const paymentId = request.body.data.id;
                 
+                const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
                 if (!MP_ACCESS_TOKEN) {
                     functions.logger.error('MP Webhook: Access Token de MP no configurado.');
                     response.status(500).send('Configuración interna incompleta.');
@@ -181,10 +193,11 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
         
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
-            const authToken = process.env.TWILIO_AUTH_TOKEN; 
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 
-            if (!authToken) {
-                functions.logger.error("Twilio Auth Token is not configured in secrets.");
+            if (!authToken || !TWILIO_ACCOUNT_SID) {
+                functions.logger.error("Twilio credentials are not configured in secrets.");
                 response.status(500).send('Configuration error.');
                 return;
             }
@@ -244,7 +257,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
                         const mediaResponse = await axios.get(mediaUrl, {
                             responseType: 'arraybuffer',
                             auth: {
-                                username: TWILIO_ACCOUNT_SID!,
+                                username: TWILIO_ACCOUNT_SID,
                                 password: authToken
                             }
                         });
@@ -331,10 +344,7 @@ export const createPointPayment = functions.https.onCall(async (request: functio
     }
     
     // 2. Verificación del Access Token de Mercado Pago
-    if (!MP_ACCESS_TOKEN) {
-        functions.logger.error('MP Point: Access Token de Mercado Pago no está configurado en las variables de entorno.');
-        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
-    }
+    const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
 
     // 3. Validación de datos de entrada
     const { amount, referenceId, terminalId } = request.data;
@@ -367,7 +377,7 @@ export const createPointPayment = functions.https.onCall(async (request: functio
 
         // 5. Llamada a la API de Mercado Pago para crear la intención de pago
         const apiResponse = await axios.post(
-            `https://api.mercadopago.com/point/payment-intents/devices/${terminalId}`,
+            `${MP_API_BASE}/point/payment-intents/devices/${terminalId}`,
             paymentIntentPayload,
             {
                 headers: {
@@ -408,14 +418,11 @@ export const getPointTerminals = functions.https.onCall(async (request: function
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 
-    if (!MP_ACCESS_TOKEN) {
-        functions.logger.error('MP Point: Access Token de Mercado Pago no está configurado.');
-        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
-    }
+    const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
 
     try {
         const apiResponse = await axios.get(
-            `https://api.mercadopago.com/point/integration-api/devices`,
+            `${MP_API_BASE}/terminals/v1/list`, // Correct endpoint
             {
                 headers: {
                     'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
@@ -423,11 +430,10 @@ export const getPointTerminals = functions.https.onCall(async (request: function
             }
         );
         
-        // La respuesta puede contener una lista de dispositivos. La filtramos para obtener solo los que nos interesan.
-        // Ver: https://www.mercadopago.com.mx/developers/es/reference/integrations/point-api/_point_integration-api_devices/get
-        const devices = apiResponse.data.devices.map((device: any) => ({
+        const devices = apiResponse.data.terminals.map((device: any) => ({
             id: device.id,
-            name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`
+            name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,
+            operating_mode: device.operating_mode
         }));
         
         return { success: true, devices: devices };
@@ -453,10 +459,7 @@ export const setTerminalPDVMode = functions.https.onCall(async (request: functio
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
     }
 
-    if (!MP_ACCESS_TOKEN) {
-        functions.logger.error('MP Point: Access Token de Mercado Pago no está configurado.');
-        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
-    }
+    const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
     
     const { terminalId } = request.data;
     if (!terminalId || typeof terminalId !== 'string') {
@@ -472,7 +475,7 @@ export const setTerminalPDVMode = functions.https.onCall(async (request: functio
         };
 
         const apiResponse = await axios.patch(
-            'https://api.mercadopago.com/terminals/v1/setup',
+            `${MP_API_BASE}/terminals/v1/setup`,
             payload,
             {
                 headers: {

@@ -11,14 +11,29 @@ import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Copy, Info } from "lucide-react";
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
+
+interface PagosSettings {
+    showTips: boolean;
+    onlinePayments: boolean;
+    collectionLink: boolean;
+    editReservationStatus: boolean;
+    bank: string;
+    accountHolder: string;
+    clabe: string;
+    mercadoPagoPublicKey: string;
+    mercadoPagoAccessToken: string;
+}
 
 export default function PagosAgendaProPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const form = useForm({
+    const form = useForm<PagosSettings>({
         defaultValues: {
             showTips: true,
             onlinePayments: true,
@@ -32,6 +47,18 @@ export default function PagosAgendaProPage() {
         }
     });
     
+    useEffect(() => {
+        const fetchSettings = async () => {
+            const settingsRef = doc(db, 'configuracion', 'pagos');
+            const docSnap = await getDoc(settingsRef);
+            if (docSnap.exists()) {
+                form.reset(docSnap.data() as PagosSettings);
+            }
+            setIsLoading(false);
+        };
+        fetchSettings();
+    }, [form]);
+    
     const collectionUrl = 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app/link-cobro';
 
     const copyToClipboard = () => {
@@ -42,16 +69,21 @@ export default function PagosAgendaProPage() {
         });
     }
 
-    const onSubmit = (data: any) => {
+    const onSubmit = async (data: PagosSettings) => {
         setIsSubmitting(true);
-        console.log("Pagos settings saved:", data);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            const settingsRef = doc(db, 'configuracion', 'pagos');
+            await setDoc(settingsRef, data, { merge: true });
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en la configuración de pagos han sido guardados."
             })
-        }, 1500);
+        } catch (error) {
+            console.error("Error saving payment settings:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los cambios.' });
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
   return (
@@ -79,7 +111,7 @@ export default function PagosAgendaProPage() {
             </CardContent>
         </Card>
         
-        <Accordion type="multiple" defaultValue={['item-1', 'item-2']} className="w-full space-y-4">
+        <Accordion type="multiple" defaultValue={['item-1', 'item-2', 'item-3']} className="w-full space-y-4">
             <AccordionItem value="item-1" className="border rounded-lg bg-card">
                 <AccordionTrigger className="p-6 font-semibold text-base">Pagos en línea</AccordionTrigger>
                 <AccordionContent className="p-6 pt-0 space-y-6">
@@ -123,7 +155,7 @@ export default function PagosAgendaProPage() {
                     <div className="space-y-2">
                         <Label>Institución bancaria</Label>
                         <Controller name="bank" control={form.control} render={({ field }) => (
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                                 <SelectTrigger><SelectValue placeholder="Selecciona un banco" /></SelectTrigger>
                                 <SelectContent><SelectItem value="bbva">BBVA</SelectItem><SelectItem value="santander">Santander</SelectItem><SelectItem value="banamex">Citibanamex</SelectItem></SelectContent>
                             </Select>
@@ -151,15 +183,15 @@ export default function PagosAgendaProPage() {
                         Si tienes una cuenta de MercadoPago puedes agregar tus propias credenciales para que las ventas se procesen a través de tu cuenta.
                     </p>
                     <div className="space-y-2">
-                        <Label htmlFor="mercado-pago-public-key">Public Key</Label>
+                        <Label htmlFor="mercadoPagoPublicKey">Public Key</Label>
                         <Controller name="mercadoPagoPublicKey" control={form.control} render={({ field }) => (
-                           <Input id="mercado-pago-public-key" {...field} placeholder="Tu Public Key de MercadoPago" />
+                           <Input id="mercadoPagoPublicKey" {...field} placeholder="Tu Public Key de MercadoPago" />
                         )}/>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="mercado-pago-access-token">Access Token</Label>
+                        <Label htmlFor="mercadoPagoAccessToken">Access Token</Label>
                          <Controller name="mercadoPagoAccessToken" control={form.control} render={({ field }) => (
-                           <Input id="mercado-pago-access-token" {...field} placeholder="Tu Access Token de MercadoPago" />
+                           <Input id="mercadoPagoAccessToken" {...field} placeholder="Tu Access Token de MercadoPago" type="password"/>
                         )}/>
                     </div>
                 </AccordionContent>
@@ -167,8 +199,8 @@ export default function PagosAgendaProPage() {
         </Accordion>
         
         <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-            <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+            <Button type="submit" disabled={isSubmitting || isLoading}>
+                {(isSubmitting || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                 Guardar Cambios
             </Button>
         </div>

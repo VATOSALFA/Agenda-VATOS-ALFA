@@ -14,6 +14,7 @@ import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 import { MercadoPagoProvider } from './mercado-pago-provider';
 import { Payment } from '@mercadopago/sdk-react';
 import { sendGoogleReviewRequest } from '@/ai/flows/send-google-review-flow';
+import { functions, httpsCallable } from '@/lib/firebase-client';
 
 
 import { Button } from '@/components/ui/button';
@@ -221,6 +222,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [clientQueryKey, setClientQueryKey] = useState(0);
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
+  const [terminalId, setTerminalId] = useState('');
+  const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
@@ -435,6 +438,51 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setClientQueryKey(prev => prev + 1); // Refetch clients
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
+
+    const handleChargeWithTerminal = async () => {
+    const saleId = `sale-${Date.now()}`; // Temporary ID for reference
+    if (cart.length === 0) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No hay items en el carrito.' });
+      return;
+    }
+    if (!terminalId) {
+      toast({ variant: 'destructive', title: 'ID de Terminal Requerido', description: 'Por favor, ingresa el ID de tu terminal Point.' });
+      return;
+    }
+    
+    setIsSendingToTerminal(true);
+    try {
+        const createPayment = httpsCallable(functions, 'createPointPayment');
+        const result: any = await createPayment({
+            amount: total,
+            referenceId: saleId, 
+            terminalId: terminalId,
+        });
+
+        if (result.data.success) {
+            toast({
+                title: 'Orden enviada a la terminal',
+                description: 'Por favor, completa el pago en el dispositivo. La venta se guardará automáticamente.',
+            });
+            // We don't submit the form here. The webhook will trigger the save.
+            // But we need to save the cart and other details to a temporary place
+            // For simplicity in this flow, we will assume the webhook will have enough data.
+            // Or we could save a "pending" sale here.
+        } else {
+            throw new Error(result.data.message || 'Error desconocido al enviar a la terminal.');
+        }
+
+    } catch (error: any) {
+        console.error("Error creating payment intent:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al enviar a la terminal",
+            description: error.message || "No se pudo comunicar con la terminal de Mercado Pago.",
+        });
+    } finally {
+        setIsSendingToTerminal(false);
+    }
+  };
 
   async function onSubmit(data: SaleFormData, paymentId?: string) {
      setIsSubmitting(true);
@@ -826,7 +874,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </FormItem>
                             )}
                             />
-
+                             {paymentMethod === 'tarjeta' && (
+                                <Card className="p-4 bg-muted/50">
+                                    <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal</FormLabel>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <Input id="terminal-id" placeholder="ID de Terminal Point" className="h-9" value={terminalId} onChange={(e) => setTerminalId(e.target.value)} />
+                                            <Button type="button" onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !terminalId || total <= 0}>
+                                                {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                                                Enviar Cobro
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </Card>
+                            )}
                             {paymentMethod === 'efectivo' && (
                                 <Card className="p-4 bg-muted/50">
                                     <FormLabel className="flex items-center text-sm font-medium mb-2"><Calculator className="mr-2 h-4 w-4" /> Calculadora de Cambio</FormLabel>

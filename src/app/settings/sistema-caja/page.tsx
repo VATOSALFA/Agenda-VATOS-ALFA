@@ -16,6 +16,7 @@ import { Loader2, PlusCircle, Info, RefreshCw } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { Form } from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
 
 interface PagosSettings {
     showTips: boolean;

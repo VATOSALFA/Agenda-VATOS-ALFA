@@ -224,6 +224,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { selectedLocalId } = useLocal();
   const [terminalId, setTerminalId] = useState('');
   const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
+  const [settingsQueryKey, setSettingsQueryKey] = useState(0);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
@@ -234,8 +235,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: cajaSettings } = useFirestoreQuery('configuracion', 'caja');
+  const { data: cajaSettings, loading: cajaSettingsLoading } = useFirestoreQuery('configuracion', `caja-${settingsQueryKey}`);
 
+
+  useEffect(() => {
+    if (isOpen) {
+        setSettingsQueryKey(prev => prev + 1); // Force refetch settings when sheet opens
+    }
+  }, [isOpen]);
+  
   useEffect(() => {
     if (cajaSettings && cajaSettings.length > 0) {
       setTerminalId(cajaSettings[0].mercadoPagoTerminalId || '');
@@ -881,11 +889,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                              {paymentMethod === 'tarjeta' && (
                                 <Card className="p-4 bg-muted/50">
                                     <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal Point</FormLabel>
-                                    <Button type="button" onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !terminalId || total <= 0} className="w-full">
-                                        {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                                    <Button type="button" onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || cajaSettingsLoading || !terminalId || total <= 0} className="w-full">
+                                        {isSendingToTerminal || cajaSettingsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
                                         Cobrar ${total.toLocaleString('es-MX')} en Terminal
                                     </Button>
-                                    {!terminalId && <p className="text-xs text-muted-foreground mt-2">No hay ID de terminal configurado. Ve a Ajustes &gt; Sistema de Caja.</p>}
+                                    {!terminalId && !cajaSettingsLoading && <p className="text-xs text-muted-foreground mt-2">No hay ID de terminal configurado. Ve a Ajustes &gt; Sistema de Caja.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (

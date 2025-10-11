@@ -442,3 +442,56 @@ export const getPointTerminals = functions.https.onCall(async (request: function
         throw new functions.https.HttpsError('internal', errorMessage);
     }
 });
+
+// =================================================================================
+// 5. ACTIVAR MODO PDV EN TERMINAL
+// =================================================================================
+export const setTerminalPDVMode = functions.https.onCall(async (request: functions.https.CallableRequest<{
+    terminalId: string;
+}>) => {
+    if (!request.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
+    }
+
+    if (!MP_ACCESS_TOKEN) {
+        functions.logger.error('MP Point: Access Token de Mercado Pago no está configurado.');
+        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
+    }
+    
+    const { terminalId } = request.data;
+    if (!terminalId || typeof terminalId !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'El campo "terminalId" es requerido.');
+    }
+
+    try {
+        const payload = {
+            terminals: [{
+                id: terminalId,
+                operating_mode: "PDV"
+            }]
+        };
+
+        const apiResponse = await axios.patch(
+            'https://api.mercadopago.com/terminals/v1/setup',
+            payload,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+                }
+            }
+        );
+
+        functions.logger.info(`Modo PDV activado para terminal ${terminalId}.`, { status: apiResponse.status, data: apiResponse.data });
+
+        return { success: true, data: apiResponse.data };
+
+    } catch (error: any) {
+        functions.logger.error(`Error al activar modo PDV para ${terminalId}.`, {
+            errorMessage: error.message,
+            errorResponse: error.response?.data
+        });
+        const errorMessage = error.response?.data?.message || 'Fallo al activar el modo PDV.';
+        throw new functions.https.HttpsError('internal', errorMessage);
+    }
+});

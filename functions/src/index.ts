@@ -21,32 +21,61 @@ const storage = getStorage();
 const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const MP_POINT_API_BASE = 'https://api.mercadopago.com/point/integrations';
+const MP_API_BASE = 'https://api.mercadopago.com';
+
 
 // =================================================================================
 // 1. MERCADO PAGO WEBHOOK (Recibe el resultado del pago)
 // =================================================================================
 
 export const mercadoPagoWebhookTest = functions.https.onRequest(
-    (request: Request, response: Response): void => {
-        
+    async (request: Request, response: Response): Promise<void> => {
         try {
-            if (request.method !== 'POST') {
-                functions.logger.warn('MP Webhook: Método no permitido. Solo POST.', { method: request.method });
-                response.status(405).send('Método no permitido. Solo POST.');
-                return; 
+            functions.logger.info('MP Webhook: Notificación recibida.', { body: request.body });
+
+            if (request.body.type === 'payment') {
+                const paymentId = request.body.data.id;
+                
+                if (!MP_ACCESS_TOKEN) {
+                    functions.logger.error('MP Webhook: Access Token de MP no configurado.');
+                    response.status(500).send('Configuración interna incompleta.');
+                    return;
+                }
+
+                // 1. Obtener los detalles del pago desde la API de Mercado Pago
+                const paymentResponse = await axios.get(
+                    `${MP_API_BASE}/v1/payments/${paymentId}`,
+                    { headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` } }
+                );
+
+                const paymentData = paymentResponse.data;
+                const externalReference = paymentData.external_reference; // Este es nuestro ID de la venta
+
+                if (paymentData.status === 'approved' && externalReference) {
+                    // 2. Buscar la venta en Firestore y actualizarla
+                    const ventaRef = db.collection('ventas').doc(externalReference);
+                    const ventaDoc = await ventaRef.get();
+
+                    if (ventaDoc.exists) {
+                        await ventaRef.update({
+                            pago_estado: 'Pagado',
+                            metodo_pago: paymentData.payment_method_id,
+                            mercado_pago_id: paymentId,
+                        });
+                        functions.logger.info(`Venta ${externalReference} actualizada a "Pagado".`);
+                    } else {
+                        functions.logger.warn(`MP Webhook: No se encontró la venta con referencia ${externalReference}.`);
+                    }
+                }
             }
 
-            functions.logger.info('MP Webhook: Notificación recibida.', { body: request.body });
-            
-            // Lógica de validación, consulta a API y actualización de Firestore iría aquí.
-
             response.status(200).send('OK');
-            return; 
+            return;
 
         } catch (error) {
             functions.logger.error('MP Webhook: Error procesando el Webhook.', error);
             response.status(500).send('Error interno del servidor');
-            return; 
+            return;
         }
     }
 );

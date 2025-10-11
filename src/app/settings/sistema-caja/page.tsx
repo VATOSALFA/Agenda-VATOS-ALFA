@@ -313,7 +313,7 @@ export default function SistemaCajaPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {Object.entries(form.watch('paymentMethods')).map(([id, method]: [string, any]) => (
+                            {Object.entries(form.watch('paymentMethods') || {}).map(([id, method]: [string, any]) => (
                                 <TableRow key={id}>
                                     <TableCell className="font-medium capitalize">{id}</TableCell>
                                     <TableCell className="text-center">

@@ -18,17 +18,18 @@ const storage = getStorage();
 // =================================================================================
 // HELPERS
 // =================================================================================
-async function getMercadoPagoAccessToken(): Promise<string> {
+async function getMercadoPagoAccessToken(): Promise<{ token: string, userId: string }> {
     const settingsDoc = await db.collection('configuracion').doc('pagos').get();
     if (!settingsDoc.exists) {
         throw new functions.https.HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida.');
     }
     const settings = settingsDoc.data();
     const token = settings?.mercadoPagoAccessToken;
-    if (!token) {
-        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
+    const userId = settings?.mercadoPagoUserId;
+    if (!token || !userId) {
+        throw new functions.https.HttpsError('internal', 'El Access Token o el User ID de Mercado Pago no están configurados.');
     }
-    return token;
+    return { token, userId };
 }
 
 const MP_API_BASE = 'https://api.mercadopago.com';
@@ -46,8 +47,8 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
             if (request.body.type === 'payment') {
                 const paymentId = request.body.data.id;
                 
-                const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
-                if (!MP_ACCESS_TOKEN) {
+                const { token } = await getMercadoPagoAccessToken();
+                if (!token) {
                     functions.logger.error('MP Webhook: Access Token de MP no configurado.');
                     response.status(500).send('Configuración interna incompleta.');
                     return;
@@ -56,7 +57,7 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
                 // 1. Obtener los detalles del pago desde la API de Mercado Pago
                 const paymentResponse = await axios.get(
                     `${MP_API_BASE}/v1/payments/${paymentId}`,
-                    { headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` } }
+                    { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
                 const paymentData = paymentResponse.data;
@@ -340,7 +341,7 @@ export const createPointPayment = functions.https.onCall(async (request) => {
     }
     
     // 2. Verificación del Access Token de Mercado Pago
-    const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
 
     // 3. Validación de datos de entrada
     const { amount, referenceId, terminalId } = request.data as { amount: number, referenceId: string, terminalId: string };
@@ -413,22 +414,27 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 
-    const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN, userId: MP_USER_ID } = await getMercadoPagoAccessToken();
 
     try {
-        const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {
-            headers: {
-                'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-            }
+        const storesResponse = await axios.get(`${MP_API_BASE}/users/${MP_USER_ID}/stores`, {
+            headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
         });
-        
-        // Handle different possible response structures
-        const terminalList = apiResponse.data?.results || apiResponse.data?.terminals || apiResponse.data;
-        
-        if (!Array.isArray(terminalList)) {
-             throw new functions.https.HttpsError('internal', 'La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
-        }
 
+        const stores = storesResponse.data?.results || [];
+        if (stores.length === 0) {
+            return { success: true, devices: [] };
+        }
+        
+        // Asumimos que las terminales están en la primera sucursal, se podría expandir si hay múltiples
+        const firstStoreId = stores[0].id;
+        
+        const terminalsResponse = await axios.get(`${MP_API_BASE}/point/integration-api/devices?store_id=${firstStoreId}`, {
+            headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+        });
+
+        const terminalList = terminalsResponse.data?.devices || [];
+        
         const devices = terminalList.map((device: any) => ({
             id: device.id,
             name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,
@@ -457,7 +463,7 @@ export const setTerminalPDVMode = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
     }
 
-    const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
     
     const { terminalId } = request.data as { terminalId: string };
     if (!terminalId || typeof terminalId !== 'string') {
@@ -497,3 +503,5 @@ export const setTerminalPDVMode = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('internal', errorMessage);
     }
 });
+
+    

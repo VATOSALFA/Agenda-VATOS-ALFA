@@ -320,13 +320,13 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 // 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
 // =================================================================================
 
-export const createPointPayment = functions.https.onCall(async (data: {
+export const createPointPayment = functions.https.onCall(async (request: functions.https.CallableRequest<{
     amount: number;
     referenceId: string;
     terminalId: string;
-}, context: functions.https.CallableContext) => {
+}>) => {
     // 1. Verificación de autenticación
-    if (!context.auth) {
+    if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
     }
     
@@ -337,7 +337,7 @@ export const createPointPayment = functions.https.onCall(async (data: {
     }
 
     // 3. Validación de datos de entrada
-    const { amount, referenceId, terminalId } = data;
+    const { amount, referenceId, terminalId } = request.data;
     if (!amount || typeof amount !== 'number' || amount <= 0) {
         throw new functions.https.HttpsError('invalid-argument', 'El campo "amount" es requerido y debe ser un número positivo.');
     }
@@ -403,8 +403,8 @@ export const createPointPayment = functions.https.onCall(async (data: {
 // 4. OBTENER TERMINALES DE MERCADO PAGO
 // =================================================================================
 
-export const getPointTerminals = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
-    if (!context.auth) {
+export const getPointTerminals = functions.https.onCall(async (request: functions.https.CallableRequest) => {
+    if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 

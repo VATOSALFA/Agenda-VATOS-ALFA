@@ -18,8 +18,8 @@ const storage = getStorage();
 // =================================================================================
 // GLOBALES Y CONSTANTES (Variables de Entorno)
 // =_================================================================================
-const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'AC2d44fd1fff9551d5f0f7cb5b1d8d9116';
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'AC2d44fd1fff9551d5f0f7cb5b1d8d9116';
+const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const MP_POINT_API_BASE = 'https://api.mercadopago.com/point/integrations';
 
 // =================================================================================
@@ -307,6 +307,10 @@ export const createPointPayment = functions.https.onCall(async (data: any, conte
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
     }
     
+    if (!MP_ACCESS_TOKEN) {
+        throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado.');
+    }
+
     // Desestructuración con aserción de tipo para resolver TS2352
     const { amount, referenceId, terminalReference } = data as PaymentData;
 

@@ -333,11 +333,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 // 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
 // =================================================================================
 
-export const createPointPayment = functions.https.onCall(async (request: functions.https.CallableRequest<{
-    amount: number;
-    referenceId: string;
-    terminalId: string;
-}>) => {
+export const createPointPayment = functions.https.onCall(async (request) => {
     // 1. Verificación de autenticación
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
@@ -413,7 +409,7 @@ export const createPointPayment = functions.https.onCall(async (request: functio
 // 4. OBTENER TERMINALES DE MERCADO PAGO
 // =================================================================================
 
-export const getPointTerminals = functions.https.onCall(async (request: functions.https.CallableRequest) => {
+export const getPointTerminals = functions.https.onCall(async (request) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
@@ -430,7 +426,14 @@ export const getPointTerminals = functions.https.onCall(async (request: function
             }
         );
         
-        const devices = apiResponse.data.terminals.map((device: any) => ({
+        // Handle different possible response structures from MercadoPago API
+        const terminalList = apiResponse.data.terminals || apiResponse.data.results || apiResponse.data.data?.terminals || apiResponse.data;
+        
+        if (!Array.isArray(terminalList)) {
+             throw new Error('La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
+        }
+
+        const devices = terminalList.map((device: any) => ({
             id: device.id,
             name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,
             operating_mode: device.operating_mode
@@ -449,12 +452,11 @@ export const getPointTerminals = functions.https.onCall(async (request: function
     }
 });
 
+
 // =================================================================================
 // 5. ACTIVAR MODO PDV EN TERMINAL
 // =================================================================================
-export const setTerminalPDVMode = functions.https.onCall(async (request: functions.https.CallableRequest<{
-    terminalId: string;
-}>) => {
+export const setTerminalPDVMode = functions.https.onCall(async (request) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
     }

@@ -351,3 +351,5 @@ export const createPointPayment = functions.https.onCall(async (data: any, conte
         throw new functions.https.HttpsError('internal', 'Fallo al comunicar con la API de Mercado Pago.');
     }
 });
+
+    

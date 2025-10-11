@@ -333,7 +333,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 // 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
 // =================================================================================
 
-export const createPointPayment = functions.https.onCall(async (request: { data: { amount: number, referenceId: string, terminalId: string }, auth?: any }) => {
+export const createPointPayment = functions.https.onCall(async (request) => {
     // 1. Verificación de autenticación
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
@@ -343,7 +343,7 @@ export const createPointPayment = functions.https.onCall(async (request: { data:
     const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
 
     // 3. Validación de datos de entrada
-    const { amount, referenceId, terminalId } = request.data;
+    const { amount, referenceId, terminalId } = request.data as { amount: number, referenceId: string, terminalId: string };
     if (!amount || typeof amount !== 'number' || amount <= 0) {
         throw new functions.https.HttpsError('invalid-argument', 'El campo "amount" es requerido y debe ser un número positivo.');
     }
@@ -406,9 +406,9 @@ export const createPointPayment = functions.https.onCall(async (request: { data:
 });
 
 // =================================================================================
-// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN MEJORADA)
+// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN CORREGIDA)
 // =================================================================================
-export const getPointTerminals = functions.https.onCall(async (request: { auth?: any }) => {
+export const getPointTerminals = functions.https.onCall(async (request) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
@@ -416,19 +416,16 @@ export const getPointTerminals = functions.https.onCall(async (request: { auth?:
     const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
 
     try {
-        const apiResponse = await axios.get(
-            `${MP_API_BASE}/point/integration-api/devices`,
-            {
-                headers: {
-                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-                }
+        const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {
+            headers: {
+                'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
             }
-        );
+        });
         
-        const terminalList = apiResponse.data?.devices;
+        const terminalList = apiResponse.data?.results || apiResponse.data?.terminals || apiResponse.data;
         
         if (!Array.isArray(terminalList)) {
-             throw new Error('La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
+             throw new functions.https.HttpsError('internal', 'La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
         }
 
         const devices = terminalList.map((device: any) => ({
@@ -454,14 +451,14 @@ export const getPointTerminals = functions.https.onCall(async (request: { auth?:
 // =================================================================================
 // 5. ACTIVAR MODO PDV EN TERMINAL
 // =================================================================================
-export const setTerminalPDVMode = functions.https.onCall(async (request: { data: { terminalId: string }, auth?: any }) => {
+export const setTerminalPDVMode = functions.https.onCall(async (request) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
     }
 
     const MP_ACCESS_TOKEN = await getMercadoPagoAccessToken();
     
-    const { terminalId } = request.data;
+    const { terminalId } = request.data as { terminalId: string };
     if (!terminalId || typeof terminalId !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'El campo "terminalId" es requerido.');
     }

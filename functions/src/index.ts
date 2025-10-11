@@ -333,7 +333,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 // 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
 // =================================================================================
 
-export const createPointPayment = functions.https.onCall(async (request) => {
+export const createPointPayment = functions.https.onCall(async (request: { data: { amount: number, referenceId: string, terminalId: string }, auth?: any }) => {
     // 1. Verificación de autenticación
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
@@ -406,10 +406,9 @@ export const createPointPayment = functions.https.onCall(async (request) => {
 });
 
 // =================================================================================
-// 4. OBTENER TERMINALES DE MERCADO PAGO
+// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN MEJORADA)
 // =================================================================================
-
-export const getPointTerminals = functions.https.onCall(async (request) => {
+export const getPointTerminals = functions.https.onCall(async (request: { auth?: any }) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
@@ -418,7 +417,7 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
 
     try {
         const apiResponse = await axios.get(
-            `${MP_API_BASE}/terminals/v1/list`, // Correct endpoint
+            `${MP_API_BASE}/point/integration-api/devices`,
             {
                 headers: {
                     'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
@@ -426,8 +425,7 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
             }
         );
         
-        // Handle different possible response structures from MercadoPago API
-        const terminalList = apiResponse.data.terminals || apiResponse.data.results || apiResponse.data.data?.terminals || apiResponse.data;
+        const terminalList = apiResponse.data?.devices;
         
         if (!Array.isArray(terminalList)) {
              throw new Error('La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
@@ -456,7 +454,7 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
 // =================================================================================
 // 5. ACTIVAR MODO PDV EN TERMINAL
 // =================================================================================
-export const setTerminalPDVMode = functions.https.onCall(async (request) => {
+export const setTerminalPDVMode = functions.https.onCall(async (request: { data: { terminalId: string }, auth?: any }) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
     }
@@ -469,6 +467,7 @@ export const setTerminalPDVMode = functions.https.onCall(async (request) => {
     }
 
     try {
+        // El PATCH a /terminals/v1/setup espera un formato específico
         const payload = {
             terminals: [{
                 id: terminalId,

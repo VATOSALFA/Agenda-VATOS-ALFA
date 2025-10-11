@@ -13,16 +13,29 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, PlusCircle } from "lucide-react";
+import { Loader2, PlusCircle, Info, RefreshCw } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { db, functions, httpsCallable } from '@/lib/firebase-client';
+import { Form } from '@/components/ui/form';
 
-const paymentMethods = [
-  { id: 'efectivo', name: 'Efectivo', active: true, requireCode: false },
-  { id: 'tarjeta', name: 'Tarjeta', active: true, requireCode: false },
-  { id: 'transferencia', name: 'Transferencia', active: true, requireCode: false },
-];
+interface PagosSettings {
+    showTips: boolean;
+    onlinePayments: boolean;
+    collectionLink: boolean;
+    editReservationStatus: boolean;
+    bank: string;
+    accountHolder: string;
+    clabe: string;
+    mercadoPagoPublicKey: string;
+    mercadoPagoAccessToken: string;
+    mercadoPagoTerminalId?: string;
+}
+
+interface Terminal {
+    id: string;
+    name: string;
+    operating_mode: string;
+}
 
 const ToggleField = ({ name, label, control }: { name: string, label: string, control: any }) => (
     <div className="flex items-center justify-between py-3 border-b last:border-b-0">
@@ -45,9 +58,11 @@ const ToggleField = ({ name, label, control }: { name: string, label: string, co
 export default function SistemaCajaPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+    const [terminals, setTerminals] = useState<Terminal[]>([]);
+    const [isLoadingTerminals, setIsLoadingTerminals] = useState(false);
 
-    const form = useForm({
+    const form = useForm<PagosSettings>({
         defaultValues: {
             enableCashBox: true,
             trackCash: true,
@@ -69,10 +84,8 @@ export default function SistemaCajaPage() {
             useBranchBilling: false,
             differentiateVat: false,
             receiptSize: '80mm',
-            paymentMethods: paymentMethods.reduce((acc, method) => {
-                acc[method.id] = { active: method.active, requireCode: method.requireCode };
-                return acc;
-            }, {} as any)
+            paymentMethods: {},
+            mercadoPagoTerminalId: '',
         }
     });
     
@@ -83,7 +96,7 @@ export default function SistemaCajaPage() {
             if (docSnap.exists()) {
                 form.reset(docSnap.data());
             }
-            setIsLoading(false);
+            setIsLoadingSettings(false);
         };
         fetchSettings();
     }, [form]);
@@ -108,6 +121,49 @@ export default function SistemaCajaPage() {
             setIsSubmitting(false);
         }
     }
+    
+    const fetchTerminals = async () => {
+        setIsLoadingTerminals(true);
+        try {
+            const getTerminals = httpsCallable(functions, 'getPointTerminals');
+            const result: any = await getTerminals();
+            if (result.data.success) {
+                setTerminals(result.data.devices);
+            } else {
+                throw new Error(result.data.message || 'Error desconocido');
+            }
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Error al buscar terminales',
+                description: error.message || 'No se pudieron obtener las terminales de Mercado Pago.',
+            });
+        } finally {
+            setIsLoadingTerminals(false);
+        }
+    };
+    
+    const activatePDV = async (terminalId: string) => {
+        try {
+            const setPDV = httpsCallable(functions, 'setTerminalPDVMode');
+            const result: any = await setPDV({ terminalId });
+            if (result.data.success) {
+                toast({
+                    title: 'Modo PDV activado',
+                    description: 'Reinicia tu terminal para aplicar los cambios.',
+                });
+                fetchTerminals(); // Refresh the list
+            } else {
+                 throw new Error(result.data.message || 'Error desconocido');
+            }
+        } catch (error: any) {
+             toast({
+                variant: 'destructive',
+                title: 'Error al activar modo PDV',
+                description: error.message,
+            });
+        }
+    };
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -133,6 +189,57 @@ export default function SistemaCajaPage() {
             <ToggleField name="requireCashierCode" label="Requerir código de cajero para acciones de cajas" control={form.control} />
             <ToggleField name="showDecimals" label="Visualizar montos totales con decimales" control={form.control} />
           </CardContent>
+        </Card>
+        
+        <Card>
+            <CardHeader>
+                <div className="flex justify-between items-center">
+                    <CardTitle>Configuración de Terminal de Mercado Pago</CardTitle>
+                    <Button type="button" onClick={fetchTerminals} disabled={isLoadingTerminals}>
+                        {isLoadingTerminals ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
+                        Buscar Terminales
+                    </Button>
+                </div>
+                <CardDescription>
+                    Activa el modo Punto de Venta (PDV) para integrar tus terminales Point. Después de activar el modo PDV, recuerda reiniciar tu terminal.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>ID de Terminal</TableHead>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Modo Operativo</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoadingTerminals ? (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow>
+                        ) : terminals.length === 0 ? (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">No se encontraron terminales. Haz clic en "Buscar Terminales".</TableCell></TableRow>
+                        ) : (
+                            terminals.map(terminal => (
+                                <TableRow key={terminal.id}>
+                                    <TableCell className="font-mono text-xs">{terminal.id}</TableCell>
+                                    <TableCell>{terminal.name}</TableCell>
+                                    <TableCell>
+                                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${terminal.operating_mode === 'PDV' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                            {terminal.operating_mode}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {terminal.operating_mode !== 'PDV' && (
+                                            <Button size="sm" onClick={() => activatePDV(terminal.id)}>Activar PDV</Button>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
         </Card>
 
         <Accordion type="multiple" className="w-full space-y-4">
@@ -195,12 +302,12 @@ export default function SistemaCajaPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                             {paymentMethods.map(method => (
-                                <TableRow key={method.id}>
-                                    <TableCell className="font-medium">{method.name}</TableCell>
+                            {Object.entries(form.watch('paymentMethods')).map(([id, method]: [string, any]) => (
+                                <TableRow key={id}>
+                                    <TableCell className="font-medium capitalize">{id}</TableCell>
                                     <TableCell className="text-center">
                                         <Controller
-                                            name={`paymentMethods.${method.id}.active`}
+                                            name={`paymentMethods.${id}.active`}
                                             control={form.control}
                                             render={({ field }) => (
                                                 <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -209,7 +316,7 @@ export default function SistemaCajaPage() {
                                     </TableCell>
                                     <TableCell className="text-center">
                                          <Controller
-                                            name={`paymentMethods.${method.id}.requireCode`}
+                                            name={`paymentMethods.${id}.requireCode`}
                                             control={form.control}
                                             render={({ field }) => (
                                                 <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -225,8 +332,8 @@ export default function SistemaCajaPage() {
         </Accordion>
         
         <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-            <Button type="submit" disabled={isSubmitting || isLoading}>
-                {(isSubmitting || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+            <Button type="submit" disabled={isSubmitting || isLoadingSettings}>
+                {(isSubmitting || isLoadingSettings) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                 Guardar Cambios
             </Button>
         </div>

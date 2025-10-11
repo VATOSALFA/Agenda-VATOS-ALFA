@@ -20,7 +20,6 @@ const storage = getStorage();
 // =_================================================================================
 const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const MP_POINT_API_BASE = 'https://api.mercadopago.com/point/integrations';
 const MP_API_BASE = 'https://api.mercadopago.com';
 
 
@@ -321,7 +320,11 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 // 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
 // =================================================================================
 
-export const createPointPayment = functions.https.onCall(async (data, context) => {
+export const createPointPayment = functions.https.onCall(async (data: {
+    amount: number;
+    referenceId: string;
+    terminalId: string;
+}, context: functions.https.CallableContext) => {
     // 1. Verificación de autenticación
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
@@ -400,7 +403,7 @@ export const createPointPayment = functions.https.onCall(async (data, context) =
 // 4. OBTENER TERMINALES DE MERCADO PAGO
 // =================================================================================
 
-export const getPointTerminals = functions.https.onCall(async (data, context) => {
+export const getPointTerminals = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }

@@ -189,7 +189,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // =================================================================================
 
 export const twilioWebhook = functions
-    .runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID", "TWILIO_PHONE_NUMBER"] })
+    .runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] })
     .https.onRequest(
     async (request: Request, response: Response) => {
         const twiml = new twilio.twiml.MessagingResponse(); 
@@ -437,12 +437,10 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
         return { success: true, devices: devices };
 
     } catch (error: any) {
-        functions.logger.error(`Error al obtener terminales de MP.`, {
-            errorMessage: error.message,
+        const errorMessage = error.response?.data?.message || 'Fallo al obtener la lista de terminales.';
+        functions.logger.error(`Error al obtener terminales de MP: ${errorMessage}`, {
             errorResponse: error.response?.data
         });
-        
-        const errorMessage = error.response?.data?.message || 'Fallo al obtener la lista de terminales.';
         throw new functions.https.HttpsError('internal', errorMessage);
     }
 });

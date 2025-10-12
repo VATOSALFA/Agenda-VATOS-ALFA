@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -1010,49 +1011,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        {paymentMethod === 'tarjeta' ? (
-                            <MercadoPagoProvider>
-                                <Payment
-                                    initialization={{
-                                        amount: total,
-                                        payer: {
-                                            email: selectedClient?.correo,
-                                            firstName: selectedClient?.nombre,
-                                            lastName: selectedClient?.apellido,
-                                        },
-                                    }}
-                                    customization={{
-                                        paymentMethods: {
-                                            maxInstallments: 1,
-                                            creditCard: "all",
-                                            debitCard: "all",
-                                        },
-                                        visual: {
-                                            style: {
-                                                theme: 'bootstrap',
-                                            }
-                                        }
-                                    }}
-                                    onReady={() => console.log('Mercado Pago component is ready.')}
-                                    onError={(error: any) => {
-                                        console.error('Mercado Pago error:', JSON.stringify(error, null, 2));
-                                        toast({
-                                            variant: 'destructive',
-                                            title: 'Error de Pago',
-                                            description: error.message || 'Inténtalo de nuevo.',
-                                        });
-                                    }}
-                                    onSubmit={async ({ formData }) => {
-                                        await onSubmit(form.getValues(), formData.payment_id)
-                                    }}
-                                />
-                            </MercadoPagoProvider>
-                        ) : (
-                             <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Finalizar Venta por ${total.toLocaleString('es-MX')}
-                            </Button>
-                        )}
+                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Finalizar Venta por ${total.toLocaleString('es-MX')}
+                        </Button>
                     </SheetFooter>
                   </form>
             )}

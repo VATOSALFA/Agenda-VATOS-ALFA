@@ -331,7 +331,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
 
 
 // =================================================================================
-// 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORRECCIÓN FINAL)
+// 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORREGIDO)
 // =================================================================================
 
 export const createPointPayment = functions.https.onCall(async (request) => {
@@ -357,25 +357,29 @@ export const createPointPayment = functions.https.onCall(async (request) => {
 
     try {
         // 4. Construcción del payload para la API de Mercado Pago
-        const paymentIntentPayload = {
-            amount: amount,
+        const orderPayload = {
+            type: "point",
+            external_reference: referenceId,
             description: `Venta en Agenda VATOS ALFA: ${referenceId}`,
-            payment: {
-                type: "point",
-                installments: 1 // Solo se permite un pago (sin cuotas)
+            transactions: {
+                payments: [{
+                    amount: amount.toFixed(2)
+                }]
             },
-            additional_info: {
-                external_reference: referenceId, // Vincula el pago a nuestra venta
-                print_on_terminal: true // Imprimir comprobante en la terminal
+            config: {
+                point: {
+                    terminal_id: terminalId,
+                    print_on_terminal: "no_ticket"
+                }
             }
         };
 
-        const idempotencyKey = `payment-${referenceId}-${Date.now()}`;
+        const idempotencyKey = `order-${referenceId}-${Date.now()}`;
 
-        // 5. Llamada a la API de Mercado Pago para crear la intención de pago
+        // 5. Llamada a la API de Mercado Pago para crear la orden
         const apiResponse = await axios.post(
-            `${MP_API_BASE}/point/payment-intents/devices/${terminalId}`,
-            paymentIntentPayload,
+            `${MP_API_BASE}/v1/orders`,
+            orderPayload,
             {
                 headers: {
                     'Content-Type': 'application/json',
@@ -385,17 +389,18 @@ export const createPointPayment = functions.https.onCall(async (request) => {
             }
         );
 
-        functions.logger.info(`Intención de pago de MP creada para ${referenceId}.`, { status: apiResponse.status, data: apiResponse.data });
+        functions.logger.info(`Orden de MP creada para ${referenceId}.`, { status: apiResponse.status, data: apiResponse.data });
 
         // 6. Devolver una respuesta exitosa
         return { 
             success: true, 
-            payment_intent_id: apiResponse.data.id, 
+            order_id: apiResponse.data.id,
+            payment_id: apiResponse.data.transactions?.payments?.[0]?.id,
             message: 'Orden enviada a la terminal correctamente.' 
         };
 
     } catch (error: any) {
-        functions.logger.error(`Error al crear Payment Intent para ${referenceId}.`, {
+        functions.logger.error(`Error al crear Orden de MP para ${referenceId}.`, {
             errorMessage: error.message,
             errorResponse: error.response?.data
         });
@@ -407,30 +412,44 @@ export const createPointPayment = functions.https.onCall(async (request) => {
 });
 
 // =================================================================================
-// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN CORREGIDA Y ROBUSTA)
+// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN FINAL Y ROBUSTA)
 // =================================================================================
 export const getPointTerminals = functions.https.onCall(async (request) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 
-    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN, userId } = await getMercadoPagoAccessToken();
 
     try {
-        const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {
+        const apiResponse = await axios.get(`${MP_API_BASE}/users/${userId}/stores`, {
             headers: {
                 'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
             }
         });
-        
-        // Handle different possible response structures
-        const terminalList = apiResponse.data?.results || apiResponse.data?.terminals || apiResponse.data;
-        
-        if (!Array.isArray(terminalList)) {
-             throw new functions.https.HttpsError('internal', 'La respuesta de la API de Mercado Pago no contiene una lista de terminales válida.');
+
+        const stores = apiResponse.data?.results || [];
+        if (stores.length === 0) {
+            return { success: true, devices: [] };
         }
 
-        const devices = terminalList.map((device: any) => ({
+        const terminalPromises = stores.map((store: any) => 
+            axios.get(`${MP_API_BASE}/terminals/v1/list?store_id=${store.id}`, {
+                headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+            })
+        );
+        
+        const terminalResponses = await Promise.all(terminalPromises);
+        const allTerminals: any[] = [];
+
+        terminalResponses.forEach(response => {
+            const terminalList = response.data?.data?.terminals || response.data?.terminals || response.data?.results || [];
+            if(Array.isArray(terminalList)) {
+                allTerminals.push(...terminalList);
+            }
+        });
+
+        const devices = allTerminals.map((device: any) => ({
             id: device.id,
             name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,
             operating_mode: device.operating_mode
@@ -498,5 +517,3 @@ export const setTerminalPDVMode = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('internal', errorMessage);
     }
 });
-
-    

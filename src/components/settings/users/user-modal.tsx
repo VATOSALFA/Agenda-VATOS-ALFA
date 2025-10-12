@@ -19,7 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2, Sparkles } from 'lucide-react';
 import type { User, Local, Role } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { db, auth } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase-client';
 import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';

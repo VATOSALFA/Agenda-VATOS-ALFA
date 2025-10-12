@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Save, Check } from "lucide-react";
-import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserModal } from '@/components/settings/users/user-modal';
@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { allPermissionCategories, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';

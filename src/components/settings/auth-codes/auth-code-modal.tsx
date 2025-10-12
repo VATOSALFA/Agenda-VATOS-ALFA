@@ -21,7 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-client';
 import type { AuthCode } from '@/lib/types';
 
 interface AuthCodeModalProps {
@@ -183,5 +183,3 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
     </Dialog>
   );
 }
-
-    

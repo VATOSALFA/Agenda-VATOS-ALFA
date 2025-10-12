@@ -12,3 +12,6 @@ runConfig:
   maxInstances: 2
   cpu: 1
   memoryMiB: 512
+
+# The 'env' section is removed as public variables are now in .env
+# and backend secrets are accessed directly by the function.

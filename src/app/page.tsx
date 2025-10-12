@@ -1,6 +1,4 @@
-'use client';
 
-import { useState } from 'react';
 import AgendaView from '@/components/agenda/agenda-view';
 
 export const dynamic = 'force-dynamic';

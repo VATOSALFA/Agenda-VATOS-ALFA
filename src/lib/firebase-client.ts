@@ -4,7 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { initializeAppCheck, ReCaptchaV3Provider, debugToken } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -20,17 +20,22 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  // Allow localhost debug token
+  // This allows the app to work in development environments without a real reCAPTCHA setup.
   if (process.env.NODE_ENV !== 'production') {
     (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
   
   try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!),
-      isTokenAutoRefreshEnabled: true
-    });
-    console.log("Firebase App Check initialized successfully.");
+    const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    if (recaptchaKey) {
+        initializeAppCheck(app, {
+          provider: new ReCaptchaV3Provider(recaptchaKey),
+          isTokenAutoRefreshEnabled: true
+        });
+        console.log("Firebase App Check initialized successfully.");
+    } else {
+        console.warn("reCAPTCHA site key not found. App Check will not be initialized.");
+    }
   } catch (error) {
     console.error("Error initializing Firebase App Check:", error);
   }

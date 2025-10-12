@@ -70,19 +70,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (profDoc.exists()) {
                         customData = profDoc.data();
                         if (!customData.role) {
-                            customData.role = 'Staff';
-                            customData.permissions = ['ver_agenda']; 
+                            customData.role = 'Staff'; 
                         }
                     }
                 }
                 
                 if (customData) {
-                    const isSuperAdminByRole = customData.role === 'Administrador general';
+                    const role = customData.role || 'Administrador general'; // Fallback to admin if role is missing
+                    const isSuperAdminByRole = role === 'Administrador general';
                     setUser({
                         ...firebaseUser,
                         displayName: customData.name || firebaseUser.displayName,
                         email: customData.email,
-                        role: isSuperAdminByRole ? 'Administrador general' : customData.role,
+                        role: role,
                         permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (customData.permissions || []),
                         uid: firebaseUser.uid,
                         local_id: customData.local_id,

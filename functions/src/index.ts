@@ -188,146 +188,144 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
-    async (request: Request, response: Response) => {
-        const twiml = new twilio.twiml.MessagingResponse(); 
-        
-        try {
-            const twilioSignature = request.headers['x-twilio-signature'] as string;
-            const authToken = process.env.TWILIO_AUTH_TOKEN;
-            const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+export const twilioWebhook = functions.https.onRequest(async (request: Request, response: Response) => {
+    const twiml = new twilio.twiml.MessagingResponse(); 
+    
+    try {
+        const twilioSignature = request.headers['x-twilio-signature'] as string;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 
-            if (!authToken || !TWILIO_ACCOUNT_SID) {
-                functions.logger.error("Twilio credentials are not configured in environment variables.");
-                response.status(500).send('Configuration error.');
-                return;
-            }
-            
-            const protocol = request.headers['x-forwarded-proto'] || 'https';
-            const host = request.headers.host;
-            const fullUrl = `${protocol}://${host}${request.originalUrl}`;
-
-            const params = request.body;
-            
-            if (!Object.keys(params).length) {
-                functions.logger.warn('Twilio Webhook: Cuerpo de solicitud vacío. Ignorando.');
-                response.status(400).send('Cuerpo vacío.');
-                return;
-            }
-
-            // Validación de Seguridad
-            const requestIsValid = twilio.validateRequest(
-                authToken,
-                twilioSignature,
-                fullUrl,
-                params
-            );
-
-            if (!requestIsValid) {
-                functions.logger.warn('Twilio Webhook: Invalid signature received.', { signature: twilioSignature, url: fullUrl });
-                response.status(403).send('Invalid Twilio Signature');
-                return;
-            }
-
-            // --- LÓGICA PRINCIPAL Y DE GUARDADO ---
-            const from = params.From as string;
-            const messageBody = (params.Body as string) || '';
-            const numMedia = parseInt((params.NumMedia as string) || '0', 10);
-            
-            functions.logger.info(`Mensaje de Twilio recibido de ${from}:`, { body: messageBody });
-
-            const { clientId } = await handleClientResponse(from, messageBody); 
-            
-            const conversationId = from.replace('whatsapp:', ''); 
-            const conversationRef = db.collection('conversations').doc(conversationId);
-            const messagesCollectionRef = conversationRef.collection('messages'); 
-            
-            const messageData: { [key: string]: any } = {
-                senderId: 'client',
-                text: messageBody,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                read: false,
-            };
-
-            if (numMedia > 0) { 
-                const mediaUrl = params.MediaUrl0 as string;
-                const mediaContentType = params.MediaContentType0 as string;
-                
-                if(mediaUrl) {
-                    try {
-                        const mediaResponse = await axios.get(mediaUrl, {
-                            responseType: 'arraybuffer',
-                            auth: {
-                                username: TWILIO_ACCOUNT_SID,
-                                password: authToken
-                            }
-                        });
-                        
-                        const fileBuffer = Buffer.from(mediaResponse.data, 'binary');
-                        const fileName = `conversations/${conversationId}/${Date.now()}_media`;
-                        const file = storage.bucket().file(fileName);
-
-                        await file.save(fileBuffer, {
-                            metadata: { contentType: mediaContentType },
-                            public: true,
-                        });
-                        
-                        messageData.mediaUrl = file.publicUrl();
-
-                        if (mediaContentType?.startsWith('image/')) {
-                            messageData.mediaType = 'image';
-                        } else if (mediaContentType?.startsWith('audio/')) {
-                            messageData.mediaType = 'audio';
-                        } else if (mediaContentType === 'application/pdf') {
-                            messageData.mediaType = 'document';
-                        }
-
-                    } catch (mediaError) {
-                        functions.logger.error("Error handling Twilio media:", mediaError);
-                        // Don't block message saving if media fails
-                    }
-                }
-            }
-
-            await messagesCollectionRef.add(messageData); 
-            
-            const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
-            
-            const conversationDoc = await conversationRef.get();
-
-            if (!conversationDoc.exists) {
-                let clientName = from;
-                if (clientId) {
-                    const clientRecord = await db.collection('clientes').doc(clientId).get();
-                    if (clientRecord.exists) {
-                        const clientData = clientRecord.data();
-                        clientName = `${clientData?.nombre} ${clientData?.apellido}`;
-                    }
-                }
-                
-                await conversationRef.set({
-                    lastMessageText: lastMessagePreview,
-                    lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    unreadCount: admin.firestore.FieldValue.increment(1),
-                    clientName: clientName,
-                });
-            } else {
-                await conversationRef.update({
-                    lastMessageText: lastMessagePreview,
-                    lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    unreadCount: admin.firestore.FieldValue.increment(1),
-                });
-            }
-
-            response.writeHead(200, { 'Content-Type': 'text/xml' });
-            response.end(twiml.toString());
-            
-        } catch (error) {
-            functions.logger.error('Twilio Webhook: Error fatal en la ejecución.', error);
-            response.status(500).send('<Response><Message>Error interno en la agenda.</Message></Response>');
+        if (!authToken || !TWILIO_ACCOUNT_SID) {
+            functions.logger.error("Twilio credentials are not configured in environment variables.");
+            response.status(500).send('Configuration error.');
+            return;
         }
+        
+        const protocol = request.headers['x-forwarded-proto'] || 'https';
+        const host = request.headers.host;
+        const fullUrl = `${protocol}://${host}${request.originalUrl}`;
+
+        const params = request.body;
+        
+        if (!Object.keys(params).length) {
+            functions.logger.warn('Twilio Webhook: Cuerpo de solicitud vacío. Ignorando.');
+            response.status(400).send('Cuerpo vacío.');
+            return;
+        }
+
+        // Validación de Seguridad
+        const requestIsValid = twilio.validateRequest(
+            authToken,
+            twilioSignature,
+            fullUrl,
+            params
+        );
+
+        if (!requestIsValid) {
+            functions.logger.warn('Twilio Webhook: Invalid signature received.', { signature: twilioSignature, url: fullUrl });
+            response.status(403).send('Invalid Twilio Signature');
+            return;
+        }
+
+        // --- LÓGICA PRINCIPAL Y DE GUARDADO ---
+        const from = params.From as string;
+        const messageBody = (params.Body as string) || '';
+        const numMedia = parseInt((params.NumMedia as string) || '0', 10);
+        
+        functions.logger.info(`Mensaje de Twilio recibido de ${from}:`, { body: messageBody });
+
+        const { clientId } = await handleClientResponse(from, messageBody); 
+        
+        const conversationId = from.replace('whatsapp:', ''); 
+        const conversationRef = db.collection('conversations').doc(conversationId);
+        const messagesCollectionRef = conversationRef.collection('messages'); 
+        
+        const messageData: { [key: string]: any } = {
+            senderId: 'client',
+            text: messageBody,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+        };
+
+        if (numMedia > 0) { 
+            const mediaUrl = params.MediaUrl0 as string;
+            const mediaContentType = params.MediaContentType0 as string;
+            
+            if(mediaUrl) {
+                try {
+                    const mediaResponse = await axios.get(mediaUrl, {
+                        responseType: 'arraybuffer',
+                        auth: {
+                            username: TWILIO_ACCOUNT_SID,
+                            password: authToken
+                        }
+                    });
+                    
+                    const fileBuffer = Buffer.from(mediaResponse.data, 'binary');
+                    const fileName = `conversations/${conversationId}/${Date.now()}_media`;
+                    const file = storage.bucket().file(fileName);
+
+                    await file.save(fileBuffer, {
+                        metadata: { contentType: mediaContentType },
+                        public: true,
+                    });
+                    
+                    messageData.mediaUrl = file.publicUrl();
+
+                    if (mediaContentType?.startsWith('image/')) {
+                        messageData.mediaType = 'image';
+                    } else if (mediaContentType?.startsWith('audio/')) {
+                        messageData.mediaType = 'audio';
+                    } else if (mediaContentType === 'application/pdf') {
+                        messageData.mediaType = 'document';
+                    }
+
+                } catch (mediaError) {
+                    functions.logger.error("Error handling Twilio media:", mediaError);
+                    // Don't block message saving if media fails
+                }
+            }
+        }
+
+        await messagesCollectionRef.add(messageData); 
+        
+        const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
+        
+        const conversationDoc = await conversationRef.get();
+
+        if (!conversationDoc.exists) {
+            let clientName = from;
+            if (clientId) {
+                const clientRecord = await db.collection('clientes').doc(clientId).get();
+                if (clientRecord.exists) {
+                    const clientData = clientRecord.data();
+                    clientName = `${clientData?.nombre} ${clientData?.apellido}`;
+                }
+            }
+            
+            await conversationRef.set({
+                lastMessageText: lastMessagePreview,
+                lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+                unreadCount: admin.firestore.FieldValue.increment(1),
+                clientName: clientName,
+            });
+        } else {
+            await conversationRef.update({
+                lastMessageText: lastMessagePreview,
+                lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+                unreadCount: admin.firestore.FieldValue.increment(1),
+            });
+        }
+
+        response.writeHead(200, { 'Content-Type': 'text/xml' });
+        response.end(twiml.toString());
+        
+    } catch (error) {
+        functions.logger.error('Twilio Webhook: Error fatal en la ejecución.', error);
+        response.status(500).send('<Response><Message>Error interno en la agenda.</Message></Response>');
     }
-);
+});
 
 
 // =================================================================================
@@ -417,7 +415,7 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 
-    const { token: MP_ACCESS_TOKEN, userId } = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
 
     try {
         const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {

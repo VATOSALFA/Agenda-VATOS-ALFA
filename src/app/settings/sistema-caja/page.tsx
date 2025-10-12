@@ -15,9 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Loader2, PlusCircle, Info, RefreshCw } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { Form } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { httpsCallable } from 'firebase/functions';
+import { functions, db } from '@/lib/firebase-client';
 
 interface PagosSettings {
     enableCashBox: boolean;
@@ -157,7 +158,7 @@ export default function SistemaCajaPage() {
                 throw new Error(result.data.message || 'Error desconocido al buscar terminales.');
             }
         } catch (error: any) {
-            toast({
+             toast({
                 variant: 'destructive',
                 title: 'Error al buscar terminales',
                 description: error.message,
@@ -169,6 +170,7 @@ export default function SistemaCajaPage() {
     
     useEffect(() => {
         fetchTerminals();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     
     const activatePDV = async (terminalId: string) => {
@@ -225,7 +227,7 @@ export default function SistemaCajaPage() {
                     <CardTitle>Configuración de Terminal de Mercado Pago</CardTitle>
                     <Button type="button" onClick={fetchTerminals} disabled={isLoadingTerminals}>
                         {isLoadingTerminals ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
-                        Buscar Terminales
+                        Refrescar Terminales
                     </Button>
                 </div>
                 <CardDescription>
@@ -265,7 +267,7 @@ export default function SistemaCajaPage() {
                         {isLoadingTerminals ? (
                             <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow>
                         ) : terminals.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No se encontraron terminales. Haz clic en "Buscar Terminales".</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No se encontraron terminales. Revisa tus credenciales en la sección de Pagos.</TableCell></TableRow>
                         ) : (
                             terminals.map(terminal => (
                                 <TableRow key={terminal.id}>
@@ -374,7 +376,7 @@ export default function SistemaCajaPage() {
                             ))}
                         </TableBody>
                     </Table>
-                </CardContent>
+                </AccordionContent>
             </AccordionItem>
         </Accordion>
         

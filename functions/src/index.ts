@@ -417,7 +417,7 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
     }
 
-    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
+    const { token: MP_ACCESS_TOKEN, userId } = await getMercadoPagoAccessToken();
 
     try {
         const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {

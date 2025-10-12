@@ -93,7 +93,7 @@ import { Label } from '@/components/ui/label';
 import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { CashBoxClosingModal } from '../sales/cash-box-closing-modal';
-import { CommissionPaymentModal } from '../sales/commission-payment-modal';
+import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
 
 
 const SummaryCard = ({

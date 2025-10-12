@@ -7,7 +7,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
-    apiKey: "YOUR_API_KEY",
+    apiKey: "AIzaSyDPssw2c_PsoEGbsozRWMmFojXpA17wjxo",
     authDomain: "vatosalfa--agenda-1ae08.firebaseapp.com",
     projectId: "vatosalfa--agenda-1ae08",
     storageBucket: "vatosalfa--agenda-1ae08.appspot.com",

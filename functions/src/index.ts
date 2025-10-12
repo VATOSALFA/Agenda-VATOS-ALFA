@@ -188,7 +188,9 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-export const twilioWebhook = functions.https.onRequest(
+export const twilioWebhook = functions
+    .runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID", "TWILIO_PHONE_NUMBER"] })
+    .https.onRequest(
     async (request: Request, response: Response) => {
         const twiml = new twilio.twiml.MessagingResponse(); 
         
@@ -361,11 +363,9 @@ export const createPointPayment = functions.https.onCall(async (request) => {
             type: "point",
             external_reference: referenceId,
             description: `Venta en Agenda VATOS ALFA: ${referenceId}`,
-            transactions: {
-                payments: [{
-                    amount: amount.toFixed(2)
-                }]
-            },
+            transactions: [{
+                amount: amount,
+            }],
             config: {
                 point: {
                     terminal_id: terminalId,
@@ -422,38 +422,17 @@ export const getPointTerminals = functions.https.onCall(async (request) => {
     const { token: MP_ACCESS_TOKEN, userId } = await getMercadoPagoAccessToken();
 
     try {
-        const apiResponse = await axios.get(`${MP_API_BASE}/users/${userId}/stores`, {
-            headers: {
-                'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-            }
+        const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {
+            headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
         });
 
-        const stores = apiResponse.data?.results || [];
-        if (stores.length === 0) {
-            return { success: true, devices: [] };
-        }
-
-        const terminalPromises = stores.map((store: any) => 
-            axios.get(`${MP_API_BASE}/terminals/v1/list?store_id=${store.id}`, {
-                headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
-            })
-        );
+        const terminalList = apiResponse.data?.data?.terminals || apiResponse.data?.terminals || apiResponse.data?.results || [];
         
-        const terminalResponses = await Promise.all(terminalPromises);
-        const allTerminals: any[] = [];
-
-        terminalResponses.forEach(response => {
-            const terminalList = response.data?.data?.terminals || response.data?.terminals || response.data?.results || [];
-            if(Array.isArray(terminalList)) {
-                allTerminals.push(...terminalList);
-            }
-        });
-
-        const devices = allTerminals.map((device: any) => ({
+        const devices = Array.isArray(terminalList) ? terminalList.map((device: any) => ({
             id: device.id,
             name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,
             operating_mode: device.operating_mode
-        }));
+        })) : [];
         
         return { success: true, devices: devices };
 

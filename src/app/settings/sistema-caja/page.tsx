@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -373,7 +374,7 @@ export default function SistemaCajaPage() {
                             ))}
                         </TableBody>
                     </Table>
-                </AccordionContent>
+                </CardContent>
             </AccordionItem>
         </Accordion>
         

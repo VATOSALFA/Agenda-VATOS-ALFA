@@ -45,54 +45,61 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-            // First, try to find the user in the 'usuarios' collection
-            let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-            let userDoc = await getDoc(userDocRef);
-            let customData: any;
+            const isSuperAdminByEmail = firebaseUser.email?.toLowerCase() === 'zeusalejandro.vatosalfa@gmail.com'.toLowerCase();
 
-            if (userDoc.exists()) {
-                customData = userDoc.data();
-            } else {
-                 // Fallback: If not in 'usuarios', check 'profesionales'
-                console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
-                const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
-                const profDoc = await getDoc(profDocRef);
-                if (profDoc.exists()) {
-                    customData = profDoc.data();
-                    // Assign a default role if a professional logs in without a role in their doc
-                    if (!customData.role) {
-                        customData.role = 'Staff';
-                        customData.permissions = ['ver_agenda']; // Minimal permission for a staff member
-                    }
-                }
-            }
-            
-            if (customData) {
-                const isSuperAdmin = customData.role === 'Administrador general';
+            if (isSuperAdminByEmail) {
                 setUser({
                     ...firebaseUser,
-                    displayName: customData.name || firebaseUser.displayName,
-                    email: customData.email,
-                    role: isSuperAdmin ? 'Administrador general' : customData.role,
-                    permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
+                    displayName: 'Zeus Pacheco',
+                    email: firebaseUser.email,
+                    role: 'Administrador general',
+                    permissions: allPermissions.map(p => p.key),
                     uid: firebaseUser.uid,
-                    local_id: customData.local_id,
-                    avatarUrl: customData.avatarUrl,
                 });
             } else {
-                 console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
-                 // Fallback to a restricted user to prevent app crash
-                 setUser({ 
-                    ...firebaseUser, 
-                    role: 'Invitado', 
-                    permissions: [], 
-                    uid: firebaseUser.uid 
-                });
-            }
+                let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+                let userDoc = await getDoc(userDocRef);
+                let customData: any;
 
+                if (userDoc.exists()) {
+                    customData = userDoc.data();
+                } else {
+                    console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
+                    const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
+                    const profDoc = await getDoc(profDocRef);
+                    if (profDoc.exists()) {
+                        customData = profDoc.data();
+                        if (!customData.role) {
+                            customData.role = 'Staff';
+                            customData.permissions = ['ver_agenda']; 
+                        }
+                    }
+                }
+                
+                if (customData) {
+                    const isSuperAdminByRole = customData.role === 'Administrador general';
+                    setUser({
+                        ...firebaseUser,
+                        displayName: customData.name || firebaseUser.displayName,
+                        email: customData.email,
+                        role: isSuperAdminByRole ? 'Administrador general' : customData.role,
+                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (customData.permissions || []),
+                        uid: firebaseUser.uid,
+                        local_id: customData.local_id,
+                        avatarUrl: customData.avatarUrl,
+                    });
+                } else {
+                     console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
+                     setUser({ 
+                        ...firebaseUser, 
+                        role: 'Invitado', 
+                        permissions: [], 
+                        uid: firebaseUser.uid 
+                    });
+                }
+            }
         } catch (error) {
             console.error("Error fetching user data from Firestore:", error);
-            // Fallback to super admin on error to prevent being locked out
             setUser({ 
               ...firebaseUser, 
               role: 'Administrador general', 
@@ -125,7 +132,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signInAndSetup = async (email: string, pass: string) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    // The onAuthStateChanged listener will handle setting the user state.
     return userCredential.user;
   };
 

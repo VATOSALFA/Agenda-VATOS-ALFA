@@ -188,7 +188,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-export const twilioWebhook = functions.https.onRequest(
+export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
     async (request: Request, response: Response) => {
         const twiml = new twilio.twiml.MessagingResponse(); 
         

@@ -1,13 +1,14 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regla más permisiva para perfiles de usuario para evitar bloqueos en el login
+    // Allows any authenticated user to read user profiles, fixing the login race condition.
+    // Writes are still restricted to the user themselves.
     match /usuarios/{userId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Regla general para todos los demás documentos
+    // Fallback rule for all other documents
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

@@ -19,15 +19,27 @@ import { Form } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 
 interface PagosSettings {
-    showTips: boolean;
-    onlinePayments: boolean;
-    collectionLink: boolean;
-    editReservationStatus: boolean;
-    bank: string;
-    accountHolder: string;
-    clabe: string;
-    mercadoPagoPublicKey: string;
-    mercadoPagoAccessToken: string;
+    enableCashBox: boolean;
+    trackCash: boolean;
+    requireClient: boolean;
+    allowPriceEditing: boolean;
+    requireServiceInfo: boolean;
+    requireCashierCode: boolean;
+    showDecimals: boolean;
+    commissionAssisted: boolean;
+    commissionNoReservation: boolean;
+    commissionFullPayment: boolean;
+    businessName: string;
+    rfc: string;
+    fiscalRegime: string;
+    fiscalAddress: string;
+    additionalInfo: string;
+    showClientInfo: boolean;
+    showProfessionalName: boolean;
+    useBranchBilling: boolean;
+    differentiateVat: boolean;
+    receiptSize: string;
+    paymentMethods: any;
     mercadoPagoTerminalId?: string;
 }
 
@@ -154,6 +166,10 @@ export default function SistemaCajaPage() {
         }
     };
     
+    useEffect(() => {
+        fetchTerminals();
+    }, []);
+    
     const activatePDV = async (terminalId: string) => {
         try {
             const setPDV = httpsCallable(functions, 'setTerminalPDVMode');
@@ -215,7 +231,26 @@ export default function SistemaCajaPage() {
                     Activa el modo Punto de Venta (PDV) para integrar tus terminales Point. Después de activar el modo PDV, recuerda reiniciar tu terminal.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+                 <div className="space-y-2">
+                    <Label htmlFor="mercadoPagoTerminalId">Terminal de cobro principal</Label>
+                    <Controller
+                        name="mercadoPagoTerminalId"
+                        control={form.control}
+                        render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingTerminals}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder={isLoadingTerminals ? "Buscando..." : "Selecciona una terminal"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {terminals.map(terminal => (
+                                        <SelectItem key={terminal.id} value={terminal.id}>{terminal.name} - {terminal.id}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                </div>
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -242,7 +277,7 @@ export default function SistemaCajaPage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         {terminal.operating_mode !== 'PDV' && (
-                                            <Button size="sm" onClick={() => activatePDV(terminal.id)}>Activar PDV</Button>
+                                            <Button size="sm" type="button" onClick={() => activatePDV(terminal.id)}>Activar PDV</Button>
                                         )}
                                     </TableCell>
                                 </TableRow>

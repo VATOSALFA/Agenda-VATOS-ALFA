@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -73,7 +72,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual } from '@/lib/types';
+import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing } from '@/lib/types';
 import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
@@ -164,8 +163,8 @@ export default function CashBoxPage() {
   const [currentPageIngresos, setCurrentPageIngresos] = useState(10);
   const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
   
-  const [terminalId, setTerminalId] = useState('');
   const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
+  const [cashboxSettings, setCashboxSettings] = useState<any>(null);
 
 
    useEffect(() => {
@@ -235,6 +234,17 @@ export default function CashBoxPage() {
     ...ingresosQueryConstraints
   );
   
+  useEffect(() => {
+    const fetchCashboxSettings = async () => {
+        const settingsRef = doc(db, 'configuracion', 'caja');
+        const docSnap = await getDoc(settingsRef);
+        if (docSnap.exists()) {
+            setCashboxSettings(docSnap.data());
+        }
+    }
+    fetchCashboxSettings();
+  }, []);
+
   const egresos = useMemo(() => {
     if (activeFilters.localId === 'todos') {
         return allEgresos;
@@ -483,8 +493,11 @@ export default function CashBoxPage() {
       toast({ variant: 'destructive', title: 'Error', description: 'No hay una venta seleccionada para cobrar.' });
       return;
     }
+    
+    const terminalId = cashboxSettings?.mercadoPagoTerminalId;
+
     if (!terminalId) {
-      toast({ variant: 'destructive', title: 'ID de Terminal Requerido', description: 'Por favor, ingresa el ID de tu terminal Point.' });
+      toast({ variant: 'destructive', title: 'Terminal no configurada', description: 'Por favor, selecciona una terminal principal en los ajustes del sistema de caja.' });
       return;
     }
     
@@ -644,9 +657,7 @@ export default function CashBoxPage() {
               Descargar reporte
           </Button>
            <div className="flex items-center gap-2">
-              <Label htmlFor="terminal-id">ID de Terminal:</Label>
-              <Input id="terminal-id" placeholder="Ej: Point-xxxxxxxx" className="h-9 w-auto" value={terminalId} onChange={(e) => setTerminalId(e.target.value)} />
-              <Button onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !selectedSale || !terminalId}>
+              <Button onClick={handleChargeWithTerminal} disabled={isSendingToTerminal || !selectedSale || !cashboxSettings?.mercadoPagoTerminalId}>
                   {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CreditCard className="mr-2 h-4 w-4" />}
                   Cobrar con Terminal
               </Button>

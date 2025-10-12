@@ -7,13 +7,13 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    apiKey: "YOUR_API_KEY",
+    authDomain: "vatosalfa--agenda-1ae08.firebaseapp.com",
+    projectId: "vatosalfa--agenda-1ae08",
+    storageBucket: "vatosalfa--agenda-1ae08.appspot.com",
+    messagingSenderId: "1083906282837",
+    appId: "1:1083906282837:web:808892f39b69b5c92d5257",
+    measurementId: "G-9XG33J03H0"
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -26,7 +26,7 @@ if (typeof window !== 'undefined') {
   }
   
   try {
-    const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    const recaptchaKey = "6LfwqgsqAAAAAIYn0x10aJq3hA_3f1q2iS-mXyde";
     if (recaptchaKey) {
         initializeAppCheck(app, {
           provider: new ReCaptchaV3Provider(recaptchaKey),

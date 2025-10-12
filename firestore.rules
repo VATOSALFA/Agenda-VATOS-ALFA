@@ -1,60 +1,8 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Default deny all reads and writes
     match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Allow authenticated users to read all collections
-    match /{path=**} {
-      allow read: if request.auth != null;
-    }
-
-    // Allow writes on specific collections for authenticated users
-    match /clientes/{clientId} {
-      allow write: if request.auth != null;
-    }
-    match /reservas/{reservaId} {
-      allow write: if request.auth != null;
-    }
-    match /ventas/{ventaId} {
-      allow write: if request.auth != null;
-    }
-     match /egresos/{egresoId} {
-      allow write: if request.auth != null;
-    }
-    match /ingresos_manuales/{ingresoId} {
-      allow write: if request.auth != null;
-    }
-    match /profesionales/{profesionalId} {
-      allow write: if request.auth != null;
-    }
-    match /servicios/{servicioId} {
-      allow write: if request.auth != null;
-    }
-    match /productos/{productoId} {
-      allow write: if request.auth != null;
-    }
-    match /locales/{localId} {
-      allow write: if request.auth != null;
-    }
-    match /usuarios/{userId} {
-      allow write: if request.auth != null;
-    }
-    match /conversations/{conversationId}/{message=**} {
-      allow write: if request.auth != null;
-    }
-    match /configuracion/{configId} {
-      allow write: if request.auth != null;
-    }
-    match /codigos_autorizacion/{codigoId} {
-        allow write: if request.auth != null;
-    }
-     match /cortes_caja/{corteId} {
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
   }
 }

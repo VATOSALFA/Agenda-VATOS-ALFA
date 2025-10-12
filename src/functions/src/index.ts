@@ -188,7 +188,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
 // =================================================================================
 
-export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH_TOKEN"] },
+export const twilioWebhook = functions.https.onRequest(
     async (request: Request, response: Response) => {
         const twiml = new twilio.twiml.MessagingResponse(); 
         
@@ -198,7 +198,7 @@ export const twilioWebhook = functions.https.onRequest( { secrets: ["TWILIO_AUTH
             const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 
             if (!authToken || !TWILIO_ACCOUNT_SID) {
-                functions.logger.error("Twilio credentials are not configured in secrets.");
+                functions.logger.error("Twilio credentials are not configured in environment variables.");
                 response.status(500).send('Configuration error.');
                 return;
             }

@@ -1,11 +1,11 @@
 
 import * as functions from 'firebase-functions';
 import { Request, Response } from 'express';
+import twilio from 'twilio';
 import * as admin from 'firebase-admin';
 import { parseISO, format } from 'date-fns';
 import axios from 'axios'; 
 import { getStorage } from 'firebase-admin/storage';
-const twilio = require('twilio');
 
 
 // Initialize Firebase Admin SDK

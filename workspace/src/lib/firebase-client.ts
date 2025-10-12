@@ -7,13 +7,13 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "vatosalfa-agenda.firebaseapp.com",
-    projectId: "vatosalfa-agenda",
-    storageBucket: "vatosalfa-agenda.appspot.com",
-    messagingSenderId: "991483842329",
-    appId: "1:991483842329:web:e7c1797c23b2b4e5488195",
-    measurementId: "G-G5D1Q5L51P"
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

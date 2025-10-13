@@ -1,17 +1,14 @@
-
-import * as functions from 'firebase-functions';
-import { Request, Response } from 'express';
-import twilio from 'twilio';
-import * as admin from 'firebase-admin';
-import { parseISO, format } from 'date-fns';
-import axios from 'axios'; 
-import { getStorage } from 'firebase-admin/storage';
+import * as functions from "firebase-functions";
+import twilio from "twilio";
+import * as admin from "firebase-admin";
+import { format, parseISO } from "date-fns";
+import axios from "axios";
+import { getStorage } from "firebase-admin/storage";
 import * as crypto from 'crypto';
-
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
-    admin.initializeApp();
+  admin.initializeApp();
 }
 const db = admin.firestore();
 const storage = getStorage();
@@ -19,23 +16,24 @@ const storage = getStorage();
 // =================================================================================
 // HELPERS
 // =================================================================================
-async function getMercadoPagoAccessToken(): Promise<{ token: string, userId: string }> {
+
+async function getMercadoPagoConfig() {
     const settingsDoc = await db.collection('configuracion').doc('pagos').get();
     if (!settingsDoc.exists) {
-        throw new functions.https.HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida.');
+        throw new functions.https.HttpsError('failed-precondition', 'La configuración de Mercado Pago no ha sido establecida.');
     }
     const settings = settingsDoc.data();
-    const token = settings?.mercadoPagoAccessToken;
+    const accessToken = settings?.mercadoPagoAccessToken;
     const userId = settings?.mercadoPagoUserId;
-    if (!token || !userId) {
-        throw new functions.https.HttpsError('internal', 'El Access Token o el User ID de Mercado Pago no están configurados.');
+    if (!accessToken || !userId) {
+        throw new functions.https.HttpsError('failed-precondition', 'El Access Token o el User ID de Mercado Pago no están configurados.');
     }
-    return { token, userId };
+    return { accessToken, userId };
 }
 
 const MP_API_BASE = 'https://api.mercadopago.com';
 
-function validateMercadoPagoSignature(req: Request): boolean {
+function validateMercadoPagoSignature(req: functions.https.Request): boolean {
     const signatureHeader = req.headers['x-signature'] as string;
     const webhookSecret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
 
@@ -64,73 +62,6 @@ function validateMercadoPagoSignature(req: Request): boolean {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
 
-
-// =================================================================================
-// 1. MERCADO PAGO WEBHOOK (Recibe el resultado del pago)
-// =================================================================================
-
-export const mercadoPagoWebhookTest = functions.runWith({ secrets: ["MERCADO_PAGO_WEBHOOK_SECRET"] }).https.onRequest(
-    async (request: Request, response: Response): Promise<void> => {
-        try {
-            functions.logger.info('MP Webhook: Notificación recibida.', { body: request.body });
-            
-            if (!validateMercadoPagoSignature(request)) {
-                functions.logger.warn('MP Webhook: Invalid signature.');
-                response.status(403).send('Invalid signature');
-                return;
-            }
-
-            if (request.body.type === 'payment') {
-                const paymentId = request.body.data.id;
-                
-                const { token } = await getMercadoPagoAccessToken();
-                if (!token) {
-                    functions.logger.error('MP Webhook: Access Token de MP no configurado.');
-                    response.status(500).send('Configuración interna incompleta.');
-                    return;
-                }
-
-                const paymentResponse = await axios.get(
-                    `${MP_API_BASE}/v1/payments/${paymentId}`,
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
-
-                const paymentData = paymentResponse.data;
-                const externalReference = paymentData.external_reference; 
-
-                if (paymentData.status === 'approved' && externalReference) {
-                    const ventaRef = db.collection('ventas').doc(externalReference);
-                    const ventaDoc = await ventaRef.get();
-
-                    if (ventaDoc.exists) {
-                        await ventaRef.update({
-                            pago_estado: 'Pagado',
-                            metodo_pago: paymentData.payment_method_id,
-                            mercado_pago_id: paymentId,
-                        });
-                        functions.logger.info(`Venta ${externalReference} actualizada a "Pagado".`);
-                    } else {
-                        functions.logger.warn(`MP Webhook: No se encontró la venta con referencia ${externalReference}.`);
-                    }
-                }
-            }
-
-            response.status(200).send('OK');
-            return;
-
-        } catch (error) {
-            functions.logger.error('MP Webhook: Error procesando el Webhook.', error);
-            response.status(500).send('Error interno del servidor');
-            return;
-        }
-    }
-);
-
-
-// =================================================================================
-// Función de lógica de Citas (sin cambios)
-// =================================================================================
-
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
     const normalizedMessage = messageBody.trim().toLowerCase();
     
@@ -153,7 +84,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
     }
     
     const clientPhone = from.replace(/\D/g, '').slice(-10);
-
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
     const clientsSnapshot = await clientsQuery.get();
 
@@ -198,11 +128,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
     switch(action) {
         case 'confirm':
             await reservationDocRef.update({ estado: 'Confirmado' });
-            functions.logger.log(`Reservation ${reservationToUpdate.id} updated to "Confirmado" for client ${clientId}.`);
-            break;
-        case 'reschedule':
-            await reservationDocRef.update({ estado: 'Pendiente' });
-            functions.logger.log(`Reservation ${reservationToUpdate.id} updated to "Pendiente" for client ${clientId}.`);
             break;
         case 'cancel':
             await db.runTransaction(async (transaction) => {
@@ -211,70 +136,46 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
                     citas_canceladas: admin.firestore.FieldValue.increment(1)
                 });
             });
-            functions.logger.log(`Reservation ${reservationToUpdate.id} updated to "Cancelado" for client ${clientId}.`);
+            break;
+        default:
+            // For reschedule or other actions, just log for now
             break;
     }
-
     return { handled: true, clientId: clientId };
 }
 
 // =================================================================================
-// 2. TWILIO WEBHOOK (Resuelve Error 500 y 404)
+// CLOUD FUNCTIONS
 // =================================================================================
 
+// 1. Twilio Webhook
 export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
-    async (request: Request, response: Response) => {
-        const twiml = new twilio.twiml.MessagingResponse(); 
-        
+    async (request, response) => {
+        const twiml = new twilio.twiml.MessagingResponse();
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
             const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 
             if (!authToken || !TWILIO_ACCOUNT_SID) {
-                functions.logger.error("Twilio credentials are not configured in environment variables.");
+                functions.logger.error("Twilio credentials not configured.");
                 response.status(500).send('Configuration error.');
                 return;
             }
             
-            const protocol = request.headers['x-forwarded-proto'] || 'https';
-            const host = request.headers.host;
-            const fullUrl = `${protocol}://${host}${request.originalUrl}`;
-
-            const params = request.body;
+            const fullUrl = `https://${request.headers.host}${request.originalUrl}`;
             
-            if (!Object.keys(params).length) {
-                functions.logger.warn('Twilio Webhook: Cuerpo de solicitud vacío. Ignorando.');
-                response.status(400).send('Cuerpo vacío.');
-                return;
-            }
-
-            // Validación de Seguridad
-            const requestIsValid = twilio.validateRequest(
-                authToken,
-                twilioSignature,
-                fullUrl,
-                params
-            );
-
-            if (!requestIsValid) {
-                functions.logger.warn('Twilio Webhook: Invalid signature received.', { signature: twilioSignature, url: fullUrl });
+            if (!twilio.validateRequest(authToken, twilioSignature, fullUrl, request.body)) {
+                functions.logger.warn('Twilio Webhook: Invalid signature received.');
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
 
-            // --- LÓGICA PRINCIPAL Y DE GUARDADO ---
-            const from = params.From as string;
-            const messageBody = (params.Body as string) || '';
-            const numMedia = parseInt((params.NumMedia as string) || '0', 10);
-            
-            functions.logger.info(`Mensaje de Twilio recibido de ${from}:`, { body: messageBody });
-
-            const { clientId } = await handleClientResponse(from, messageBody); 
-            
+            const from = request.body.From as string;
+            const messageBody = (request.body.Body as string) || '';
             const conversationId = from.replace('whatsapp:', ''); 
-            const conversationRef = db.collection('conversations').doc(conversationId);
-            const messagesCollectionRef = conversationRef.collection('messages'); 
+
+            await handleClientResponse(from, messageBody);
             
             const messageData: { [key: string]: any } = {
                 senderId: 'client',
@@ -283,246 +184,144 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
                 read: false,
             };
 
-            if (numMedia > 0) { 
-                const mediaUrl = params.MediaUrl0 as string;
-                const mediaContentType = params.MediaContentType0 as string;
-                
-                if(mediaUrl) {
-                    try {
-                        const mediaResponse = await axios.get(mediaUrl, {
-                            responseType: 'arraybuffer',
-                            auth: {
-                                username: TWILIO_ACCOUNT_SID,
-                                password: authToken
-                            }
-                        });
-                        
-                        const fileBuffer = Buffer.from(mediaResponse.data, 'binary');
-                        const fileName = `conversations/${conversationId}/${Date.now()}_media`;
-                        const file = storage.bucket().file(fileName);
-
-                        await file.save(fileBuffer, {
-                            metadata: { contentType: mediaContentType },
-                            public: true,
-                        });
-                        
-                        messageData.mediaUrl = file.publicUrl();
-
-                        if (mediaContentType?.startsWith('image/')) {
-                            messageData.mediaType = 'image';
-                        } else if (mediaContentType?.startsWith('audio/')) {
-                            messageData.mediaType = 'audio';
-                        } else if (mediaContentType === 'application/pdf') {
-                            messageData.mediaType = 'document';
-                        }
-
-                    } catch (mediaError) {
-                        functions.logger.error("Error handling Twilio media:", mediaError);
-                        // Don't block message saving if media fails
-                    }
-                }
-            }
-
-            await messagesCollectionRef.add(messageData); 
+            await db.collection('conversations').doc(conversationId).collection('messages').add(messageData);
             
-            const lastMessagePreview = messageBody || (messageData.mediaType ? `[${messageData.mediaType.charAt(0).toUpperCase() + messageData.mediaType.slice(1)}]` : '[Mensaje vacío]');
-            
-            const conversationDoc = await conversationRef.get();
-
-            if (!conversationDoc.exists) {
-                let clientName = from;
-                if (clientId) {
-                    const clientRecord = await db.collection('clientes').doc(clientId).get();
-                    if (clientRecord.exists) {
-                        const clientData = clientRecord.data();
-                        clientName = `${clientData?.nombre} ${clientData?.apellido}`;
-                    }
-                }
-                
-                await conversationRef.set({
-                    lastMessageText: lastMessagePreview,
-                    lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    unreadCount: admin.firestore.FieldValue.increment(1),
-                    clientName: clientName,
-                });
-            } else {
-                await conversationRef.update({
-                    lastMessageText: lastMessagePreview,
-                    lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    unreadCount: admin.firestore.FieldValue.increment(1),
-                });
-            }
+            await db.collection('conversations').doc(conversationId).set({
+                lastMessageText: messageBody,
+                lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+                unreadCount: admin.firestore.FieldValue.increment(1),
+            }, { merge: true });
 
             response.writeHead(200, { 'Content-Type': 'text/xml' });
             response.end(twiml.toString());
             
         } catch (error) {
-            functions.logger.error('Twilio Webhook: Error fatal en la ejecución.', error);
-            response.status(500).send('<Response><Message>Error interno en la agenda.</Message></Response>');
+            functions.logger.error('Twilio Webhook Error:', error);
+            response.status(500).send('Internal Server Error');
         }
     }
 );
 
+// 2. Mercado Pago Webhook
+export const mercadoPagoWebhook = functions.runWith({ secrets: ["MERCADO_PAGO_WEBHOOK_SECRET"] }).https.onRequest(
+    async (request, response) => {
+        if (!validateMercadoPagoSignature(request)) {
+            functions.logger.warn('MP Webhook: Invalid signature.');
+            response.status(403).send('Invalid signature');
+            return;
+        }
 
-// =================================================================================
-// 3. FUNCIÓN DE COBRO DE MERCADO PAGO POINT (CORREGIDO)
-// =================================================================================
+        try {
+            if (request.body.type === 'payment') {
+                const paymentId = request.body.data.id;
+                const { accessToken } = await getMercadoPagoConfig();
+                
+                const paymentResponse = await axios.get(`${MP_API_BASE}/v1/payments/${paymentId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
 
-export const createPointPayment = functions.https.onCall(async (request) => {
-    // 1. Verificación de autenticación
-    if (!request.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden iniciar cobros.');
-    }
-    
-    // 2. Verificación del Access Token de Mercado Pago
-    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
+                const paymentData = paymentResponse.data;
+                const externalReference = paymentData.external_reference;
 
-    // 3. Validación de datos de entrada
-    const { amount, referenceId, terminalId } = request.data as { amount: number, referenceId: string, terminalId: string };
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
-        throw new functions.https.HttpsError('invalid-argument', 'El campo "amount" es requerido y debe ser un número positivo.');
+                if (paymentData.status === 'approved' && externalReference) {
+                    const ventaRef = db.collection('ventas').doc(externalReference);
+                    await ventaRef.update({
+                        pago_estado: 'Pagado',
+                        metodo_pago: paymentData.payment_method_id,
+                        mercado_pago_id: paymentId,
+                    });
+                    functions.logger.info(`Venta ${externalReference} actualizada a "Pagado".`);
+                }
+            }
+            response.status(200).send('OK');
+        } catch (error) {
+            functions.logger.error('MP Webhook Error:', error);
+            response.status(500).send('Internal Server Error');
+        }
     }
-    if (!referenceId || typeof referenceId !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'El campo "referenceId" (ID de la venta) es requerido.');
+);
+
+// 3. Create Mercado Pago Point Payment
+export const createPointPayment = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden realizar esta acción.');
     }
-    if (!terminalId || typeof terminalId !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'El campo "terminalId" (ID del dispositivo) es requerido.');
+
+    const { amount, referenceId, terminalId } = data;
+    if (!amount || !referenceId || !terminalId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Faltan parámetros requeridos.');
     }
 
     try {
-        // 4. Construcción del payload para la API de Mercado Pago
-        const orderPayload = {
+        const { accessToken } = await getMercadoPagoConfig();
+        const idempotencyKey = `order-${referenceId}-${Date.now()}`;
+
+        const apiResponse = await axios.post(`${MP_API_BASE}/v1/orders`, {
             type: "point",
             external_reference: referenceId,
             description: `Venta en Agenda VATOS ALFA: ${referenceId}`,
-            transactions: [{
-                amount: amount,
-            }],
-            config: {
-                point: {
-                    terminal_id: terminalId,
-                    print_on_terminal: "no_ticket"
-                }
+            transactions: [{ amount: parseFloat(amount.toFixed(2)) }],
+            config: { point: { terminal_id: terminalId, print_on_terminal: "no_ticket" } }
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Idempotency-Key': idempotencyKey,
             }
-        };
-
-        const idempotencyKey = `order-${referenceId}-${Date.now()}`;
-
-        // 5. Llamada a la API de Mercado Pago para crear la orden
-        const apiResponse = await axios.post(
-            `${MP_API_BASE}/v1/orders`,
-            orderPayload,
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-                    'X-Idempotency-Key': idempotencyKey,
-                }
-            }
-        );
-
-        functions.logger.info(`Orden de MP creada para ${referenceId}.`, { status: apiResponse.status, data: apiResponse.data });
-
-        // 6. Devolver una respuesta exitosa
-        return { 
-            success: true, 
-            order_id: apiResponse.data.id,
-            payment_id: apiResponse.data.transactions?.payments?.[0]?.id,
-            message: 'Orden enviada a la terminal correctamente.' 
-        };
-
-    } catch (error: any) {
-        functions.logger.error(`Error al crear Orden de MP para ${referenceId}.`, {
-            errorMessage: error.message,
-            errorResponse: error.response?.data
         });
-        
-        // 7. Manejo de errores de la API
-        const errorMessage = error.response?.data?.message || 'Fallo al comunicar con la API de Mercado Pago.';
-        throw new functions.https.HttpsError('internal', errorMessage);
+
+        return { success: true, orderId: apiResponse.data.id };
+    } catch (error: any) {
+        functions.logger.error(`Error creando orden en MP para ${referenceId}:`, error.response?.data || error.message);
+        throw new functions.https.HttpsError('internal', error.response?.data?.message || 'Error al crear la orden de pago.');
     }
 });
 
-// =================================================================================
-// 4. OBTENER TERMINALES DE MERCADO PAGO (VERSIÓN FINAL Y ROBUSTA)
-// =================================================================================
-export const getPointTerminals = functions.https.onCall(async (request) => {
-    if (!request.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden ver las terminales.');
+// 4. Get Mercado Pago Terminals
+export const getPointTerminals = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
     }
-
-    const { token: MP_ACCESS_TOKEN, userId } = await getMercadoPagoAccessToken();
-
     try {
+        const { accessToken } = await getMercadoPagoConfig();
         const apiResponse = await axios.get(`${MP_API_BASE}/terminals/v1/list`, {
-            headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+            headers: { 'Authorization': `Bearer ${accessToken}` }
         });
-
-        const terminalList = apiResponse.data?.data?.terminals || apiResponse.data?.terminals || apiResponse.data?.results || [];
-        
-        const devices = Array.isArray(terminalList) ? terminalList.map((device: any) => ({
-            id: device.id,
-            name: `${device.operating_mode === 'PDV' ? 'PDV - ' : ''}${device.id.slice(-6)}`,
-            operating_mode: device.operating_mode
-        })) : [];
-        
-        return { success: true, devices: devices };
-
+        const terminalList = apiResponse.data?.data?.terminals || [];
+        const devices = terminalList.map((d: any) => ({
+            id: d.id,
+            name: `${d.operating_mode === 'PDV' ? 'PDV - ' : ''}${d.id.slice(-6)}`,
+            operating_mode: d.operating_mode
+        }));
+        return { success: true, devices };
     } catch (error: any) {
-        const errorMessage = error.response?.data?.message || 'Fallo al obtener la lista de terminales.';
-        functions.logger.error(`Error al obtener terminales de MP: ${errorMessage}`, {
-            errorResponse: error.response?.data
-        });
-        throw new functions.https.HttpsError('internal', errorMessage);
+        functions.logger.error('Error al obtener terminales de MP:', error.response?.data || error.message);
+        throw new functions.https.HttpsError('internal', 'Fallo al obtener la lista de terminales.');
     }
 });
 
-
-// =================================================================================
-// 5. ACTIVAR MODO PDV EN TERMINAL
-// =================================================================================
-export const setTerminalPDVMode = functions.https.onCall(async (request) => {
-    if (!request.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden modificar terminales.');
+// 5. Set Terminal to PDV Mode
+export const setTerminalPDVMode = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
     }
-
-    const { token: MP_ACCESS_TOKEN } = await getMercadoPagoAccessToken();
-    
-    const { terminalId } = request.data as { terminalId: string };
-    if (!terminalId || typeof terminalId !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'El campo "terminalId" es requerido.');
+    const { terminalId } = data;
+    if (!terminalId) {
+        throw new functions.https.HttpsError('invalid-argument', 'El ID de la terminal es requerido.');
     }
-
     try {
-        // El PATCH a /terminals/v1/setup espera un formato específico
-        const payload = {
-            terminals: [{
-                id: terminalId,
-                operating_mode: "PDV"
-            }]
-        };
-
-        const apiResponse = await axios.patch(
-            `${MP_API_BASE}/terminals/v1/setup`,
-            payload,
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-                }
+        const { accessToken } = await getMercadoPagoConfig();
+        await axios.patch(`${MP_API_BASE}/terminals/v1/setup`, {
+            terminals: [{ id: terminalId, operating_mode: "PDV" }]
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
             }
-        );
-
-        functions.logger.info(`Modo PDV activado para terminal ${terminalId}.`, { status: apiResponse.status, data: apiResponse.data });
-
-        return { success: true, data: apiResponse.data };
-
-    } catch (error: any) {
-        functions.logger.error(`Error al activar modo PDV para ${terminalId}.`, {
-            errorMessage: error.message,
-            errorResponse: error.response?.data
         });
-        const errorMessage = error.response?.data?.message || 'Fallo al activar el modo PDV.';
-        throw new functions.https.HttpsError('internal', errorMessage);
+        return { success: true };
+    } catch (error: any) {
+        functions.logger.error(`Error al activar modo PDV para ${terminalId}:`, error.response?.data || error.message);
+        throw new functions.https.HttpsError('internal', 'Fallo al activar el modo PDV.');
     }
 });

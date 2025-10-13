@@ -1,4 +1,6 @@
 
+'use client';
+
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -7,13 +9,13 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
-    apiKey: "AIzaSyAZL8T2nJ3G-u_y_6c4s8N5rO7dZ1fX9Y8",
+    apiKey: "YOUR_API_KEY",
     authDomain: "vatosalfa-agenda.firebaseapp.com",
     projectId: "vatosalfa-agenda",
     storageBucket: "vatosalfa-agenda.appspot.com",
-    messagingSenderId: "991483842329",
-    appId: "1:991483842329:web:e7c1797c23b2b4e5488195",
-    measurementId: "G-G5D1Q5L51P"
+    messagingSenderId: "362629633858",
+    appId: "1:362629633858:web:7f64b81254359194e99f03",
+    measurementId: "G-65YPS2P6M2"
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -26,7 +28,7 @@ if (typeof window !== 'undefined') {
   }
   
   try {
-    const recaptchaKey = "6LcU3vwpAAAAAJJz22WOZk5s_V2i65zC9i8i_fGz";
+    const recaptchaKey = "6LejM_UpAAAAAJTqPzG5_k1ZgR-D3Y-xYgY-5_wZ";
     if (recaptchaKey) {
         initializeAppCheck(app, {
           provider: new ReCaptchaV3Provider(recaptchaKey),

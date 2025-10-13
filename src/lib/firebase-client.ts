@@ -26,7 +26,7 @@ if (typeof window !== 'undefined') {
   }
   
   try {
-    const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    const recaptchaKey = "6LcU3vwpAAAAAJJz22WOZk5s_V2i65zC9i8i_fGz";
     if (recaptchaKey) {
         initializeAppCheck(app, {
           provider: new ReCaptchaV3Provider(recaptchaKey),

@@ -10,8 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
-import { db } from '@/lib/firebase-admin';
-import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, Timestamp, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
+import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, serverTimestamp, Timestamp, limit } from 'firebase/firestore';
 
 
 const TemplatedWhatsAppMessageInput = z.object({
@@ -52,7 +52,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
     const messageData = {
         senderId: 'vatosalfa',
         text: messageBody,
-        timestamp: Timestamp.now(),
+        timestamp: serverTimestamp(),
         read: true,
     };
     
@@ -62,7 +62,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
     
     const conversationData = {
         lastMessageText: `Tú: ${messageBody}`,
-        lastMessageTimestamp: Timestamp.now(),
+        lastMessageTimestamp: serverTimestamp(),
     };
     
     if (conversationSnap.empty) {

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -76,7 +77,7 @@ import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, Cas
 import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
-import { SaleDetailModal } from '../sales/sale-detail-modal';
+import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -92,7 +93,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { CashBoxClosingModal } from '../sales/cash-box-closing-modal';
+import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
 import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
 
 

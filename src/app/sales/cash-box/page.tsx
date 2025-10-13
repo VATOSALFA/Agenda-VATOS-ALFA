@@ -1138,3 +1138,5 @@ export default function CashBoxPage() {
     </>
   );
 }
+
+    

@@ -64,7 +64,7 @@ import {
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Input } from '../ui/input';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 

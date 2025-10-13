@@ -9,13 +9,13 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "vatosalfa-agenda.firebaseapp.com",
-    projectId: "vatosalfa-agenda",
-    storageBucket: "vatosalfa-agenda.appspot.com",
-    messagingSenderId: "362629633858",
-    appId: "1:362629633858:web:7f64b81254359194e99f03",
-    measurementId: "G-65YPS2P6M2"
+    apiKey: "AIzaSyAsUWZLiMR7sVkL0of4i09-6zWfBHFjSUY",
+    authDomain: "agenda-1ae08.firebaseapp.com",
+    projectId: "agenda-1ae08",
+    storageBucket: "agenda-1ae08.firebasestorage.app",
+    messagingSenderId: "34221543030",
+    appId: "1:34221543030:web:b46655e3ef8d7de4539957",
+    measurementId: "G-MZC8TZBYFL"
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -28,7 +28,7 @@ if (typeof window !== 'undefined') {
   }
   
   try {
-    const recaptchaKey = "6LejM_UpAAAAAJTqPzG5_k1ZgR-D3Y-xYgY-5_wZ";
+    const recaptchaKey = "6LfPidorAAAAAMRvfe91b-8_Jmzsrdc_qNmj3N78";
     if (recaptchaKey) {
         initializeAppCheck(app, {
           provider: new ReCaptchaV3Provider(recaptchaKey),

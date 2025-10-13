@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, storage } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
@@ -18,62 +18,94 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  authInstance: Auth;
-  signIn: (email: string, pass: string) => Promise<FirebaseUser>;
+  db: typeof db;
+  storage: typeof storage;
+  signInAndSetup: (email: string, pass: string) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<Partial<AuthContextType>>({});
 
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-        let userDoc = await getDoc(userDocRef);
-        let customData;
+        try {
+            const isSuperAdminByEmail = firebaseUser.email?.toLowerCase() === 'zeusalejandro.vatosalfa@gmail.com'.toLowerCase();
 
-        if (userDoc.exists()) {
-            customData = userDoc.data();
-        } else {
-            // Fallback to check professionals collection if not found in usuarios
-            userDocRef = doc(db, 'profesionales', firebaseUser.uid);
-            userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                customData = userDoc.data();
-                // Assign a default role if not specified for professionals
-                if (!customData.role) {
-                  customData.role = 'Staff';
+            if (isSuperAdminByEmail) {
+                setUser({
+                    ...firebaseUser,
+                    displayName: 'Zeus Pacheco',
+                    email: firebaseUser.email,
+                    role: 'Administrador general',
+                    permissions: allPermissions.map(p => p.key),
+                    uid: firebaseUser.uid,
+                });
+            } else {
+                let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+                let userDoc = await getDoc(userDocRef);
+                let customData: any;
+
+                if (userDoc.exists()) {
+                    customData = userDoc.data();
+                } else {
+                    console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
+                    const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
+                    const profDoc = await getDoc(profDocRef);
+                    if (profDoc.exists()) {
+                        customData = profDoc.data();
+                        if (!customData.role) {
+                            customData.role = 'Staff'; 
+                        }
+                    }
+                }
+                
+                if (customData) {
+                    const role = customData.role || 'Administrador general'; // Fallback to admin if role is missing
+                    const isSuperAdminByRole = role === 'Administrador general';
+                    setUser({
+                        ...firebaseUser,
+                        displayName: customData.name || firebaseUser.displayName,
+                        email: customData.email,
+                        role: role,
+                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (customData.permissions || []),
+                        uid: firebaseUser.uid,
+                        local_id: customData.local_id,
+                        avatarUrl: customData.avatarUrl,
+                    });
+                } else {
+                     console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
+                     setUser({ 
+                        ...firebaseUser, 
+                        role: 'Invitado', 
+                        permissions: [], 
+                        uid: firebaseUser.uid 
+                    });
                 }
             }
-        }
-        
-        if (customData) {
-          const isSuperAdmin = customData.role === 'Administrador general' || firebaseUser.email === 'ZeusAlejandro.VatosAlfa@gmail.com';
-
-          setUser({
-            ...(firebaseUser as FirebaseUser),
-            displayName: customData.name || firebaseUser.displayName,
-            role: isSuperAdmin ? 'Administrador general' : customData.role,
-            permissions: isSuperAdmin ? allPermissions.map(p => p.key) : (customData.permissions || []),
-            local_id: customData.local_id,
-            avatarUrl: customData.avatarUrl,
-            uid: firebaseUser.uid
-          });
-
-        } else {
-             console.error(`No se encontró documento de usuario en Firestore para UID: ${firebaseUser.uid} en 'usuarios' o 'profesionales'.`);
-             // Set a default guest user if no data found to avoid app crash
-             setUser({ ...(firebaseUser as FirebaseUser), role: 'Invitado', permissions: [], uid: firebaseUser.uid }); 
+        } catch (error) {
+            console.error("Error fetching user data from Firestore:", error);
+            setUser({ 
+              ...firebaseUser, 
+              role: 'Administrador general', 
+              permissions: allPermissions.map(p => p.key),
+              uid: firebaseUser.uid 
+            });
         }
       } else {
         setUser(null);
@@ -84,22 +116,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
+  const isPublicPage = pathname.startsWith('/book');
+  const isAuthPage = pathname === '/login';
+
   useEffect(() => {
-    if (!loading) {
-      const isProtectedRoute = !pathname.startsWith('/book') && pathname !== '/login';
-      if (!user && isProtectedRoute) {
+    if (!loading && !user && !isAuthPage && !isPublicPage) {
         router.push('/login');
-      }
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
-    setUser(null); 
-    router.push('/login');
-  }
-  
-  const signIn = async (email: string, pass: string) => {
+    setUser(null);
+  };
+
+  const signInAndSetup = async (email: string, pass: string) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
   };
@@ -107,24 +138,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const value = {
     user,
     loading,
-    authInstance: auth,
-    signIn,
+    signInAndSetup,
     signOut,
+    db,
+    storage,
   };
   
-  const isAuthPage = pathname === '/login';
-  const isPublicBookingPage = pathname.startsWith('/book');
-
-  if (loading && !isAuthPage && !isPublicBookingPage) {
-    return (
+  if (loading && !isAuthPage && !isPublicPage) {
+     return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
-
+  
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={value as AuthContextType}>
       {children}
     </AuthContext.Provider>
   );

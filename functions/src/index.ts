@@ -6,6 +6,7 @@ import * as admin from 'firebase-admin';
 import { parseISO, format } from 'date-fns';
 import axios from 'axios'; 
 import { getStorage } from 'firebase-admin/storage';
+import * as crypto from 'crypto';
 
 
 // Initialize Firebase Admin SDK
@@ -34,15 +35,50 @@ async function getMercadoPagoAccessToken(): Promise<{ token: string, userId: str
 
 const MP_API_BASE = 'https://api.mercadopago.com';
 
+function validateMercadoPagoSignature(req: Request): boolean {
+    const signatureHeader = req.headers['x-signature'] as string;
+    const webhookSecret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+
+    if (!signatureHeader || !webhookSecret) {
+        functions.logger.warn('MP Webhook: Missing signature header or secret.');
+        return false;
+    }
+
+    const parts = signatureHeader.split(',').reduce((acc, part) => {
+        const [key, value] = part.split('=');
+        acc[key.trim()] = value.trim();
+        return acc;
+    }, {} as Record<string, string>);
+
+    const timestamp = parts['ts'];
+    const signature = parts['v1'];
+    
+    if (!timestamp || !signature) return false;
+
+    const manifest = `id:${req.body.data.id};request-id:${req.headers['x-request-id']};ts:${timestamp};`;
+    
+    const hmac = crypto.createHmac('sha256', webhookSecret);
+    hmac.update(manifest);
+    const expectedSignature = hmac.digest('hex');
+
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+}
+
 
 // =================================================================================
 // 1. MERCADO PAGO WEBHOOK (Recibe el resultado del pago)
 // =================================================================================
 
-export const mercadoPagoWebhookTest = functions.https.onRequest(
+export const mercadoPagoWebhookTest = functions.runWith({ secrets: ["MERCADO_PAGO_WEBHOOK_SECRET"] }).https.onRequest(
     async (request: Request, response: Response): Promise<void> => {
         try {
             functions.logger.info('MP Webhook: Notificación recibida.', { body: request.body });
+            
+            if (!validateMercadoPagoSignature(request)) {
+                functions.logger.warn('MP Webhook: Invalid signature.');
+                response.status(403).send('Invalid signature');
+                return;
+            }
 
             if (request.body.type === 'payment') {
                 const paymentId = request.body.data.id;
@@ -54,17 +90,15 @@ export const mercadoPagoWebhookTest = functions.https.onRequest(
                     return;
                 }
 
-                // 1. Obtener los detalles del pago desde la API de Mercado Pago
                 const paymentResponse = await axios.get(
                     `${MP_API_BASE}/v1/payments/${paymentId}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
                 const paymentData = paymentResponse.data;
-                const externalReference = paymentData.external_reference; // Este es nuestro ID de la venta
+                const externalReference = paymentData.external_reference; 
 
                 if (paymentData.status === 'approved' && externalReference) {
-                    // 2. Buscar la venta en Firestore y actualizarla
                     const ventaRef = db.collection('ventas').doc(externalReference);
                     const ventaDoc = await ventaRef.get();
 

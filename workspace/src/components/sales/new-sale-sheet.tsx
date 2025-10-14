@@ -12,8 +12,6 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import type { Client, Product, Service as ServiceType, Profesional, Local, User } from '@/lib/types';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
-import { MercadoPagoProvider } from './mercado-pago-provider';
-import { Payment } from '@mercadopago/sdk-react';
 import { sendGoogleReviewRequest } from '@/ai/flows/send-google-review-flow';
 import { functions, httpsCallable } from '@/lib/firebase-client';
 
@@ -514,20 +512,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                   });
                 }).catch(console.error);
             }
-
-            // Log stock movement
-            const movementRef = doc(collection(db, "movimientos_stock"));
-            transaction.set(movementRef, {
-                date: Timestamp.now(),
-                local_id: data.local_id,
-                product_id: item.id,
-                presentation_id: item.presentation_id || null,
-                from: currentStock,
-                to: newStock,
-                cause: 'Venta',
-                staff_id: item.barbero_id || null,
-                comment: `Venta de ${item.cantidad} unidad(es).`
-            });
         }
         
         const ventaRef = doc(collection(db, "ventas"));

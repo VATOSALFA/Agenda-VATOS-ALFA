@@ -1,30 +1,42 @@
-import * as functions from "firebase-functions";
+
+import * as functions from "firebase-functions/v1";
 import twilio from "twilio";
 import * as admin from "firebase-admin";
 import { format, parseISO } from "date-fns";
 import axios from "axios";
-import { getStorage } from "firebase-admin/storage";
 import * as crypto from 'crypto';
 
-// Initialize Firebase Admin SDK
+// Definición de tipos de datos para las funciones onCall
+interface CreatePaymentData {
+    amount: number;
+    referenceId: string;
+    terminalId: string;
+}
+interface SetPDVData {
+    terminalId: string;
+}
+
+// Inicialización de Firebase Admin SDK
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 const db = admin.firestore();
-const storage = getStorage();
 
 // =================================================================================
-// HELPERS
+// HELPERS (Lógica Reutilizable)
 // =================================================================================
 
-async function getMercadoPagoConfig() {
+/**
+ * Obtiene el Access Token de Mercado Pago desde la configuración de Firestore.
+ */
+async function getMercadoPagoConfig(): Promise<{ accessToken: string, userId: string }> {
     const settingsDoc = await db.collection('configuracion').doc('pagos').get();
     if (!settingsDoc.exists) {
         throw new functions.https.HttpsError('failed-precondition', 'La configuración de Mercado Pago no ha sido establecida.');
     }
     const settings = settingsDoc.data();
-    const accessToken = settings?.mercadoPagoAccessToken;
-    const userId = settings?.mercadoPagoUserId;
+    const accessToken = settings?.mercadoPagoAccessToken as string;
+    const userId = settings?.mercadoPagoUserId as string;
     if (!accessToken || !userId) {
         throw new functions.https.HttpsError('failed-precondition', 'El Access Token o el User ID de Mercado Pago no están configurados.');
     }
@@ -33,6 +45,9 @@ async function getMercadoPagoConfig() {
 
 const MP_API_BASE = 'https://api.mercadopago.com';
 
+/**
+ * Valida la firma de seguridad de Mercado Pago para los Webhooks.
+ */
 function validateMercadoPagoSignature(req: functions.https.Request): boolean {
     const signatureHeader = req.headers['x-signature'] as string;
     const webhookSecret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
@@ -51,8 +66,9 @@ function validateMercadoPagoSignature(req: functions.https.Request): boolean {
     const timestamp = parts['ts'];
     const signature = parts['v1'];
     
-    if (!timestamp || !signature) return false;
+    if (!timestamp || !signature || !req.body.data?.id) return false;
 
+    // Se asume que req.body.data.id existe
     const manifest = `id:${req.body.data.id};request-id:${req.headers['x-request-id']};ts:${timestamp};`;
     
     const hmac = crypto.createHmac('sha256', webhookSecret);
@@ -62,6 +78,9 @@ function validateMercadoPagoSignature(req: functions.https.Request): boolean {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
 
+/**
+ * Lógica para manejar la respuesta del cliente (confirmar/cancelar cita).
+ */
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
     const normalizedMessage = messageBody.trim().toLowerCase();
     
@@ -83,6 +102,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
+    // Normalización de número
     const clientPhone = from.replace(/\D/g, '').slice(-10);
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
     const clientsSnapshot = await clientsQuery.get();
@@ -95,11 +115,11 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
     const clientDoc = clientsSnapshot.docs[0];
     const clientId = clientDoc.id;
     
+    // ... (Lógica de búsqueda y actualización de reservas) ...
     const today = format(new Date(), 'yyyy-MM-dd');
     const reservationsQuery = db.collection('reservas')
         .where('cliente_id', '==', clientId)
         .where('fecha', '>=', today);
-    
     const reservationsSnapshot = await reservationsQuery.get();
     
     if (reservationsSnapshot.empty) {
@@ -138,7 +158,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
             });
             break;
         default:
-            // For reschedule or other actions, just log for now
             break;
     }
     return { handled: true, clientId: clientId };
@@ -150,14 +169,13 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 
 // 1. Twilio Webhook
 export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
-    async (request, response) => {
+    async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
-            const authToken = process.env.TWILIO_AUTH_TOKEN;
-            const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-
-            if (!authToken || !TWILIO_ACCOUNT_SID) {
+            const authToken = process.env.TWILIO_AUTH_TOKEN as string;
+            
+            if (!authToken) {
                 functions.logger.error("Twilio credentials not configured.");
                 response.status(500).send('Configuration error.');
                 return;
@@ -204,7 +222,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
 
 // 2. Mercado Pago Webhook
 export const mercadoPagoWebhook = functions.runWith({ secrets: ["MERCADO_PAGO_WEBHOOK_SECRET"] }).https.onRequest(
-    async (request, response) => {
+    async (request: functions.https.Request, response: functions.Response) => {
         if (!validateMercadoPagoSignature(request)) {
             functions.logger.warn('MP Webhook: Invalid signature.');
             response.status(403).send('Invalid signature');
@@ -242,7 +260,7 @@ export const mercadoPagoWebhook = functions.runWith({ secrets: ["MERCADO_PAGO_WE
 );
 
 // 3. Create Mercado Pago Point Payment
-export const createPointPayment = functions.https.onCall(async (data, context) => {
+export const createPointPayment = functions.https.onCall(async (data: CreatePaymentData, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden realizar esta acción.');
     }
@@ -278,7 +296,7 @@ export const createPointPayment = functions.https.onCall(async (data, context) =
 });
 
 // 4. Get Mercado Pago Terminals
-export const getPointTerminals = functions.https.onCall(async (data, context) => {
+export const getPointTerminals = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
     }
@@ -301,7 +319,7 @@ export const getPointTerminals = functions.https.onCall(async (data, context) =>
 });
 
 // 5. Set Terminal to PDV Mode
-export const setTerminalPDVMode = functions.https.onCall(async (data, context) => {
+export const setTerminalPDVMode = functions.https.onCall(async (data: SetPDVData, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
     }

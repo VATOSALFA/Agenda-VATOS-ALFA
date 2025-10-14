@@ -1,10 +1,11 @@
+
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -20,14 +21,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { signInAndSetup, user, loading: authLoading } = useAuth();
-    
-    // Redirect if user is already logged in
-    useEffect(() => {
-        if (!authLoading && user) {
-            router.replace('/(app)');
-        }
-    }, [user, authLoading, router]);
+    const { signInAndSetup } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -43,7 +37,7 @@ export default function LoginPage() {
         try {
             await signInAndSetup(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
-            router.push('/(app)');
+            router.push('/agenda');
         } catch (err: any) {
             console.error("Error de inicio de sesión:", err);
             if (err instanceof FirebaseError) {
@@ -67,15 +61,6 @@ export default function LoginPage() {
         }
     };
     
-    // Show a loader while auth state is being determined
-    if (authLoading || user) {
-       return (
-          <div className="flex justify-center items-center h-screen bg-muted/40">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        );
-    }
-
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">
             <h1 className="text-3xl font-bold text-slate-800 mb-6">VATOS ALFA agenda</h1>

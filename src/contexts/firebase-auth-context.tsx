@@ -131,7 +131,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const isProtectedRoute = !pathname.startsWith('/login') && !pathname.startsWith('/book');
-  const isAuthPage = pathname.startsWith('/login');
 
   useEffect(() => {
     if (loading) return;
@@ -141,12 +140,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         router.replace('/login');
     }
 
-    // If authenticated and on the login page, redirect to the agenda
-    if (user && isAuthPage) {
-        router.replace('/agenda');
-    }
-
-  }, [user, loading, isProtectedRoute, isAuthPage, router]);
+  }, [user, loading, isProtectedRoute, pathname, router]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
@@ -168,8 +162,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  // Display a full-page loader only for protected routes while authenticating.
-  // Public and auth pages can render their own content.
   if (loading && isProtectedRoute) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">

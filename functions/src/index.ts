@@ -1,5 +1,5 @@
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import twilio from 'twilio';
 import * as admin from 'firebase-admin';
 import { format, parseISO } from 'date-fns';

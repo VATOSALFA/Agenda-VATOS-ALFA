@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -9,9 +8,9 @@ import { useState, useEffect } from "react";
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/firebase-auth-context";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -22,13 +21,14 @@ export default function LoginPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { signInAndSetup, user, loading: authLoading } = useAuth();
-
+    
+    // Redirect if user is already logged in
     useEffect(() => {
         if (!authLoading && user) {
-            router.push('/');
+            router.replace('/(app)');
         }
     }, [user, authLoading, router]);
-    
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
@@ -43,7 +43,7 @@ export default function LoginPage() {
         try {
             await signInAndSetup(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
-            router.push('/');
+            router.push('/(app)');
         } catch (err: any) {
             console.error("Error de inicio de sesión:", err);
             if (err instanceof FirebaseError) {
@@ -66,15 +66,15 @@ export default function LoginPage() {
             setIsLoading(false);
         }
     };
-
-    if (authLoading || (!authLoading && user)) {
-        return (
+    
+    // Show a loader while auth state is being determined
+    if (authLoading || user) {
+       return (
           <div className="flex justify-center items-center h-screen bg-muted/40">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         );
     }
-
 
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">

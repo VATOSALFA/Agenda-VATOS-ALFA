@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -158,7 +157,6 @@ export default function Header() {
             title: "Sesión cerrada",
             description: "Has cerrado sesión correctamente.",
         });
-        router.push('/login');
     } catch (error) {
         toast({
             variant: "destructive",
@@ -202,7 +200,7 @@ export default function Header() {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
-          <Link href="/(app)" className="mr-6 flex items-center space-x-2">
+          <Link href="/agenda" className="mr-6 flex items-center space-x-2">
             {logoUrl ? (
                 <Image src={logoUrl} alt="Logo" width={125} height={60} className="h-[60px] w-auto" />
             ) : (
@@ -231,10 +229,10 @@ export default function Header() {
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
              <Link
-                href="/(app)"
+                href="/agenda"
                 className={cn(
                     'px-3 py-2 rounded-md transition-colors',
-                    pathname === '/' || pathname.startsWith('/(app)') && !pathname.includes('clients')
+                    pathname === '/agenda'
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}
@@ -263,7 +261,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/(app)/sales')
+                    pathname.startsWith('/sales')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -290,7 +288,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/(app)/products')
+                    pathname.startsWith('/products')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -317,7 +315,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/(app)/reports')
+                    pathname.startsWith('/reports')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -344,7 +342,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/(app)/finanzas')
+                    pathname.startsWith('/finanzas')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -374,7 +372,7 @@ export default function Header() {
                 href="/admin"
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/(app)/admin')
+                  pathname.startsWith('/admin')
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}
@@ -435,7 +433,7 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                      <Link href="/settings/users">
+                      <Link href="/admin/users">
                           <Users className="mr-2 h-4 w-4" />
                           <span>Usuarios y permisos</span>
                       </Link>

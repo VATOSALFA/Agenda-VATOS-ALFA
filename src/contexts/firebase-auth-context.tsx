@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
-import { allPermissions } from '@/lib/permissions';
+import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
@@ -77,16 +77,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (customData) {
                     const role = customData.role || 'Administrador general';
                     const isSuperAdminByRole = role === 'Administrador general';
-                    const rolesRef = doc(db, 'roles', role.toLowerCase().replace(/ /g, '_'));
-                    const roleDoc = await getDoc(rolesRef);
-                    const rolePermissions = roleDoc.exists() ? roleDoc.data().permissions : [];
+
+                    // Fetch permissions for the role from Firestore
+                    const roleDocRef = doc(db, 'roles', role.toLowerCase().replace(/ /g, '_'));
+                    const roleDoc = await getDoc(roleDocRef);
+                    
+                    let rolePermissions: string[] = [];
+                    if (roleDoc.exists()) {
+                        rolePermissions = roleDoc.data().permissions || [];
+                    } else {
+                        // Fallback to initialRoles if not found in DB
+                        const initialRole = initialRoles.find(r => r.title === role);
+                        rolePermissions = initialRole ? initialRole.permissions : [];
+                    }
                     
                     setUser({
                         ...firebaseUser,
                         displayName: customData.name || firebaseUser.displayName,
                         email: customData.email,
                         role: role,
-                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (rolePermissions || []),
+                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : rolePermissions,
                         uid: firebaseUser.uid,
                         local_id: customData.local_id,
                         avatarUrl: customData.avatarUrl,
@@ -119,13 +129,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
-  const isPublicPage = pathname.startsWith('/book') || pathname.startsWith('/login');
-  
+  const isProtectedRoute = !pathname.startsWith('/login') && !pathname.startsWith('/book');
+  const isAuthPage = pathname.startsWith('/login');
+
   useEffect(() => {
-    if (!loading && !user && !isPublicPage) {
+    if (loading) return;
+    
+    // If not authenticated and on a protected route, redirect to login
+    if (!user && isProtectedRoute) {
         router.replace('/login');
     }
-  }, [user, loading, pathname, router, isPublicPage]);
+
+    // If authenticated and on the login page, redirect to the agenda
+    if (user && isAuthPage) {
+        router.replace('/agenda');
+    }
+
+  }, [user, loading, isProtectedRoute, isAuthPage, router]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
@@ -147,7 +167,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  if (loading && !isPublicPage) {
+  // Display a full-page loader only for protected routes while authenticating.
+  // Public and auth pages can render their own content.
+  if (loading && isProtectedRoute) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

@@ -27,9 +27,24 @@ const db = admin.firestore();
 // =================================================================================
 
 /**
- * Obtiene el Access Token de Mercado Pago desde la configuración de Firestore.
+ * Obtiene el Access Token de Mercado Pago desde la configuración de Firestore o variables de entorno.
  */
 async function getMercadoPagoConfig(): Promise<{ accessToken: string, userId: string }> {
+    // Prioritize environment variables for production
+    const envAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+
+    if (envAccessToken) {
+        // Assume userId might also come from env or is derivable/fixed for production
+        // For this implementation, we will try to fetch it from Firestore as a fallback.
+        const settingsDoc = await db.collection('configuracion').doc('pagos').get();
+        const userId = settingsDoc.exists() ? settingsDoc.data()?.mercadoPagoUserId : 'default_user_id';
+         if (!userId) {
+            throw new functions.https.HttpsError('failed-precondition', 'El User ID de Mercado Pago no está configurado en Firestore.');
+        }
+        return { accessToken: envAccessToken, userId };
+    }
+
+    // Fallback to Firestore for local development
     const settingsDoc = await db.collection('configuracion').doc('pagos').get();
     if (!settingsDoc.exists) {
         throw new functions.https.HttpsError('failed-precondition', 'La configuración de Mercado Pago no ha sido establecida.');
@@ -37,8 +52,9 @@ async function getMercadoPagoConfig(): Promise<{ accessToken: string, userId: st
     const settings = settingsDoc.data();
     const accessToken = settings?.mercadoPagoAccessToken as string;
     const userId = settings?.mercadoPagoUserId as string;
+
     if (!accessToken || !userId) {
-        throw new functions.https.HttpsError('failed-precondition', 'El Access Token o el User ID de Mercado Pago no están configurados.');
+        throw new functions.https.HttpsError('failed-precondition', 'El Access Token o el User ID de Mercado Pago no están configurados en Firestore.');
     }
     return { accessToken, userId };
 }
@@ -296,7 +312,7 @@ export const createPointPayment = functions.https.onCall(async (data: CreatePaym
 });
 
 // 4. Get Mercado Pago Terminals
-export const getPointTerminals = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const getPointTerminals = functions.runWith({ secrets: ["MERCADO_PAGO_ACCESS_TOKEN"] }).https.onCall(async (data: any, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
     }
@@ -319,7 +335,7 @@ export const getPointTerminals = functions.https.onCall(async (data: any, contex
 });
 
 // 5. Set Terminal to PDV Mode
-export const setTerminalPDVMode = functions.https.onCall(async (data: SetPDVData, context: functions.https.CallableContext) => {
+export const setTerminalPDVMode = functions.runWith({ secrets: ["MERCADO_PAGO_ACCESS_TOKEN"] }).https.onCall(async (data: SetPDVData, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
     }

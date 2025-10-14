@@ -1,4 +1,3 @@
-
 'use client';
 
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
@@ -18,43 +17,38 @@ const firebaseConfig: FirebaseOptions = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-let app;
-
-// Initialize Firebase only once
-if (getApps().length === 0) {
-    if (!firebaseConfig.apiKey) {
-        throw new Error("Firebase API Key is missing. Check your environment variables.");
-    }
-    app = initializeApp(firebaseConfig);
-
-    // Initialize App Check
-    if (typeof window !== 'undefined') {
-      // This allows the app to work in development environments without a real reCAPTCHA setup.
-      if (process.env.NODE_ENV !== 'production') {
-        (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-      }
-      
-      try {
-        const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-        if (recaptchaKey) {
-            initializeAppCheck(app, {
-              provider: new ReCaptchaV3Provider(recaptchaKey),
-              isTokenAutoRefreshEnabled: true
-            });
-            console.log("Firebase App Check initialized successfully.");
-        } else {
-            console.warn("reCAPTCHA site key not found. App Check will not be initialized.");
+const getFirebaseApp = () => {
+    if (getApps().length === 0) {
+        if (!firebaseConfig.apiKey) {
+            throw new Error("Firebase API Key is missing. Check your environment variables.");
         }
-      } catch (error) {
-        console.error("Error initializing Firebase App Check:", error);
-      }
+        const app = initializeApp(firebaseConfig);
+
+        if (typeof window !== 'undefined') {
+            if (process.env.NODE_ENV !== 'production') {
+                (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+            }
+
+            try {
+                const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+                if (recaptchaKey) {
+                    initializeAppCheck(app, {
+                        provider: new ReCaptchaV3Provider(recaptchaKey),
+                        isTokenAutoRefreshEnabled: true
+                    });
+                } else {
+                    console.warn("reCAPTCHA site key not found. App Check will not be initialized.");
+                }
+            } catch (error) {
+                console.error("Error initializing Firebase App Check:", error);
+            }
+        }
+        return app;
     }
+    return getApp();
+};
 
-} else {
-    app = getApp();
-}
-
-
+const app = getFirebaseApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

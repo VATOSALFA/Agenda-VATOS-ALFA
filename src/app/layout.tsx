@@ -1,13 +1,9 @@
-
-'use client';
-
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider } from '@/contexts/firebase-auth-context';
-import { LocalProvider } from '@/contexts/local-context';
 import { MercadoPagoProvider } from '@/components/sales/mercado-pago-provider';
+import { LocalProvider } from '@/contexts/local-context';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -19,14 +15,12 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body>
-          <AuthProvider>
-            <LocalProvider>
-              <MercadoPagoProvider>
+        <LocalProvider>
+            <MercadoPagoProvider>
                 {children}
-              </MercadoPagoProvider>
-            </LocalProvider>
-          </AuthProvider>
-        <Toaster />
+                <Toaster />
+            </MercadoPagoProvider>
+        </LocalProvider>
       </body>
     </html>
   );

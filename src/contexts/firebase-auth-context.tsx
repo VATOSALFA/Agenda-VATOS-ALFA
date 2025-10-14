@@ -75,14 +75,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
                 
                 if (customData) {
-                    const role = customData.role || 'Administrador general'; // Fallback to admin if role is missing
+                    const role = customData.role || 'Administrador general';
                     const isSuperAdminByRole = role === 'Administrador general';
+                    const rolesRef = doc(db, 'roles', role.toLowerCase().replace(/ /g, '_'));
+                    const roleDoc = await getDoc(rolesRef);
+                    const rolePermissions = roleDoc.exists() ? roleDoc.data().permissions : [];
+                    
                     setUser({
                         ...firebaseUser,
                         displayName: customData.name || firebaseUser.displayName,
                         email: customData.email,
                         role: role,
-                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (customData.permissions || []),
+                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (rolePermissions || []),
                         uid: firebaseUser.uid,
                         local_id: customData.local_id,
                         avatarUrl: customData.avatarUrl,
@@ -91,7 +95,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                      console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
                      setUser({ 
                         ...firebaseUser, 
-                        role: 'Administrador general', // Default to admin if no user doc found
+                        role: 'Administrador general', 
                         permissions: allPermissions.map(p => p.key), 
                         uid: firebaseUser.uid 
                     });
@@ -115,21 +119,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
-  const isPublicPage = pathname.startsWith('/book');
-  const isAuthPage = pathname === '/login';
-
+  const isPublicPage = pathname.startsWith('/book') || pathname.startsWith('/login');
+  
   useEffect(() => {
-    if (!loading && !user && !isAuthPage && !isPublicPage) {
-        router.push('/login');
+    if (!loading && !user && !isPublicPage) {
+        router.replace('/login');
     }
-    if (!loading && user && isAuthPage) {
-        router.push('/');
-    }
-  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
+  }, [user, loading, pathname, router, isPublicPage]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
+    router.push('/login');
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
@@ -146,7 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  if (loading && !isAuthPage && !isPublicPage) {
+  if (loading && !isPublicPage) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

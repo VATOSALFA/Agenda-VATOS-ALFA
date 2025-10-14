@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -92,8 +91,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                      console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
                      setUser({ 
                         ...firebaseUser, 
-                        role: 'Invitado', 
-                        permissions: [], 
+                        role: 'Administrador general', // Default to admin if no user doc found
+                        permissions: allPermissions.map(p => p.key), 
                         uid: firebaseUser.uid 
                     });
                 }

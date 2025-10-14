@@ -1,9 +1,9 @@
 
-import * as functions from "firebase-functions/v1";
-import twilio from "twilio";
-import * as admin from "firebase-admin";
-import { format, parseISO } from "date-fns";
-import axios from "axios";
+import * as functions from 'firebase-functions';
+import twilio from 'twilio';
+import * as admin from 'firebase-admin';
+import { format, parseISO } from 'date-fns';
+import axios from 'axios';
 import * as crypto from 'crypto';
 
 // Definición de tipos de datos para las funciones onCall

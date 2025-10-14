@@ -7,7 +7,6 @@ import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { LocalProvider } from '@/contexts/local-context';
-import Header from '@/components/layout/header';
 import { MercadoPagoProvider } from '@/components/sales/mercado-pago-provider';
 
 
@@ -25,8 +24,7 @@ export default function RootLayout({
           <AuthProvider>
             <LocalProvider>
               <MercadoPagoProvider>
-                <Header />
-                <main className="pt-16">
+                <main>
                     {children}
                 </main>
               </MercadoPagoProvider>

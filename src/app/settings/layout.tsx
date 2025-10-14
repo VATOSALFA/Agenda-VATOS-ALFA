@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import Header from '@/components/layout/header';
 
 const settingsLinks = [
   { href: '/settings/empresa', label: 'Empresa', icon: Building2, permission: 'ver_configuracion_empresa' },
@@ -71,107 +72,110 @@ export default function SettingsLayout({ children }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-muted/40">
-      <aside className="w-72 flex-shrink-0 border-r bg-background p-4">
-        <nav className="flex flex-col space-y-4">
-          <Collapsible defaultOpen>
-            <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-              Información básica
-              <ChevronDown className="h-4 w-4" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 pt-2">
-              {settingsLinks.map(({ href, label, icon: Icon, permission }) => (
-                canSee(permission) && (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                      pathname === href && 'bg-muted text-primary'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Link>
-                )
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
-          
-          <Collapsible defaultOpen>
-            <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-              Opciones avanzadas
-              <ChevronDown className="h-4 w-4" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 pt-2">
-              {advancedLinks.map(({ href, label, icon: Icon, permission }) => (
-                canSee(permission) && (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                      pathname === href && 'bg-muted text-primary'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Link>
-                )
-              ))}
-              <Link
-                href="/settings/diagnostico"
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                  pathname === '/settings/diagnostico' && 'bg-muted text-primary'
-                )}
-              >
-                <Server className="h-4 w-4" />
-                Diagnóstico
-              </Link>
-            </CollapsibleContent>
-          </Collapsible>
-          
-           <Collapsible defaultOpen>
-            <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-              Cuenta
-              <ChevronDown className="h-4 w-4" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 pt-2">
-              {accountLinks.map(({ href, label, icon: Icon, permission }) => (
-                canSee(permission) && (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                      pathname === href && 'bg-muted text-primary'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Link>
-                )
-              ))}
-              {canSee('ver_usuarios_permisos') && (
-                 <Link
-                  href={'/settings/users'}
+    <>
+      <Header />
+      <div className="flex h-screen pt-16 bg-muted/40">
+        <aside className="w-72 flex-shrink-0 border-r bg-background p-4">
+          <nav className="flex flex-col space-y-4">
+            <Collapsible defaultOpen>
+              <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
+                Información básica
+                <ChevronDown className="h-4 w-4" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 pt-2">
+                {settingsLinks.map(({ href, label, icon: Icon, permission }) => (
+                  canSee(permission) && (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                        pathname === href && 'bg-muted text-primary'
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </Link>
+                  )
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+            
+            <Collapsible defaultOpen>
+              <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
+                Opciones avanzadas
+                <ChevronDown className="h-4 w-4" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 pt-2">
+                {advancedLinks.map(({ href, label, icon: Icon, permission }) => (
+                  canSee(permission) && (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                        pathname === href && 'bg-muted text-primary'
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </Link>
+                  )
+                ))}
+                <Link
+                  href="/settings/diagnostico"
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                    pathname === '/settings/users' && 'bg-muted text-primary'
+                    pathname === '/settings/diagnostico' && 'bg-muted text-primary'
                   )}
                 >
-                  <Users className="h-4 w-4" />
-                  Usuarios y permisos
+                  <Server className="h-4 w-4" />
+                  Diagnóstico
                 </Link>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
-        </nav>
-      </aside>
-      <div className="flex-1 overflow-y-auto">
-        {children}
+              </CollapsibleContent>
+            </Collapsible>
+            
+             <Collapsible defaultOpen>
+              <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
+                Cuenta
+                <ChevronDown className="h-4 w-4" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 pt-2">
+                {accountLinks.map(({ href, label, icon: Icon, permission }) => (
+                  canSee(permission) && (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                        pathname === href && 'bg-muted text-primary'
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </Link>
+                  )
+                ))}
+                {canSee('ver_usuarios_permisos') && (
+                   <Link
+                    href={'/settings/users'}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+                      pathname === '/settings/users' && 'bg-muted text-primary'
+                    )}
+                  >
+                    <Users className="h-4 w-4" />
+                    Usuarios y permisos
+                  </Link>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          </nav>
+        </aside>
+        <div className="flex-1 overflow-y-auto">
+          {children}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

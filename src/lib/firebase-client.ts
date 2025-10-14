@@ -35,7 +35,6 @@ if (getApps().length === 0) {
       }
       
       try {
-        // IMPORTANT: Replace this with your actual reCAPTCHA v3 site key from the Firebase console.
         const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
         if (recaptchaKey) {
             initializeAppCheck(app, {

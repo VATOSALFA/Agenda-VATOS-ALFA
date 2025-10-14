@@ -29,15 +29,15 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
   const [confirmationText, setConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   
-  const isConfirmationTextCorrect = confirmationText === 'CANCELAR';
+  const isConfirmationTextCorrect = confirmationText.toUpperCase() === 'CANCELAR';
 
   const handleConfirm = async () => {
     if (!reservation || !isConfirmationTextCorrect) return;
     setIsDeleting(true);
     await onConfirm(reservation.id);
     setIsDeleting(false);
-    onOpenChange(false);
     setConfirmationText('');
+    onOpenChange(false);
   }
 
   const handleClose = () => {

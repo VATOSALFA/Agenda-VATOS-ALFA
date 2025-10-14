@@ -4,7 +4,6 @@ import twilio from 'twilio';
 import * as admin from 'firebase-admin';
 import { format, parseISO } from 'date-fns';
 import axios from 'axios';
-import { getStorage } from 'firebase-admin/storage';
 import * as crypto from 'crypto';
 
 // Initialize Firebase Admin SDK
@@ -12,7 +11,6 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 const db = admin.firestore();
-const storage = getStorage();
 
 // =================================================================================
 // HELPERS
@@ -151,7 +149,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 
 // 1. Twilio Webhook
 export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
-    async (request: functions.https.Request, response: any) => {
+    async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
@@ -205,7 +203,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
 
 // 2. Mercado Pago Webhook
 export const mercadoPagoWebhook = functions.runWith({ secrets: ["MERCADO_PAGO_WEBHOOK_SECRET"] }).https.onRequest(
-    async (request: functions.https.Request, response: any) => {
+    async (request: functions.https.Request, response: functions.Response) => {
         if (!validateMercadoPagoSignature(request)) {
             functions.logger.warn('MP Webhook: Invalid signature.');
             response.status(403).send('Invalid signature');

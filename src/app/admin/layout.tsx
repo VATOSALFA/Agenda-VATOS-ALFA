@@ -1,125 +1,65 @@
-
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import type { ReactNode } from 'react';
-import {
-  Users,
-  Scissors,
-  MessageCircle,
-  Percent,
-  ChevronDown,
-  Mail,
-  Component,
-  KeyRound,
-  Store,
-  School,
-  Settings,
-  MessagesSquare,
-  Bell
-} from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useAuth } from '@/contexts/firebase-auth-context';
-import Header from '@/components/layout/header';
+import Header from "@/components/layout/header";
+import { SidebarNav } from "@/components/layout/sidebar-nav";
 
-const adminLinks = [
-  { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
-  { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
-  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
+const adminNavItems = [
+    {
+      title: "Profesionales",
+      href: "/admin/profesionales",
+    },
+    {
+      title: "Servicios",
+      href: "/admin/servicios",
+    },
+    {
+      title: "Locales",
+      href: "/admin/locales",
+    },
+    {
+      title: "Comisiones",
+      href: "/admin/comisiones",
+    },
+    {
+      title: "Conversaciones",
+      href: "/admin/conversations",
+    },
+    {
+      title: "Integraciones",
+      href: "/admin/integrations",
+    },
+     {
+      title: "WhatsApp",
+      href: "/admin/whatsapp",
+    },
+    {
+      title: "Códigos de autorización",
+      href: "/admin/auth-codes",
+    },
+     {
+      title: "Emails",
+      href: "/admin/emails",
+    },
 ];
 
-const advancedLinks = [
-  { href: '/settings/recordatorios', label: 'Recordatorios', icon: Bell, permission: 'ver_configuracion_recordatorios' },
-  { href: '/admin/auth-codes', label: 'Códigos de Autorización', icon: KeyRound, permission: 'ver_codigos_autorizacion' },
-]
+interface AdminLayoutProps {
+  children: React.ReactNode
+}
 
-type Props = {
-  children: ReactNode;
-};
-
-export default function AdminLayout({ children }: Props) {
-  const pathname = usePathname();
-  const { user } = useAuth();
-  
-  const canSee = (permission: string) => {
-    if (!user || !user.permissions) return false;
-    // Admin always has all permissions
-    if (user.role === 'Administrador general') return true;
-    return user.permissions.includes(permission);
-  }
-
-  // The conversation page has its own layout, but we want the main app header.
-  if (pathname === '/admin/conversations') {
-    return (
-        <>
-            <Header />
-            <div className="h-[calc(100vh-4rem)] pt-16">
-                {children}
-            </div>
-        </>
-    );
-  }
-
+export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <>
       <Header />
-      <div className="flex h-screen pt-16 bg-muted/40">
-        <aside className="w-72 flex-shrink-0 border-r bg-background p-4">
-          <nav className="flex flex-col space-y-1">
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-                Informacion
-                <ChevronDown className="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 pt-2">
-                {adminLinks.map(({ href, label, icon: Icon, permission }) => (
-                  canSee(permission) && (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                      pathname === href && 'bg-muted text-primary'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Link>
-                  )
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="flex w-full justify-between items-center text-lg font-semibold px-3 py-2">
-                Avanzado
-                <ChevronDown className="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 pt-2">
-                {advancedLinks.map(({ href, label, icon: Icon, permission }) => (
-                  canSee(permission) && (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                      pathname === href && 'bg-muted text-primary'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Link>
-                  )
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          </nav>
-        </aside>
-        <div className="flex-1 overflow-y-auto">
-          {children}
+      <div className="flex-1 pt-16">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-10">
+            <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
+                <aside className="-mx-4 lg:w-1/5">
+                    <SidebarNav items={adminNavItems} />
+                </aside>
+                <div className="flex-1">{children}</div>
+            </div>
         </div>
       </div>
     </>
-  );
+  )
 }

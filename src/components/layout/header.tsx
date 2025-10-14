@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -68,7 +69,6 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const mainNavLinks = [
-  { href: '/', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
   { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
 ];
 
@@ -120,8 +120,6 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const isAuthPage = pathname === '/login' || pathname.startsWith('/book');
 
   useEffect(() => {
     if (!db || !user) return;
@@ -196,7 +194,7 @@ export default function Header() {
     document.dispatchEvent(new CustomEvent(eventName));
   }
   
-  if (!user || isAuthPage) {
+  if (!user) {
     return null;
   }
 
@@ -204,7 +202,7 @@ export default function Header() {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
-          <Link href="/" className="mr-6 flex items-center space-x-2">
+          <Link href="/(app)" className="mr-6 flex items-center space-x-2">
             {logoUrl ? (
                 <Image src={logoUrl} alt="Logo" width={125} height={60} className="h-[60px] w-auto" />
             ) : (
@@ -232,6 +230,17 @@ export default function Header() {
             <span className="font-bold text-lg text-white whitespace-nowrap">VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
+             <Link
+                href="/(app)"
+                className={cn(
+                    'px-3 py-2 rounded-md transition-colors',
+                    pathname === '/' || pathname.startsWith('/(app)') && !pathname.includes('clients')
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                )}
+                >
+                Agenda
+            </Link>
             {mainNavLinks.map(({ href, label, permission }) => (
                 canSee(permission) && (
                     <Link
@@ -239,7 +248,7 @@ export default function Header() {
                     href={href}
                     className={cn(
                         'px-3 py-2 rounded-md transition-colors',
-                        pathname === href
+                        pathname.startsWith(href)
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white'
                     )}
@@ -254,7 +263,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/sales')
+                    pathname.startsWith('/(app)/sales')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -281,7 +290,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/products')
+                    pathname.startsWith('/(app)/products')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -308,7 +317,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/reports')
+                    pathname.startsWith('/(app)/reports')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -335,7 +344,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/finanzas')
+                    pathname.startsWith('/(app)/finanzas')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                   )}>
@@ -365,7 +374,7 @@ export default function Header() {
                 href="/admin"
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/admin')
+                  pathname.startsWith('/(app)/admin')
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}

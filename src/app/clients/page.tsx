@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -38,6 +37,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
+import Header from "@/components/layout/header";
 
 export const dynamic = 'force-dynamic';
 
@@ -397,6 +397,8 @@ export default function ClientsPage() {
 
   return (
     <>
+      <Header />
+      <main className="pt-16">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Base de Clientes</h2>
@@ -555,6 +557,7 @@ export default function ClientsPage() {
           </main>
         </div>
       </div>
+      </main>
 
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-2xl">

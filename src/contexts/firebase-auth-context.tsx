@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -123,6 +122,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!loading && !user && !isAuthPage && !isPublicPage) {
         router.push('/login');
     }
+    if (!loading && user && isAuthPage) {
+        router.push('/');
+    }
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signOut = async () => {
@@ -144,7 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  if (loading && !isAuthPage) {
+  if (loading && !isAuthPage && !isPublicPage) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

@@ -9,9 +9,7 @@ import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { LocalProvider } from '@/contexts/local-context';
 import { MercadoPagoProvider } from '@/components/sales/mercado-pago-provider';
 
-
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-
 
 export default function RootLayout({
   children,
@@ -24,9 +22,7 @@ export default function RootLayout({
           <AuthProvider>
             <LocalProvider>
               <MercadoPagoProvider>
-                <main>
-                    {children}
-                </main>
+                {children}
               </MercadoPagoProvider>
             </LocalProvider>
           </AuthProvider>

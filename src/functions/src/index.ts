@@ -1,5 +1,5 @@
 
-import * as functions from 'firebase-functions/v1';
+import * as functions from 'firebase-functions';
 import twilio from 'twilio';
 import * as admin from 'firebase-admin';
 import { format, parseISO } from 'date-fns';
@@ -50,7 +50,7 @@ function validateMercadoPagoSignature(req: functions.https.Request): boolean {
     const timestamp = parts['ts'];
     const signature = parts['v1'];
     
-    if (!timestamp || !signature) return false;
+    if (!timestamp || !signature || !req.body.data?.id) return false;
 
     const manifest = `id:${req.body.data.id};request-id:${req.headers['x-request-id']};ts:${timestamp};`;
     

@@ -10,7 +10,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <>
       <Header />
-      <div className="pt-16 h-screen overflow-hidden">
+      <div className="pt-16 h-[calc(100vh-4rem)]">
         {children}
       </div>
     </>

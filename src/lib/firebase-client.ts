@@ -6,7 +6,6 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,28 +22,7 @@ const getFirebaseApp = () => {
         if (!firebaseConfig.apiKey) {
             throw new Error("Firebase API Key is missing. Check your environment variables.");
         }
-        const app = initializeApp(firebaseConfig);
-
-        if (typeof window !== 'undefined') {
-            if (process.env.NODE_ENV !== 'production') {
-                (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-            }
-
-            try {
-                const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-                if (recaptchaKey) {
-                    initializeAppCheck(app, {
-                        provider: new ReCaptchaV3Provider(recaptchaKey),
-                        isTokenAutoRefreshEnabled: true
-                    });
-                } else {
-                    console.warn("reCAPTCHA site key not found. App Check will not be initialized.");
-                }
-            } catch (error: unknown) {
-                console.error("Error initializing Firebase App Check:", error);
-            }
-        }
-        return app;
+        return initializeApp(firebaseConfig);
     }
     return getApp();
 };

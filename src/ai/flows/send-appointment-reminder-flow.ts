@@ -12,7 +12,7 @@ import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'fireb
 import { db } from '@/lib/firebase-client';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Reservation, Client, Local, Profesional } from '@/lib/types';
-import { addHours, subDays, startOfHour, setHours, format, parse } from 'date-fns';
+import { addHours, subDays, startOfHour, setHours, format, parse, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 
@@ -143,7 +143,7 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
 
       for (const res of reservationsToSend) {
         const [hour, minute] = res.hora_inicio.split(':').map(Number);
-        const appointmentTime = setHours(new Date(res.fecha), hour, minute);
+        const appointmentTime = setHours(parse(res.fecha, 'yyyy-MM-dd', new Date()), hour);
         
         if (appointmentTime >= targetTimeStart && appointmentTime <= targetTimeEnd) {
            const sent = await sendReminder(res);

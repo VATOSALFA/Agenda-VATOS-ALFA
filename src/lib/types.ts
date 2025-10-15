@@ -16,6 +16,7 @@ export interface Client {
   citas_canceladas?: number;
   gasto_total?: number;
   numero_cliente?: string;
+  reviewRequestSent?: boolean;
 }
 
 export interface Local {

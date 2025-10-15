@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -76,7 +77,7 @@ export default function BookPage() {
                                             <div key={categoryGroup.id}>
                                                 <h3 className="text-lg font-semibold mb-2">{categoryGroup.name}</h3>
                                                 <div className="space-y-2">
-                                                    {categoryGroup.services.map(service => (
+                                                    {categoryGroup.services.map((service: Service) => (
                                                         <div 
                                                             key={service.id} 
                                                             className="flex items-center justify-between p-3 rounded-lg border bg-background hover:bg-muted/50 cursor-pointer"

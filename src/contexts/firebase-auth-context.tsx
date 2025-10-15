@@ -1,7 +1,8 @@
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions, initialRoles } from '@/lib/permissions';
@@ -56,8 +57,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     uid: firebaseUser.uid,
                 });
             } else {
-                let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-                let userDoc = await getDoc(userDocRef);
+                const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+                const userDoc = await getDoc(userDocRef);
                 let customData: any;
 
                 if (userDoc.exists()) {

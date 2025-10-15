@@ -1,11 +1,12 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Search, Download, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Download, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,7 +18,7 @@ import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
-import type { Client, Local, Profesional, Sale, User } from "@/lib/types";
+import type { Client, Local, Profesional, Service, AuthCode, Sale, User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
 import {

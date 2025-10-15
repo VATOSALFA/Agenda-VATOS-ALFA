@@ -1,13 +1,13 @@
 
+
 'use client';
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '@/lib/firebase-client';
-import { UploadCloud, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { UploadCloud, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Progress } from '../ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
@@ -33,7 +33,6 @@ export function ImageUploader({
 }: ImageUploaderProps) {
   
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const handleUpload = useCallback(async (file: File) => {

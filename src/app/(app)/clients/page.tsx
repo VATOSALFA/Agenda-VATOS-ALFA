@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale } from "@/lib/types";
@@ -227,7 +228,7 @@ export default function ClientsPage() {
                 if (!client.fecha_nacimiento) return false;
                 const birthDate = typeof client.fecha_nacimiento === 'string' 
                     ? parseISO(client.fecha_nacimiento)
-                    : new Date(client.fecha_nacimiento.seconds * 1000);
+                    : new Date((client.fecha_nacimiento as Timestamp).seconds * 1000);
                 return getMonth(birthDate) === monthToFilter;
             });
         }

@@ -1,8 +1,9 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import type { User, Local, Role } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase-client';
-import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
@@ -262,7 +263,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                             folder="profesionales"
                             currentImageUrl={field.value}
                             onUploadStateChange={setIsUploading}
-                            onUploadEnd={(url) => {
+                            onUpload={(url) => {
                                 form.setValue('avatarUrl', url, { shouldDirty: true });
                             }}
                             onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}

@@ -61,7 +61,8 @@ function Calendar({
         IconLeft: () => <ChevronLeft className="h-4 w-4" />,
         IconRight: () => <ChevronRight className="h-4 w-4" />,
         Dropdown: (dropdownProps: DropdownProps) => {
-            const { fromYear, toYear, fromMonth, toMonth, fromDate, toDate } = dropdownProps;
+            const { fromDate, toDate } = props;
+            const { fromMonth, toMonth, fromYear, toYear } = dropdownProps;
             const options: { label: string; value: string }[] = [];
             let selectValue: string | undefined;
 

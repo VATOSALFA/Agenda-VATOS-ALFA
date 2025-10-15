@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
 import { useAuth } from "@/contexts/firebase-auth-context";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -20,6 +22,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
     const { user, loading, signInAndSetup } = useAuth();
+    const router = useRouter();
 
     if (loading || user) {
         return (
@@ -43,7 +46,7 @@ export default function LoginPage() {
         try {
             await signInAndSetup(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
-            // The redirection is now handled by the AuthProvider
+            router.push('/agenda');
         } catch (err: unknown) {
             console.error("Error de inicio de sesión:", err);
             if (err instanceof FirebaseError) {

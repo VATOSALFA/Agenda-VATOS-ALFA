@@ -1,4 +1,5 @@
 
+
 import { Timestamp } from "firebase/firestore";
 
 export interface Client {
@@ -7,9 +8,9 @@ export interface Client {
   apellido: string;
   correo: string;
   telefono: string;
-  fecha_nacimiento?: string | { seconds: number; nanoseconds: number; } | null;
+  fecha_nacimiento?: string | Timestamp | Date | null;
   notas?: string;
-  creado_en: any; // Firestore Timestamp
+  creado_en: Timestamp; // Firestore Timestamp
   citas_totales?: number;
   citas_asistidas?: number;
   citas_no_asistidas?: number;
@@ -27,6 +28,9 @@ export interface Local {
   email: string;
   status: 'active' | 'inactive';
   schedule: Schedule;
+  timezone: string;
+  acceptsOnline: boolean;
+  delivery: boolean;
 }
 
 
@@ -44,14 +48,14 @@ export interface Profesional {
     schedule?: Schedule;
     order: number;
     local_id: string; // Added local_id to associate professional with a local
-    defaultCommission?: { value: number; type: '%' | '$' };
-    comisionesPorServicio?: { [key: string]: { value: number, type: '%' | '$' } };
-    comisionesPorProducto?: { [key: string]: { value: number, type: '%' | '$' } };
+    defaultCommission?: Commission;
+    comisionesPorServicio?: { [key: string]: Commission };
+    comisionesPorProducto?: { [key: string]: Commission };
 }
 
 export interface Reservation {
     id: string;
-    items: { servicio: string; barbero_id: string; nombre?: string; }[];
+    items: SaleItem[];
     cliente_id: string;
     servicio: string; // Concatenated services for simple display
     barbero_id: string;
@@ -109,6 +113,11 @@ export interface ScheduleDay {
     end: string;
 }
 
+export interface Commission {
+    value: number;
+    type: '%' | '$';
+}
+
 export interface Product {
     id: string;
     nombre: string;
@@ -120,16 +129,14 @@ export interface Product {
     stock: number;
     purchase_cost?: number;
     internal_price?: number;
-    commission?: {
-        value: number;
-        type: '%' | '$';
-    }
-    comisionesPorProfesional?: { [key: string]: { value: number, type: '%' | '$' } };
+    commission?: Commission;
+    comisionesPorProfesional?: { [key: string]: Commission };
     includes_vat?: boolean;
     description?: string;
     stock_alarm_threshold?: number;
     notification_email?: string;
-    created_at?: any;
+    created_at?: Timestamp;
+    updated_at?: Timestamp;
     active: boolean;
     order: number;
     images?: string[];
@@ -140,6 +147,9 @@ export interface ProductCategory {
     name: string;
     order: number;
 }
+
+export interface ServiceCategory extends ProductCategory {}
+
 
 export interface ProductBrand {
     id: string;
@@ -161,11 +171,8 @@ export interface Service {
     category: string;
     active: boolean;
     order: number;
-    defaultCommission?: {
-        value: number;
-        type: '%' | '$';
-    };
-    comisionesPorProfesional?: { [profesionalId: string]: { value: number, type: '%' | '$' } };
+    defaultCommission?: Commission;
+    comisionesPorProfesional?: { [profesionalId: string]: Commission };
 }
 
 export interface CartItem {
@@ -220,7 +227,7 @@ export interface SaleItem {
 
 export interface Egreso {
   id: string;
-  fecha: any; // Firestore Timestamp
+  fecha: Timestamp; // Firestore Timestamp
   monto: number;
   concepto: string;
   aQuien: string; // professional ID
@@ -261,6 +268,13 @@ export interface User {
   permissions?: string[];
   local_id?: string;
   avatarUrl?: string;
+}
+
+export interface Role {
+  id: string;
+  title: string;
+  description: string;
+  permissions: string[];
 }
 
 export interface AuthCode {

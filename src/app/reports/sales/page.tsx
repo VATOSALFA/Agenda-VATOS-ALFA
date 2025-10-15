@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -16,7 +17,7 @@ import { DateRange } from 'react-day-picker';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { where, Timestamp } from 'firebase/firestore';
-import type { Sale, Service, ServiceCategory, Local, SaleItem } from '@/lib/types';
+import type { Sale, Service, ServiceCategory, SaleItem } from '@/lib/types';
 
 
 const KpiCard = ({ title, value, change, isPositive, prefix = '', suffix = '' }: { title: string, value: string, change?: string, isPositive?: boolean, prefix?: string, suffix?: string }) => (
@@ -32,7 +33,8 @@ const KpiCard = ({ title, value, change, isPositive, prefix = '', suffix = '' }:
     </div>
 );
 
-const CustomBarLabel = ({ x, y, width, value }: {x: number, y:number, width: number, value: number}) => {
+const CustomBarLabel = (props: any) => {
+    const {x, y, width, value} = props;
     return (
         <text x={x + width + 10} y={y + 10} fill="hsl(var(--foreground))" textAnchor="start" fontSize={12}>
             {`$${value.toLocaleString('es-MX')}`}
@@ -141,7 +143,7 @@ export default function SalesReportPage() {
             salesByService: sortedServices.map(([name, value]) => ({ name, value }))
         };
 
-    }, [sales, services, categoryMap, isLoading, categories]);
+    }, [sales, services, categoryMap, isLoading]);
 
 
     return (
@@ -223,7 +225,7 @@ export default function SalesReportPage() {
                                 <XAxis type="number" hide />
                                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                                 <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />}>
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
                                     {aggregatedData.salesByCategory.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
                                     ))}
@@ -244,7 +246,7 @@ export default function SalesReportPage() {
                                 <XAxis type="number" hide />
                                 <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                                 <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />}>
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
                                      {aggregatedData.salesByService.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
                                     ))}

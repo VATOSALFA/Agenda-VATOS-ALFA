@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import * as React from "react"
@@ -24,7 +25,9 @@ const Command = React.forwardRef<
 ))
 Command.displayName = CommandPrimitive.displayName
 
-const CommandDialog = ({ children, ...props }: DialogProps) => {
+interface CommandDialogProps extends DialogProps {}
+
+const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0 shadow-lg">

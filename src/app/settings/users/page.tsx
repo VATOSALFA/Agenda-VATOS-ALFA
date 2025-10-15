@@ -1,14 +1,15 @@
 
+
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Loader2, Save, Check } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save } from "lucide-react";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { allPermissionCategories, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
@@ -172,7 +173,7 @@ export default function UsersPage() {
             if (role.id === roleId) {
                 const newPermissions = checked
                     ? [...role.permissions, permissionKey]
-                    : role.permissions.filter(p => p !== permissionKey);
+                    : role.permissions.filter((p: string) => p !== permissionKey);
                 return { ...role, permissions: Array.from(new Set(newPermissions)) };
             }
             return role;
@@ -377,7 +378,7 @@ export default function UsersPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
-                       Se eliminará permanentemente al usuario "{userToDelete.name}". Esta acción no se puede deshacer.
+                       Se eliminará permanentemente al usuario &quot;{userToDelete.name}&quot;. Esta acción no se puede deshacer.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

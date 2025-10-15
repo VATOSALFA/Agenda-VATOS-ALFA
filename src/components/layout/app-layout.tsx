@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
                 
                 if (customData) {
-                    const role = customData.role || 'Administrador general'; // Fallback to admin if role is missing
+                    const role = customData.role || 'Administrador general'; // Fallback to admin if no user doc found
                     const isSuperAdminByRole = role === 'Administrador general';
                     setUser({
                         ...firebaseUser,

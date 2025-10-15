@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -8,6 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { Firestore } from 'firebase/firestore';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -117,17 +119,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const isPublicPage = pathname.startsWith('/book');
-  const isAuthPage = pathname === '/login';
+  const isAuthPage = pathname === '/';
 
   useEffect(() => {
-    if (!loading && !user && !isAuthPage && !isPublicPage) {
-        router.push('/login');
+    if (loading) return;
+    
+    // If there is a user and they are on the login page, redirect to the main app page
+    if (user && isAuthPage) {
+        router.replace('/agenda');
     }
+    
+    // If there is no user and they are on a protected page, redirect to login
+    if (!user && !isAuthPage && !isPublicPage) {
+        router.replace('/');
+    }
+
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
+    router.push('/');
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
@@ -144,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  if (loading && !isAuthPage) {
+  if (loading && !isAuthPage && !isPublicPage) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

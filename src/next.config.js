@@ -8,12 +8,37 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  webpack(config) {
+  experimental: {
+    allowedDevOrigins: [
+      "https://*.cluster-f4iwdviaqvc2ct6pgytzw4xqy4.cloudworkstations.dev",
+    ],
+  },
+  webpack(config, { isServer }) {
     config.experiments = {
       ...config.experiments,
       topLevelAwait: true,
     };
     
+    // Mark server-side modules as external to prevent bundling errors
+    if (!isServer) {
+        config.externals = {
+            ...config.externals,
+            '@opentelemetry/exporter-jaeger': '@opentelemetry/exporter-jaeger',
+            'handlebars': 'handlebars',
+            'require-in-the-middle': 'require-in-the-middle',
+            'express': 'express',
+        };
+    }
+
+    config.module.rules.push({
+      test: /node_modules\/handlebars\/lib\/index\.js$/,
+      loader: 'string-replace-loader',
+      options: {
+        search: 'require.extensions',
+        replace: '[]',
+      },
+    });
+
     return config;
   },
   images: {
@@ -42,6 +67,12 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'api.twilio.com',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };

@@ -46,3 +46,14 @@ env:
   # --- GEMINI CONFIG ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
+
+# Esta sección asegura que las Cloud Functions también tengan acceso a los secretos
+backend:
+  functions:
+    env:
+      - variable: TWILIO_ACCOUNT_SID
+        secret: NEXT_PUBLIC_TWILIO_ACCOUNT_SID
+      - variable: TWILIO_AUTH_TOKEN
+        secret: NEXT_PUBLIC_TWILIO_AUTH_TOKEN
+      - variable: MERCADO_PAGO_WEBHOOK_SECRET
+        secret: MERCADO_PAGO_WEBHOOK_SECRET

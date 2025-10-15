@@ -121,6 +121,8 @@ export default function Header() {
   const logoUrl = empresaData?.[0]?.logo_url;
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const isAuthPage = pathname === '/login';
+
   useEffect(() => {
     if (!db || !user) return;
     const q = query(
@@ -193,7 +195,7 @@ export default function Header() {
     document.dispatchEvent(new CustomEvent(eventName));
   }
   
-  if (!user) {
+  if (!user || isAuthPage) {
     return null;
   }
 
@@ -205,7 +207,7 @@ export default function Header() {
             {logoUrl ? (
                 <Image src={logoUrl} alt="Logo" width={125} height={60} className="h-[60px] w-auto" />
             ) : (
-                <span className="font-bold text-lg text-white whitespace-nowrap">VATOS ALFA</span>
+                <span className="font-bold text-lg text-white whitespace-nowrap">Agenda VATOS ALFA</span>
             )}
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">

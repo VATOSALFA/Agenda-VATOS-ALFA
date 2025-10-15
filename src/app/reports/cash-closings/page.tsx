@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { DateRange } from 'react-day-picker';
 import { format, startOfDay, endOfDay } from 'date-fns';
@@ -15,12 +15,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Calendar as CalendarIcon, Search, Download, Eye, Loader2, User } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, Download, Eye, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CashClosing, User as AppUser } from '@/lib/types';
 import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
-import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashClosing | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) => {

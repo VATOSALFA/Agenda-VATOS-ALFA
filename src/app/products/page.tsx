@@ -1,23 +1,21 @@
 
-
 'use client';
 
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoreHorizontal, PlusCircle, Search, Upload, Plus, Minus, Bell, Download, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { PlusCircle, Search, Upload, Plus, Minus, Download, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NewProductModal } from "@/components/products/new-product-modal";
 import { CategoryModal } from "@/components/products/category-modal";
 import { BrandModal } from "@/components/products/brand-modal";
 import { PresentationModal } from "@/components/products/presentation-modal";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Product, ProductCategory, ProductBrand, ProductPresentation, AuthCode } from "@/lib/types";
+import type { Product, ProductCategory, ProductBrand, ProductPresentation } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -427,7 +425,7 @@ export default function InventoryPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Se eliminará permanentemente el producto "{productToDelete.nombre}".
+                        Esta acción no se puede deshacer. Se eliminará permanentemente el producto &quot;{productToDelete.nombre}&quot;.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

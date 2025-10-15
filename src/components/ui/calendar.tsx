@@ -39,7 +39,7 @@ function Calendar({
         head_row: "flex",
         head_cell:
           "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2 justify-between",
+        row: "flex w-full mt-2",
         cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),
@@ -58,43 +58,43 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
-        IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
-        Dropdown: (props: DropdownProps) => {
-            const { fromYear, toYear, fromMonth, toMonth, fromDate, toDate } = props;
+        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
+        IconRight: () => <ChevronRight className="h-4 w-4" />,
+        Dropdown: (dropdownProps: DropdownProps) => {
+            const { fromYear, toYear, fromMonth, toMonth, fromDate, toDate } = dropdownProps;
             const options: { label: string; value: string }[] = [];
             let selectValue: string | undefined;
 
-            if (props.name === 'months') {
+            if (dropdownProps.name === 'months') {
                 const months = Array.from({ length: 12 }, (_, i) => new Date(new Date().getFullYear(), i, 1));
                 options.push(...months.map((month, i) => ({
                     value: i.toString(),
                     label: month.toLocaleString('default', { month: 'long' })
                 })));
-                selectValue = props.value !== undefined ? String(props.value) : undefined;
-            } else if (props.name === 'years') {
+                selectValue = dropdownProps.value !== undefined ? String(dropdownProps.value) : undefined;
+            } else if (dropdownProps.name === 'years') {
                 const startYear = fromYear || fromDate?.getFullYear() || new Date().getFullYear() - 100;
                 const endYear = toYear || toDate?.getFullYear() || new Date().getFullYear();
                  for (let i = endYear; i >= startYear; i--) {
                     options.push({ value: i.toString(), label: i.toString() });
                 }
-                selectValue = (props.value !== undefined) ? String(props.value) : undefined;
+                selectValue = (dropdownProps.value !== undefined) ? String(dropdownProps.value) : undefined;
             }
 
             const handleValueChange = (newValue: string) => {
-                if (props.onChange) {
+                if (dropdownProps.onChange) {
                     const changeEvent = {
                         target: { value: newValue }
                     } as React.ChangeEvent<HTMLSelectElement>;
-                    props.onChange(changeEvent);
+                    dropdownProps.onChange(changeEvent);
                 }
             };
 
-            let triggerDisplayValue = props.caption;
-            if(props.name === 'months' && props.value !== undefined) {
-                triggerDisplayValue = new Date(new Date().getFullYear(), props.value as number).toLocaleString('default', { month: 'long' });
-            } else if (props.name === 'years' && props.value !== undefined) {
-                triggerDisplayValue = String(props.value);
+            let triggerDisplayValue = dropdownProps.caption;
+            if(dropdownProps.name === 'months' && dropdownProps.value !== undefined) {
+                triggerDisplayValue = new Date(new Date().getFullYear(), dropdownProps.value as number).toLocaleString('default', { month: 'long' });
+            } else if (dropdownProps.name === 'years' && dropdownProps.value !== undefined) {
+                triggerDisplayValue = String(dropdownProps.value);
             }
 
             return (

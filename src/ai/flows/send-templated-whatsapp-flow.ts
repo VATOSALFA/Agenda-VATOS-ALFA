@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
 import { db } from '@/lib/firebase-client';
-import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, serverTimestamp, Timestamp, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 
 
 const TemplatedWhatsAppMessageInput = z.object({
@@ -37,7 +37,7 @@ async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promi
         const content = await client.content.v1.contents(contentSid).fetch();
         // The body can be in `content.types.twilio/text.body` or similar structures.
         // This is a simplified access pattern.
-        return (content.types as any)['twilio/text']?.body || (content.types as any)['twilio/whatsapp-template']?.body || 'Plantilla no encontrada.';
+        return (content.types as Record<string, { body: string }> )['twilio/text']?.body || (content.types as Record<string, { body: string }>)['twilio/whatsapp-template']?.body || 'Plantilla no encontrada.';
     } catch (error) {
         console.error("Error fetching template body from Twilio:", error);
         return 'Plantilla no encontrada.';
@@ -114,7 +114,7 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
     try {
       const client = new Twilio.Twilio(accountSid, authToken);
       
-      const messageData: any = {
+      const messageData = {
         from: `whatsapp:${fromNumber}`,
         to: `whatsapp:+52${input.to}`,
         contentSid: input.contentSid,
@@ -136,11 +136,12 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
         success: true,
         sid: message.sid,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Twilio API Error (Template):', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with Twilio templated message.';
       return {
         success: false,
-        error: error.message || 'An unknown error occurred with Twilio templated message.',
+        error: errorMessage,
       };
     }
   }

@@ -23,7 +23,7 @@ export default function ClientsSettingsPage() {
         }
     });
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: unknown) => {
         setIsSubmitting(true);
         console.log("Client settings saved:", data);
         setTimeout(() => {

@@ -9,13 +9,12 @@ interface UseFirestoreQuery<T> {
   data: T[];
   loading: boolean;
   error: Error | null;
-  key?: any;
   setKey: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export function useFirestoreQuery<T>(
   collectionName: string,
-  keyOrFirstConstraint?: any | QueryConstraint,
+  keyOrFirstConstraint?: any,
   ...otherConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> {
   const [data, setData] = useState<T[]>([]);
@@ -23,20 +22,18 @@ export function useFirestoreQuery<T>(
   const [error, setError] = useState<Error | null>(null);
   const [manualKey, setManualKey] = useState(0);
 
-  let constraints: (QueryConstraint | undefined)[] = [];
+  const finalConstraints: QueryConstraint[] = [];
   
-  // Handle overloaded function signature
   let depsKey: any = manualKey;
   if (typeof keyOrFirstConstraint === 'string' || typeof keyOrFirstConstraint === 'number' || typeof keyOrFirstConstraint === 'boolean' || keyOrFirstConstraint === undefined) {
     depsKey = keyOrFirstConstraint ?? manualKey;
-    constraints.push(...otherConstraints);
-  } else {
-    constraints.push(keyOrFirstConstraint as QueryConstraint);
-    constraints.push(...otherConstraints);
+    finalConstraints.push(...otherConstraints.filter((c): c is QueryConstraint => c !== undefined));
+  } else if (keyOrFirstConstraint) {
+    finalConstraints.push(keyOrFirstConstraint as QueryConstraint);
+    finalConstraints.push(...otherConstraints.filter((c): c is QueryConstraint => c !== undefined));
   }
 
 
-  const finalConstraints = constraints.filter((c): c is QueryConstraint => c !== undefined);
   const isQueryActive = depsKey !== undefined;
 
 
@@ -68,13 +65,17 @@ export function useFirestoreQuery<T>(
 
         return () => unsubscribe();
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error(`Error setting up query for ${collectionName}:`, err);
-        setError(err);
+        if (err instanceof Error) {
+            setError(err);
+        } else {
+            setError(new Error('An unknown error occurred'));
+        }
         setLoading(false);
     }
     
-  }, [db, collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive, depsKey]);
+  }, [collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive, depsKey, loading]);
 
   return { data, loading, error, setKey: setManualKey };
 }

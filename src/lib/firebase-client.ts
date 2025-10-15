@@ -40,7 +40,7 @@ const getFirebaseApp = () => {
                 } else {
                     console.warn("reCAPTCHA site key not found. App Check will not be initialized.");
                 }
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Error initializing Firebase App Check:", error);
             }
         }

@@ -1,7 +1,8 @@
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type Auth, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions } from '@/lib/permissions';
@@ -56,8 +57,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     uid: firebaseUser.uid,
                 });
             } else {
-                let userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-                let userDoc = await getDoc(userDocRef);
+                const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+                const userDoc = await getDoc(userDocRef);
                 let customData: any;
 
                 if (userDoc.exists()) {
@@ -116,20 +117,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const isPublicPage = pathname.startsWith('/book');
-  const isAuthPage = pathname === '/login';
+  const isAuthPage = pathname === '/'; // The root is now the login page
 
   useEffect(() => {
-    if (!loading && !user && !isAuthPage && !isPublicPage) {
-        router.push('/login');
+    if (loading) return;
+    
+    // If there is a user and they are on the login page, redirect to the main app page
+    if (user && isAuthPage) {
+        router.replace('/agenda');
     }
-    if (!loading && user && isAuthPage) {
-        router.push('/');
+    
+    // If there is no user and they are on a protected page, redirect to login
+    if (!user && !isAuthPage && !isPublicPage) {
+        router.replace('/');
     }
+
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
+    router.push('/');
   };
 
   const signInAndSetup = async (email: string, pass: string) => {

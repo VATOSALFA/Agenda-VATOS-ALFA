@@ -8,11 +8,11 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Reservation, Client, Local, Profesional } from '@/lib/types';
-import { addHours, subDays, startOfHour, setHours, format, parse, addDays } from 'date-fns';
+import { addHours, startOfHour, setHours, format, parse, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 
@@ -142,7 +142,7 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
       let sentCount = 0;
 
       for (const res of reservationsToSend) {
-        const [hour, minute] = res.hora_inicio.split(':').map(Number);
+        const [hour] = res.hora_inicio.split(':').map(Number);
         const appointmentTime = setHours(parse(res.fecha, 'yyyy-MM-dd', new Date()), hour);
         
         if (appointmentTime >= targetTimeStart && appointmentTime <= targetTimeEnd) {
@@ -153,9 +153,10 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
 
       return { success: true, remindersSent: sentCount, message: `Sent ${sentCount} reminders.` };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in sendAppointmentRemindersFlow:', error);
-      return { success: false, remindersSent: 0, message: error.message || 'An unknown error occurred.' };
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      return { success: false, remindersSent: 0, message: errorMessage };
     }
   }
 );

@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Download, Filter, Gift, DollarSign, Search, Loader2 } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Filter, DollarSign, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Local, Profesional } from "@/lib/types";
@@ -35,7 +35,6 @@ export default function TipsPage() {
   const [localFilter, setLocalFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [isLoading, setIsLoading] = useState(false);
-  const [queryKey, setQueryKey] = useState(0);
 
   // In a real scenario, you'd fetch tips. For now, we simulate fetching and filtering.
   // const { data: tips, loading: tipsLoading } = useFirestoreQuery('propinas');
@@ -64,7 +63,6 @@ export default function TipsPage() {
       setIsLoading(true);
       // Simulate API call delay
       setTimeout(() => {
-          setQueryKey(prev => prev + 1); // This would trigger a refetch in a real scenario
           setIsLoading(false);
       }, 500);
   }

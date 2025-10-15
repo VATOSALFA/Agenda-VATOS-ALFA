@@ -76,13 +76,14 @@ export default function DiagnosticoPage() {
             } else {
                 throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error al probar Twilio:", error);
             setTwilioStatus('error');
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             toast({
                 variant: "destructive",
                 title: "Error de Conexión con Twilio",
-                description: error.message,
+                description: errorMessage,
             });
         } finally {
             setIsTestingTwilio(false);

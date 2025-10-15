@@ -7,7 +7,7 @@ export interface Client {
   apellido: string;
   correo: string;
   telefono: string;
-  fecha_nacimiento?: string | { seconds: number; nanoseconds: number; };
+  fecha_nacimiento?: string | { seconds: number; nanoseconds: number; } | null;
   notas?: string;
   creado_en: any; // Firestore Timestamp
   citas_totales?: number;
@@ -72,8 +72,6 @@ export interface Reservation {
     canal_reserva?: string;
     local_id?: string; // Added local_id to reservations
     notifications?: {
-      email_notification: boolean;
-      email_reminder: boolean;
       whatsapp_notification: boolean;
       whatsapp_reminder: boolean;
     };
@@ -91,6 +89,7 @@ export interface TimeBlock {
     start?: number; // transient
     duration?: number; // transient
     color?: string; // transient
+    local_id?: string;
 }
 
 export interface Schedule {
@@ -101,6 +100,7 @@ export interface Schedule {
     viernes: ScheduleDay;
     sabado: ScheduleDay;
     domingo: ScheduleDay;
+    [key: string]: ScheduleDay;
 }
 
 export interface ScheduleDay {
@@ -241,7 +241,7 @@ export interface IngresoManual {
 
 export interface StockMovement {
     id: string;
-    date: any; // Firestore Timestamp
+    date: any;
     local_id: string;
     product_id: string;
     presentation_id: string;
@@ -286,4 +286,11 @@ export interface CashClosing {
     diferencia: number;
     comentarios?: string;
     detalle_conteo: Record<string, number>;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  body: string;
+  contentSid: string;
 }

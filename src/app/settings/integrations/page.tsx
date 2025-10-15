@@ -53,18 +53,18 @@ export default function IntegrationsPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><Facebook className="h-6 w-6 text-blue-600" /> Facebook</CardTitle>
                         <CardDescription>
-                            Agrega el botón "Reservar" en la página de Facebook de tu negocio.
+                            Agrega el botón &quot;Reservar&quot; en la página de Facebook de tu negocio.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-2">
                                 <Image src="https://placehold.co/600x400.png" data-ai-hint="social media interface" alt="Paso 1" width={600} height={400} className="rounded-lg border" />
-                                <p><span className="font-bold">1.</span> En tu página de Facebook, haz click en "+ Agregar un botón".</p>
+                                <p><span className="font-bold">1.</span> En tu página de Facebook, haz click en &quot;+ Agregar un botón&quot;.</p>
                             </div>
                             <div className="space-y-2">
                                 <Image src="https://placehold.co/600x400.png" data-ai-hint="user interface menu" alt="Paso 2" width={600} height={400} className="rounded-lg border" />
-                                <p><span className="font-bold">2.</span> Selecciona la opción "Reservar".</p>
+                                <p><span className="font-bold">2.</span> Selecciona la opción &quot;Reservar&quot;.</p>
                             </div>
                             <div className="space-y-2">
                                 <Image src="https://placehold.co/600x400.png" data-ai-hint="website link form" alt="Paso 3" width={600} height={400} className="rounded-lg border" />
@@ -85,11 +85,11 @@ export default function IntegrationsPage() {
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-2">
                                 <div className="flex justify-center"><Image src="https://placehold.co/250x500.png" data-ai-hint="mobile phone screen" alt="Paso 1" width={250} height={500} className="rounded-lg border" /></div>
-                                <p className="text-center"><span className="font-bold">1.</span> Ve a "Editar perfil" en tu cuenta de Instagram.</p>
+                                <p className="text-center"><span className="font-bold">1.</span> Ve a &quot;Editar perfil&quot; en tu cuenta de Instagram.</p>
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-center"><Image src="https://placehold.co/250x500.png" data-ai-hint="social media profile" alt="Paso 2" width={250} height={500} className="rounded-lg border" /></div>
-                                <p className="text-center"><span className="font-bold">2.</span> Agrega el link de tu sitio web de Agenda VATOS ALFA en el campo "Sitio web".</p>
+                                <p className="text-center"><span className="font-bold">2.</span> Agrega el link de tu sitio web de Agenda VATOS ALFA en el campo &quot;Sitio web&quot;.</p>
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-center"><Image src="https://placehold.co/250x500.png" data-ai-hint="user profile social" alt="Paso 3" width={250} height={500} className="rounded-lg border" /></div>

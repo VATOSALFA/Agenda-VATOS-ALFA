@@ -3,7 +3,7 @@
 
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, query, where, getDocs, writeBatch, Timestamp, doc } from 'firebase/firestore';
@@ -14,13 +14,13 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import type { Service, Profesional, Client, Local } from '@/lib/types';
+import type { Service, Profesional, Local } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { User, Calendar, Clock, Scissors, CheckCircle, Loader2 } from 'lucide-react';
+import { User, Calendar, Scissors, CheckCircle, Loader2 } from 'lucide-react';
 import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
 
@@ -91,8 +91,6 @@ function ConfirmPageContent() {
             } else {
                 clientId = querySnapshot.docs[0].id;
             }
-            
-            const local = locales.find(l => l.id === selectedProfessional.local_id);
             
             const reservationData = {
                 cliente_id: clientId,

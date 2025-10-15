@@ -14,9 +14,6 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
-import { storage } from "@/lib/firebase-client";
-import { ref, listAll } from "firebase/storage";
-
 
 interface EmpresaSettings {
     id?: string;

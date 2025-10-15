@@ -75,40 +75,9 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Local } from '@/components/admin/locales/new-local-modal';
+import type { Local, Profesional, Schedule } from '@/lib/types';
 
 
-export interface ScheduleDay {
-    enabled: boolean;
-    start: string;
-    end: string;
-}
-
-export interface Schedule {
-    lunes: ScheduleDay;
-    martes: ScheduleDay;
-    miercoles: ScheduleDay;
-    jueves: ScheduleDay;
-    viernes: ScheduleDay;
-    sabado: ScheduleDay;
-    domingo: ScheduleDay;
-}
-
-export interface Profesional {
-    id: string;
-    name: string;
-    email: string;
-    avatar: string;
-    dataAiHint?: string;
-    active: boolean;
-    acceptsOnline: boolean;
-    biography: string;
-    services: string[];
-    schedule?: Schedule;
-    order: number;
-    local_id: string;
-    userId?: string;
-}
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
 function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void }) {
@@ -269,8 +238,8 @@ export default function ProfessionalsPage() {
     }
   }
   
-  function handleDragStart(event: any) {
-    setActiveId(event.active.id);
+  function handleDragStart(event: DragEndEvent) {
+    setActiveId(event.active.id as string);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -328,7 +297,7 @@ export default function ProfessionalsPage() {
       .filter(p => !p.local_id || !assignedProfessionals.has(p.id))
       .sort((a,b) => a.order - b.order);
   
-    const result: any[] = [...byLocal];
+    const result: ({ professionals: Profesional[] } & Partial<Local>)[] = [...byLocal];
   
     if (unassignedProfessionals.length > 0) {
       result.push({

@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,7 +53,7 @@ export default function SitioWebPage() {
         }
     });
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: unknown) => {
         setIsSubmitting(true);
         console.log("Website settings saved:", data);
         setTimeout(() => {

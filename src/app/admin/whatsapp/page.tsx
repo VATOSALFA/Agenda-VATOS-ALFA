@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -34,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, PlusCircle, Trash2, MessageCircle, Edit, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Local } from '@/lib/types';
+import type { Local, Template } from '@/lib/types';
 import { collection, addDoc, deleteDoc, doc, Timestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import {
@@ -48,7 +47,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { TemplateSelectionModal, type Template } from '@/components/admin/whatsapp/template-selection-modal';
+import { TemplateSelectionModal } from '@/components/admin/whatsapp/template-selection-modal';
 import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
 import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
@@ -157,9 +156,10 @@ export default function WhatsappPage() {
       } else {
         throw new Error(result.error || 'Error desconocido');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error(error);
-        toast({ variant: 'destructive', title: 'Error de envío', description: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        toast({ variant: 'destructive', title: 'Error de envío', description: errorMessage });
     }
     setIsSendingTest(false);
   };
@@ -375,5 +375,3 @@ export default function WhatsappPage() {
     </>
   );
 }
-
-    

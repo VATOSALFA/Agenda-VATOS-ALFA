@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Product, Professional, Commission } from '@/app/admin/comisiones/page';
+import type { Product, Professional, Commission } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Separator } from '@/components/ui/separator';
@@ -39,7 +39,7 @@ interface EditProductComisionModalProps {
 const getDefaultValues = (product: Product, professionals: Professional[]) => {
     const values: { [key: string]: Commission } = {};
     professionals.forEach(prof => {
-        values[prof.id] = product.comisionesPorProfesional?.[prof.id] || product.defaultCommission || { value: 0, type: '%' };
+        values[prof.id] = product.comisionesPorProfesional?.[prof.id] || product.commission || { value: 0, type: '%' };
     });
     return values;
 }
@@ -61,7 +61,7 @@ export function EditProductComisionModal({ product, isOpen, onClose, onDataSaved
     }
   }, [product, professionals, isOpen, reset]);
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: Record<string, Commission>) => {
     if (!db) return;
     setIsSubmitting(true);
     try {

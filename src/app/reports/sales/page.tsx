@@ -1,7 +1,8 @@
+
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ResponsiveContainer, BarChart, XAxis, YAxis, Tooltip, Bar, LineChart, Line, Legend, CartesianGrid, Cell } from 'recharts';
 import { ArrowUp, ArrowDown, Search } from 'lucide-react';
@@ -31,7 +32,7 @@ const KpiCard = ({ title, value, change, isPositive, prefix = '', suffix = '' }:
     </div>
 );
 
-const CustomBarLabel = ({ x, y, width, value }: any) => {
+const CustomBarLabel = ({ x, y, width, value }: {x: number, y:number, width: number, value: number}) => {
     return (
         <text x={x + width + 10} y={y + 10} fill="hsl(var(--foreground))" textAnchor="start" fontSize={12}>
             {`$${value.toLocaleString('es-MX')}`}
@@ -44,16 +45,26 @@ export default function SalesReportPage() {
     const [localFilter, setLocalFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey,
-        ...(dateRange?.from ? [where('fecha_hora_venta', '>=', Timestamp.fromDate(dateRange.from))] : []),
-        ...(dateRange?.to ? [where('fecha_hora_venta', '<=', Timestamp.fromDate(dateRange.to))] : []),
-        ...(localFilter !== 'todos' ? [where('local_id', '==', localFilter)] : [])
-    );
+    const salesQueryConstraints = useMemo(() => {
+        const constraints = [];
+        if (dateRange?.from) {
+            constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(dateRange.from)));
+        }
+        if (dateRange?.to) {
+            constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(dateRange.to)));
+        }
+        if (localFilter !== 'todos') {
+            constraints.push(where('local_id', '==', localFilter));
+        }
+        return constraints;
+    }, [dateRange, localFilter]);
+
+
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     
-    const isLoading = salesLoading || servicesLoading || categoriesLoading || localesLoading;
+    const isLoading = salesLoading || servicesLoading || categoriesLoading;
 
     const handlePeriodChange = (value: string) => {
         const today = new Date();
@@ -69,11 +80,6 @@ export default function SalesReportPage() {
     const handleSearch = () => {
         setQueryKey(prev => prev + 1);
     };
-
-    const serviceMap = useMemo(() => {
-        if (servicesLoading) return new Map();
-        return new Map(services.map(s => [s.id, s]));
-    }, [services, servicesLoading]);
     
     const categoryMap = useMemo(() => {
         if (categoriesLoading) return new Map();
@@ -109,7 +115,7 @@ export default function SalesReportPage() {
         const salesByCategory: Record<string, number> = {};
 
         sales.forEach(sale => {
-            sale.items?.forEach((item: SaleItem) => {
+            (sale.items || []).forEach((item: SaleItem) => {
                 if (item.tipo === 'servicio') {
                     const service = services.find(s => s.id === item.id || s.name === item.servicio);
                     if (service) {
@@ -135,7 +141,7 @@ export default function SalesReportPage() {
             salesByService: sortedServices.map(([name, value]) => ({ name, value }))
         };
 
-    }, [sales, services, categories, categoryMap, isLoading]);
+    }, [sales, services, categoryMap, isLoading, categories]);
 
 
     return (
@@ -218,7 +224,7 @@ export default function SalesReportPage() {
                                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                                 <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
                                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />}>
-                                    {aggregatedData.salesByCategory.map((entry, index) => (
+                                    {aggregatedData.salesByCategory.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
                                     ))}
                                 </Bar>
@@ -239,7 +245,7 @@ export default function SalesReportPage() {
                                 <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                                 <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
                                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel />}>
-                                     {aggregatedData.salesByService.map((entry, index) => (
+                                     {aggregatedData.salesByService.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
                                     ))}
                                 </Bar>

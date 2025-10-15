@@ -3,17 +3,15 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { PlusCircle, ShoppingCart, Edit, Save, Loader2, TrendingUp, ArrowRight } from 'lucide-react';
+import { Edit, Save, Loader2, TrendingDown } from 'lucide-react';
 import { AddDepositoModal } from '@/components/finanzas/add-deposito-modal';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
@@ -112,7 +110,7 @@ export default function FinanzasResumenPage() {
             const monthlySales = sales.filter(s => s.fecha_hora_venta.toDate().getMonth() === monthIndex);
             
             const ventaProductos = monthlySales.reduce((sum, sale) => {
-                return sum + sale.items
+                return sum + (sale.items || [])
                     .filter(i => i.tipo === 'producto')
                     .reduce((itemSum, i) => {
                         const itemSubtotal = i.subtotal || i.precio_unitario || 0;
@@ -249,7 +247,7 @@ export default function FinanzasResumenPage() {
                                     <span className="font-semibold text-red-600">-${comisionProfesionalesAnual.toLocaleString('es-MX')}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
-                                    <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
+                                    <span className="font-bold text-primary flex items-center"><TrendingDown className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
                                     <span className="font-extrabold text-primary">${utilidadVatosAlfaAnual.toLocaleString('es-MX')}</span>
                                 </div>
                             </>

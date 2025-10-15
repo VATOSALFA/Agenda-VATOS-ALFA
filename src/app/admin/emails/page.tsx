@@ -41,7 +41,7 @@ export default function EmailsSettingsPage() {
         }
     });
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: unknown) => {
         setIsSubmitting(true);
         console.log("Email settings saved:", data);
         setTimeout(() => {
@@ -261,7 +261,7 @@ export default function EmailsSettingsPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Esta acción no se puede deshacer. El correo "{senderToDelete.email}" será eliminado permanentemente.
+                        Esta acción no se puede deshacer. El correo &quot;{senderToDelete.email}&quot; será eliminado permanentemente.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

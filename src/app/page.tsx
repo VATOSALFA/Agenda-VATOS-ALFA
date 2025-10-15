@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
@@ -19,7 +18,6 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const router = useRouter();
     const { toast } = useToast();
     const { user, loading, signInAndSetup } = useAuth();
 
@@ -45,8 +43,8 @@ export default function LoginPage() {
         try {
             await signInAndSetup(email, password);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
-            router.push('/agenda');
-        } catch (err: any) {
+            // The redirection is now handled by the AuthProvider
+        } catch (err: unknown) {
             console.error("Error de inicio de sesión:", err);
             if (err instanceof FirebaseError) {
                 switch (err.code) {
@@ -71,7 +69,7 @@ export default function LoginPage() {
     
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">VATOS ALFA agenda</h1>
+            <h1 className="text-3xl font-bold text-slate-800 mb-6">Agenda VATOS ALFA</h1>
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>

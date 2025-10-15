@@ -1,23 +1,21 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, Line, CartesianGrid, BarChart as RechartsBarChart, Bar } from 'recharts';
-import { Calendar as CalendarIcon, Search, CheckCircle, XCircle, Clock, AlertTriangle, Users, BookOpen, Truck, Store, Scissors, DollarSign, BarChart, LineChartIcon, PieChartIcon, Loader2 } from 'lucide-react';
+import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, BarChart as RechartsBarChart, Bar } from 'recharts';
+import { Calendar as CalendarIcon, Search, CheckCircle, XCircle, Clock, AlertTriangle, Users, BookOpen, DollarSign, BarChart, LineChartIcon, PieChartIcon, Loader2 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Reservation, Service, Profesional } from '@/lib/types';
-import { where, Timestamp } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
 
 const reservationStatuses = [
     { id: 'Reservado', label: 'Reservado', icon: <BookOpen className="h-4 w-4 mr-2" /> },
@@ -239,7 +237,7 @@ export default function ReservationsReportPage() {
                                         <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
                                         <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} />
                                         <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
-                                            {serviceRankingData.map((entry, index) => (
+                                            {serviceRankingData.map((_, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Bar>
@@ -255,7 +253,7 @@ export default function ReservationsReportPage() {
                                 <ResponsiveContainer width="100%" height={250}>
                                     <RechartsPieChart>
                                         <Pie data={reservationsByDayData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
-                                            {reservationsByDayData.map((entry, index) => (
+                                            {reservationsByDayData.map((_, index) => (
                                                 <Cell key={`cell-${index}`} fill={DAY_COLORS[index % DAY_COLORS.length]} />
                                             ))}
                                         </Pie>

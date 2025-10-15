@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -40,7 +39,7 @@ const PermissionBadge = ({ permitted }: { permitted: boolean }) => (
     </Badge>
 );
 
-const ToggleField = ({ name, label, control, description }: { name: string, label: string, control: any, description?: string }) => (
+const ToggleField = ({ name, label, control, description }: { name: keyof typeof form.getValues, label: string, control: any, description?: string }) => (
     <div className="flex items-center justify-between py-3 border-b last:border-b-0">
         <div>
             <Label htmlFor={name} className="font-medium">{label}</Label>
@@ -80,7 +79,7 @@ export default function AuthCodesSettingsPage() {
         }
     });
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: unknown) => {
         setIsSubmitting(true);
         console.log("Authorization codes settings saved:", data);
         setTimeout(() => {
@@ -108,7 +107,7 @@ export default function AuthCodesSettingsPage() {
     }
     
     const handleDeleteCode = async () => {
-        if (!codeToDelete) return;
+        if (!codeToDelete || !db) return;
         try {
             await deleteDoc(doc(db, 'codigos_autorizacion', codeToDelete.id));
             toast({
@@ -126,6 +125,7 @@ export default function AuthCodesSettingsPage() {
 
     const handleToggleActive = async (codeId: string, active: boolean) => {
         try {
+            if (!db) return;
             const codeRef = doc(db, 'codigos_autorizacion', codeId);
             await updateDoc(codeRef, { active });
             toast({
@@ -243,7 +243,7 @@ export default function AuthCodesSettingsPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
-                       Esta acción no se puede deshacer. Se eliminará permanentemente el código de autorización para "{codeToDelete.name}".
+                       Esta acción no se puede deshacer. Se eliminará permanentemente el código de autorización para &quot;{codeToDelete.name}&quot;.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

@@ -1,6 +1,5 @@
 
-
-import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Banknote, FileText, Settings, LucideIcon, MessageSquare } from 'lucide-react';
+import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon, MessageSquare } from 'lucide-react';
 
 
 export interface Permission {
@@ -157,5 +156,3 @@ export const roleIcons: Record<string, LucideIcon> = {
   'Staff': Wrench,
   'Staff (Sin edición)': Wrench,
 };
-
-

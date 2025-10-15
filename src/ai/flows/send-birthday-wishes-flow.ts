@@ -94,9 +94,10 @@ const sendBirthdayWishesFlow = ai.defineFlow(
 
       return { success: true, wishesSent: sentCount, message: `Sent ${sentCount} birthday wishes.` };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in sendBirthdayWishesFlow:', error);
-      return { success: false, wishesSent: 0, message: error.message || 'An unknown error occurred.' };
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      return { success: false, wishesSent: 0, message: errorMessage };
     }
   }
 );

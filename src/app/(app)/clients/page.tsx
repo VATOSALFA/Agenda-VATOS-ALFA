@@ -1,14 +1,15 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, Search, Upload, Filter, Trash2, Calendar as CalendarIcon, User, VenetianMask, Combine, Download, ChevronDown, Plus, AlertTriangle, Edit, ChevronLeft, ChevronRight, Cake, X } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Client, Local, Profesional, Service, Reservation, Product, Sale } from "@/lib/types";
+import type { Client, Local, Reservation, Sale } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
@@ -55,7 +56,7 @@ const FiltersSidebar = ({
     locales,
     isLoading,
     isLocalAdmin,
-  }: any) => {
+  }: { onApply: () => void, onReset: () => void, dateRange: DateRange | undefined, setDateRange: (range: DateRange | undefined) => void, localFilter: string, setLocalFilter: (val: string) => void, birthdayMonthFilter: string, setBirthdayMonthFilter: (val: string) => void, locales: Local[], isLoading: boolean, isLocalAdmin: boolean }) => {
 
     return (
         <div className="space-y-4">
@@ -210,7 +211,7 @@ export default function ClientsPage() {
 
     if (hasAdvancedFilters) {
         if(activeFilters.dateRange) {
-            let clientIdsFromSales = new Set<string>();
+            const clientIdsFromSales = new Set<string>();
 
             const filteredSales = sales.filter(s => {
                 return activeFilters.local === 'todos' || s.local_id === activeFilters.local;

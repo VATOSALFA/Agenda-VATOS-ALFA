@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import {
   collection,
@@ -13,35 +13,22 @@ import {
 } from 'firebase/firestore';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import {
-  Scissors,
   Calendar,
   Tag,
-  Bell,
   Users,
-  Box,
-  BarChart2,
-  Settings,
-  Plus,
   CreditCard,
-  UserPlus,
-  Clock,
-  Briefcase,
-  Gift,
   DollarSign,
-  ArrowRightLeft,
   Banknote,
   ChevronDown,
   Wallet,
   Lock,
   Archive,
   ShoppingCart,
-  History,
   FileText,
-  PieChart,
   LineChart,
-  Store,
-  MessageCircle,
-  Percent,
+  Settings,
+  Plus,
+  Gift,
   Globe,
   Copy,
   Share2,
@@ -114,7 +101,6 @@ interface EmpresaSettings {
 
 export default function Header() {
   const pathname = usePathname();
-  const router = useRouter();
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');

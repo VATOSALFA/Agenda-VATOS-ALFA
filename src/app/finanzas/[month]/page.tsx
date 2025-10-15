@@ -3,11 +3,11 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, DollarSign, ShoppingCart, ArrowDown, ArrowUp, ChevronDown, User, Loader2, Edit, Save, Trash2 } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2 } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -15,8 +15,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
-import { startOfMonth, endOfMonth, format, parse, isValid } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {

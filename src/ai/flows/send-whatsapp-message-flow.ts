@@ -7,6 +7,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
+import { MessageListInstanceCreateOptions } from 'twilio/lib/rest/api/v2010/account/message';
 
 const WhatsAppMessageSchema = z.object({
   to: z.string().describe("The recipient's phone number, just the digits."),
@@ -59,7 +60,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     try {
       const client = new Twilio.Twilio(accountSid, authToken);
       
-      const messageData: any = {
+      const messageData: MessageListInstanceCreateOptions = {
         from: `whatsapp:${fromNumber}`,
         to: `whatsapp:+52${input.to}`,
         body: input.text || '',
@@ -75,11 +76,12 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
         success: true,
         sid: message.sid,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Twilio API Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with Twilio.';
       return {
         success: false,
-        error: error.message || 'An unknown error occurred with Twilio.',
+        error: errorMessage,
       };
     }
   }

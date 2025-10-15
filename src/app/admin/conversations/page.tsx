@@ -21,13 +21,12 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/ai/flows/send-whatsapp-message-flow';
 
-import { Loader2, Send, ChevronLeft, Paperclip, X, FileText, Download, Play, Pause, MessageSquareText, SquarePen } from 'lucide-react';
+import { Loader2, Send, Paperclip, X, FileText, Download, Play, Pause, MessageSquareText, SquarePen } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import type { Client } from '@/lib/types';
@@ -238,7 +237,7 @@ export default function ConversationsPage() {
         const conversationRef = doc(db, 'conversations', activeConversationId);
         
         // Save message to Firestore first
-        const messageData: any = {
+        const messageData: Partial<Message> = {
             senderId: 'vatosalfa',
             text: tempMessage,
             timestamp: serverTimestamp(),
@@ -273,14 +272,15 @@ export default function ConversationsPage() {
         }
         toast({ title: '¡Mensaje enviado!', description: `SID: ${result.sid}` });
         
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error sending message:", error);
         setCurrentMessage(tempMessage); // Restore message on error
         setFile(tempFile); // Restore file on error
+        const errorMessage = error instanceof Error ? error.message : 'No se pudo enviar el mensaje a través de Twilio.';
         toast({
             variant: 'destructive',
             title: 'Error de envío',
-            description: error.message || 'No se pudo enviar el mensaje a través de Twilio.'
+            description: errorMessage
         })
     } finally {
         setIsSending(false);

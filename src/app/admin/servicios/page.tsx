@@ -2,12 +2,10 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,7 +28,6 @@ import {
   Info,
   X,
   Trash2,
-  Check
 } from 'lucide-react';
 import {
   Select,
@@ -46,7 +43,7 @@ import {
 } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -61,7 +58,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { collection, doc, addDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -81,10 +78,6 @@ export interface ServiceCategory {
   id: string;
   name: string;
   order: number;
-}
-
-interface GroupedService extends ServiceCategory {
-    services: Service[];
 }
 
 
@@ -426,7 +419,7 @@ export default function ServicesPage() {
         <AlertDialogHeader>
           <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta acción no se puede deshacer. Se eliminará permanentemente el servicio "{serviceToDelete?.name}".
+            Esta acción no se puede deshacer. Se eliminará permanentemente el servicio &quot;{serviceToDelete?.name}&quot;.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

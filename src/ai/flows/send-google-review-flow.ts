@@ -70,9 +70,10 @@ const sendGoogleReviewRequestFlow = ai.defineFlow(
       } else {
         throw new Error(result.error || 'Failed to send WhatsApp message.');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in sendGoogleReviewRequestFlow:', error);
-      return { success: false, message: error.message || 'An unknown error occurred.' };
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      return { success: false, message: errorMessage };
     }
   }
 );

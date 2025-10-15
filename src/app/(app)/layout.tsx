@@ -1,7 +1,6 @@
 'use client';
 
 import Header from "@/components/layout/header";
-import { AuthProvider } from "@/contexts/firebase-auth-context";
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -9,9 +8,11 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
-    <AuthProvider>
+    <>
       <Header />
-      {children}
-    </AuthProvider>
+      <div className="pt-16 h-screen overflow-hidden">
+        {children}
+      </div>
+    </>
   )
 }

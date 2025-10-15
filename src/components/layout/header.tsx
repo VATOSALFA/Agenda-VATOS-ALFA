@@ -232,7 +232,7 @@ export default function Header() {
                 href="/agenda"
                 className={cn(
                     'px-3 py-2 rounded-md transition-colors',
-                    pathname === '/agenda'
+                    pathname.startsWith('/agenda')
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}

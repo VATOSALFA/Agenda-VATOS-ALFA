@@ -21,7 +21,15 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const { signInAndSetup } = useAuth();
+    const { user, loading, signInAndSetup } = useAuth();
+
+    if (loading || user) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-muted/40">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        );
+    }
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

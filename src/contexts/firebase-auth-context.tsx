@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -130,22 +129,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
-  const isProtectedRoute = !pathname.startsWith('/login') && !pathname.startsWith('/book');
+  const isPublicPage = pathname.startsWith('/book');
+  const isAuthPage = pathname === '/'; // The root is now the login page
 
   useEffect(() => {
     if (loading) return;
     
-    // If not authenticated and on a protected route, redirect to login
-    if (!user && isProtectedRoute) {
-        router.replace('/login');
+    // If there is a user and they are on the login page, redirect to the main app page
+    if (user && isAuthPage) {
+        router.replace('/agenda');
+    }
+    
+    // If there is no user and they are on a protected page, redirect to login
+    if (!user && !isAuthPage && !isPublicPage) {
+        router.replace('/');
     }
 
-  }, [user, loading, isProtectedRoute, pathname, router]);
+  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
-    router.push('/login');
+    router.push('/');
   };
 
   const signInAndSetup = async (email: string, pass: string) => {
@@ -162,7 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  if (loading && isProtectedRoute) {
+  if (loading && !isAuthPage && !isPublicPage) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

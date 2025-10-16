@@ -1,3 +1,4 @@
+
 'use client';
 
 import Header from "@/components/layout/header";
@@ -39,6 +40,10 @@ const settingsNavItems = [
      {
       title: "Diagnóstico",
       href: "/settings/diagnostico",
+    },
+    {
+      title: "Usuarios y permisos",
+      href: "/settings/users",
     }
 ];
 
@@ -49,16 +54,13 @@ interface SettingsLayoutProps {
 export default function SettingsLayout({ children }: SettingsLayoutProps) {
   return (
     <>
-      <Header />
-      <div className="flex-1 pt-16">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-10">
-            <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
-                <aside className="-mx-4 lg:w-1/5">
-                    <SidebarNav items={settingsNavItems} />
-                </aside>
-                <div className="flex-1">{children}</div>
-            </div>
-        </div>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-10">
+          <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
+              <aside className="-mx-4 lg:w-1/5">
+                  <SidebarNav items={settingsNavItems} />
+              </aside>
+              <div className="flex-1">{children}</div>
+          </div>
       </div>
     </>
   )

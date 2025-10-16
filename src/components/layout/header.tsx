@@ -205,7 +205,7 @@ export default function Header() {
                         pathname.startsWith(href) && href !== '/'
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white',
-                        pathname === href && href === '/' && 'bg-white/10 text-white'
+                        pathname === '/agenda' && href === '/agenda' && 'bg-white/10 text-white'
                     )}
                     >
                     {label}
@@ -326,7 +326,7 @@ export default function Header() {
 
             {canSee('ver_administracion') && (
               <Link
-                href="/settings/users"
+                href="/admin/users"
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                   pathname.startsWith('/admin') || pathname.startsWith('/settings')

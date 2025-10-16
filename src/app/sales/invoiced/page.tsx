@@ -1,12 +1,11 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { Search, Download, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -34,6 +33,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import * as XLSX from 'xlsx';
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { db } from "@/lib/firebase-client";
 
@@ -144,6 +144,8 @@ export default function InvoicedSalesPage() {
 
     const [queryKey, setQueryKey] = useState(0);
 
+    const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
+
     useEffect(() => {
         const today = new Date();
         const initialDateRange = { from: today, to: today };
@@ -230,8 +232,8 @@ export default function InvoicedSalesPage() {
           const saleTotal = sale.total || 0;
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(item => {
-                    const type = item.tipo === 'producto' ? 'Productos' : 'Servicios';
-                    const itemSubtotal = item.subtotal || 0;
+                    const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
+                    const itemSubtotal = (item as any).subtotal || 0;
                     const proportion = itemSubtotal / saleSubtotal;
                     const proportionalTotal = proportion * saleTotal;
                     acc[type] = (acc[type] || 0) + proportionalTotal;
@@ -406,7 +408,7 @@ export default function InvoicedSalesPage() {
             toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
         } else {
             toast({ title: 'Código correcto' });
-            if (authAction) authAction();
+            authAction?.();
             setIsAuthModalOpen(false);
         }
         setAuthCode('');
@@ -742,3 +744,5 @@ export default function InvoicedSalesPage() {
     </>
   );
 }
+
+    

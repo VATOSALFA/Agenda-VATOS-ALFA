@@ -426,7 +426,7 @@ export default function InventoryPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Se eliminará permanentemente el producto &quot;{productToDelete.nombre}&quot;.
+                        Esta acción no se puede deshacer. Se eliminará permanentemente el producto "{productToDelete.nombre}".
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -466,3 +466,5 @@ export default function InventoryPage() {
     </>
   );
 }
+
+    

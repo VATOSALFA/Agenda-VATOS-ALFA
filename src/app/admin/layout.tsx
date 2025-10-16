@@ -8,11 +8,7 @@ interface AdminLayoutProps {
 const sidebarNavItems = [
     { title: "Profesionales", href: "/admin/profesionales" },
     { title: "Servicios", href: "/admin/servicios" },
-    { title: "Locales", href: "/admin/locales" },
     { title: "Comisiones", href: "/admin/comisiones" },
-    { title: "Whatsapp", href: "/admin/whatsapp" },
-    { title: "Usuarios y Permisos", href: "/admin/users" },
-    { title: "Mi Perfil", href: "/admin/profile" },
 ];
 
 

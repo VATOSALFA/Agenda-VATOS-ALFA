@@ -1,18 +1,31 @@
+import { SidebarNav } from "@/components/layout/sidebar-nav";
 
-'use client';
-import { useAuth } from '@/contexts/firebase-auth-context';
-import { useRouter } from 'next/navigation';
+interface SettingsLayoutProps {
+  children: React.ReactNode;
+}
 
-// This layout is for stand-alone settings pages.
-export default function SettingsLayout({children}: {children: React.ReactNode}) {
-  const { user } = useAuth();
-  const router = useRouter();
+const sidebarNavItems = [
+    { title: "Empresa", href: "/settings/empresa" },
+    { title: "Sitio Web", href: "/settings/sitio-web" },
+    { title: "Agenda", href: "/settings/agenda" },
+    { title: "Sistema de caja", href: "/settings/sistema-caja" },
+    { title: "Recordatorios", href: "/settings/recordatorios" },
+    { title: "Pagos", href: "/settings/pagos" },
+    { title: "Emails", href: "/settings/emails" },
+    { title: "Clientes", href: "/settings/clients-settings" },
+    { title: "Códigos de autorización", href: "/settings/auth-codes" },
+];
 
-  if (!user?.permissions?.includes('ver_configuracion')) {
-    // Or redirect to an unauthorized page
-    router.replace('/agenda');
-    return null;
-  }
-  
-  return <>{children}</>
+
+export default function SettingsLayout({ children }: SettingsLayoutProps) {
+  return (
+    <div className="flex flex-col md:flex-row h-full">
+        <aside className="w-full md:w-1/5 md:border-r p-4 md:p-6">
+            <SidebarNav items={sidebarNavItems} />
+        </aside>
+        <main className="flex-1 p-4 md:p-8 pt-6 overflow-y-auto">
+            {children}
+        </main>
+    </div>
+  );
 }

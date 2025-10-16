@@ -53,8 +53,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { SettingsModal } from '../shared/settings-modal';
-
 
 const mainNavLinks = [
   { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
@@ -108,7 +106,6 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
   const logoUrl = empresaData?.[0]?.logo_url;
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const isAuthPage = pathname === '/';
 
@@ -376,9 +373,11 @@ export default function Header() {
                 </Link>
              )}
             
-            <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white" onClick={() => setIsSettingsModalOpen(true)}>
-                <Settings className="h-5 w-5" />
-            </Button>
+            <Link href="/settings" passHref>
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                    <Settings className="h-5 w-5" />
+                </Button>
+            </Link>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -448,7 +447,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-      <SettingsModal isOpen={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen} />
     </>
   );
 }

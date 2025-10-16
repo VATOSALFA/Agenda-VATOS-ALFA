@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 export default function SettingsPage() {
     const router = useRouter();
     useEffect(() => {
-        router.replace('/settings/empresa');
+        router.replace('/admin/profesionales');
     }, [router]);
 
     return null; // Or a loading spinner

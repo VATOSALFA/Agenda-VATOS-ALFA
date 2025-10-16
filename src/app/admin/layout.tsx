@@ -1,7 +1,6 @@
 
 'use client';
 
-import Header from "@/components/layout/header";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 
 const adminNavItems = [
@@ -41,6 +40,10 @@ const adminNavItems = [
       title: "Emails",
       href: "/admin/emails",
     },
+    {
+        title: "Usuarios y Permisos",
+        href: "/admin/users",
+    }
 ];
 
 interface AdminLayoutProps {

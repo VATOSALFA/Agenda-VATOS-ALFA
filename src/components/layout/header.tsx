@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Link from 'next/link';
@@ -109,7 +108,7 @@ export default function Header() {
   const logoUrl = empresaData?.[0]?.logo_url;
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const isAuthPage = pathname === '/login';
+  const isAuthPage = pathname === '/';
 
   useEffect(() => {
     if (!db || !user) return;
@@ -202,7 +201,7 @@ export default function Header() {
                     href={href}
                     className={cn(
                         'px-3 py-2 rounded-md transition-colors',
-                        pathname.startsWith(href) && href !== '/'
+                        pathname.startsWith(href) && href !== '/' && href !== '/agenda'
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white',
                         pathname === '/agenda' && href === '/agenda' && 'bg-white/10 text-white'
@@ -326,10 +325,10 @@ export default function Header() {
 
             {canSee('ver_administracion') && (
               <Link
-                href="/admin/users"
+                href="/admin"
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/admin') || pathname.startsWith('/settings')
+                  pathname.startsWith('/admin')
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}
@@ -388,12 +387,6 @@ export default function Header() {
                       <Settings className="mr-2 h-4 w-4" />
                       <span>Configuraciones</span>
                     </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                      <Link href="/settings/users">
-                          <Users className="mr-2 h-4 w-4" />
-                          <span>Usuarios y permisos</span>
-                      </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -11,10 +11,6 @@ const sidebarNavItems = [
     { title: "Locales", href: "/admin/locales" },
     { title: "Comisiones", href: "/admin/comisiones" },
     { title: "Whatsapp", href: "/admin/whatsapp" },
-    { title: "Códigos de autorización", href: "/admin/auth-codes" },
-    { title: "Emails", href: "/admin/emails" },
-    { title: "Integraciones", href: "/admin/integrations" },
-    { title: "Empresa", href: "/admin/empresa" },
     { title: "Usuarios y Permisos", href: "/admin/users" },
     { title: "Mi Perfil", href: "/admin/profile" },
 ];

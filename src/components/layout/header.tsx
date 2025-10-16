@@ -374,6 +374,30 @@ export default function Header() {
                 </Link>
              )}
             
+            {canSee('ver_configuracion') && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                   <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                      <Settings className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin/profesionales">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Configuraciones</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                      <Link href="/admin/users">
+                          <Users className="mr-2 h-4 w-4" />
+                          <span>Usuarios y permisos</span>
+                      </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="bg-transparent text-gray-300 border-gray-500 hover:bg-white/10 hover:text-white hover:border-white/80">

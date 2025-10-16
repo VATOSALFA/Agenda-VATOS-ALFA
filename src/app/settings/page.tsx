@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-// This page just redirects to the default settings page.
+// This page just redirects to the default admin page.
 export default function SettingsPage() {
     const router = useRouter();
     useEffect(() => {

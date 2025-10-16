@@ -1,4 +1,3 @@
-
 'use client';
 
 import { SidebarNav } from "@/components/layout/sidebar-nav";
@@ -43,6 +42,30 @@ const adminNavItems = [
     {
         title: "Usuarios y Permisos",
         href: "/admin/users",
+    },
+    {
+      title: "Mi Perfil",
+      href: "/settings/profile"
+    },
+    {
+      title: "Empresa",
+      href: "/settings/empresa"
+    },
+    {
+      title: "Comportamiento de reservas",
+      href: "/settings/agenda"
+    },
+    {
+      title: "Configuración de clientes",
+      href: "/settings/clients-settings"
+    },
+    {
+      title: "Configuración de pagos",
+      href: "/settings/pagos"
+    },
+    {
+      title: "Diagnóstico del sistema",
+      href: "/settings/diagnostico"
     }
 ];
 

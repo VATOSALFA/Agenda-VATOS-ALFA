@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -168,7 +169,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', where('__name__', '==', 'recordatorios'));
+  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', 'recordatorios');
   const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', 'agenda');
   
   const reminderSettings = reminderSettingsData?.[0];
@@ -462,7 +463,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             const client = clients.find(c => c.id === data.cliente_id);
             const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
             const local = locales.find(l => l.id === data.local_id);
-            if (client?.telefono && professional) {
+            if (client?.telefono && professional && local) {
                 const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
                 // No need to await this, it can run in the background
                 sendTemplatedWhatsAppMessage({
@@ -470,11 +471,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     contentSid: 'HX6162105c1002a6cf84fa345393869746',
                     contentVariables: {
                         '1': client.nombre,
-                        '2': local?.name || 'nuestro local',
-                        '3': dataToSave.servicio!,
-                        '4': fullDateStr,
-                        '5': local?.address || 'nuestra sucursal',
-                        '6': professional.name,
+                        '2': dataToSave.servicio!,
+                        '3': fullDateStr,
+                        '4': professional.name,
                     }
                 }).catch(waError => {
                     console.warn("WhatsApp notification failed to send:", waError);

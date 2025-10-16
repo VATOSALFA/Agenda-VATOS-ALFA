@@ -23,10 +23,15 @@ const nextConfig = {
     if (!isServer) {
         config.externals = {
             ...config.externals,
-            '@opentelemetry/exporter-jaeger': '@opentelemetry/exporter-jaeger',
+            'express': 'express',
             'handlebars': 'handlebars',
             'require-in-the-middle': 'require-in-the-middle',
-            'express': 'express',
+            '@opentelemetry/api': '@opentelemetry/api',
+            '@opentelemetry/sd-node': '@opentelemetry/sd-node',
+            '@opentelemetry/resources': '@opentelemetry/resources',
+            '@opentelemetry/semantic-conventions': '@opentelemetry/semantic-conventions',
+            '@opentelemetry/instrumentation': '@opentelemetry/instrumentation',
+            '@opentelemetry/exporter-jaeger': '@opentelemetry/exporter-jaeger',
         };
     }
 

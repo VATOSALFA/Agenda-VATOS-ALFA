@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Link from 'next/link';
@@ -56,7 +57,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 const mainNavLinks = [
   { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
-  { href: '/admin/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
+  { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
 ];
 
 const salesNavLinks = [
@@ -193,23 +194,25 @@ export default function Header() {
              <span className="font-bold text-lg text-white whitespace-nowrap">Agenda VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
-            {mainNavLinks.map(({ href, label, permission }) => (
-                canSee(permission) && (
-                    <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                        'px-3 py-2 rounded-md transition-colors',
-                        pathname.startsWith(href) && href !== '/' && href !== '/agenda'
-                        ? 'bg-white/10 text-white'
-                        : 'text-gray-300 hover:bg-white/10 hover:text-white',
-                        (pathname === '/agenda' && href === '/agenda') || (pathname.startsWith('/agenda/semanal') && href === '/agenda') && 'bg-white/10 text-white'
-                    )}
-                    >
-                    {label}
-                    </Link>
+            {mainNavLinks.map(({ href, label, permission }) => {
+                const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
+                return (
+                    canSee(permission) && (
+                        <Link
+                        key={href}
+                        href={href}
+                        className={cn(
+                            'px-3 py-2 rounded-md transition-colors',
+                            isActive
+                            ? 'bg-white/10 text-white'
+                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        )}
+                        >
+                        {label}
+                        </Link>
+                    )
                 )
-            ))}
+            })}
             
             {canSeeAny(salesNavLinks.map(l => l.permission)) && (
               <DropdownMenu>
@@ -450,3 +453,5 @@ export default function Header() {
     </>
   );
 }
+
+    

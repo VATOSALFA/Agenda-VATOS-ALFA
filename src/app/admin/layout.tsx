@@ -1,5 +1,4 @@
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { Separator } from "@/components/ui/separator";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -22,13 +21,13 @@ const sidebarNavItems = [
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
-    <div className="space-y-6 p-4 md:p-8 pt-6">
-        <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
-            <aside className="-mx-4 lg:w-1/5 lg:border-r lg:pr-8">
-                <SidebarNav items={sidebarNavItems} />
-            </aside>
-            <div className="flex-1">{children}</div>
-        </div>
+    <div className="flex flex-col md:flex-row h-full">
+        <aside className="w-full md:w-1/5 md:border-r p-4 md:p-6">
+            <SidebarNav items={sidebarNavItems} />
+        </aside>
+        <main className="flex-1 p-4 md:p-8 pt-6 overflow-y-auto">
+            {children}
+        </main>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <div className="space-y-6 p-4 md:p-8 pt-6">
         <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
-            <aside className="-mx-4 lg:w-1/5">
+            <aside className="-mx-4 lg:w-1/5 lg:border-r lg:pr-8">
                 <SidebarNav items={sidebarNavItems} />
             </aside>
             <div className="flex-1">{children}</div>

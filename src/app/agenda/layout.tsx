@@ -1,18 +1,8 @@
 'use client';
 
-import Header from "@/components/layout/header";
+// This file is intentionally left blank. 
+// The main layout is now handled by src/app/(app)/layout.tsx
 
-interface AppLayoutProps {
-  children: React.ReactNode
-}
-
-export default function AppLayout({ children }: AppLayoutProps) {
-  return (
-    <>
-      <Header />
-      <div className="pt-16 h-[calc(100vh-4rem)]">
-        {children}
-      </div>
-    </>
-  )
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }

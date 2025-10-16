@@ -1,170 +1,41 @@
-
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
-import { auth, db, storage } from '@/lib/firebase-client';
-import { doc, getDoc } from 'firebase/firestore';
-import { allPermissions } from '@/lib/permissions';
-import { usePathname, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import Header from "@/components/layout/header";
+import { useAuth } from "@/contexts/firebase-auth-context";
+import { Loader2 } from "lucide-react";
+import { usePathname } from "next/navigation";
 
-export interface CustomUser extends FirebaseUser {
-    role?: string;
-    permissions?: string[];
-    local_id?: string;
-    avatarUrl?: string;
-}
-interface AuthContextType {
-  user: CustomUser | null;
-  loading: boolean;
-  db: typeof db;
-  storage: typeof storage;
-  signInAndSetup: (email: string, pass: string) => Promise<FirebaseUser>;
-  signOut: () => Promise<void>;
+interface AppLayoutProps {
+  children: React.ReactNode
 }
 
-const AuthContext = createContext<Partial<AuthContextType>>({});
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<CustomUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  
-  const pathname = usePathname();
-  const router = useRouter();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-            const isSuperAdminByEmail = firebaseUser.email?.toLowerCase() === 'zeusalejandro.vatosalfa@gmail.com'.toLowerCase();
-
-            if (isSuperAdminByEmail) {
-                setUser({
-                    ...firebaseUser,
-                    displayName: 'Zeus Pacheco',
-                    email: firebaseUser.email,
-                    role: 'Administrador general',
-                    permissions: allPermissions.map(p => p.key),
-                    uid: firebaseUser.uid,
-                });
-            } else {
-                const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-                const userDoc = await getDoc(userDocRef);
-                let customData: any;
-
-                if (userDoc.exists()) {
-                    customData = userDoc.data();
-                } else {
-                    console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
-                    const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
-                    const profDoc = await getDoc(profDocRef);
-                    if (profDoc.exists()) {
-                        customData = profDoc.data();
-                        if (!customData.role) {
-                            customData.role = 'Staff'; 
-                        }
-                    }
-                }
-                
-                if (customData) {
-                    const role = customData.role || 'Administrador general'; // Fallback to admin if no user doc found
-                    const isSuperAdminByRole = role === 'Administrador general';
-                    setUser({
-                        ...firebaseUser,
-                        displayName: customData.name || firebaseUser.displayName,
-                        email: customData.email,
-                        role: role,
-                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : (customData.permissions || []),
-                        uid: firebaseUser.uid,
-                        local_id: customData.local_id,
-                        avatarUrl: customData.avatarUrl,
-                    });
-                } else {
-                     console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
-                     setUser({ 
-                        ...firebaseUser, 
-                        role: 'Administrador general', // Default to admin if no user doc found
-                        permissions: allPermissions.map(p => p.key), 
-                        uid: firebaseUser.uid 
-                    });
-                }
-            }
-        } catch (error) {
-            console.error("Error fetching user data from Firestore:", error);
-            setUser({ 
-              ...firebaseUser, 
-              role: 'Administrador general', 
-              permissions: allPermissions.map(p => p.key),
-              uid: firebaseUser.uid 
-            });
-        }
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-  
-  const isPublicPage = pathname.startsWith('/book');
-  const isAuthPage = pathname === '/'; // The root is now the login page
-
-  useEffect(() => {
-    if (loading) return;
+export default function AppLayout({ children }: AppLayoutProps) {
+    const { user, loading } = useAuth();
+    const pathname = usePathname();
     
-    // If there is a user and they are on the login page, redirect to the main app page
-    if (user && isAuthPage) {
-        router.replace('/agenda');
-    }
-    
-    // If there is no user and they are on a protected page, redirect to login
-    if (!user && !isAuthPage && !isPublicPage) {
-        router.replace('/');
+    // Pages that should not have the main app header
+    const isPublicPage = pathname.startsWith('/book');
+    const isAuthPage = pathname === '/';
+
+    if (loading && !isAuthPage && !isPublicPage) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-muted/40">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        );
     }
 
-  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
-
-  const signOut = async () => {
-    await firebaseSignOut(auth);
-    setUser(null);
-    router.push('/');
-  };
-
-  const signInAndSetup = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    return userCredential.user;
-  };
-
-  const value = {
-    user,
-    loading,
-    signInAndSetup,
-    signOut,
-    db,
-    storage,
-  };
+    if (!user || isAuthPage || isPublicPage) {
+        return <>{children}</>;
+    }
   
-  if (loading && !isAuthPage && !isPublicPage) {
-     return (
-      <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-  
+  // This is the main layout for the authenticated app
   return (
-    <AuthContext.Provider value={value as AuthContextType}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+    <>
+      <Header />
+      <div className="pt-16 h-screen overflow-y-auto">
+        {children}
+      </div>
+    </>
+  )
+}

@@ -58,7 +58,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 
 const mainNavLinks = [
   { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
-  { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
+  { href: '/admin/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
 ];
 
 const salesNavLinks = [
@@ -202,9 +202,10 @@ export default function Header() {
                     href={href}
                     className={cn(
                         'px-3 py-2 rounded-md transition-colors',
-                        pathname.startsWith(href)
+                        pathname.startsWith(href) && href !== '/admin/clients'
                         ? 'bg-white/10 text-white'
-                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        : 'text-gray-300 hover:bg-white/10 hover:text-white',
+                        pathname.startsWith('/admin/clients') && href === '/admin/clients' && 'bg-white/10 text-white'
                     )}
                     >
                     {label}

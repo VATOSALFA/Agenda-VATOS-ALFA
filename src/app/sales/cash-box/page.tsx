@@ -73,7 +73,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing } from '@/lib/types';
-import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
+import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
@@ -1138,4 +1138,3 @@ export default function CashBoxPage() {
   );
 }
 
-    

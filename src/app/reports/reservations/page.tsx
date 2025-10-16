@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, BarChart as RechartsBarChart, Bar, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart as RechartsLineChart, XAxis, YAxis, Tooltip, Legend, BarChart as RechartsBarChart, Bar, CartesianGrid, Line } from 'recharts';
 import { Calendar as CalendarIcon, Search, CheckCircle, XCircle, Clock, AlertTriangle, Users, BookOpen, DollarSign, BarChart, LineChartIcon, PieChartIcon, Loader2 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';

@@ -1,3 +1,4 @@
+
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 
 interface AdminLayoutProps {

@@ -20,7 +20,7 @@ const adminNavItems = [
       title: "Comisiones",
       href: "/admin/comisiones",
     },
-    {
+     {
       title: "Conversaciones",
       href: "/admin/conversations",
     },

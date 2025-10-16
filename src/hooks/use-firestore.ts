@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, QueryConstraint } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
+import { collection, query, onSnapshot, QueryConstraint, getDocs } from 'firebase/firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface UseFirestoreQuery<T> {
   data: T[];
@@ -17,6 +17,7 @@ export function useFirestoreQuery<T>(
   keyOrFirstConstraint?: any,
   ...otherConstraints: (QueryConstraint | undefined)[]
 ): UseFirestoreQuery<T> {
+  const { db } = useAuth();
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -33,9 +34,7 @@ export function useFirestoreQuery<T>(
     finalConstraints.push(...otherConstraints.filter((c): c is QueryConstraint => c !== undefined));
   }
 
-
   const isQueryActive = depsKey !== undefined;
-
 
   useEffect(() => {
     if (!db || !isQueryActive) {
@@ -50,20 +49,38 @@ export function useFirestoreQuery<T>(
     try {
         const q = query(collection(db, collectionName), ...finalConstraints);
         
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          const items = querySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as T[];
-          setData(items);
-          setLoading(false);
-        }, (err) => {
-          setError(err instanceof Error ? err : new Error('An unknown error occurred'));
-          console.error(`Error listening to collection ${collectionName}:`, err);
-          setLoading(false);
-        });
+        // Initial fetch to get data quickly
+        getDocs(q).then(initialSnapshot => {
+            const items = initialSnapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            })) as T[];
+            setData(items);
+            setLoading(false);
 
-        return () => unsubscribe();
+            // Then listen for realtime updates
+            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+              const updatedItems = querySnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              })) as T[];
+              setData(updatedItems);
+            }, (err) => {
+              setError(err instanceof Error ? err : new Error('An unknown error occurred'));
+              console.error(`Error listening to collection ${collectionName}:`, err);
+              setLoading(false);
+            });
+    
+            return unsubscribe;
+        }).catch(err => {
+             console.error(`Error fetching initial data for ${collectionName}:`, err);
+             if (err instanceof Error) {
+                 setError(err);
+             } else {
+                 setError(new Error('An unknown error occurred during initial fetch'));
+             }
+             setLoading(false);
+        });
 
     } catch (err: unknown) {
         console.error(`Error setting up query for ${collectionName}:`, err);
@@ -75,7 +92,9 @@ export function useFirestoreQuery<T>(
         setLoading(false);
     }
     
-  }, [collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive, depsKey, loading]);
+  // We use JSON.stringify on finalConstraints to create a stable dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive, depsKey, db]);
 
   return { data, loading, error, setKey: setManualKey };
 }

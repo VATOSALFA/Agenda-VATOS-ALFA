@@ -202,10 +202,10 @@ export default function Header() {
                     href={href}
                     className={cn(
                         'px-3 py-2 rounded-md transition-colors',
-                        pathname.startsWith(href) && href !== '/admin/clients'
+                        pathname.startsWith(href) && href !== '/'
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white',
-                        pathname.startsWith('/admin/clients') && href === '/admin/clients' && 'bg-white/10 text-white'
+                        pathname === href && href === '/' && 'bg-white/10 text-white'
                     )}
                     >
                     {label}
@@ -326,10 +326,10 @@ export default function Header() {
 
             {canSee('ver_administracion') && (
               <Link
-                href="/admin"
+                href="/settings/users"
                 className={cn(
                   'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/admin')
+                  pathname.startsWith('/admin') || pathname.startsWith('/settings')
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 )}
@@ -390,7 +390,7 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                      <Link href="/admin/users">
+                      <Link href="/settings/users">
                           <Users className="mr-2 h-4 w-4" />
                           <span>Usuarios y permisos</span>
                       </Link>

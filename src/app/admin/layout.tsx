@@ -1,9 +1,4 @@
-
-'use client';
-
-// This layout was causing routing conflicts and is no longer necessary.
-// The main app layout now handles all nested routes correctly.
-
+// This file is intentionally left empty to resolve a routing conflict.
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

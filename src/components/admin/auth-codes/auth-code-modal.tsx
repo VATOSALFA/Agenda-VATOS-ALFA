@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -22,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import type { AuthCode } from '@/lib/types';
+import { Separator } from '@/components/ui/separator';
 
 interface AuthCodeModalProps {
   isOpen: boolean;
@@ -112,65 +114,71 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                 Configura los detalles y permisos para este código de autorización.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-6 space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: Cajero Turno Mañana" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Código</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ingresa el código secreto" type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="space-y-3 pt-4 border-t">
-                 <FormField
-                  control={form.control}
-                  name="reserves"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Reservas</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="cashbox"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Caja</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="download"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Descarga de Archivos</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
+            <div className="py-6">
+                <Card className="p-6">
+                    <CardContent className="p-0 space-y-6">
+                         <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Nombre</FormLabel>
+                                <FormControl>
+                                <Input placeholder="Ej: Cajero Turno Mañana" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="code"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Código</FormLabel>
+                                <FormControl>
+                                <Input placeholder="Ingresa el código secreto" type="password" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <Separator />
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-medium">Permisos</h4>
+                            <FormField
+                                control={form.control}
+                                name="reserves"
+                                render={({ field }) => (
+                                <FormItem className="flex items-center justify-between">
+                                    <FormLabel>Permiso de Reservas</FormLabel>
+                                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="cashbox"
+                                render={({ field }) => (
+                                <FormItem className="flex items-center justify-between">
+                                    <FormLabel>Permiso de Caja</FormLabel>
+                                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="download"
+                                render={({ field }) => (
+                                <FormItem className="flex items-center justify-between">
+                                    <FormLabel>Permiso de Descarga</FormLabel>
+                                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                </FormItem>
+                                )}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>

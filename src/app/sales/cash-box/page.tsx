@@ -77,7 +77,7 @@ import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, Cas
 import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
-import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
+import { SaleDetailModal } from '../sale-detail-modal';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -93,8 +93,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
-import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
+import { CashBoxClosingModal } from '../cash-box-closing-modal';
+import { CommissionPaymentModal } from '../commission-payment-modal';
 
 
 const SummaryCard = ({
@@ -159,9 +159,9 @@ export default function CashBoxPage() {
   const [authAction, setAuthAction] = useState<(() => void) | null>(null);
   const [currentPageSales, setCurrentPageSales] = useState(1);
   const [itemsPerPageSales, setItemsPerPageSales] = useState(10);
-  const [currentPageEgresos, setCurrentPageEgresos] = useState(10);
+  const [currentPageEgresos, setCurrentPageEgresos] = useState(1);
   const [itemsPerPageEgresos, setItemsPerPageEgresos] = useState(10);
-  const [currentPageIngresos, setCurrentPageIngresos] = useState(10);
+  const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
   const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
   
   const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
@@ -1138,5 +1138,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-
-    

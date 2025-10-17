@@ -238,15 +238,11 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
       <DialogContent className="sm:max-w-lg">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader className="flex-row items-center justify-between space-y-0">
+            <DialogHeader>
               <DialogTitle>{isEditMode ? "Editar Egreso" : "Agregar Egreso Manual"}</DialogTitle>
-                <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {isEditMode ? 'Guardar Cambios' : 'Guardar Egreso'}
-                    </Button>
-                </div>
+              <DialogDescription>
+                Completa los detalles para registrar la salida de dinero de la caja.
+              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 px-1 py-6 max-h-[70vh] overflow-y-auto">
@@ -388,6 +384,13 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 )}
               />
             </div>
+            <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isEditMode ? 'Guardar Cambios' : 'Guardar Egreso'}
+                </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

@@ -1,9 +1,11 @@
+
 'use client';
 
 import Header from "@/components/layout/header";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import AppInitializer from "./app-initializer";
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -33,6 +35,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <>
       <Header />
+      <AppInitializer />
       <div className="pt-16 h-screen overflow-y-auto">
         {children}
       </div>

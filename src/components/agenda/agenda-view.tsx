@@ -153,15 +153,6 @@ export default function AgendaView() {
   const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
   useEffect(() => {
-    const handleNewSale = () => {
-      setSaleInitialData(null);
-      setIsSaleSheetOpen(true);
-    };
-    document.addEventListener('new-sale', handleNewSale);
-    return () => document.removeEventListener('new-sale', handleNewSale);
-  }, []);
-
-  useEffect(() => {
     // Let the auth context set the localId if needed.
     // If user is general admin and no local is selected, select the first one.
     if (!user?.local_id && !selectedLocalId && locales.length > 0) {
@@ -413,7 +404,7 @@ export default function AgendaView() {
         const cartItems = selectedReservation.items.map(item => {
             const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
             return service ? { ...service, barbero_id: item.barbero_id, nombre: service.name } : null;
-        }).filter((i): i is Service & { barbero_id: string } => !!i);
+        }).filter((i): i is ServiceType & { barbero_id: string } => !!i);
 
         setSaleInitialData({
             client,
@@ -788,18 +779,14 @@ export default function AgendaView() {
         </div>
       </div>
       
-      <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-          <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
-              <NewReservationForm
-              isOpen={isReservationModalOpen}
-              onOpenChange={setIsReservationModalOpen}
-              isDialogChild
-              onFormSubmit={onDataRefresh}
-              initialData={reservationInitialData}
-              isEditMode={!!reservationInitialData?.id}
-              />
-          </DialogContent>
-      </Dialog>
+      <NewReservationForm
+        isOpen={isReservationModalOpen}
+        onOpenChange={setIsReservationModalOpen}
+        isDialogChild
+        onFormSubmit={onDataRefresh}
+        initialData={reservationInitialData}
+        isEditMode={!!reservationInitialData?.id}
+      />
       
       <BlockScheduleForm
         isOpen={isBlockScheduleModalOpen}

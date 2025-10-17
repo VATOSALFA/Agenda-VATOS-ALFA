@@ -198,7 +198,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             
             // This password change logic is flawed for admin changing other users' passwords
             // As it requires re-authentication of the currently logged in user (the admin).
-            // A backend function would be required for a secure implementation.
             // For now, it will only work if an admin changes their own password.
             if (data.newPassword && data.currentPassword) {
                 const currentUser = auth.currentUser;
@@ -216,6 +215,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                  return;
             }
 
+            if(auth.currentUser && auth.currentUser.uid === user.id) {
+                await updateProfile(auth.currentUser, { displayName: fullName, photoURL: data.avatarUrl });
+            }
+
             toast({ title: "Usuario actualizado" });
         } else {
             if (!data.password) {
@@ -225,7 +228,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             const tempUserCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
             const newFirebaseUser = tempUserCredential.user;
             
-            await updateProfile(newFirebaseUser, { displayName: fullName });
+            await updateProfile(newFirebaseUser, { displayName: fullName, photoURL: data.avatarUrl || null });
 
             const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
             await setDoc(userRef, dataToSave);

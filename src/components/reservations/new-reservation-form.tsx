@@ -47,6 +47,7 @@ import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
 import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
+import { ScrollArea } from '../ui/scroll-area';
 
 interface ReminderSettings {
   notifications: Record<string, { enabled: boolean }>;
@@ -523,19 +524,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [isAppointmentNotificationEnabled, isReminderNotificationEnabled, form, isEditMode]);
 
   const FormContent = () => (
-    <>
-    <div className="flex flex-col h-full">
-      <div className="p-6 pb-2">
-          <DialogHeader>
-            <DialogTitle>{isEditMode ? "Editar Reserva" : "Nueva Reserva"}</DialogTitle>
-            <DialogDescription>
-              {isEditMode ? "Modifica los detalles de la reserva." : "Completa los detalles para agendar una nueva reserva para tu cliente."}
-            </DialogDescription>
-          </DialogHeader>
-      </div>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 px-6 pb-4 pt-2 flex-row items-center justify-between border-b">
+        <div className="flex-shrink-0 px-6 pt-6 pb-4 flex-row items-center justify-between border-b">
            <FormField
               control={form.control}
               name="estado"
@@ -777,7 +768,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         </DialogFooter>
       </form>
     </Form>
-    </div>
     <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-lg">
              <DialogHeader>

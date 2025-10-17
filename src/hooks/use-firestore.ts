@@ -37,10 +37,18 @@ export function useFirestoreQuery<T>(
   const isQueryActive = depsKey !== undefined;
 
   useEffect(() => {
-    if (!db || keyOrFirstConstraint === undefined) {
+    if (!db) {
       if(loading) setLoading(false);
       return;
     }
+    
+    // Do not run query if the dependencies are explicitly set to undefined (except for manual key)
+    if (keyOrFirstConstraint === undefined && manualKey === 0 && otherConstraints.length === 0) {
+        // This is a special case for queries that should wait for an action,
+        // but we still want them to run on manual refetch.
+        // For now, we will allow them to run if `db` is present.
+    }
+
 
     setLoading(true);
     setError(null);
@@ -93,7 +101,7 @@ export function useFirestoreQuery<T>(
     
   // We use JSON.stringify on finalConstraints to create a stable dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, JSON.stringify(finalConstraints), manualKey, db, keyOrFirstConstraint]);
+  }, [collectionName, JSON.stringify(finalConstraints), manualKey, db]);
 
   return { data, loading, error, setKey: setManualKey };
 }

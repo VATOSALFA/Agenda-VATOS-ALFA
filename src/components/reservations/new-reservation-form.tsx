@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -524,261 +523,262 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [isAppointmentNotificationEnabled, isReminderNotificationEnabled, form, isEditMode]);
 
   const FormContent = () => (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 px-6 pt-6 pb-4 flex-row items-center justify-between border-b">
-           <FormField
-              control={form.control}
-              name="estado"
-              render={({ field }) => (
-                <FormItem>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue>
-                                <div className="flex items-center gap-2">
-                                    <span className={cn('h-3 w-3 rounded-full', statusColor)} />
-                                    <span>{selectedStatusLabel}</span>
-                                </div>
-                            </SelectValue>
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {statusOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                            <div className="flex items-center gap-2">
-                                <span className={cn('h-2.5 w-2.5 rounded-full', opt.color)} />
-                                {opt.label}
-                            </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-        </div>
-
-        <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
-          <div className="space-y-4">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <FormField
+    <>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 px-6 pt-6 pb-4 flex-row items-center justify-between border-b">
+             <FormField
                 control={form.control}
-                name="fecha"
+                name="estado"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Fecha</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : <span>Selecciona una fecha</span>}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus /></PopoverContent>
-                    </Popover>
+                  <FormItem>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                          <SelectTrigger className="w-[180px]">
+                              <SelectValue>
+                                  <div className="flex items-center gap-2">
+                                      <span className={cn('h-3 w-3 rounded-full', statusColor)} />
+                                      <span>{selectedStatusLabel}</span>
+                                  </div>
+                              </SelectValue>
+                          </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {statusOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                              <div className="flex items-center gap-2">
+                                  <span className={cn('h-2.5 w-2.5 rounded-full', opt.color)} />
+                                  {opt.label}
+                              </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-                <div className="space-y-2">
-                    <FormLabel>Hora</FormLabel>
-                    <div className="flex items-center gap-2">
-                        <div className="flex-grow space-y-1">
-                            <p className="text-xs text-muted-foreground text-center">Inicio</p>
-                            <div className="flex items-center gap-1">
-                                <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={(value) => { field.onChange(value); form.setValue('hora_inicio_minuto', '00'); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                <span>:</span>
-                                <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                            </div>
-                        </div>
-                        <span className="pt-6 px-1">a</span>
-                        <div className="flex-grow space-y-1">
-                            <p className="text-xs text-muted-foreground text-center">Fin</p>
-                            <div className="flex items-center gap-1">
-                               <FormField control={form.control} name="hora_fin_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                <span>:</span>
-                                <FormField control={form.control} name="hora_fin_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                            </div>
-                        </div>
-                    </div>
-                    <FormMessage className="text-center text-xs">
-                        {form.formState.errors.hora_inicio_hora?.message}
-                    </FormMessage>
-                </div>
-            </div>
-
-             {selectedClient ? (
-                <Card>
-                    <CardContent className="p-3">
-                            <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                                <Avatar className="h-9 w-9">
-                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                    <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            ) : (
-                <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                    <FormItem>
-                        <div className="flex justify-between items-center">
-                        <FormLabel>Cliente</FormLabel>
-                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                        </Button>
-                        </div>
-                         <ClientCombobox
-                            clients={clients}
-                            loading={clientsLoading}
-                            value={field.value}
-                            onChange={field.onChange}
-                         />
-                        <FormMessage />
-                    </FormItem>
-                )}/>
-            )}
-
-            {selectedClient && (
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="notificaciones">
-                    <AccordionTrigger>Notificaciones Adicionales</AccordionTrigger>
-                    <AccordionContent className="space-y-3 pt-2">
-                        <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2">
-                                <FormControl>
-                                    <Checkbox
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                        disabled={!selectedClient?.telefono || !isAppointmentNotificationEnabled}
-                                    />
-                                </FormControl>
-                                <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
-                            </FormItem>
-                        )}/>
-                         <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2">
-                                <FormControl>
-                                    <Checkbox
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                        disabled={!selectedClient?.telefono || !isReminderNotificationEnabled}
-                                    />
-                                </FormControl>
-                                <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>
-                            </FormItem>
-                        )}/>
-                        {!selectedClient?.telefono && <p className="text-xs text-muted-foreground pl-6">El cliente no tiene un teléfono para enviar notificaciones de WhatsApp.</p>}
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-            )}
-
-
-            <div className="space-y-4">
-                {fields.map((field, index) => (
-                    <Card key={field.id} className="p-4 relative bg-muted/50">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Servicios</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
-                                        <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}/>
-                            <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Profesional</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
-                                        <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                                    </Select>
-                                     {availabilityErrors[index] && <p className="text-sm font-medium text-destructive">{availabilityErrors[index]}</p>}
-                                </FormItem>
-                            )}/>
-                        </div>
-                        {fields.length > 1 && (
-                             <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        )}
-                    </Card>
-                ))}
-                 <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '' })} className="w-full">
-                    <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
-                </Button>
-            </div>
           </div>
 
-          <Accordion type="single" collapsible className="px-6">
-            <AccordionItem value="item-1">
-                <AccordionTrigger>Información adicional</AccordionTrigger>
-                <AccordionContent className="space-y-4 pt-2">
-                     <FormField control={form.control} name="precio" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Precio</FormLabel>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
-                            </div>
-                            <FormMessage />
-                        </FormItem>
-                    )}/>
-                    <FormField control={form.control} name="notas" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Notas compartidas con el cliente</FormLabel>
-                            <FormControl><Textarea rows={4} placeholder="Estas notas serán visibles para el cliente" {...field} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}/>
-                     <FormField control={form.control} name="nota_interna" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Nota interna</FormLabel>
-                            <FormControl><Textarea rows={4} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}/>
-                </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-        
-        <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
-          <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Reserva'}
-          </Button>
-        </DialogFooter>
-      </form>
-    </Form>
-    <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent className="sm:max-w-lg">
-             <DialogHeader>
-                <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-                <DialogDescription>
-                    Completa la información para registrar un nuevo cliente en el sistema.
-                </DialogDescription>
-              </DialogHeader>
-            <NewClientForm onFormSubmit={handleClientCreated} />
-        </DialogContent>
-    </Dialog>
+          <div className="flex-grow space-y-6 px-6 py-4 overflow-y-auto">
+            <div className="space-y-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <FormField
+                  control={form.control}
+                  name="fecha"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Fecha</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground" )}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : <span>Selecciona una fecha</span>}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus /></PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                  <div className="space-y-2">
+                      <FormLabel>Hora</FormLabel>
+                      <div className="flex items-center gap-2">
+                          <div className="flex-grow space-y-1">
+                              <p className="text-xs text-muted-foreground text-center">Inicio</p>
+                              <div className="flex items-center gap-1">
+                                  <FormField control={form.control} name="hora_inicio_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={(value) => { field.onChange(value); form.setValue('hora_inicio_minuto', '00'); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                  <span>:</span>
+                                  <FormField control={form.control} name="hora_inicio_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                              </div>
+                          </div>
+                          <span className="pt-6 px-1">a</span>
+                          <div className="flex-grow space-y-1">
+                              <p className="text-xs text-muted-foreground text-center">Fin</p>
+                              <div className="flex items-center gap-1">
+                                 <FormField control={form.control} name="hora_fin_hora" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2,'0')}>{String(h).padStart(2,'0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                  <span>:</span>
+                                  <FormField control={form.control} name="hora_fin_minuto" render={({field}) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                              </div>
+                          </div>
+                      </div>
+                      <FormMessage className="text-center text-xs">
+                          {form.formState.errors.hora_inicio_hora?.message}
+                      </FormMessage>
+                  </div>
+              </div>
+
+               {selectedClient ? (
+                  <Card>
+                      <CardContent className="p-3">
+                              <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                  <Avatar className="h-9 w-9">
+                                      <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                      <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                      <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
+                                  </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                              </div>
+                          </div>
+                      </CardContent>
+                  </Card>
+              ) : (
+                  <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                      <FormItem>
+                          <div className="flex justify-between items-center">
+                          <FormLabel>Cliente</FormLabel>
+                          <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                  <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                          </Button>
+                          </div>
+                           <ClientCombobox
+                              clients={clients}
+                              loading={clientsLoading}
+                              value={field.value}
+                              onChange={field.onChange}
+                           />
+                          <FormMessage />
+                      </FormItem>
+                  )}/>
+              )}
+
+              {selectedClient && (
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="notificaciones">
+                      <AccordionTrigger>Notificaciones Adicionales</AccordionTrigger>
+                      <AccordionContent className="space-y-3 pt-2">
+                          <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
+                              <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                      <Checkbox
+                                          checked={field.value}
+                                          onCheckedChange={field.onChange}
+                                          disabled={!selectedClient?.telefono || !isAppointmentNotificationEnabled}
+                                      />
+                                  </FormControl>
+                                  <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
+                              </FormItem>
+                          )}/>
+                           <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
+                              <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                      <Checkbox
+                                          checked={field.value}
+                                          onCheckedChange={field.onChange}
+                                          disabled={!selectedClient?.telefono || !isReminderNotificationEnabled}
+                                      />
+                                  </FormControl>
+                                  <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>
+                              </FormItem>
+                          )}/>
+                          {!selectedClient?.telefono && <p className="text-xs text-muted-foreground pl-6">El cliente no tiene un teléfono para enviar notificaciones de WhatsApp.</p>}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+              )}
+
+
+              <div className="space-y-4">
+                  {fields.map((field, index) => (
+                      <Card key={field.id} className="p-4 relative bg-muted/50">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                               <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
+                                  <FormItem>
+                                      <FormLabel>Servicios</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                          <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
+                                          <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}/>
+                              <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
+                                  <FormItem>
+                                      <FormLabel>Profesional</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                          <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
+                                          <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                                      </Select>
+                                       {availabilityErrors[index] && <p className="text-sm font-medium text-destructive">{availabilityErrors[index]}</p>}
+                                  </FormItem>
+                              )}/>
+                          </div>
+                          {fields.length > 1 && (
+                               <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
+                                  <Trash2 className="h-4 w-4" />
+                              </Button>
+                          )}
+                      </Card>
+                  ))}
+                   <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '' })} className="w-full">
+                      <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
+                  </Button>
+              </div>
+            </div>
+
+            <Accordion type="single" collapsible className="px-6">
+              <AccordionItem value="item-1">
+                  <AccordionTrigger>Información adicional</AccordionTrigger>
+                  <AccordionContent className="space-y-4 pt-2">
+                       <FormField control={form.control} name="precio" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Precio</FormLabel>
+                              <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                  <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
+                              </div>
+                              <FormMessage />
+                          </FormItem>
+                      )}/>
+                      <FormField control={form.control} name="notas" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Notas compartidas con el cliente</FormLabel>
+                              <FormControl><Textarea rows={4} placeholder="Estas notas serán visibles para el cliente" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}/>
+                       <FormField control={form.control} name="nota_interna" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Nota interna</FormLabel>
+                              <FormControl><Textarea rows={4} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}/>
+                  </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+          
+          <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
+            <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Reserva'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Form>
+      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+          <DialogContent className="sm:max-w-lg">
+               <DialogHeader>
+                  <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                  <DialogDescription>
+                      Completa la información para registrar un nuevo cliente en el sistema.
+                  </DialogDescription>
+                </DialogHeader>
+              <NewClientForm onFormSubmit={handleClientCreated} />
+          </DialogContent>
+      </Dialog>
     </>
   );
 

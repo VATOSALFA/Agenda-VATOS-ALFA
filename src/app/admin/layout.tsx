@@ -1,12 +1,14 @@
 
-interface AdminLayoutProps {
-  children: React.ReactNode;
-}
+'use client';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
-  return (
-    <div className="flex-1 p-4 md:p-8 pt-6 overflow-y-auto">
-        {children}
-    </div>
-  );
+// This page just redirects to the default admin page.
+export default function AdminLayout() {
+    const router = useRouter();
+    useEffect(() => {
+        router.replace('/admin/profesionales');
+    }, [router]);
+
+    return null; // Or a loading spinner
 }

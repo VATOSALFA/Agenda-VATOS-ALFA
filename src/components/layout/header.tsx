@@ -454,12 +454,6 @@ export default function Header() {
                             <span>Mi Perfil</span>
                         </Link>
                     </DropdownMenuItem>
-                     <DropdownMenuItem asChild>
-                        <Link href="/admin/empresa">
-                            <Landmark className="mr-2 h-4 w-4" />
-                            <span>Mi Negocio</span>
-                        </Link>
-                    </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={handleLogout}>

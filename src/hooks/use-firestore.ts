@@ -37,9 +37,8 @@ export function useFirestoreQuery<T>(
   const isQueryActive = depsKey !== undefined;
 
   useEffect(() => {
-    if (!db || !isQueryActive) {
+    if (!db || keyOrFirstConstraint === undefined) {
       if(loading) setLoading(false);
-      setData([]); // Clear data if query is not active
       return;
     }
 
@@ -94,7 +93,7 @@ export function useFirestoreQuery<T>(
     
   // We use JSON.stringify on finalConstraints to create a stable dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, JSON.stringify(finalConstraints), manualKey, isQueryActive, depsKey, db]);
+  }, [collectionName, JSON.stringify(finalConstraints), manualKey, db, keyOrFirstConstraint]);
 
   return { data, loading, error, setKey: setManualKey };
 }

@@ -45,75 +45,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-            const isSuperAdminByEmail = firebaseUser.email?.toLowerCase() === 'zeusalejandro.vatosalfa@gmail.com'.toLowerCase();
+            let customData: any;
+            let userRole: string;
+            let userPermissions: string[] = [];
 
-            if (isSuperAdminByEmail) {
-                setUser({
-                    ...firebaseUser,
-                    displayName: 'Zeus Pacheco',
-                    email: firebaseUser.email,
-                    role: 'Administrador general',
-                    permissions: allPermissions.map(p => p.key),
-                    uid: firebaseUser.uid,
-                });
+            // 1. Check 'usuarios' collection first
+            const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                customData = userDoc.data();
+                userRole = customData.role || 'Staff (Sin edición)';
             } else {
-                const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-                const userDoc = await getDoc(userDocRef);
-                let customData: any;
-
-                if (userDoc.exists()) {
-                    customData = userDoc.data();
+                // 2. Fallback to 'profesionales' collection
+                console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
+                const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
+                const profDoc = await getDoc(profDocRef);
+                if (profDoc.exists()) {
+                    customData = profDoc.data();
+                    userRole = 'Staff (Sin edición)'; // Professionals default to a restricted role
                 } else {
-                    console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
-                    const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
-                    const profDoc = await getDoc(profDocRef);
-                    if (profDoc.exists()) {
-                        customData = profDoc.data();
-                        if (!customData.role) {
-                            customData.role = 'Staff'; 
-                        }
-                    }
-                }
-                
-                if (customData) {
-                    const role = customData.role || 'Administrador general';
-                    const isSuperAdminByRole = role === 'Administrador general';
-
-                    // Fetch permissions for the role from Firestore
-                    const roleDocRef = doc(db, 'roles', role.toLowerCase().replace(/ /g, '_'));
-                    const roleDoc = await getDoc(roleDocRef);
-                    
-                    let rolePermissions: string[] = [];
-                    if (roleDoc.exists()) {
-                        rolePermissions = roleDoc.data().permissions || [];
-                    } else {
-                        // Fallback to initialRoles if not found in DB
-                        const initialRole = initialRoles.find(r => r.title === role);
-                        rolePermissions = initialRole ? initialRole.permissions : [];
-                    }
-                    
-                    setUser({
-                        ...firebaseUser,
-                        displayName: customData.name || firebaseUser.displayName,
-                        email: customData.email,
-                        role: role,
-                        permissions: isSuperAdminByRole ? allPermissions.map(p => p.key) : rolePermissions,
-                        uid: firebaseUser.uid,
-                        local_id: customData.local_id,
-                        avatarUrl: customData.avatarUrl,
-                    });
-                } else {
-                     console.error(`CRITICAL: User document for UID ${firebaseUser.uid} not found in 'usuarios' or 'profesionales'. Please verify the user exists in Firestore.`);
-                     setUser({ 
-                        ...firebaseUser, 
-                        role: 'Administrador general', 
-                        permissions: allPermissions.map(p => p.key), 
-                        uid: firebaseUser.uid 
-                    });
+                    // 3. Fallback for super admin or unprovisioned user
+                    console.warn(`User document for UID ${firebaseUser.uid} not found. Defaulting to Admin.`);
+                    customData = { name: firebaseUser.displayName, email: firebaseUser.email };
+                    userRole = 'Administrador general';
                 }
             }
+
+            // Determine permissions based on role
+            if (userRole === 'Administrador general') {
+                userPermissions = allPermissions.map(p => p.key);
+            } else {
+                // Fetch permissions for the role from Firestore
+                const roleId = userRole.toLowerCase().replace(/ /g, '_');
+                const roleDocRef = doc(db, 'roles', roleId);
+                const roleDoc = await getDoc(roleDocRef);
+                
+                if (roleDoc.exists()) {
+                    userPermissions = roleDoc.data().permissions || [];
+                } else {
+                    // Fallback to initialRoles if not found in DB
+                    const initialRole = initialRoles.find(r => r.title === userRole);
+                    userPermissions = initialRole ? initialRole.permissions : [];
+                    console.warn(`Role '${userRole}' not found in Firestore. Using default permissions.`);
+                }
+            }
+            
+            setUser({
+                ...firebaseUser,
+                displayName: customData.name || firebaseUser.displayName,
+                email: customData.email || firebaseUser.email,
+                role: userRole,
+                permissions: userPermissions,
+                uid: firebaseUser.uid,
+                local_id: customData.local_id,
+                avatarUrl: customData.avatarUrl,
+            });
+
         } catch (error) {
             console.error("Error fetching user data from Firestore:", error);
+             // Critical error, default to super-admin to avoid locking out.
             setUser({ 
               ...firebaseUser, 
               role: 'Administrador general', 

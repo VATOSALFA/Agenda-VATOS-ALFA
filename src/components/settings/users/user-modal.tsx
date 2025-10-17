@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -24,7 +23,7 @@ import { db, auth } from '@/lib/firebase-client';
 import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateEmail, updateProfile } from 'firebase/auth';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
 import { useDebounce } from 'use-debounce';
@@ -181,9 +180,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     try {
         const selectedRoleData = roles.find(r => r.title === data.role);
         const permissionsForRole = selectedRoleData ? selectedRoleData.permissions : [];
-        
+        const fullName = `${data.nombre} ${data.apellido}`.trim();
+
         const dataToSave: any = { 
-            name: `${data.nombre} ${data.apellido}`.trim(),
+            name: fullName,
             email: data.email,
             celular: data.celular,
             role: data.role,
@@ -196,15 +196,19 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
             
+            // This password change logic is flawed for admin changing other users' passwords
+            // As it requires re-authentication of the currently logged in user (the admin).
+            // A backend function would be required for a secure implementation.
+            // For now, it will only work if an admin changes their own password.
             if (data.newPassword && data.currentPassword) {
                 const currentUser = auth.currentUser;
-                if(currentUser && currentUser.email) {
+                if(currentUser && currentUser.email?.toLowerCase() === user.email.toLowerCase()) {
                     const credential = EmailAuthProvider.credential(currentUser.email, data.currentPassword);
                     await reauthenticateWithCredential(currentUser, credential);
                     await updatePassword(currentUser, data.newPassword);
                     toast({ title: "Contraseña actualizada" });
-                } else {
-                   throw new Error("No hay un usuario activo para reautenticar.");
+                } else if (currentUser?.email?.toLowerCase() !== user.email.toLowerCase()) {
+                    toast({ variant: 'destructive', title: "Error de permisos", description: "No puedes cambiar la contraseña de otro usuario desde aquí." });
                 }
             } else if (data.newPassword && !data.currentPassword) {
                  toast({ variant: 'destructive', title: "Error", description: "Debes ingresar tu contraseña actual para cambiarla." });
@@ -217,11 +221,15 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             if (!data.password) {
                 throw new Error("La contraseña es requerida para nuevos usuarios.");
             }
-            const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-            const newFirebaseUser = userCredential.user;
+            // Temporarily create user in Auth to get a UID
+            const tempUserCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+            const newFirebaseUser = tempUserCredential.user;
+            
+            await updateProfile(newFirebaseUser, { displayName: fullName });
 
             const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
             await setDoc(userRef, dataToSave);
+            
             toast({ title: "Usuario creado con éxito" });
         }
         
@@ -234,7 +242,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             description = "Este correo electrónico ya está registrado. Por favor, utiliza otro.";
         } else if (error.code === 'auth/weak-password') {
             description = "La contraseña es demasiado débil. Debe tener al menos 6 caracteres.";
-        } else if (error.code === 'auth/wrong-password') {
+        } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
             description = "La contraseña actual es incorrecta.";
         }
         toast({ variant: 'destructive', title: "Error", description });

@@ -27,6 +27,7 @@ import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCrede
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
 import { useDebounce } from 'use-debounce';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 
 const userSchema = (isEditMode: boolean) => z.object({
@@ -219,7 +220,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                 await updateProfile(auth.currentUser, { displayName: fullName, photoURL: data.avatarUrl });
             }
 
-            toast({ title: "Usuario actualizado" });
+            toast({ title: "Cambios realizados con exito" });
         } else {
             if (!data.password) {
                 throw new Error("La contraseña es requerida para nuevos usuarios.");
@@ -336,42 +337,46 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     )}
                   />
                 ) : (
-                  <div className="space-y-4 pt-4 border-t">
-                      <h4 className="text-sm font-medium">Cambiar Contraseña (Opcional)</h4>
-                      <FormField
-                          control={form.control}
-                          name="currentPassword"
-                          render={({ field }) => (
-                              <FormItem>
-                                  <FormLabel>Contraseña actual</FormLabel>
-                                  <FormControl><Input type="password" {...field} autoComplete="current-password" /></FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )}
-                      />
-                      <FormField
-                          control={form.control}
-                          name="newPassword"
-                          render={({ field }) => (
-                              <FormItem>
-                                  <FormLabel>Nueva contraseña</FormLabel>
-                                  <FormControl><Input type="password" {...field} autoComplete="new-password"/></FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )}
-                      />
-                      <FormField
-                          control={form.control}
-                          name="confirmPassword"
-                          render={({ field }) => (
-                              <FormItem>
-                                  <FormLabel>Confirmar nueva contraseña</FormLabel>
-                                  <FormControl><Input type="password" {...field} autoComplete="new-password"/></FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )}
-                      />
-                  </div>
+                    <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="change-password">
+                            <AccordionTrigger className="text-sm font-semibold">Cambiar Contraseña</AccordionTrigger>
+                            <AccordionContent className="pt-4 space-y-4">
+                                <FormField
+                                    control={form.control}
+                                    name="currentPassword"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Contraseña actual</FormLabel>
+                                            <FormControl><Input type="password" {...field} autoComplete="current-password" /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="newPassword"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Nueva contraseña</FormLabel>
+                                            <FormControl><Input type="password" {...field} autoComplete="new-password"/></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="confirmPassword"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Confirmar nueva contraseña</FormLabel>
+                                            <FormControl><Input type="password" {...field} autoComplete="new-password"/></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
                 )}
                 <FormField
                   control={form.control}

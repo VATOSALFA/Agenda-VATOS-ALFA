@@ -23,6 +23,9 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
   return (
     <div className="flex flex-col md:flex-row h-full">
         <aside className="w-full md:w-1/5 md:border-r p-4 md:p-6">
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">
+                CONFIGURACIÓN
+            </h2>
             <SidebarNav items={sidebarNavItems} />
         </aside>
         <main className="flex-1 p-4 md:p-8 pt-6 overflow-y-auto">

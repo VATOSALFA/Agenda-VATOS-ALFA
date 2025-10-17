@@ -14,6 +14,7 @@ const sidebarNavItems = [
     { title: "Pagos", href: "/settings/pagos" },
     { title: "Emails", href: "/settings/emails" },
     { title: "Clientes", href: "/settings/clients-settings" },
+    { title: "Usuarios", href: "/settings/users" },
     { title: "Códigos de autorización", href: "/settings/auth-codes" },
     { title: "Diagnóstico", href: "/settings/diagnostico" },
 ];

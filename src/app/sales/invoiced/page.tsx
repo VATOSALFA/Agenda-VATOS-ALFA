@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
-import { format, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -145,11 +145,20 @@ export default function InvoicedSalesPage() {
     const [queryKey, setQueryKey] = useState(0);
 
     const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
+    
+    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+
 
     useEffect(() => {
         const today = new Date();
-        const initialDateRange = { from: today, to: today };
+        let initialDateRange: DateRange | undefined;
+        if (isReceptionist) {
+            initialDateRange = { from: subDays(today, 2), to: today };
+        } else {
+            initialDateRange = { from: today, to: today };
+        }
         setDateRange(initialDateRange);
+        
         const initialFilters = {
             dateRange: initialDateRange,
             local: user?.local_id || 'todos',
@@ -159,19 +168,26 @@ export default function InvoicedSalesPage() {
         if(user?.local_id) {
             setLocalFilter(user.local_id);
         }
-    }, [user]);
+    }, [user, isReceptionist]);
 
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
-        if (activeFilters.dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
+        let fromDate = activeFilters.dateRange?.from;
+        if (isReceptionist) {
+            // Force date range for receptionists regardless of selection
+            const today = new Date();
+            fromDate = startOfDay(subDays(today, 2));
+        }
+
+        if (fromDate) {
+            constraints.push(where('fecha_hora_venta', '>=', startOfDay(fromDate)));
         }
         if (activeFilters.dateRange?.to) {
             constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
         return constraints;
-    }, [activeFilters.dateRange]);
+    }, [activeFilters.dateRange, isReceptionist]);
 
     const { data: salesDataFromHook, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
@@ -438,7 +454,7 @@ export default function InvoicedSalesPage() {
                 <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant={"outline"} className="justify-start text-left font-normal">
+                            <Button variant={"outline"} className="justify-start text-left font-normal" disabled={isReceptionist}>
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {dateRange?.from ? (
                                     dateRange.to ? (
@@ -744,5 +760,3 @@ export default function InvoicedSalesPage() {
     </>
   );
 }
-
-    

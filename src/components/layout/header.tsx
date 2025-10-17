@@ -37,6 +37,8 @@ import {
   LogOut,
   MessagesSquare,
   User,
+  Scissors,
+  Percent
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -93,6 +95,12 @@ const finanzasNavLinks = [
   { href: '/finanzas/octubre', label: 'Octubre', permission: 'ver_finanzas' },
   { href: '/finanzas/noviembre', label: 'Noviembre', permission: 'ver_finanzas' },
   { href: '/finanzas/diciembre', label: 'Diciembre', permission: 'ver_finanzas' },
+];
+
+const adminNavLinks = [
+    { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
+    { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
+    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
 interface EmpresaSettings {
@@ -326,17 +334,30 @@ export default function Header() {
             )}
 
             {canSee('ver_administracion') && (
-              <Link
-                href="/admin"
-                className={cn(
-                  'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                  pathname.startsWith('/admin')
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}
-              >
-                Administración
-              </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className={cn(
+                        'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                        pathname.startsWith('/admin')
+                        ? 'bg-white/10 text-white'
+                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                    )}>
+                        Administración <ChevronDown className="w-4 h-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="start">
+                      {adminNavLinks.map(({href, label, icon: Icon, permission}) => (
+                          canSee(permission!) && (
+                            <DropdownMenuItem key={href} asChild>
+                                <Link href={href!}>
+                                    <Icon className="mr-2 h-4 w-4" />
+                                    <span>{label}</span>
+                                </Link>
+                            </DropdownMenuItem>
+                          )
+                      ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
             )}
 
           </nav>

@@ -7,6 +7,7 @@ interface SettingsLayoutProps {
 
 const sidebarNavItems = [
     { title: "Empresa", href: "/settings/empresa" },
+    { title: "Locales", href: "/admin/locales" },
     { title: "Sitio Web", href: "/settings/sitio-web" },
     { title: "Agenda", href: "/settings/agenda" },
     { title: "Sistema de caja", href: "/settings/sistema-caja" },

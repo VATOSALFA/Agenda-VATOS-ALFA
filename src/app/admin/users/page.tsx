@@ -200,7 +200,7 @@ export default function UsersPage() {
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8">
-      <Alert>
+        <Alert>
           <Info className="h-4 w-4" />
           <AlertTitle>En esta pantalla podrás crear y gestionar usuarios.</AlertTitle>
           <AlertDescription>
@@ -385,5 +385,4 @@ export default function UsersPage() {
       )}
     </div>
   );
-
-    
+}

@@ -175,7 +175,6 @@ export default function InvoicedSalesPage() {
         const constraints = [];
         let fromDate = activeFilters.dateRange?.from;
         if (isReceptionist) {
-            // Force date range for receptionists regardless of selection
             const today = new Date();
             fromDate = startOfDay(subDays(today, 2));
         }
@@ -454,7 +453,7 @@ export default function InvoicedSalesPage() {
                 <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant={"outline"} className="justify-start text-left font-normal" disabled={isReceptionist}>
+                            <Button variant={"outline"} className="justify-start text-left font-normal">
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {dateRange?.from ? (
                                     dateRange.to ? (
@@ -468,7 +467,14 @@ export default function InvoicedSalesPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                            <Calendar 
+                                mode="range" 
+                                selected={dateRange} 
+                                onSelect={setDateRange} 
+                                numberOfMonths={2} 
+                                locale={es}
+                                disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                            />
                         </PopoverContent>
                     </Popover>
                     <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLocalAdmin || localesLoading}>

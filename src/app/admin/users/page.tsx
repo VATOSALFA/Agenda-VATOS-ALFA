@@ -201,7 +201,7 @@ export default function UsersPage() {
 
   return (
     <>
-    <div className="flex-1 space-y-6">
+    <div className="flex-1 space-y-6 p-4 md:p-8">
         <Alert>
             <Info className="h-4 w-4" />
             <AlertTitle>En esta pantalla podrás crear y gestionar usuarios.</AlertTitle>
@@ -308,7 +308,7 @@ export default function UsersPage() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        onClick={()={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                         disabled={currentPage === totalPages}
                     >
                         Siguiente <ChevronRight className="h-4 w-4 ml-1" />
@@ -389,3 +389,5 @@ export default function UsersPage() {
     </>
   );
 }
+
+    

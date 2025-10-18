@@ -86,7 +86,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
     }
 }
 
-export const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
+export const sendTemplatedWhatsAppMessage = ai.defineFlow(
   {
     name: 'sendTemplatedWhatsAppMessageFlow',
     inputSchema: TemplatedWhatsAppMessageInput,
@@ -110,7 +110,7 @@ export const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
       
       const messageData = {
         from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+521${input.to}`,
+        to: `whatsapp:+52${input.to}`,
         contentSid: input.contentSid,
         contentVariables: JSON.stringify(input.contentVariables),
       };
@@ -140,3 +140,4 @@ export const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
     }
   }
 );
+export const sendTemplatedWhatsAppMessageFlow = sendTemplatedWhatsAppMessage;

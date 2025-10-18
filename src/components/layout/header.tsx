@@ -397,11 +397,13 @@ export default function Header() {
                 </Link>
              )}
             
-            <Link href="/settings" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
-                    <Settings className="h-5 w-5" />
-                </Button>
-            </Link>
+            {canSee('ver_administracion') && (
+              <Link href="/settings" passHref>
+                  <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                      <Settings className="h-5 w-5" />
+                  </Button>
+              </Link>
+            )}
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

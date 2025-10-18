@@ -122,26 +122,25 @@ function ConfirmPageContent() {
 
             // Send WhatsApp notification
             if (data.telefono) {
-                try {
-                    const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                    await sendTemplatedWhatsAppMessage({
-                        to: data.telefono,
-                        contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // Cita Agendada
-                        contentVariables: {
-                            '1': data.nombre,
-                            '2': reservationData.servicio,
-                            '3': fullDateStr,
-                            '4': selectedProfessional.name,
-                        },
-                    });
-                } catch (waError) {
-                    console.error("WhatsApp notification failed:", waError);
-                    // Do not block UI for this error, just log it.
+                const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
+                const result = await sendTemplatedWhatsAppMessage({
+                    to: data.telefono,
+                    contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // Cita Agendada
+                    contentVariables: {
+                        '1': data.nombre,
+                        '2': reservationData.servicio,
+                        '3': fullDateStr,
+                        '4': selectedProfessional.name,
+                    },
+                });
+
+                if(result.success) {
                     toast({
-                        variant: 'destructive',
-                        title: 'Error de Notificación',
-                        description: 'La reserva se creó, pero no se pudo enviar la notificación por WhatsApp.',
+                        title: 'Notificación enviada',
+                        description: 'El mensaje de WhatsApp ha sido enviado al cliente.',
                     });
+                } else {
+                    throw new Error(result.error || 'Error desconocido al enviar WhatsApp');
                 }
             }
             
@@ -153,9 +152,10 @@ function ConfirmPageContent() {
 
             router.push('/book/success');
 
-        } catch (error) {
-            console.error("Error confirming reservation:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo confirmar la reserva. Por favor, inténtalo de nuevo.' });
+        } catch (error: unknown) {
+            console.error("Error confirming reservation or sending notification:", error);
+            const errorMessage = error instanceof Error ? error.message : 'No se pudo completar el proceso.';
+            toast({ variant: 'destructive', title: 'Error', description: `No se pudo confirmar la reserva o enviar la notificación. Error: ${errorMessage}` });
         } finally {
             setIsSubmitting(false);
         }

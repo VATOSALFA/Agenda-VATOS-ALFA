@@ -159,17 +159,19 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             celular: data.celular,
             role: data.role,
             permissions: permissionsForRole,
-            local_id: data.role === 'Administrador general' ? (data.local_id || null) : data.local_id,
             avatarUrl: data.avatarUrl,
         };
         
+        // Handle local_id correctly
+        if (data.role === 'Administrador general') {
+            dataToSave.local_id = data.local_id || null;
+        } else {
+            dataToSave.local_id = data.local_id;
+        }
+
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
-            
-            // This logic is complex for an admin. The primary use case here is for an admin to update user details,
-            // not to manage their passwords. A password reset flow would be a better pattern.
-            // For now, only profile updates are supported here.
 
             if(auth.currentUser && auth.currentUser.uid === user.id) {
                 await updateProfile(auth.currentUser, { displayName: fullName, photoURL: data.avatarUrl });
@@ -293,19 +295,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
-                {!isEditMode && (
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contraseña (temporal)</FormLabel>
-                        <FormControl><Input type="password" {...field} placeholder="Debe tener al menos 6 caracteres" /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
                  <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="optional-fields">
                         <AccordionTrigger className="text-sm font-semibold">Datos Opcionales</AccordionTrigger>
@@ -321,6 +310,24 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                                 </FormItem>
                             )}
                             />
+                        </AccordionContent>
+                    </AccordionItem>
+                     <AccordionItem value="password-fields">
+                        <AccordionTrigger className="text-sm font-semibold">Cambiar Contraseña</AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                             {!isEditMode && (
+                                <FormField
+                                    control={form.control}
+                                    name="password"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Contraseña</FormLabel>
+                                        <FormControl><Input type="password" {...field} placeholder="Debe tener al menos 6 caracteres" /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                            )}
                         </AccordionContent>
                     </AccordionItem>
                  </Accordion>

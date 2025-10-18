@@ -12,6 +12,7 @@ const sidebarNavItems = [
     { title: "Agenda", href: "/settings/agenda" },
     { title: "Sistema de caja", href: "/settings/sistema-caja" },
     { title: "Recordatorios", href: "/settings/recordatorios" },
+    { title: "WhatsApp", href: "/admin/whatsapp" },
     { title: "Pagos", href: "/settings/pagos" },
     { title: "Emails", href: "/settings/emails" },
     { title: "Clientes", href: "/settings/clients-settings" },

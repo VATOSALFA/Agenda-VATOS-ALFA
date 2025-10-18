@@ -27,7 +27,7 @@ import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCrede
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
 import { useDebounce } from 'use-debounce';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 const userSchema = (isEditMode: boolean) => z.object({

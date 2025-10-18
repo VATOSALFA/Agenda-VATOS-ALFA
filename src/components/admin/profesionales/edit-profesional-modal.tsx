@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -95,7 +96,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         services: [],
         schedule: defaultSchedule,
         biography: '',
-        avatar: '',
+        avatarUrl: '',
         local_id: '',
     },
   });
@@ -136,7 +137,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             : {
                 name: '', email: '', active: true, acceptsOnline: true, services: [],
                 schedule: defaultSchedule,
-                biography: '', avatar: '', order: 0,
+                biography: '', avatarUrl: '', order: 0,
                 local_id: locales.length > 0 ? locales[0].id : ''
             };
         form.reset(defaultValues);
@@ -401,7 +402,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                       <div className="space-y-2">
                          <Label>Foto del profesional</Label>
                          <Controller
-                            name="avatar"
+                            name="avatarUrl"
                             control={form.control}
                             render={({ field }) => (
                                <ImageUploader 

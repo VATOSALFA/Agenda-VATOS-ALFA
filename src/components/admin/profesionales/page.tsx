@@ -104,7 +104,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
         <Avatar>
-          <AvatarImage src={prof.avatar} data-ai-hint={prof.dataAiHint} />
+          <AvatarImage src={prof.avatarUrl} data-ai-hint={prof.dataAiHint} />
           <AvatarFallback>{prof.name ? prof.name.substring(0, 2) : '??'}</AvatarFallback>
         </Avatar>
         <span className="font-medium">{prof.name}</span>

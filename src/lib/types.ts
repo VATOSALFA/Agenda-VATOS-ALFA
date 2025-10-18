@@ -39,7 +39,7 @@ export interface Profesional {
     userId: string;
     name: string;
     email: string;
-    avatar: string;
+    avatarUrl: string;
     dataAiHint?: string;
     active: boolean;
     acceptsOnline: boolean;

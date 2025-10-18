@@ -171,21 +171,37 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     setIsSubmitting(true);
     try {
         if(!db) throw new Error("Database not available");
+        
+        // The `avatarUrl` is now managed in the `usuarios` collection.
+        // We remove it from the professional data to avoid duplication.
+        const { avatarUrl, ...profData } = data;
 
         if (profesional) {
             const profRef = doc(db, 'profesionales', profesional.id);
-            await updateDoc(profRef, data);
-            await upsertUser(data, profesional.userId || profesional.id); // Use existing userId or fall back to prof id
+            await updateDoc(profRef, profData);
+            
+            // Also update the user document with the new avatar and name
+            if (profesional.userId) {
+                const userRef = doc(db, 'usuarios', profesional.userId);
+                await updateDoc(userRef, { name: profData.name, avatarUrl: avatarUrl });
+            }
+
             toast({ title: "Profesional actualizado con éxito" });
         } else {
             // Create user first
             const newUserRef = doc(collection(db, 'usuarios'));
-            await upsertUser(data, newUserRef.id);
+            await setDoc(newUserRef, {
+                name: profData.name,
+                email: profData.email,
+                role: 'Staff',
+                local_id: profData.local_id,
+                avatarUrl: avatarUrl,
+            });
 
             // Then create professional with the same ID as user
             const profRef = doc(db, 'profesionales', newUserRef.id);
             await setDoc(profRef, { 
-                ...data,
+                ...profData,
                 userId: newUserRef.id, // Explicitly link userId
                 order: 99,
                 created_at: Timestamp.now() 

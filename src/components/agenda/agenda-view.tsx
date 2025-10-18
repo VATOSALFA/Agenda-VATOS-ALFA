@@ -53,7 +53,7 @@ import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
-import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser } from '@/lib/types';
+import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser } from '@/lib/types';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -542,8 +542,8 @@ export default function AgendaView() {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   
   const getProfessionalAvatar = (profesional: Profesional) => {
-      const user = userMap.get(profesional.id);
-      return user?.avatarUrl || profesional.avatarUrl;
+      const userDoc = userMap.get(profesional.userId);
+      return userDoc?.avatarUrl || profesional.avatarUrl;
   }
 
   return (

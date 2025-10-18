@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useRef, MouseEvent, useEffect, useMemo, useCallback } from 'react';
@@ -541,7 +542,7 @@ export default function AgendaView() {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   
   const getProfessionalAvatar = (profesional: Profesional) => {
-      const user = userMap.get(profesional.userId);
+      const user = userMap.get(profesional.id);
       return user?.avatarUrl || profesional.avatarUrl;
   }
 

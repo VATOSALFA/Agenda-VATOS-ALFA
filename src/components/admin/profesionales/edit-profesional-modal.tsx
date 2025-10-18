@@ -144,16 +144,18 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     }
   }, [profesional, form, isOpen, locales]);
 
-  const upsertUser = async (profData: any, profId: string) => {
-    if(!db) throw new Error("Database not available");
-    const userRef = doc(db, 'usuarios', profId);
+  const upsertUser = async (profData: any, userId: string): Promise<string> => {
+    if (!db) throw new Error("Database not available");
+
+    const userRef = doc(db, 'usuarios', userId);
     const userSnap = await getDoc(userRef);
 
     const userData = {
         name: profData.name,
         email: profData.email,
-        role: 'Staff (Sin edición)',
-        local_id: profData.local_id
+        role: 'Staff',
+        local_id: profData.local_id,
+        avatarUrl: profData.avatarUrl
     };
 
     if (userSnap.exists()) {
@@ -161,30 +163,33 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     } else {
         await setDoc(userRef, userData);
     }
-    return userRef.id;
-  };
+    return userId;
+};
 
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
         if(!db) throw new Error("Database not available");
-        if(profesional) {
-            // Update
+
+        if (profesional) {
             const profRef = doc(db, 'profesionales', profesional.id);
             await updateDoc(profRef, data);
-            await upsertUser(data, profesional.id);
+            await upsertUser(data, profesional.userId || profesional.id); // Use existing userId or fall back to prof id
             toast({ title: "Profesional actualizado con éxito" });
         } else {
-            // Create
-            const collectionRef = collection(db, 'profesionales');
-            const profDocRef = await addDoc(collectionRef, { 
-                ...data, 
-                order: 99, // Add to end of list
+            // Create user first
+            const newUserRef = doc(collection(db, 'usuarios'));
+            await upsertUser(data, newUserRef.id);
+
+            // Then create professional with the same ID as user
+            const profRef = doc(db, 'profesionales', newUserRef.id);
+            await setDoc(profRef, { 
+                ...data,
+                userId: newUserRef.id, // Explicitly link userId
+                order: 99,
                 created_at: Timestamp.now() 
             });
-            const userId = await upsertUser(data, profDocRef.id);
-            await updateDoc(profDocRef, { userId: userId });
             toast({ title: "Profesional creado con éxito" });
         }
         onDataSaved();

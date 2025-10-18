@@ -15,7 +15,7 @@ import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, serv
 
 
 const TemplatedWhatsAppMessageInput = z.object({
-  to: z.string().describe("The recipient's phone number in E.164 format, just the digits."),
+  to: z.string().describe("The recipient's phone number, just the digits."),
   contentSid: z.string().describe("The Content SID of the Twilio template to use."),
   contentVariables: z.record(z.string(), z.string()).describe("An object of key-value pairs for the template variables. e.g. { '1': 'John', '2': 'Your appointment details' }"),
 });
@@ -86,13 +86,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
     }
 }
 
-export async function sendTemplatedWhatsAppMessage(
-  input: TemplatedWhatsAppMessageInput
-): Promise<WhatsAppMessageOutput> {
-  return sendTemplatedWhatsAppMessageFlow(input);
-}
-
-const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
+export const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
   {
     name: 'sendTemplatedWhatsAppMessageFlow',
     inputSchema: TemplatedWhatsAppMessageInput,
@@ -116,7 +110,7 @@ const sendTemplatedWhatsAppMessageFlow = ai.defineFlow(
       
       const messageData = {
         from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+52${input.to}`,
+        to: `whatsapp:+521${input.to}`,
         contentSid: input.contentSid,
         contentVariables: JSON.stringify(input.contentVariables),
       };

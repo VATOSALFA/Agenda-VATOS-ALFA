@@ -34,6 +34,7 @@ export const allPermissionCategories: PermissionCategory[] = [
         icon: Users,
         permissions: [
             { key: 'ver_clientes', label: 'Ver Clientes' },
+            { key: 'ver_numero_telefono', label: 'Ver número de teléfono' },
         ],
     },
     {
@@ -115,7 +116,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
     description: 'Administra un local específico, gestionando profesionales, servicios y viendo reportes de su sucursal.',
     permissions: [
         'ver_agenda', 'crear_reservas', 'bloquear_horarios', 
-        'ver_clientes', 
+        'ver_clientes', 'ver_numero_telefono',
         'ver_ventas', 'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'registrar_ventas', 'ver_propinas',
         'ver_productos', 'ver_inventario', 'ver_venta_productos',
         'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja',

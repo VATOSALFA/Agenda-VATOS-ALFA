@@ -169,6 +169,8 @@ export default function ClientsPage() {
   const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
 
   const isLoading = clientsLoading || localesLoading || salesLoading;
+  
+  const canViewPhone = useMemo(() => user?.permissions?.includes('ver_numero_telefono'), [user]);
 
   useEffect(() => {
     if (user?.local_id) {
@@ -485,7 +487,7 @@ export default function ClientsPage() {
                         <TableCell className="font-medium">{client.nombre}</TableCell>
                         <TableCell>{client.apellido}</TableCell>
                         <TableCell>{client.correo}</TableCell>
-                        <TableCell>{client.telefono}</TableCell>
+                        <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
                         <TableCell>{formatDate(client.creado_en)}</TableCell>
                         <TableCell className="text-right">
                            <div className="flex items-center justify-end gap-2">

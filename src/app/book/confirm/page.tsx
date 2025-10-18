@@ -126,7 +126,7 @@ function ConfirmPageContent() {
                     const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
                     await sendTemplatedWhatsAppMessage({
                         to: data.telefono,
-                        contentSid: 'HX6162105c1002a6cf84fa345393869746', // agendada (CORRECTED)
+                        contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // Cita Agendada
                         contentVariables: {
                             '1': data.nombre,
                             '2': reservationData.servicio,

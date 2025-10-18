@@ -33,6 +33,7 @@ import type { Local } from '@/components/admin/locales/new-local-modal';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { db, auth } from '@/lib/firebase-client';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 
 interface EditProfesionalModalProps {
@@ -172,40 +173,46 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     try {
         if(!db) throw new Error("Database not available");
         
-        // The `avatarUrl` is now managed in the `usuarios` collection.
-        // We remove it from the professional data to avoid duplication.
-        const { avatarUrl, ...profData } = data;
+        const { ...profData } = data;
 
-        if (profesional) {
+        if (profesional) { // EDIT MODE
             const profRef = doc(db, 'profesionales', profesional.id);
             await updateDoc(profRef, profData);
             
             // Also update the user document with the new avatar and name
             if (profesional.userId) {
                 const userRef = doc(db, 'usuarios', profesional.userId);
-                await updateDoc(userRef, { name: profData.name, avatarUrl: avatarUrl });
+                await updateDoc(userRef, { name: profData.name, avatarUrl: profData.avatarUrl });
             }
 
             toast({ title: "Profesional actualizado con éxito" });
-        } else {
-            // Create user first
-            const newUserRef = doc(collection(db, 'usuarios'));
-            await setDoc(newUserRef, {
+        } else { // CREATE MODE
+            const newProfessionalId = doc(collection(db, 'profesionales')).id;
+            const newUserId = doc(collection(db, 'usuarios')).id;
+
+            const userData = {
                 name: profData.name,
                 email: profData.email,
                 role: 'Staff',
                 local_id: profData.local_id,
-                avatarUrl: avatarUrl,
-            });
+                avatarUrl: profData.avatarUrl,
+            };
 
-            // Then create professional with the same ID as user
-            const profRef = doc(db, 'profesionales', newUserRef.id);
-            await setDoc(profRef, { 
+            const professionalData = {
                 ...profData,
-                userId: newUserRef.id, // Explicitly link userId
+                userId: newUserId, // Link to the user document
                 order: 99,
-                created_at: Timestamp.now() 
-            });
+                created_at: Timestamp.now()
+            }
+            
+            const userRef = doc(db, 'usuarios', newUserId);
+            const profRef = doc(db, 'profesionales', newProfessionalId);
+
+            const batch = writeBatch(db);
+            batch.set(userRef, userData);
+            batch.set(profRef, professionalData);
+            await batch.commit();
+
             toast({ title: "Profesional creado con éxito" });
         }
         onDataSaved();

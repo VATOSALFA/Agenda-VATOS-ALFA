@@ -542,8 +542,7 @@ export default function AgendaView() {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   
   const getProfessionalAvatar = (profesional: Profesional): string | undefined => {
-    if (!profesional.userId) return undefined;
-    const userDoc = userMap.get(profesional.userId);
+    const userDoc = userMap.get(profesional.id);
     return userDoc?.avatarUrl;
   };
 
@@ -647,7 +646,7 @@ export default function AgendaView() {
                            <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group">
                                <Avatar className="h-[60px] w-[60px] group-hover:ring-2 group-hover:ring-primary transition-all">
                                    <AvatarImage src={getProfessionalAvatar(barber)} alt={barber.name} />
-                                   <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
+                                   <AvatarFallback>{barber.name ? barber.name.substring(0, 2) : '??'}</AvatarFallback>
                                </Avatar>
                                <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
                            </Link>

@@ -163,12 +163,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         };
         
         // Handle local_id correctly
-        if (data.role === 'Administrador general') {
-            dataToSave.local_id = data.local_id || null;
-        } else {
-            dataToSave.local_id = data.local_id;
-        }
-
+        dataToSave.local_id = data.local_id || null;
+        
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
@@ -290,7 +286,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
-                      <FormControl><Input type="email" {...field} disabled={isEditMode} /></FormControl>
+                      <FormControl><Input type="email" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

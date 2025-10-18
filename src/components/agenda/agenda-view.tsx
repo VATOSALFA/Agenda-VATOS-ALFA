@@ -52,7 +52,7 @@ import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
-import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock, SaleItem } from '@/lib/types';
+import type { Profesional, Client, Service, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser } from '@/lib/types';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -147,9 +147,10 @@ export default function AgendaView() {
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
+  const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios', queryKey);
   const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
   useEffect(() => {
@@ -208,7 +209,7 @@ export default function AgendaView() {
   const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
   
-  const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading;
+  const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading || usersLoading;
 
   const filteredProfessionals = useMemo(() => {
     const professionalsOfLocal = professionals.filter(p => p.local_id === selectedLocalId);
@@ -537,6 +538,13 @@ export default function AgendaView() {
     ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
     : 'Cargando...';
 
+  const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
+  
+  const getProfessionalAvatar = (profesional: Profesional) => {
+      const user = userMap.get(profesional.userId);
+      return user?.avatarUrl || profesional.avatarUrl;
+  }
+
   return (
     <TooltipProvider>
       <div className="grid grid-cols-[288px_1fr] h-[calc(100vh-4rem)] bg-muted/40 gap-2">
@@ -636,7 +644,7 @@ export default function AgendaView() {
                         <div key={barber.id} className="p-2 h-28 flex flex-col items-center justify-center border-b">
                            <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group">
                                <Avatar className="h-[60px] w-[60px] group-hover:ring-2 group-hover:ring-primary transition-all">
-                                   <AvatarImage src={barber.avatarUrl} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                   <AvatarImage src={getProfessionalAvatar(barber)} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                </Avatar>
                                <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>

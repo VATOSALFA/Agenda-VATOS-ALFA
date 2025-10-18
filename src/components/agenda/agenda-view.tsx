@@ -636,7 +636,7 @@ export default function AgendaView() {
                         <div key={barber.id} className="p-2 h-28 flex flex-col items-center justify-center border-b">
                            <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group">
                                <Avatar className="h-[60px] w-[60px] group-hover:ring-2 group-hover:ring-primary transition-all">
-                                   <AvatarImage src={barber.avatar} alt={barber.name} data-ai-hint={barber.dataAiHint} />
+                                   <AvatarImage src={barber.avatarUrl} alt={barber.name} data-ai-hint={barber.dataAiHint} />
                                    <AvatarFallback>{barber.name.substring(0, 2)}</AvatarFallback>
                                </Avatar>
                                <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>

@@ -34,14 +34,7 @@ const userSchema = (isEditMode: boolean) => z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
   apellido: z.string().min(1, 'El apellido es requerido.'),
   email: z.string().email('El email no es válido.'),
-  password: z.string().optional().refine(password => {
-    if (isEditMode) {
-      return true;
-    }
-    return !!password && password.length >= 6;
-  }, {
-      message: 'La contraseña debe tener al menos 6 caracteres.',
-  }),
+  password: z.string().optional(),
   celular: z.string().optional(),
   role: z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
@@ -166,7 +159,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             celular: data.celular,
             role: data.role,
             permissions: permissionsForRole,
-            local_id: data.role === 'Administrador general' ? null : data.local_id,
+            local_id: data.role === 'Administrador general' ? (data.local_id || null) : data.local_id,
             avatarUrl: data.avatarUrl,
         };
         
@@ -186,6 +179,9 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         } else {
             if (!data.password) {
                 throw new Error("La contraseña es requerida para nuevos usuarios.");
+            }
+             if (data.password.length < 6) {
+                throw new Error("La contraseña debe tener al menos 6 caracteres.");
             }
             // Temporarily create user in Auth to get a UID, then sign out the admin and sign back in.
             // This is a workaround for Firebase Auth client-side limitations.
@@ -219,7 +215,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         let description = "No se pudo guardar el usuario. Inténtalo de nuevo.";
         if (error.code === 'auth/email-already-in-use') {
             description = "Este correo electrónico ya está registrado. Por favor, utiliza otro.";
-        } else if (error.code === 'auth/weak-password') {
+        } else if (error.code === 'auth/weak-password' || error.message.includes('at least 6 characters')) {
             description = "La contraseña es demasiado débil. Debe tener al menos 6 caracteres.";
         }
         toast({ variant: 'destructive', title: "Error", description });
@@ -297,7 +293,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
-                {!isEditMode ? (
+                {!isEditMode && (
                   <FormField
                     control={form.control}
                     name="password"
@@ -309,27 +305,25 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       </FormItem>
                     )}
                   />
-                ) : (
-                    <Accordion type="single" collapsible className="w-full">
-                        <AccordionItem value="change-password">
-                            <AccordionTrigger className="text-sm font-semibold">Cambiar Contraseña</AccordionTrigger>
-                            <AccordionContent className="pt-4 space-y-4">
-                               <p className="text-xs text-muted-foreground">La funcionalidad para cambiar la contraseña de otro usuario no está disponible. El usuario debe hacerlo desde su propio perfil.</p>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
                 )}
-                <FormField
-                  control={form.control}
-                  name="celular"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Celular</FormLabel>
-                      <FormControl><Input type="tel" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="optional-fields">
+                        <AccordionTrigger className="text-sm font-semibold">Datos Opcionales</AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                            <FormField
+                            control={form.control}
+                            name="celular"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Celular</FormLabel>
+                                <FormControl><Input type="tel" {...field} /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
+                        </AccordionContent>
+                    </AccordionItem>
+                 </Accordion>
                 <FormField
                   control={form.control}
                   name="role"

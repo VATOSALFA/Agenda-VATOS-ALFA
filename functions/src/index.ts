@@ -82,6 +82,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
+    // Standardize phone number to 10 digits for DB lookup
     const clientPhone = from.replace(/\D/g, '').slice(-10);
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
     const clientsSnapshot = await clientsQuery.get();
@@ -154,9 +155,9 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
-            const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
 
-            if (!authToken || !TWILIO_ACCOUNT_SID) {
+            if (!authToken || !accountSid) {
                 functions.logger.error("Twilio credentials not configured.");
                 response.status(500).send('Configuration error.');
                 return;

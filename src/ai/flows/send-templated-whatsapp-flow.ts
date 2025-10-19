@@ -46,7 +46,8 @@ async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promi
 
 async function logMessageToConversation(to: string, messageBody: string) {
     // The 'to' variable is just the 10-digit number.
-    const conversationId = `whatsapp:+52${to}`; // Construct the full ID
+    const cleanPhoneNumber = to.replace(/\D/g, '').slice(-10);
+    const conversationId = `whatsapp:+52${cleanPhoneNumber}`; // Construct the full ID
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesCollectionRef = collection(db, 'conversations', conversationId, 'messages');
 
@@ -71,7 +72,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
         // Conversation doesn't exist, create it with client info
         const clientsRef = collection(db, 'clientes');
         // Search for the client using the 10-digit phone number
-        const clientQuery = query(clientsRef, where('telefono', '==', to), limit(1));
+        const clientQuery = query(clientsRef, where('telefono', '==', cleanPhoneNumber), limit(1));
         const clientSnapshot = await getDocs(clientQuery);
         
         let clientName = null;
@@ -82,7 +83,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
         
         await setDoc(conversationRef, {
             ...conversationData,
-            clientName: clientName || `+52${to}`, // Use phone as fallback name
+            clientName: clientName || `+52${cleanPhoneNumber}`, // Use phone as fallback name
             unreadCount: 0 // Messages sent by us are "read" by default
         });
     } else {
@@ -101,9 +102,9 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
   async (input) => {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+    const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
 
-    if (!accountSid || !authToken || !fromNumber) {
+    if (!accountSid || !authToken || !fromNumberRaw) {
       console.error('Twilio credentials not configured.');
       return {
         success: false,
@@ -113,6 +114,11 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
 
     try {
       const client = new Twilio.Twilio(accountSid, authToken);
+
+      // Standardize the 'from' number: remove the '1' after '+52' if it exists
+      const fromNumber = fromNumberRaw.startsWith('+521') 
+          ? `+52${fromNumberRaw.substring(4)}`
+          : fromNumberRaw;
       
       const messageData = {
         from: `whatsapp:${fromNumber}`,

@@ -40,9 +40,9 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
   async (input) => {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+    const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
 
-    if (!accountSid || !authToken || !fromNumber) {
+    if (!accountSid || !authToken || !fromNumberRaw) {
       console.error('Twilio credentials not configured.');
       return {
         success: false,
@@ -60,6 +60,11 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     try {
       const client = new Twilio.Twilio(accountSid, authToken);
       
+      // Standardize the 'from' number: remove the '1' after '+52' if it exists
+      const fromNumber = fromNumberRaw.startsWith('+521') 
+          ? `+52${fromNumberRaw.substring(4)}`
+          : fromNumberRaw;
+
       const messageData: MessageListInstanceCreateOptions = {
         from: `whatsapp:${fromNumber}`,
         to: `whatsapp:+52${input.to}`,

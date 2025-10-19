@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Suspense } from 'react';
@@ -6,7 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useMemo } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { collection, query, where, getDocs, writeBatch, Timestamp, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { addMinutes, format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -22,6 +23,14 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { User, Calendar, Scissors, CheckCircle, Loader2 } from 'lucide-react';
 import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
+
+interface ReminderSettings {
+    notifications: {
+        appointment_notification?: {
+            enabled: boolean;
+        };
+    };
+}
 
 
 const confirmSchema = z.object({
@@ -119,9 +128,16 @@ function ConfirmPageContent() {
             batch.set(newReservationRef, reservationData);
 
             await batch.commit();
+            
+            // Check if appointment notifications are enabled
+            const settingsRef = doc(db, 'configuracion', 'recordatorios');
+            const settingsSnap = await getDoc(settingsRef);
+            const settings = settingsSnap.data() as ReminderSettings | undefined;
+            const isNotificationEnabled = settings?.notifications?.appointment_notification?.enabled ?? false;
 
-            // Send WhatsApp notification
-            if (data.telefono) {
+
+            // Send WhatsApp notification only if enabled
+            if (data.telefono && isNotificationEnabled) {
                 const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
                 const result = await sendTemplatedWhatsAppMessage({
                     to: data.telefono,
@@ -142,13 +158,21 @@ function ConfirmPageContent() {
                 } else {
                     throw new Error(result.error || 'Error desconocido al enviar WhatsApp');
                 }
+            } else if (data.telefono && !isNotificationEnabled) {
+                toast({
+                    title: 'Reserva Confirmada (Sin Notificación)',
+                    description: 'Las notificaciones de citas están desactivadas en la configuración.',
+                });
             }
             
-            toast({
-                title: '¡Reserva Confirmada!',
-                description: 'Tu cita ha sido agendada con éxito.',
-                className: 'bg-green-100 text-green-800 border-green-200'
-            });
+            if(!isNotificationEnabled) {
+                toast({
+                    title: '¡Reserva Confirmada!',
+                    description: 'Tu cita ha sido agendada con éxito.',
+                    className: 'bg-green-100 text-green-800 border-green-200'
+                });
+            }
+
 
             router.push('/book/success');
 

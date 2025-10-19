@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -60,6 +61,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
+
+interface ReminderSettings {
+    notifications: {
+        google_review?: {
+            enabled: boolean;
+        };
+    };
+}
 
 
 interface CartItem { 
@@ -584,22 +593,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         description: 'La venta se ha guardado correctamente.',
       });
 
-      // Send Google Review Request
-      const client = clients.find(c => c.id === data.cliente_id);
-      const local = locales.find(l => l.id === data.local_id);
-      if (client?.telefono && local) {
-          setTimeout(() => {
-              sendGoogleReviewRequest({
-                  clientId: client.id,
-                  clientName: client.nombre,
-                  clientPhone: client.telefono,
-                  localName: local.name,
-              }).catch(err => {
-                  console.error("Failed to send Google review request:", err);
-                  // Non-blocking, so we just log the error.
-              });
-          }, 30 * 60 * 1000); // 30 minutes
+      // Send Google Review Request if enabled
+      const settingsRef = doc(db, 'configuracion', 'recordatorios');
+      const settingsSnap = await getDoc(settingsRef);
+      const settings = settingsSnap.data() as ReminderSettings | undefined;
+      const isReviewEnabled = settings?.notifications?.google_review?.enabled ?? false;
+
+      if (isReviewEnabled) {
+          const client = clients.find(c => c.id === data.cliente_id);
+          const local = locales.find(l => l.id === data.local_id);
+          if (client?.telefono && local) {
+              setTimeout(() => {
+                  sendGoogleReviewRequest({
+                      clientId: client.id,
+                      clientName: client.nombre,
+                      clientPhone: client.telefono,
+                      localName: local.name,
+                  }).catch(err => {
+                      console.error("Failed to send Google review request:", err);
+                      // Non-blocking, so we just log the error.
+                  });
+              }, 30 * 60 * 1000); // 30 minutes
+          }
       }
+
 
       resetFlow();
       onOpenChange(false);

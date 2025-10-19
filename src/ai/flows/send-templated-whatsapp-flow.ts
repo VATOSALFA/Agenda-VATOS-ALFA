@@ -114,20 +114,27 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
 
     try {
       const client = new Twilio.Twilio(accountSid, authToken);
-
-      // Standardize the 'from' number: remove the '1' after '+52' if it exists
-      const fromNumber = fromNumberRaw.startsWith('+521') 
-          ? `+52${fromNumberRaw.substring(4)}`
-          : fromNumberRaw;
       
+      // Standardize the 'from' number by removing the '1' if it exists after '+52'
+      const fromNumber = fromNumberRaw.startsWith('+521')
+        ? `+52${fromNumberRaw.substring(4)}`
+        : fromNumberRaw;
+
+      // Ensure the 'to' number is just the 10 digits before formatting
+      const cleanToNumber = input.to.replace(/\D/g, '').slice(-10);
+
       const messageData = {
         from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+52${input.to}`,
+        to: `whatsapp:+52${cleanToNumber}`, // Always use +52 and 10 digits
         contentSid: input.contentSid,
         contentVariables: JSON.stringify(input.contentVariables),
       };
+
+      console.log('Attempting to send Twilio message with data:', messageData);
       
       const message = await client.messages.create(messageData);
+
+      console.log('Twilio message sent successfully:', message.sid);
 
       // Log the sent message to Firestore
       const templateBody = await getTemplateBody(client, input.contentSid);
@@ -136,7 +143,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
           renderedBody = renderedBody.replace(`{{${key}}}`, value);
       }
       
-      await logMessageToConversation(input.to, renderedBody);
+      await logMessageToConversation(cleanToNumber, renderedBody);
 
       return {
         success: true,

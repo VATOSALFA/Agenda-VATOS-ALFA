@@ -45,9 +45,10 @@ async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promi
 }
 
 async function logMessageToConversation(to: string, messageBody: string) {
-    const fullPhoneNumber = `whatsapp:+52${to}`;
-    const conversationRef = doc(db, 'conversations', fullPhoneNumber);
-    const messagesCollectionRef = collection(db, 'conversations', fullPhoneNumber, 'messages');
+    // The 'to' variable is just the 10-digit number.
+    const conversationId = `whatsapp:+52${to}`; // Construct the full ID
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const messagesCollectionRef = collection(db, 'conversations', conversationId, 'messages');
 
     const messageData = {
         senderId: 'vatosalfa',
@@ -58,18 +59,21 @@ async function logMessageToConversation(to: string, messageBody: string) {
     
     await addDoc(messagesCollectionRef, messageData);
     
-    const conversationSnap = await getDocs(query(collection(db, 'conversations'), where('__name__', '==', fullPhoneNumber), limit(1)));
+    // Check if the conversation document exists
+    const conversationSnap = await getDoc(conversationRef);
     
     const conversationData = {
         lastMessageText: `Tú: ${messageBody}`,
         lastMessageTimestamp: serverTimestamp(),
     };
     
-    if (conversationSnap.empty) {
-        // Attempt to find client name
+    if (!conversationSnap.exists()) {
+        // Conversation doesn't exist, create it with client info
         const clientsRef = collection(db, 'clientes');
+        // Search for the client using the 10-digit phone number
         const clientQuery = query(clientsRef, where('telefono', '==', to), limit(1));
         const clientSnapshot = await getDocs(clientQuery);
+        
         let clientName = null;
         if (!clientSnapshot.empty) {
             const clientData = clientSnapshot.docs[0].data();
@@ -78,13 +82,15 @@ async function logMessageToConversation(to: string, messageBody: string) {
         
         await setDoc(conversationRef, {
             ...conversationData,
-            clientName: clientName || `+52${to}`,
+            clientName: clientName || `+52${to}`, // Use phone as fallback name
             unreadCount: 0 // Messages sent by us are "read" by default
         });
     } else {
+        // Conversation exists, just update it
         await updateDoc(conversationRef, conversationData);
     }
 }
+
 
 export const sendTemplatedWhatsAppMessage = ai.defineFlow(
   {

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Suspense } from 'react';
@@ -135,6 +134,11 @@ function ConfirmPageContent() {
             const settings = settingsSnap.data() as ReminderSettings | undefined;
             const isNotificationEnabled = settings?.notifications?.appointment_notification?.enabled ?? false;
 
+            toast({
+                title: '¡Reserva Confirmada!',
+                description: 'Tu cita ha sido agendada con éxito.',
+                className: 'bg-green-100 text-green-800 border-green-200'
+            });
 
             // Send WhatsApp notification only if enabled
             if (data.telefono && isNotificationEnabled) {
@@ -153,27 +157,19 @@ function ConfirmPageContent() {
                 if(result.success) {
                     toast({
                         title: 'Notificación enviada',
-                        description: 'El mensaje de WhatsApp ha sido enviado al cliente.',
+                        description: 'El mensaje de WhatsApp de confirmación ha sido enviado al cliente.',
                     });
                 } else {
+                    // Throw an error to be caught by the catch block and inform the user
                     throw new Error(result.error || 'Error desconocido al enviar WhatsApp');
                 }
             } else if (data.telefono && !isNotificationEnabled) {
                 toast({
-                    title: 'Reserva Confirmada (Sin Notificación)',
-                    description: 'Las notificaciones de citas están desactivadas en la configuración.',
+                    title: 'Notificaciones Desactivadas',
+                    description: 'La reserva se guardó, pero no se envió notificación por WhatsApp.',
                 });
             }
             
-            if(!isNotificationEnabled) {
-                toast({
-                    title: '¡Reserva Confirmada!',
-                    description: 'Tu cita ha sido agendada con éxito.',
-                    className: 'bg-green-100 text-green-800 border-green-200'
-                });
-            }
-
-
             router.push('/book/success');
 
         } catch (error: unknown) {

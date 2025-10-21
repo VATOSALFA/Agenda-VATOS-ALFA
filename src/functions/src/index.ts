@@ -152,28 +152,25 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
     async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
-        functions.logger.info("Twilio webhook received!", { body: request.body });
+        functions.logger.info("--- Twilio Webhook Triggered ---", { body: request.body });
         
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
             const accountSid = process.env.TWILIO_ACCOUNT_SID;
 
-            functions.logger.info(`Using Account SID: ${accountSid ? 'Exists' : 'MISSING!'}`);
+            functions.logger.info(`Account SID found: ${!!accountSid}, Auth Token found: ${!!authToken}`);
 
             if (!authToken || !accountSid) {
-                functions.logger.error("Twilio credentials not configured in environment secrets.");
-                response.status(500).send('Configuration error.');
+                functions.logger.error("Twilio credentials missing in environment secrets.");
+                response.status(500).send('Twilio configuration error.');
                 return;
             }
             
             const fullUrl = `https://${request.headers.host}${request.originalUrl}`;
             
             if (!twilio.validateRequest(authToken, twilioSignature, fullUrl, request.body)) {
-                functions.logger.warn('Twilio Webhook: Invalid signature received.', {
-                    url: fullUrl,
-                    headers: request.headers,
-                });
+                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: fullUrl });
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
@@ -209,7 +206,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
             response.end(twiml.toString());
             
         } catch (error) {
-            functions.logger.error('Twilio Webhook Error:', error);
+            functions.logger.error('--- Twilio Webhook Error ---', { error: error instanceof Error ? error.message : String(error) });
             response.status(500).send('Internal Server Error');
         }
     }

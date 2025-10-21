@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -462,11 +463,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         success = true; // Mark as successful if we reach here
 
         // Notification logic after successful save
-        if (!isEditMode && data.notifications?.whatsapp_notification) {
+        if (data.notifications?.whatsapp_notification && !isEditMode) {
             const client = clients.find(c => c.id === data.cliente_id);
             const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
-            const local = locales.find(l => l.id === data.local_id);
-            if (client?.telefono && professional && local) {
+            if (client?.telefono && professional) {
                 const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
                 // No need to await this, it can run in the background
                 sendTemplatedWhatsAppMessage({
@@ -663,7 +663,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                         <Checkbox
                                             checked={field.value}
                                             onCheckedChange={field.onChange}
-                                            disabled={!selectedClient?.telefono}
+                                            disabled={!selectedClient?.telefono || !isAppointmentNotificationEnabled}
                                         />
                                     </FormControl>
                                     <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
@@ -675,7 +675,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                         <Checkbox
                                             checked={field.value}
                                             onCheckedChange={field.onChange}
-                                            disabled={!selectedClient?.telefono}
+                                            disabled={!selectedClient?.telefono || !isReminderNotificationEnabled}
                                         />
                                     </FormControl>
                                     <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>

@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import Twilio from 'twilio';
 import { db } from '@/lib/firebase-client';
-import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, updateDoc, doc, addDoc, serverTimestamp, limit, getDoc } from 'firebase/firestore';
 
 
 const TemplatedWhatsAppMessageInput = z.object({
@@ -104,8 +104,13 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
 
+    console.log('--- Iniciando Flujo de Envío de WhatsApp Templado ---');
+    console.log(`Account SID (existe): ${!!accountSid}`);
+    console.log(`Auth Token (existe): ${!!authToken}`);
+    console.log(`Número de Origen (raw): ${fromNumberRaw}`);
+
     if (!accountSid || !authToken || !fromNumberRaw) {
-      console.error('Twilio credentials not configured.');
+      console.error('Faltan credenciales de Twilio en las variables de entorno.');
       return {
         success: false,
         error: 'Twilio credentials are not configured in environment variables.',
@@ -115,10 +120,10 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     try {
       const client = new Twilio.Twilio(accountSid, authToken);
       
-      // Standardize the 'from' number by removing the '1' if it exists after '+52'
-      const fromNumber = fromNumberRaw.startsWith('+521')
-        ? `+52${fromNumberRaw.substring(4)}`
-        : fromNumberRaw;
+      // Standardize the 'from' number: remove the '1' after '+52' if it exists
+      const fromNumber = fromNumberRaw.startsWith('+521') 
+          ? `+52${fromNumberRaw.substring(3)}`
+          : fromNumberRaw;
 
       // Ensure the 'to' number is just the 10 digits before formatting
       const cleanToNumber = input.to.replace(/\D/g, '').slice(-10);
@@ -130,11 +135,11 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
         contentVariables: JSON.stringify(input.contentVariables),
       };
 
-      console.log('Attempting to send Twilio message with data:', messageData);
+      console.log('Datos del mensaje a enviar a Twilio:', JSON.stringify(messageData, null, 2));
       
       const message = await client.messages.create(messageData);
 
-      console.log('Twilio message sent successfully:', message.sid);
+      console.log('Respuesta exitosa de Twilio:', JSON.stringify(message, null, 2));
 
       // Log the sent message to Firestore
       const templateBody = await getTemplateBody(client, input.contentSid);
@@ -150,7 +155,8 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
         sid: message.sid,
       };
     } catch (error: unknown) {
-      console.error('Twilio API Error (Template):', error);
+      console.error('--- ERROR DE API DE TWILIO ---');
+      console.error(JSON.stringify(error, null, 2));
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with Twilio templated message.';
       return {
         success: false,

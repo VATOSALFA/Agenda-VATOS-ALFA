@@ -70,6 +70,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/xlsx": "0.0.35",
+    "dotenv": "^16.4.5",
     "eslint": "8.57.1",
     "eslint-config-next": "15.5.4",
     "genkit-cli": "^1.13.0",

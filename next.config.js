@@ -1,5 +1,12 @@
 
 /** @type {import('next').NextConfig} */
+
+// Load environment variables from .env file for local development
+if (process.env.NODE_ENV === 'development') {
+  require('dotenv').config({ path: './.env' });
+}
+
+
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,

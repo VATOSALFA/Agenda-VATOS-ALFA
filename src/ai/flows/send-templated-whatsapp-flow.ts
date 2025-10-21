@@ -109,6 +109,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     console.log(`Auth Token (existe): ${!!authToken}`);
     console.log(`Número de Origen (raw): ${fromNumberRaw}`);
 
+
     if (!accountSid || !authToken || !fromNumberRaw) {
       console.error('Faltan credenciales de Twilio en las variables de entorno.');
       return {
@@ -118,19 +119,15 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     }
 
     try {
-      const client = new Twilio.Twilio(accountSid, authToken);
+      const client = new Twilio(accountSid, authToken);
       
-      // Standardize the 'from' number: remove the '1' after '+52' if it exists
-      const fromNumber = fromNumberRaw.startsWith('+521') 
-          ? `+52${fromNumberRaw.substring(3)}`
-          : fromNumberRaw;
+      const fromNumber = fromNumberRaw.replace('+521', '+52');
 
-      // Ensure the 'to' number is just the 10 digits before formatting
       const cleanToNumber = input.to.replace(/\D/g, '').slice(-10);
 
       const messageData = {
         from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+52${cleanToNumber}`, // Always use +52 and 10 digits
+        to: `whatsapp:+52${cleanToNumber}`,
         contentSid: input.contentSid,
         contentVariables: JSON.stringify(input.contentVariables),
       };

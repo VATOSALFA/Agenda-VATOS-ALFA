@@ -153,7 +153,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
     async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
         functions.logger.info("Twilio webhook received!", { body: request.body });
-
+        
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -177,7 +177,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
-
+            
             functions.logger.info("Twilio signature validated successfully.");
 
             const from = request.body.From as string;
@@ -202,7 +202,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
                 lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
                 unreadCount: admin.firestore.FieldValue.increment(1),
             }, { merge: true });
-            
+
             functions.logger.info("Message saved to conversation.");
 
             response.writeHead(200, { 'Content-Type': 'text/xml' });

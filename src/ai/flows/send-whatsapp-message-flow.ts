@@ -58,12 +58,9 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     }
 
     try {
-      const client = new Twilio.Twilio(accountSid, authToken);
+      const client = new Twilio(accountSid, authToken);
       
-      // Standardize the 'from' number: remove the '1' after '+52' if it exists
-      const fromNumber = fromNumberRaw.startsWith('+521') 
-          ? `+52${fromNumberRaw.substring(4)}`
-          : fromNumberRaw;
+      const fromNumber = fromNumberRaw.replace('+521', '+52');
 
       const messageData: MessageListInstanceCreateOptions = {
         from: `whatsapp:${fromNumber}`,

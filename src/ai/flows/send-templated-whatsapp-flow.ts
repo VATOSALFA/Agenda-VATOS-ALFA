@@ -35,8 +35,6 @@ type WhatsAppMessageOutput = z.infer<typeof WhatsAppMessageOutputSchema>;
 async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promise<string> {
     try {
         const content = await client.content.v1.contents(contentSid).fetch();
-        // The body can be in `content.types.twilio/text.body` or similar structures.
-        // This is a simplified access pattern.
         return (content.types as Record<string, { body: string }> )['twilio/text']?.body || (content.types as Record<string, { body: string }>)['twilio/whatsapp-template']?.body || 'Plantilla no encontrada.';
     } catch (error) {
         console.error("Error fetching template body from Twilio:", error);
@@ -45,9 +43,8 @@ async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promi
 }
 
 async function logMessageToConversation(to: string, messageBody: string) {
-    // The 'to' variable is just the 10-digit number.
     const cleanPhoneNumber = to.replace(/\D/g, '').slice(-10);
-    const conversationId = `whatsapp:+52${cleanPhoneNumber}`; // Construct the full ID
+    const conversationId = `whatsapp:+52${cleanPhoneNumber}`;
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesCollectionRef = collection(db, 'conversations', conversationId, 'messages');
 
@@ -60,7 +57,6 @@ async function logMessageToConversation(to: string, messageBody: string) {
     
     await addDoc(messagesCollectionRef, messageData);
     
-    // Check if the conversation document exists
     const conversationSnap = await getDoc(conversationRef);
     
     const conversationData = {
@@ -69,9 +65,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
     };
     
     if (!conversationSnap.exists()) {
-        // Conversation doesn't exist, create it with client info
         const clientsRef = collection(db, 'clientes');
-        // Search for the client using the 10-digit phone number
         const clientQuery = query(clientsRef, where('telefono', '==', cleanPhoneNumber), limit(1));
         const clientSnapshot = await getDocs(clientQuery);
         
@@ -83,11 +77,10 @@ async function logMessageToConversation(to: string, messageBody: string) {
         
         await setDoc(conversationRef, {
             ...conversationData,
-            clientName: clientName || `+52${cleanPhoneNumber}`, // Use phone as fallback name
-            unreadCount: 0 // Messages sent by us are "read" by default
+            clientName: clientName || `+52${cleanPhoneNumber}`,
+            unreadCount: 0
         });
     } else {
-        // Conversation exists, just update it
         await updateDoc(conversationRef, conversationData);
     }
 }
@@ -103,26 +96,16 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
-
-    console.log('--- Iniciando Flujo de Envío de WhatsApp Templado ---');
-    console.log(`Account SID (existe): ${!!accountSid}`);
-    console.log(`Auth Token (existe): ${!!authToken}`);
-    console.log(`Número de Origen (raw): ${fromNumberRaw}`);
-
-
+    
     if (!accountSid || !authToken || !fromNumberRaw) {
-      console.error('Faltan credenciales de Twilio en las variables de entorno.');
-      return {
-        success: false,
-        error: 'Twilio credentials are not configured in environment variables.',
-      };
+      const errorMsg = 'Twilio credentials are not configured in environment variables.';
+      console.error(errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     try {
       const client = new Twilio(accountSid, authToken);
-      
-      const fromNumber = fromNumberRaw.replace('+521', '+52');
-
+      const fromNumber = fromNumberRaw.startsWith('+521') ? `+52${fromNumberRaw.slice(4)}` : fromNumberRaw;
       const cleanToNumber = input.to.replace(/\D/g, '').slice(-10);
 
       const messageData = {
@@ -132,13 +115,8 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
         contentVariables: JSON.stringify(input.contentVariables),
       };
 
-      console.log('Datos del mensaje a enviar a Twilio:', JSON.stringify(messageData, null, 2));
-      
       const message = await client.messages.create(messageData);
 
-      console.log('Respuesta exitosa de Twilio:', JSON.stringify(message, null, 2));
-
-      // Log the sent message to Firestore
       const templateBody = await getTemplateBody(client, input.contentSid);
       let renderedBody = templateBody;
       for (const [key, value] of Object.entries(input.contentVariables)) {

@@ -43,11 +43,9 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
 
     if (!accountSid || !authToken || !fromNumberRaw) {
-      console.error('Twilio credentials not configured.');
-      return {
-        success: false,
-        error: 'Twilio credentials are not configured in environment variables.',
-      };
+      const errorMsg = 'Twilio credentials are not configured in environment variables.';
+      console.error(errorMsg);
+      return { success: false, error: errorMsg };
     }
     
     if (!input.text && !input.mediaUrl) {
@@ -59,8 +57,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
 
     try {
       const client = new Twilio(accountSid, authToken);
-      
-      const fromNumber = fromNumberRaw.replace('+521', '+52');
+      const fromNumber = fromNumberRaw.startsWith('+521') ? `+52${fromNumberRaw.slice(4)}` : fromNumberRaw;
 
       const messageData: MessageListInstanceCreateOptions = {
         from: `whatsapp:${fromNumber}`,

@@ -158,7 +158,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
             const accountSid = process.env.TWILIO_ACCOUNT_SID;
 
             if (!authToken || !accountSid) {
-                functions.logger.error("Twilio credentials not configured.");
+                functions.logger.error("Twilio credentials not configured in environment secrets.");
                 response.status(500).send('Configuration error.');
                 return;
             }

@@ -14,11 +14,6 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    allowedDevOrigins: [
-      "https://*.cluster-f4iwdviaqvc2ct6pgytzw4xqy4.cloudworkstations.dev",
-    ],
-  },
   webpack(config, { isServer }) {
     config.experiments = {
       ...config.experiments,

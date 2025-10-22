@@ -30,15 +30,6 @@ const nextConfig = {
         };
     }
 
-    config.module.rules.push({
-      test: /node_modules\/handlebars\/lib\/index\.js$/,
-      loader: 'string-replace-loader',
-      options: {
-        search: 'require.extensions',
-        replace: '[]',
-      },
-    });
-
     return config;
   },
   images: {

@@ -1,0 +1,12 @@
+diff --git a/node_modules/handlebars/lib/index.js b/node_modules/handlebars/lib/index.js
+index 458c67c..81c9751 100644
+--- a/node_modules/handlebars/lib/index.js
++++ b/node_modules/handlebars/lib/index.js
+@@ -1,5 +1,6 @@
+ 'use strict';
+-
++var require = function() { return { extensions: [] } };
++Object.defineProperty(require, 'extensions', { get: function() { return [] } });
+ var _interopRequireDefault = require('@babel/runtime/helpers/interopRequireDefault')['default'];
+ 
+ var _handlebars = _interopRequireDefault(require('./handlebars.runtime'));

@@ -34,13 +34,16 @@ const nextConfig = {
             '@opentelemetry/exporter-jaeger': '@opentelemetry/exporter-jaeger',
         };
     }
-
+    
     config.module.rules.push({
-      test: /node_modules\/handlebars\/lib\/index\.js$/,
-      loader: 'string-replace-loader',
-      options: {
-        search: 'require.extensions',
-        replace: '[]',
+      test: /\.js$/,
+      include: /node_modules\/handlebars/,
+      use: {
+        loader: 'string-replace-loader',
+        options: {
+          search: 'require.extensions',
+          replace: '[]',
+        },
       },
     });
 

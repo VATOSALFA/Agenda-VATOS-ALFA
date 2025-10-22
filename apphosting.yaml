@@ -5,6 +5,8 @@ run:
     - npm run build
   start:
     - next start
+backend:
+  id: vatosalfa
 runConfig:
   minInstances: 0
   maxInstances: 2

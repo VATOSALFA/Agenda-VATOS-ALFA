@@ -2,10 +2,10 @@
 'use client';
 
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
 
 const firebaseConfig: FirebaseOptions = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -17,20 +17,42 @@ const firebaseConfig: FirebaseOptions = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-const getFirebaseApp = () => {
-    if (getApps().length === 0) {
-        if (!firebaseConfig.apiKey) {
-            throw new Error("Firebase API Key is missing. Check your environment variables.");
-        }
-        return initializeApp(firebaseConfig);
+function initializeFirebase() {
+    if (getApps().length > 0) {
+        return {
+            app: getApp(),
+            auth: getAuth(),
+            db: getFirestore(),
+            storage: getStorage(),
+            functions: getFunctions(getApp())
+        };
     }
-    return getApp();
-};
 
-const app = getFirebaseApp();
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-export const functions = getFunctions(app);
+    if (!firebaseConfig.apiKey) {
+        throw new Error("Firebase API Key is missing. Check your environment variables.");
+    }
+    
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    const functions = getFunctions(app, 'us-central1'); // Specify region if needed
 
-export { app, httpsCallable };
+    // Example for connecting to emulators in development
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+        // To run with emulators, uncomment the following lines
+        // and ensure the Firebase Emulator Suite is running.
+        // connectAuthEmulator(auth, "http://localhost:9099");
+        // connectFirestoreEmulator(db, "localhost", 8080);
+        // connectFunctionsEmulator(functions, "localhost", 5001);
+        // connectStorageEmulator(storage, "localhost", 9199);
+        // console.log("Firebase connected to local emulators.");
+    }
+
+    return { app, auth, db, storage, functions };
+}
+
+
+const { app, auth, db, storage, functions } = initializeFirebase();
+
+export { app, auth, db, storage, functions, httpsCallable };

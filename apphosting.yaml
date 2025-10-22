@@ -1,7 +1,9 @@
 # apphosting.yaml
 run:
   build:
-    - npm ci && npm run build
+    - npm ci
+    - npx patch-package
+    - npm run build
   start:
     - next start
 backend:

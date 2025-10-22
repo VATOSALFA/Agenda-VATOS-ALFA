@@ -93,17 +93,24 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (input) => {
+    console.log('[DIAGNOSTIC] Iniciando flujo sendTemplatedWhatsAppMessageFlow.');
+    
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
     
+    console.log(`[DIAGNOSTIC] TWILIO_ACCOUNT_SID encontrado: ${!!accountSid}`);
+    console.log(`[DIAGNOSTIC] TWILIO_AUTH_TOKEN encontrado: ${!!authToken}`);
+    console.log(`[DIAGNOSTIC] TWILIO_PHONE_NUMBER encontrado: ${!!fromNumberRaw}`);
+
     if (!accountSid || !authToken || !fromNumberRaw) {
-      const errorMsg = 'Twilio credentials are not configured in environment variables.';
-      console.error(errorMsg);
+      const errorMsg = 'Las credenciales de Twilio no están configuradas en las variables de entorno del servidor.';
+      console.error(`[DIAGNOSTIC] ERROR: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
 
     try {
+      console.log('[DIAGNOSTIC] Creando cliente de Twilio...');
       const client = new Twilio(accountSid, authToken);
       const fromNumber = fromNumberRaw.startsWith('+521') ? `+52${fromNumberRaw.slice(4)}` : fromNumberRaw;
       const cleanToNumber = input.to.replace(/\D/g, '').slice(-10);
@@ -115,7 +122,10 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
         contentVariables: JSON.stringify(input.contentVariables),
       };
 
+      console.log('[DIAGNOSTIC] Enviando mensaje a Twilio con los siguientes datos:', messageData);
       const message = await client.messages.create(messageData);
+      console.log('[DIAGNOSTIC] Mensaje enviado con éxito. SID:', message.sid);
+
 
       const templateBody = await getTemplateBody(client, input.contentSid);
       let renderedBody = templateBody;
@@ -124,15 +134,17 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
       }
       
       await logMessageToConversation(cleanToNumber, renderedBody);
+      console.log('[DIAGNOSTIC] Mensaje guardado en la conversación.');
+
 
       return {
         success: true,
         sid: message.sid,
       };
     } catch (error: unknown) {
-      console.error('--- ERROR DE API DE TWILIO ---');
+      console.error('[DIAGNOSTIC] --- ERROR DE API DE TWILIO ---');
       console.error(JSON.stringify(error, null, 2));
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with Twilio templated message.';
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al enviar mensaje de Twilio.';
       return {
         success: false,
         error: errorMessage,

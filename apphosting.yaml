@@ -2,7 +2,6 @@
 run:
   build:
     - npm ci
-    - npx patch-package
     - npm run build
   start:
     - next start

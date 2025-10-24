@@ -112,12 +112,13 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     try {
       console.log('[DIAGNOSTIC] Creando cliente de Twilio...');
       const client = new Twilio(accountSid, authToken);
-      const fromNumber = fromNumberRaw.startsWith('+521') ? `+52${fromNumberRaw.slice(4)}` : fromNumberRaw;
-      const cleanToNumber = input.to.replace(/\D/g, '').slice(-10);
+      
+      const cleanFromNumber = `+52${fromNumberRaw.replace(/\D/g, '').slice(-10)}`;
+      const cleanToNumber = `+52${input.to.replace(/\D/g, '').slice(-10)}`;
 
       const messageData = {
-        from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+52${cleanToNumber}`,
+        from: `whatsapp:${cleanFromNumber}`,
+        to: `whatsapp:${cleanToNumber}`,
         contentSid: input.contentSid,
         contentVariables: JSON.stringify(input.contentVariables),
       };
@@ -133,7 +134,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
           renderedBody = renderedBody.replace(`{{${key}}}`, value);
       }
       
-      await logMessageToConversation(cleanToNumber, renderedBody);
+      await logMessageToConversation(input.to, renderedBody);
       console.log('[DIAGNOSTIC] Mensaje guardado en la conversación.');
 
 

@@ -10,8 +10,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { functions, httpsCallable } from '@/lib/firebase-client';
-import { sendWhatsAppMessage } from './send-whatsapp-message-flow';
-
 
 const TemplatedWhatsAppMessageInput = z.object({
   to: z.string().describe("The recipient's phone number, just the digits."),
@@ -29,24 +27,20 @@ const WhatsAppMessageOutputSchema = z.object({
 
 type WhatsAppMessageOutput = z.infer<typeof WhatsAppMessageOutputSchema>;
 
-
 export const sendTemplatedWhatsAppMessage = ai.defineFlow(
   {
     name: 'sendTemplatedWhatsAppMessageFlow',
     inputSchema: TemplatedWhatsAppMessageInput,
     outputSchema: WhatsAppMessageOutputSchema,
   },
-  async ({ to, contentSid, contentVariables }) => {
+  async (payload) => {
     try {
-      const result = await sendWhatsAppMessage({
-        to,
-        text: `Your Template SID is: ${contentSid} and variables are ${JSON.stringify(contentVariables)}`
-      });
-      return result;
+      const sendWhatsAppFunction = httpsCallable(functions, 'sendWhatsAppMessage');
+      const result = await sendWhatsAppFunction(payload);
+      return result.data as WhatsAppMessageOutput;
     } catch (error: unknown) {
-      console.error('[DIAGNOSTIC] --- ERROR IN TEMPLATED FLOW ---');
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-      console.error(errorMessage);
+      console.error('[DIAGNOSTIC] --- ERROR IN TEMPLATED FLOW ---', errorMessage);
       return {
         success: false,
         error: errorMessage,

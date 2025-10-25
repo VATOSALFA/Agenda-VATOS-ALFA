@@ -113,7 +113,9 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
       console.log('[DIAGNOSTIC] Creando cliente de Twilio...');
       const client = new Twilio(accountSid, authToken);
       
-      const cleanFromNumber = `+${fromNumberRaw.replace(/\D/g, '')}`;
+      // Correctly format the "from" number, preserving the "+521" prefix if present
+      const cleanFromNumber = fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw.replace(/\D/g, '')}`;
+
       const cleanToNumber = `+521${input.to.replace(/\D/g, '').slice(-10)}`;
 
       const messageData = {
@@ -154,3 +156,4 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
   }
 );
 export const sendTemplatedWhatsAppMessageFlow = sendTemplatedWhatsAppMessage;
+

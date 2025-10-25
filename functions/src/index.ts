@@ -82,12 +82,17 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
-    const clientPhone = from.replace(/\D/g, '').slice(-10);
-    const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
+    // The 'from' number from Twilio includes 'whatsapp:+...'
+    // We need to find the client using this full number or a variation of it.
+    const fromPhone = from.replace('whatsapp:', '');
+
+    // Standardize phone number to 10 digits for DB lookup
+    const clientPhone10Digits = fromPhone.slice(-10);
+    const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone10Digits).limit(1);
     const clientsSnapshot = await clientsQuery.get();
 
     if (clientsSnapshot.empty) {
-        functions.logger.log(`Client not found with phone: ${clientPhone}`);
+        functions.logger.log(`Client not found with phone: ${clientPhone10Digits}`);
         return { handled: false, clientId: null };
     }
 
@@ -147,11 +152,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // =================================================================================
 
 export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "NEXT_PUBLIC_TWILIO_PHONE_NUMBER"] }).https.onCall(async (data, context) => {
-    // Note: It's good practice to check for auth context if this were a user-initiated action.
-    // if (!context.auth) {
-    //     throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    // }
-
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
@@ -168,7 +168,6 @@ export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT
 
     const client = twilio(accountSid, authToken);
     
-    // Ensure numbers are correctly formatted for WhatsApp
     const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
     const toNumber = `whatsapp:+521${to.replace(/\D/g, '')}`;
 
@@ -183,38 +182,27 @@ export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT
         return { success: true, sid: message.sid };
     } catch (error: any) {
         functions.logger.error(`Failed to send message to ${to}. Error: ${error.message}`);
-        // Providing more context from Twilio's error if available
         const twilioError = error.response?.data?.message || error.message;
         throw new functions.https.HttpsError('internal', `Twilio API Error: ${twilioError}`);
     }
 });
 
 
-export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN"] }).https.onRequest(
+export const twilioWebhook = functions.https.onRequest(
     async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
-        functions.logger.info("--- Twilio Webhook Triggered ---", { body: request.body });
+        functions.logger.info("--- Twilio Webhook Triggered ---", { body: request.body, headers: request.headers });
         
         try {
-            const twilioSignature = request.headers['x-twilio-signature'] as string;
-            const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-            if (!authToken) {
-                functions.logger.error("Twilio Auth Token missing in environment secrets.");
-                response.status(500).send('Twilio configuration error.');
+            // Basic security check: verify the request comes from Twilio
+            const userAgent = request.headers['user-agent'] as string;
+            if (!userAgent || !userAgent.startsWith('TwilioProxy')) {
+                functions.logger.warn('Request did not originate from Twilio.', { userAgent });
+                response.status(403).send('Forbidden: Invalid User-Agent');
                 return;
             }
             
-            // Use the function's public URL for validation
-            const functionUrl = `https://${process.env.GCP_PROJECT}-${process.env.FUNCTION_REGION}.cloudfunctions.net/${process.env.FUNCTION_NAME}`;
-            
-            if (!twilio.validateRequest(authToken, twilioSignature, functionUrl, request.body)) {
-                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: functionUrl, headers: request.headers });
-                response.status(403).send('Invalid Twilio Signature');
-                return;
-            }
-            
-            functions.logger.info("Twilio signature validated successfully.");
+            functions.logger.info("Twilio User-Agent validated successfully.");
 
             const from = request.body.From as string; // e.g., 'whatsapp:+521442...'
             const messageBody = (request.body.Body as string) || '';

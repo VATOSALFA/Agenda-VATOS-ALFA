@@ -10,6 +10,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { functions, httpsCallable } from '@/lib/firebase-client';
+import { sendWhatsAppMessage } from './send-whatsapp-message-flow';
 
 
 const TemplatedWhatsAppMessageInput = z.object({
@@ -35,32 +36,15 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     inputSchema: TemplatedWhatsAppMessageInput,
     outputSchema: WhatsAppMessageOutputSchema,
   },
-  async (input) => {
-    console.log('[DIAGNOSTIC] Client-side flow triggered. Preparing to call sendWhatsApp Cloud Function.');
-    
-    if (!functions) {
-        const errorMsg = "Firebase Functions is not initialized on the client.";
-        console.error(`[DIAGNOSTIC] ERROR: ${errorMsg}`);
-        return { success: false, error: errorMsg };
-    }
-
+  async ({ to, contentSid, contentVariables }) => {
     try {
-      console.log('[DIAGNOSTIC] Calling sendWhatsApp function with payload:', input);
-      const sendWhatsApp = httpsCallable(functions, 'sendWhatsApp');
-      const result: any = await sendWhatsApp(input);
-      
-      console.log('[DIAGNOSTIC] Received response from sendWhatsApp function:', result.data);
-
-      if (result.data.success) {
-        return {
-          success: true,
-          sid: result.data.sid,
-        };
-      } else {
-        throw new Error(result.data.error || 'Unknown error from Cloud Function.');
-      }
+      const result = await sendWhatsAppMessage({
+        to,
+        text: `Your Template SID is: ${contentSid} and variables are ${JSON.stringify(contentVariables)}`
+      });
+      return result;
     } catch (error: unknown) {
-      console.error('[DIAGNOSTIC] --- ERROR CALLING CLOUD FUNCTION ---');
+      console.error('[DIAGNOSTIC] --- ERROR IN TEMPLATED FLOW ---');
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       console.error(errorMessage);
       return {

@@ -45,5 +45,3 @@ env:
   # --- GEMINI CONFIG ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
-# The 'backend' block is removed to ensure all env vars are available globally.
-# This simplifies secret management for both frontend and Cloud Functions.

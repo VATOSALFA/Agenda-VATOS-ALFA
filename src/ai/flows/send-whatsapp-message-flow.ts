@@ -38,30 +38,37 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (input) => {
+    console.log('[DIAGNOSTIC] sendWhatsAppMessageFlow triggered on the server.');
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
 
+    console.log(`[DIAGNOSTIC] Secrets: SID found: ${!!accountSid}, Token found: ${!!authToken}, Number found: ${!!fromNumberRaw}`);
+
+
     if (!accountSid || !authToken || !fromNumberRaw) {
       const errorMsg = 'Twilio credentials are not configured in environment variables.';
-      console.error(errorMsg);
+      console.error(`[DIAGNOSTIC] ERROR: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
     
     if (!input.text && !input.mediaUrl) {
-        return {
-            success: false,
-            error: 'Message must include either text or a media URL.'
-        }
+        const errorMsg = 'Message must include either text or a media URL.';
+        console.error(`[DIAGNOSTIC] ERROR: ${errorMsg}`);
+        return { success: false, error: errorMsg };
     }
 
     try {
+      console.log(`[DIAGNOSTIC] Initializing Twilio client...`);
       const client = new Twilio(accountSid, authToken);
-      const fromNumber = fromNumberRaw.startsWith('+521') ? `+52${fromNumberRaw.slice(4)}` : fromNumberRaw;
+      
+      // Ensure correct formatting for numbers
+      const fromNumber = `whatsapp:${fromNumberRaw}`;
+      const toNumber = `whatsapp:+52${input.to.replace(/\D/g, '')}`;
 
       const messageData: MessageListInstanceCreateOptions = {
-        from: `whatsapp:${fromNumber}`,
-        to: `whatsapp:+52${input.to}`,
+        from: fromNumber,
+        to: toNumber,
         body: input.text || '',
       };
       
@@ -69,18 +76,20 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
           messageData.mediaUrl = [input.mediaUrl];
       }
 
+      console.log('[DIAGNOSTIC] Sending message with data:', { from: messageData.from, to: messageData.to, body: messageData.body ? `${messageData.body.substring(0, 20)}...` : 'No body', hasMedia: !!messageData.mediaUrl });
       const message = await client.messages.create(messageData);
+      console.log('[DIAGNOSTIC] Twilio message sent successfully. SID:', message.sid);
 
       return {
         success: true,
         sid: message.sid,
       };
     } catch (error: unknown) {
-      console.error('Twilio API Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with Twilio.';
+      const errorDetails = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+      console.error('[DIAGNOSTIC] --- TWILIO API ERROR ---', errorDetails);
       return {
         success: false,
-        error: errorMessage,
+        error: errorDetails.message,
       };
     }
   }

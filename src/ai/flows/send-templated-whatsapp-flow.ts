@@ -44,7 +44,7 @@ async function getTemplateBody(client: Twilio.Twilio, contentSid: string): Promi
 
 async function logMessageToConversation(to: string, messageBody: string) {
     const cleanPhoneNumber = to.replace(/\D/g, '').slice(-10);
-    const conversationId = `whatsapp:+52${cleanPhoneNumber}`;
+    const conversationId = `whatsapp:+521${cleanPhoneNumber}`;
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesCollectionRef = collection(db, 'conversations', conversationId, 'messages');
 
@@ -77,7 +77,7 @@ async function logMessageToConversation(to: string, messageBody: string) {
         
         await setDoc(conversationRef, {
             ...conversationData,
-            clientName: clientName || `+52${cleanPhoneNumber}`,
+            clientName: clientName || `+521${cleanPhoneNumber}`,
             unreadCount: 0
         });
     } else {
@@ -113,8 +113,8 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
       console.log('[DIAGNOSTIC] Creando cliente de Twilio...');
       const client = new Twilio(accountSid, authToken);
       
-      const cleanFromNumber = `+52${fromNumberRaw.replace(/\D/g, '').slice(-10)}`;
-      const cleanToNumber = `+52${input.to.replace(/\D/g, '').slice(-10)}`;
+      const cleanFromNumber = `+${fromNumberRaw.replace(/\D/g, '')}`;
+      const cleanToNumber = `+521${input.to.replace(/\D/g, '').slice(-10)}`;
 
       const messageData = {
         from: `whatsapp:${cleanFromNumber}`,

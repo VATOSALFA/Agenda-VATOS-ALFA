@@ -1,4 +1,5 @@
 
+
 import * as functions from 'firebase-functions';
 import twilio from 'twilio';
 import * as admin from 'firebase-admin';
@@ -152,14 +153,18 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
     async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
+        functions.logger.info("--- Twilio Webhook Triggered ---", { body: request.body });
+        
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
             const accountSid = process.env.TWILIO_ACCOUNT_SID;
 
+            functions.logger.info(`Account SID found: ${!!accountSid}, Auth Token found: ${!!authToken}`);
+
             if (!authToken || !accountSid) {
-                functions.logger.error("Twilio credentials not configured in environment secrets.");
-                response.status(500).send('Configuration error.');
+                functions.logger.error("Twilio credentials missing in environment secrets.");
+                response.status(500).send('Twilio configuration error.');
                 return;
             }
             
@@ -170,10 +175,14 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
+            
+            functions.logger.info("Twilio signature validated successfully.");
 
             const from = request.body.From as string;
             const messageBody = (request.body.Body as string) || '';
             const conversationId = from.replace('whatsapp:', ''); 
+
+            functions.logger.info(`Processing message from ${from}`);
 
             await handleClientResponse(from, messageBody);
             
@@ -192,11 +201,13 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
                 unreadCount: admin.firestore.FieldValue.increment(1),
             }, { merge: true });
 
+            functions.logger.info("Message saved to conversation.");
+
             response.writeHead(200, { 'Content-Type': 'text/xml' });
             response.end(twiml.toString());
             
         } catch (error) {
-            functions.logger.error('Twilio Webhook Error:', error);
+            functions.logger.error('--- Twilio Webhook Error ---', { error: error instanceof Error ? error.message : String(error) });
             response.status(500).send('Internal Server Error');
         }
     }

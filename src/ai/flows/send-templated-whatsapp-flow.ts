@@ -14,7 +14,7 @@ import { functions, httpsCallable } from '@/lib/firebase-client';
 const TemplatedWhatsAppMessageInput = z.object({
   to: z.string().describe("The recipient's phone number, just the digits."),
   contentSid: z.string().describe("The Content SID of the Twilio template to use."),
-  contentVariables: z.record(z.string(), z.string()).describe("An object of key-value pairs for the template variables. e.g. { '1': 'John', '2': 'Your appointment details' }"),
+  contentVariables: z.record(z.string(), z.string()).optional().describe("An object of key-value pairs for the template variables. e.g. { '1': 'John', '2': 'Your appointment details' }"),
 });
 
 export type TemplatedWhatsAppMessageInput = z.infer<typeof TemplatedWhatsAppMessageInput>;
@@ -37,7 +37,12 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     try {
       const sendWhatsAppFunction = httpsCallable(functions, 'sendWhatsAppMessage');
       const result = await sendWhatsAppFunction(payload);
-      return result.data as WhatsAppMessageOutput;
+      const data = result.data as { success: boolean; sid?: string; error?: string };
+
+      if (!data.success) {
+        throw new Error(data.error || 'Unknown error from Cloud Function.');
+      }
+      return data;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       console.error('[DIAGNOSTIC] --- ERROR IN TEMPLATED FLOW ---', errorMessage);

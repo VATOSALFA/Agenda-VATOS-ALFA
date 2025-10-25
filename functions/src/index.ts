@@ -147,6 +147,11 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // =================================================================================
 
 export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "NEXT_PUBLIC_TWILIO_PHONE_NUMBER"] }).https.onCall(async (data, context) => {
+    // Note: It's good practice to check for auth context if this were a user-initiated action.
+    // if (!context.auth) {
+    //     throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    // }
+
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
@@ -163,8 +168,9 @@ export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT
 
     const client = twilio(accountSid, authToken);
     
-    const fromNumber = `whatsapp:${fromNumberRaw}`;
-    const toNumber = `whatsapp:+52${to.replace(/\D/g, '')}`;
+    // Ensure numbers are correctly formatted for WhatsApp
+    const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
+    const toNumber = `whatsapp:+521${to.replace(/\D/g, '')}`;
 
     try {
         const message = await client.messages.create({
@@ -177,7 +183,9 @@ export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT
         return { success: true, sid: message.sid };
     } catch (error: any) {
         functions.logger.error(`Failed to send message to ${to}. Error: ${error.message}`);
-        throw new functions.https.HttpsError('internal', `Twilio API Error: ${error.message}`);
+        // Providing more context from Twilio's error if available
+        const twilioError = error.response?.data?.message || error.message;
+        throw new functions.https.HttpsError('internal', `Twilio API Error: ${twilioError}`);
     }
 });
 
@@ -197,17 +205,18 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN"] 
                 return;
             }
             
-            const fullUrl = `https://${request.headers['x-forwarded-host'] || request.headers.host}${request.originalUrl}`;
+            // Use the function's public URL for validation
+            const functionUrl = `https://${process.env.GCP_PROJECT}-${process.env.FUNCTION_REGION}.cloudfunctions.net/${process.env.FUNCTION_NAME}`;
             
-            if (!twilio.validateRequest(authToken, twilioSignature, fullUrl, request.body)) {
-                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: fullUrl, headers: request.headers });
+            if (!twilio.validateRequest(authToken, twilioSignature, functionUrl, request.body)) {
+                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: functionUrl, headers: request.headers });
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
             
             functions.logger.info("Twilio signature validated successfully.");
 
-            const from = request.body.From as string;
+            const from = request.body.From as string; // e.g., 'whatsapp:+521442...'
             const messageBody = (request.body.Body as string) || '';
             const conversationId = from; // Use the full 'whatsapp:+...' string as the ID
 

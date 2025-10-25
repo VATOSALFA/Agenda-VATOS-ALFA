@@ -171,7 +171,7 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
             const fullUrl = `https://${request.headers.host}${request.originalUrl}`;
             
             if (!twilio.validateRequest(authToken, twilioSignature, fullUrl, request.body)) {
-                functions.logger.warn('Twilio Webhook: Invalid signature received.');
+                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: fullUrl });
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
@@ -336,3 +336,53 @@ export const setTerminalPDVMode = functions.https.onCall(async (data: any, conte
         throw new functions.https.HttpsError('internal', 'Fallo al activar el modo PDV.');
     }
 });
+
+// 6. Send WhatsApp Message
+export const sendWhatsApp = functions.runWith({ secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"] }).https.onCall(
+    async (data, context) => {
+        // Auth check
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'La función solo puede ser llamada por usuarios autenticados.');
+        }
+
+        const { to, contentSid, contentVariables } = data;
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
+
+        if (!accountSid || !authToken || !fromNumberRaw) {
+            functions.logger.error("Las credenciales de Twilio no están configuradas en los secretos de la función.");
+            throw new functions.https.HttpsError('internal', 'El servidor no está configurado para enviar mensajes.');
+        }
+
+        try {
+            const client = twilio(accountSid, authToken);
+
+            // Ensure correct formatting
+            const fromNumber = `whatsapp:${fromNumberRaw}`;
+            const toNumber = `whatsapp:+521${to.replace(/\D/g, '')}`;
+
+            const messageData = {
+                from: fromNumber,
+                to: toNumber,
+                contentSid: contentSid,
+                contentVariables: JSON.stringify(contentVariables),
+            };
+
+            functions.logger.info("Enviando mensaje a Twilio con los siguientes datos:", messageData);
+            const message = await client.messages.create(messageData);
+            
+            functions.logger.info("Mensaje enviado con éxito. SID:", message.sid);
+
+            return { success: true, sid: message.sid };
+
+        } catch (error: any) {
+            functions.logger.error('--- ERROR DE API DE TWILIO ---', {
+                error: error.message,
+                code: error.code,
+                moreInfo: error.moreInfo,
+            });
+            throw new functions.https.HttpsError('internal', error.message || 'Error desconocido al enviar el mensaje de Twilio.');
+        }
+    }
+);

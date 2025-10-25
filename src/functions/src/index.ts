@@ -83,7 +83,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
-    // Standardize phone number to 10 digits for DB lookup
     const clientPhone = from.replace(/\D/g, '').slice(-10);
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone).limit(1);
     const clientsSnapshot = await clientsQuery.get();
@@ -139,7 +138,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
             });
             break;
         default:
-            // For reschedule or other actions, just log for now
             break;
     }
     return { handled: true, clientId: clientId };
@@ -149,8 +147,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // CLOUD FUNCTIONS
 // =================================================================================
 
-// 1. Twilio Webhook
-export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"] }).https.onRequest(
+export const twilioWebhook = functions.https.onRequest(
     async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();
         functions.logger.info("--- Twilio Webhook Triggered ---", { body: request.body });
@@ -158,29 +155,28 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
         try {
             const twilioSignature = request.headers['x-twilio-signature'] as string;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
-            const accountSid = process.env.TWILIO_ACCOUNT_SID;
 
-            functions.logger.info(`Account SID found: ${!!accountSid}, Auth Token found: ${!!authToken}`);
-
-            if (!authToken || !accountSid) {
-                functions.logger.error("Twilio credentials missing in environment secrets.");
+            if (!authToken) {
+                functions.logger.error("Twilio Auth Token missing in environment secrets.");
                 response.status(500).send('Twilio configuration error.');
                 return;
             }
             
-            const fullUrl = `https://${request.headers.host}${request.originalUrl}`;
+            // Use the function's public URL for validation
+            const functionUrl = `https://${process.env.GCP_PROJECT}-${process.env.FUNCTION_REGION}.cloudfunctions.net/${process.env.FUNCTION_NAME}`;
             
-            if (!twilio.validateRequest(authToken, twilioSignature, fullUrl, request.body)) {
-                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: fullUrl });
+            // The key change: Pass the request body directly to twilio.validateRequest
+            if (!twilio.validateRequest(authToken, twilioSignature, functionUrl, request.body)) {
+                functions.logger.warn('Twilio Webhook: Invalid signature.', { url: functionUrl, headers: request.headers });
                 response.status(403).send('Invalid Twilio Signature');
                 return;
             }
             
             functions.logger.info("Twilio signature validated successfully.");
 
-            const from = request.body.From as string;
+            const from = request.body.From as string; // e.g., 'whatsapp:+521442...'
             const messageBody = (request.body.Body as string) || '';
-            const conversationId = from.replace('whatsapp:', ''); 
+            const conversationId = from; // Use the full 'whatsapp:+...' string as the ID
 
             functions.logger.info(`Processing message from ${from}`);
 
@@ -213,7 +209,6 @@ export const twilioWebhook = functions.runWith({ secrets: ["TWILIO_AUTH_TOKEN", 
     }
 );
 
-// 2. Mercado Pago Webhook
 export const mercadoPagoWebhook = functions.runWith({ secrets: ["MERCADO_PAGO_WEBHOOK_SECRET"] }).https.onRequest(
     async (request: functions.https.Request, response: functions.Response) => {
         if (!validateMercadoPagoSignature(request)) {
@@ -252,7 +247,6 @@ export const mercadoPagoWebhook = functions.runWith({ secrets: ["MERCADO_PAGO_WE
     }
 );
 
-// 3. Create Mercado Pago Point Payment
 export const createPointPayment = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Solo usuarios autenticados pueden realizar esta acción.');
@@ -288,7 +282,6 @@ export const createPointPayment = functions.https.onCall(async (data: any, conte
     }
 });
 
-// 4. Get Mercado Pago Terminals
 export const getPointTerminals = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');
@@ -311,7 +304,6 @@ export const getPointTerminals = functions.https.onCall(async (data: any, contex
     }
 });
 
-// 5. Set Terminal to PDV Mode
 export const setTerminalPDVMode = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Acción no permitida.');

@@ -7,12 +7,6 @@ run:
     - next start
 backend:
   id: vatosalfa
-  secretEnvironmentVariables:
-    - secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
-    - secret: TWILIO_ACCOUNT_SID
-    - secret: TWILIO_AUTH_TOKEN
-    - secret: MERCADO_PAGO_WEBHOOK_SECRET
-    - secret: GEMINI_API_KEY
 runConfig:
   minInstances: 0
   maxInstances: 2

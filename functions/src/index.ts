@@ -82,12 +82,8 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
         return { handled: false, clientId: null };
     }
     
-    // The 'from' number from Twilio includes 'whatsapp:+...'
-    // We need to find the client using this full number or a variation of it.
-    const fromPhone = from.replace('whatsapp:', '');
-
     // Standardize phone number to 10 digits for DB lookup
-    const clientPhone10Digits = fromPhone.slice(-10);
+    const clientPhone10Digits = from.replace(/\D/g, '').slice(-10);
     const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone10Digits).limit(1);
     const clientsSnapshot = await clientsQuery.get();
 
@@ -168,7 +164,9 @@ export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT
 
     const client = twilio(accountSid, authToken);
     
+    // Ensure numbers are correctly formatted for Twilio WhatsApp API
     const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
+    // Mexico requires +521 before the 10-digit number
     const toNumber = `whatsapp:+521${to.replace(/\D/g, '')}`;
 
     try {

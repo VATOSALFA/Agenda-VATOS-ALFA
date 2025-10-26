@@ -35,6 +35,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
   },
   async (payload) => {
     try {
+      // Ensure the callable function name matches the exported name in functions/src/index.ts
       const sendWhatsAppFunction = httpsCallable(functions, 'sendWhatsAppMessage');
       const result = await sendWhatsAppFunction(payload);
       const data = result.data as { success: boolean; sid?: string; error?: string };
@@ -44,7 +45,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
       }
       return data;
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred while calling the function.';
       console.error('[DIAGNOSTIC] --- ERROR IN TEMPLATED FLOW ---', errorMessage);
       return {
         success: false,

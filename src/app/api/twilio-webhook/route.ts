@@ -1,8 +1,9 @@
+
 // src/app/api/twilio-webhook/route.ts
 'use server';
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-server'; // Use server-side firebase
+import { getDb } from '@/lib/firebase-server'; // Use server-side firebase
 import type { NextRequest } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { parseISO, format } from 'date-fns';
@@ -11,7 +12,8 @@ import twilio from 'twilio';
 // Helper function to validate the Twilio signature
 async function validateTwilioWebhook(request: NextRequest) {
   const signature = request.headers.get('x-twilio-signature');
-  const webhookUrl = request.url;
+  // Use a stable URL, as the request URL can vary with query params etc.
+  const webhookUrl = `${process.env.HOST || ''}/api/twilio-webhook`;
   const formData = await request.formData();
   const params: { [key: string]: string } = {};
   formData.forEach((value, key) => {
@@ -29,6 +31,7 @@ async function validateTwilioWebhook(request: NextRequest) {
 
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
+    const db = getDb();
     const normalizedMessage = messageBody.trim().toLowerCase();
     
     const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
@@ -115,6 +118,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 
 export async function POST(request: NextRequest) {
   try {
+    const db = getDb();
     const formData = await request.formData();
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string || '';

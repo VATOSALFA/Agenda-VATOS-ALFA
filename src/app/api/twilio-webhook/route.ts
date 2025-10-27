@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-server'; // Use server-side firebase
 import type { NextRequest } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { parseISO } from 'date-fns';
+import { parseISO, format } from 'date-fns';
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
     const normalizedMessage = messageBody.trim().toLowerCase();

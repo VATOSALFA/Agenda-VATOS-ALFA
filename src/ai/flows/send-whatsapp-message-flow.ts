@@ -41,7 +41,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     console.log('[DIAGNOSTIC] sendWhatsAppMessageFlow triggered on the server.');
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER;
+    const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
 
     console.log(`[DIAGNOSTIC] Secrets: SID found: ${!!accountSid}, Token found: ${!!authToken}, Number found: ${!!fromNumberRaw}`);
 
@@ -63,8 +63,9 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
       const client = new Twilio(accountSid, authToken);
       
       // Ensure correct formatting for numbers
-      const fromNumber = `whatsapp:${fromNumberRaw}`;
-      const toNumber = `whatsapp:+52${input.to.replace(/\D/g, '')}`;
+      const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
+      const toNumber = `whatsapp:+521${input.to.replace(/\D/g, '')}`;
+
 
       const messageData: MessageListInstanceCreateOptions = {
         from: fromNumber,

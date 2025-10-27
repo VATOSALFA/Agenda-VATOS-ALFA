@@ -34,6 +34,8 @@ env:
   # --- GEMINI CONFIG ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
+  - variable: MERCADO_PAGO_WEBHOOK_SECRET
+    secret: MERCADO_PAGO_WEBHOOK_SECRET
   # --- TWILIO CONFIG ---
   - variable: TWILIO_ACCOUNT_SID
     secret: TWILIO_ACCOUNT_SID
@@ -41,5 +43,3 @@ env:
     secret: TWILIO_AUTH_TOKEN
   - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
-  - variable: MERCADO_PAGO_WEBHOOK_SECRET
-    secret: MERCADO_PAGO_WEBHOOK_SECRET

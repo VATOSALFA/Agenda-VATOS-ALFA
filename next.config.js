@@ -9,42 +9,6 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  webpack(config, { isServer }) {
-    config.experiments = {
-      ...config.experiments,
-      topLevelAwait: true,
-    };
-    
-    // Mark server-side modules as external to prevent bundling errors
-    if (!isServer) {
-        config.externals = {
-            ...config.externals,
-            'express': 'express',
-            // 'handlebars': 'handlebars', // This line was causing the crash
-            'require-in-the-middle': 'require-in-the-middle',
-            '@opentelemetry/api': '@opentelemetry/api',
-            '@opentelemetry/sd-node': '@opentelemetry/sd-node',
-            '@opentelemetry/resources': '@opentelemetry/resources',
-            '@opentelemetry/semantic-conventions': '@opentelemetry/semantic-conventions',
-            '@opentelemetry/instrumentation': '@opentelemetry/instrumentation',
-            '@opentelemetry/exporter-jaeger': '@opentelemetry/exporter-jaeger',
-        };
-    }
-    
-    config.module.rules.push({
-      test: /\.js$/,
-      include: /node_modules\/handlebars/,
-      use: {
-        loader: 'string-replace-loader',
-        options: {
-          search: 'require.extensions',
-          replace: '[]',
-        },
-      },
-    });
-
-    return config;
-  },
   images: {
     remotePatterns: [
       {

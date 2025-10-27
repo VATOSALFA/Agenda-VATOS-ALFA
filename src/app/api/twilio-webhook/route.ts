@@ -6,6 +6,27 @@ import { db } from '@/lib/firebase-server'; // Use server-side firebase
 import type { NextRequest } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { parseISO, format } from 'date-fns';
+import twilio from 'twilio';
+
+// Helper function to validate the Twilio signature
+async function validateTwilioWebhook(request: NextRequest) {
+  const signature = request.headers.get('x-twilio-signature');
+  const webhookUrl = request.url;
+  const formData = await request.formData();
+  const params: { [key: string]: string } = {};
+  formData.forEach((value, key) => {
+    params[key] = value.toString();
+  });
+
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!signature || !authToken) {
+    return false;
+  }
+
+  return twilio.validateRequest(authToken, signature, webhookUrl, params);
+}
+
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
     const normalizedMessage = messageBody.trim().toLowerCase();
@@ -97,31 +118,61 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string || '';
+    const mediaUrl = formData.get('MediaUrl0') as string | null;
+    const mediaType = formData.get('MediaContentType0') as string | null;
+
 
     if (!from) {
       return new NextResponse('Missing "From" parameter', { status: 400 });
     }
     
-    // Don't validate signature in a webhook, as it's complex with Next.js serverless functions.
-    // Rely on unguessable webhook URL for security.
+    // In a production environment, you should validate the Twilio signature.
+    // const isValid = await validateTwilioWebhook(request);
+    // if (!isValid) {
+    //   return new NextResponse('Invalid Twilio Signature', { status: 401 });
+    // }
 
-    const conversationId = from.replace('whatsapp:', '');
+    const conversationId = from; // Use the full 'whatsapp:+...' string as ID
     
     // Process client response (confirmation, cancellation)
     await handleClientResponse(from, body);
 
-    // Save message to conversation history
-    const conversationRef = db.collection('conversations').doc(conversationId);
-    await conversationRef.collection('messages').add({
+    const messageData: {
+        senderId: 'client';
+        text?: string;
+        mediaUrl?: string;
+        mediaType?: 'image' | 'audio' | 'document';
+        timestamp: FieldValue;
+        read: boolean;
+    } = {
       senderId: 'client',
-      text: body,
       timestamp: FieldValue.serverTimestamp(),
       read: false,
-    });
+    };
+    
+    if (body) {
+        messageData.text = body;
+    }
+
+    if (mediaUrl) {
+        messageData.mediaUrl = mediaUrl;
+        if(mediaType?.startsWith('image/')) {
+            messageData.mediaType = 'image';
+        } else if (mediaType?.startsWith('audio/')) {
+            messageData.mediaType = 'audio';
+        } else if (mediaType === 'application/pdf') {
+            messageData.mediaType = 'document';
+        }
+    }
+
+    // Save message to conversation history
+    const conversationRef = db.collection('conversations').doc(conversationId);
+    await conversationRef.collection('messages').add(messageData);
     
     // Update the conversation summary
+    const lastMessageText = body || (mediaUrl ? `[${messageData.mediaType || 'Archivo'}]` : '[Mensaje vacío]');
     await conversationRef.set({
-      lastMessageText: body,
+      lastMessageText,
       lastMessageTimestamp: FieldValue.serverTimestamp(),
       unreadCount: FieldValue.increment(1),
     }, { merge: true });

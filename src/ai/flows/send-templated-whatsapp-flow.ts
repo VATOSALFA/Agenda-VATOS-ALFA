@@ -9,7 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import Twilio from 'twilio';
+import twilio from 'twilio';
 
 const TemplatedWhatsAppMessageInput = z.object({
   to: z.string().describe("The recipient's phone number, just the digits."),
@@ -47,7 +47,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     
     try {
       console.log(`[DIAGNOSTIC] Initializing Twilio client...`);
-      const client = new Twilio(accountSid, authToken);
+      const client = twilio(accountSid, authToken);
       
       // Ensure correct formatting for WhatsApp numbers
       const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;

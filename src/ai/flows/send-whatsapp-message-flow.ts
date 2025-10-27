@@ -6,7 +6,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import Twilio from 'twilio';
+import twilio from 'twilio';
 import { MessageListInstanceCreateOptions } from 'twilio/lib/rest/api/v2010/account/message';
 
 const WhatsAppMessageSchema = z.object({
@@ -60,7 +60,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
 
     try {
       console.log(`[DIAGNOSTIC] Initializing Twilio client...`);
-      const client = new Twilio(accountSid, authToken);
+      const client = twilio(accountSid, authToken);
       
       // Ensure correct formatting for numbers
       const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;

@@ -1,15 +1,15 @@
 
 'use server';
 /**
- * @fileOverview A flow to send a templated WhatsApp message using Twilio via a Cloud Function.
+ * @fileOverview A flow to send a templated WhatsApp message using Twilio.
  *
- * - sendTemplatedWhatsAppMessage - A function that calls a secure backend function to send a message.
+ * - sendTemplatedWhatsAppMessage - A function that calls the Twilio API.
  * - TemplatedWhatsAppMessageInput - The input schema for the flow.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { functions, httpsCallable } from '@/lib/firebase-client';
+import Twilio from 'twilio';
 
 const TemplatedWhatsAppMessageInput = z.object({
   to: z.string().describe("The recipient's phone number, just the digits."),
@@ -34,24 +34,44 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (payload) => {
-    try {
-      // Ensure the callable function name matches the exported name in functions/src/index.ts
-      const sendWhatsAppFunction = httpsCallable(functions, 'sendWhatsAppMessage');
-      const result = await sendWhatsAppFunction(payload);
-      const data = result.data as { success: boolean; sid?: string; error?: string };
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
 
-      if (!data.success) {
-        throw new Error(data.error || 'Unknown error from Cloud Function.');
-      }
-      return data;
+    if (!accountSid || !authToken || !fromNumberRaw) {
+      const errorMsg = 'Twilio credentials are not configured in server environment variables.';
+      console.error(`[DIAGNOSTIC] ERROR: ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+    
+    try {
+      const client = new Twilio(accountSid, authToken);
+      
+      const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
+      const toNumber = `whatsapp:+521${payload.to.replace(/\D/g, '')}`;
+
+      const message = await client.messages.create({
+        from: fromNumber,
+        to: toNumber,
+        contentSid: payload.contentSid,
+        contentVariables: payload.contentVariables ? JSON.stringify(payload.contentVariables) : undefined,
+      });
+
+      console.log('[DIAGNOSTIC] Twilio message sent successfully. SID:', message.sid);
+
+      return {
+        success: true,
+        sid: message.sid,
+      };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred while calling the function.';
-      console.error('[DIAGNOSTIC] --- ERROR IN TEMPLATED FLOW ---', errorMessage);
+      const errorDetails = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+      console.error('[DIAGNOSTIC] --- TWILIO API ERROR ---', errorDetails);
       return {
         success: false,
-        error: errorMessage,
+        error: errorDetails.message,
       };
     }
   }
 );
+
 export const sendTemplatedWhatsAppMessageFlow = sendTemplatedWhatsAppMessage;

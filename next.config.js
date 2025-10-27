@@ -20,7 +20,7 @@ const nextConfig = {
         config.externals = {
             ...config.externals,
             'express': 'express',
-            'handlebars': 'handlebars',
+            // 'handlebars': 'handlebars', // This line was causing the crash
             'require-in-the-middle': 'require-in-the-middle',
             '@opentelemetry/api': '@opentelemetry/api',
             '@opentelemetry/sd-node': '@opentelemetry/sd-node',

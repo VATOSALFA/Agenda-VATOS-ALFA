@@ -147,45 +147,6 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 // CLOUD FUNCTIONS
 // =================================================================================
 
-export const sendWhatsAppMessage = functions.runWith({ secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "NEXT_PUBLIC_TWILIO_PHONE_NUMBER"] }).https.onCall(async (data, context) => {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumberRaw) {
-        functions.logger.error("Twilio credentials are not configured in environment variables.");
-        throw new functions.https.HttpsError('failed-precondition', 'Twilio credentials are not configured.');
-    }
-
-    const { to, contentSid, contentVariables } = data;
-    if (!to || !contentSid) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: to, contentSid.');
-    }
-
-    const client = twilio(accountSid, authToken);
-    
-    // Ensure numbers are correctly formatted for Twilio WhatsApp API
-    const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
-    // Mexico requires +521 before the 10-digit number
-    const toNumber = `whatsapp:+521${to.replace(/\D/g, '')}`;
-
-    try {
-        const message = await client.messages.create({
-            from: fromNumber,
-            to: toNumber,
-            contentSid: contentSid,
-            contentVariables: contentVariables ? JSON.stringify(contentVariables) : undefined,
-        });
-        functions.logger.info(`Message sent to ${to}. SID: ${message.sid}`);
-        return { success: true, sid: message.sid };
-    } catch (error: any) {
-        functions.logger.error(`Failed to send message to ${to}. Error: ${error.message}`);
-        const twilioError = error.response?.data?.message || error.message;
-        throw new functions.https.HttpsError('internal', `Twilio API Error: ${twilioError}`);
-    }
-});
-
-
 export const twilioWebhook = functions.https.onRequest(
     async (request: functions.https.Request, response: functions.Response) => {
         const twiml = new twilio.twiml.MessagingResponse();

@@ -34,6 +34,7 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (payload) => {
+    // Correctly read secrets provided by the App Hosting environment
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
@@ -45,11 +46,15 @@ export const sendTemplatedWhatsAppMessage = ai.defineFlow(
     }
     
     try {
+      console.log(`[DIAGNOSTIC] Initializing Twilio client...`);
       const client = new Twilio(accountSid, authToken);
       
+      // Ensure correct formatting for WhatsApp numbers
       const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
+      // Add Mexico's required prefixes for mobile numbers
       const toNumber = `whatsapp:+521${payload.to.replace(/\D/g, '')}`;
 
+      console.log(`[DIAGNOSTIC] Sending message from ${fromNumber} to ${toNumber}`);
       const message = await client.messages.create({
         from: fromNumber,
         to: toNumber,

@@ -3,44 +3,53 @@
 
 import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin SDK only if it hasn't been initialized yet.
+// Variable para almacenar la app de Firebase y evitar reinicializaciones.
+let firebaseAdminApp: admin.app.App | null = null;
+
 const initializeFirebaseAdmin = () => {
   if (admin.apps.length > 0) {
     return admin.app();
   }
 
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountKey) {
-    console.warn('FIREBASE_SERVICE_ACCOUNT_KEY is not available. Admin SDK not initialized.');
+  // Las variables de entorno solo están disponibles en el entorno de ejecución, no durante la construcción.
+  const serviceAccountKeyString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+  if (!serviceAccountKeyString) {
+    console.warn('FIREBASE_SERVICE_ACCOUNT_KEY no está disponible. La inicialización del Admin SDK se omitirá.');
     return null;
   }
-  
+
   try {
-    const serviceAccount = JSON.parse(serviceAccountKey);
-    return admin.initializeApp({
+    const serviceAccount = JSON.parse(serviceAccountKeyString);
+    
+    console.log("Inicializando Firebase Admin SDK...");
+    firebaseAdminApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
-  } catch(e) {
-      console.error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.");
-      return null;
+    console.log("Firebase Admin SDK inicializado con éxito.");
+    return firebaseAdminApp;
+  } catch (e: any) {
+    console.error("Error al parsear FIREBASE_SERVICE_ACCOUNT_KEY o al inicializar Firebase Admin:", e.message);
+    // Lanza el error para que la función que lo llama sepa que falló.
+    throw new Error("No se pudo inicializar Firebase Admin SDK: " + e.message);
   }
 };
 
 function getDb() {
-  const app = initializeFirebaseAdmin();
+  const app = firebaseAdminApp || initializeFirebaseAdmin();
   if (!app) {
-    throw new Error("Firebase Admin SDK is not initialized. Cannot access Firestore.");
+    throw new Error("Firebase Admin SDK no está inicializado. No se puede acceder a Firestore.");
   }
-  return admin.firestore();
+  return admin.firestore(app);
 }
 
 function getAuth() {
-  const app = initializeFirebaseAdmin();
+  const app = firebaseAdminApp || initializeFirebaseAdmin();
   if (!app) {
-      throw new Error("Firebase Admin SDK is not initialized. Cannot access Auth.");
+    throw new Error("Firebase Admin SDK no está inicializado. No se puede acceder a Auth.");
   }
-  return admin.auth();
+  return admin.auth(app);
 }
 
-// Export functions to get the instances
+// Exportar las funciones para obtener las instancias
 export { getDb, getAuth };

@@ -1,147 +1,34 @@
-
 'use server';
 
-import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/firebase-server'; // Use server-side firebase
-import type { NextRequest } from 'next/server';
+import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { parseISO, format } from 'date-fns';
-import twilio from 'twilio';
+import { NextRequest, NextResponse } from 'next/server';
+import { parse } from 'url';
 
-async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
+// This function is deployed as a public Cloud Function.
+// It allows unauthenticated requests from Twilio.
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const fetchCache = 'default-no-store';
+
+async function saveMessage(from: string, body: string | null, mediaUrl: string | null, mediaType: string | null) {
     const db = getDb();
     if (!db) {
-        throw new Error("La base de datos no está inicializada para handleClientResponse.");
+        throw new Error("Database not initialized.");
     }
-    const normalizedMessage = messageBody.trim().toLowerCase();
+    const conversationId = from; // e.g., 'whatsapp:+14155238886'
+    const conversationRef = db.collection('conversations').doc(conversationId);
     
-    const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
-    const rescheduleKeywords = ['reagendar'];
-    const cancellationKeywords = ['cancelar la cita', 'cancelar'];
-
-    let action: 'confirm' | 'reschedule' | 'cancel' | null = null;
-
-    if (confirmationKeywords.some(keyword => normalizedMessage.includes(keyword))) {
-        action = 'confirm';
-    } else if (rescheduleKeywords.some(keyword => normalizedMessage.includes(keyword))) {
-        action = 'reschedule';
-    } else if (cancellationKeywords.some(keyword => normalizedMessage.includes(keyword))) {
-        action = 'cancel';
-    }
-
-    if (!action) {
-        return { handled: false, clientId: null };
-    }
-    
-    // Standardize phone number to 10 digits for DB lookup
-    const clientPhone10Digits = from.replace(/\D/g, '').slice(-10);
-    const clientsQuery = db.collection('clientes').where('telefono', '==', clientPhone10Digits).limit(1);
-    const clientsSnapshot = await clientsQuery.get();
-
-    if (clientsSnapshot.empty) {
-        console.log(`[DIAGNOSTIC] Webhook: Client not found with phone: ${clientPhone10Digits}`);
-        return { handled: false, clientId: null };
-    }
-
-    const clientDoc = clientsSnapshot.docs[0];
-    const clientId = clientDoc.id;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const reservationsQuery = db.collection('reservas')
-        .where('cliente_id', '==', clientId)
-        .where('fecha', '>=', format(today, 'yyyy-MM-dd'));
-    
-    const reservationsSnapshot = await reservationsQuery.get();
-    
-    if (reservationsSnapshot.empty) {
-        console.log(`[DIAGNOSTIC] Webhook: No pending reservations found for client: ${clientId}`);
-        return { handled: true, clientId: clientId };
-    }
-    
-    const upcomingReservations = reservationsSnapshot.docs
-      .map(d => ({ id: d.id, ...d.data() } as any))
-      .filter(r => r.estado !== 'Cancelado');
-
-    if (upcomingReservations.length === 0) {
-      console.log(`[DIAGNOSTIC] Webhook: No non-cancelled upcoming reservations found for client: ${clientId}`);
-      return { handled: true, clientId: clientId };
-    }
-
-    upcomingReservations.sort((a: any, b: any) => {
-        const dateA = parseISO(`${a.fecha}T${a.hora_inicio}`);
-        const dateB = parseISO(`${b.fecha}T${b.hora_inicio}`);
-        return dateA.getTime() - dateB.getTime();
-    });
-    
-    const reservationToUpdate = upcomingReservations[0];
-    const reservationDocRef = db.collection('reservas').doc(reservationToUpdate.id);
-
-    const batch = db.batch();
-    switch(action) {
-        case 'confirm':
-            batch.update(reservationDocRef, { estado: 'Confirmado' });
-            break;
-        case 'cancel':
-            batch.update(reservationDocRef, { estado: 'Cancelado' });
-            batch.update(clientDoc.ref, { 
-                citas_canceladas: FieldValue.increment(1)
-            });
-            break;
-        default:
-            break;
-    }
-    await batch.commit();
-    console.log(`[DIAGNOSTIC] Webhook: Action '${action}' processed for client ${clientId} on reservation ${reservationToUpdate.id}`);
-    return { handled: true, clientId: clientId };
-}
-
-
-export async function POST(request: NextRequest) {
-  try {
-    const db = getDb();
-    if (!db) {
-        console.error('[DIAGNOSTIC] Webhook Error: Database not initialized.');
-        return new NextResponse("Internal Server Error: Database not initialized", { status: 500 });
-    }
-    
-    const formData = await request.formData();
-    
-    const from = formData.get('From') as string;
-    const body = formData.get('Body') as string || '';
-    const mediaUrl = formData.get('MediaUrl0') as string | null;
-    const mediaType = formData.get('MediaContentType0') as string | null;
-
-    if (!from) {
-      return new NextResponse('Missing "From" parameter', { status: 400 });
-    }
-
-    const conversationId = from; // Use the full 'whatsapp:+...' string as ID
-    
-    // Process client response (confirmation, cancellation)
-    await handleClientResponse(from, body);
-
-    const messageData: {
-        senderId: 'client';
-        text?: string;
-        mediaUrl?: string;
-        mediaType?: 'image' | 'audio' | 'document';
-        timestamp: FieldValue;
-        read: boolean;
-    } = {
-      senderId: 'client',
-      timestamp: FieldValue.serverTimestamp(),
-      read: false,
+    const messageData: any = {
+        senderId: 'client',
+        timestamp: FieldValue.serverTimestamp(),
+        read: false
     };
-    
-    if (body) {
-        messageData.text = body;
-    }
 
+    if (body) messageData.text = body;
     if (mediaUrl) {
         messageData.mediaUrl = mediaUrl;
-        if(mediaType?.startsWith('image/')) {
+        if (mediaType?.startsWith('image/')) {
             messageData.mediaType = 'image';
         } else if (mediaType?.startsWith('audio/')) {
             messageData.mediaType = 'audio';
@@ -150,30 +37,42 @@ export async function POST(request: NextRequest) {
         }
     }
 
-    // Save message to conversation history
-    const conversationRef = db.collection('conversations').doc(conversationId);
     await conversationRef.collection('messages').add(messageData);
-    
-    // Update the conversation summary
+
     const lastMessageText = body || (mediaUrl ? `[${messageData.mediaType || 'Archivo'}]` : '[Mensaje vacío]');
+    
+    // Use set with merge to create or update the conversation summary
     await conversationRef.set({
       lastMessageText,
       lastMessageTimestamp: FieldValue.serverTimestamp(),
       unreadCount: FieldValue.increment(1),
     }, { merge: true });
+}
 
-    console.log(`[DIAGNOSTIC] Webhook: Message from ${from} saved to conversation.`);
+export async function POST(request: NextRequest) {
+    try {
+        const formData = await request.formData();
+        const from = formData.get('From') as string;
+        const body = formData.get('Body') as string | null;
+        const mediaUrl = formData.get('MediaUrl0') as string | null;
+        const mediaType = formData.get('MediaContentType0') as string | null;
 
-    // Respond to Twilio to avoid an error on their end.
-    const xmlResponse = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
-    return new NextResponse(xmlResponse, { 
-        status: 200,
-        headers: { 'Content-Type': 'text/xml' } 
-    });
+        if (!from) {
+            return new NextResponse('Missing "From" parameter', { status: 400 });
+        }
+        
+        // Save the message asynchronously. We don't need to wait for it.
+        saveMessage(from, body, mediaUrl, mediaType).catch(console.error);
 
-  } catch (error) {
-    console.error('[DIAGNOSTIC] Twilio Webhook Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-    return new NextResponse(`Internal Server Error: ${errorMessage}`, { status: 500 });
-  }
+        // Respond to Twilio immediately to acknowledge receipt.
+        const xmlResponse = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
+        return new NextResponse(xmlResponse, {
+            status: 200,
+            headers: { 'Content-Type': 'text/xml' }
+        });
+    } catch (error) {
+        console.error('Error processing Twilio webhook:', error);
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        return new NextResponse(`Internal Server Error: ${errorMessage}`, { status: 500 });
+    }
 }

@@ -1,12 +1,11 @@
-'use server';
 
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { NextRequest, NextResponse } from 'next/server';
-import { parse } from 'url';
 
-// This function is deployed as a public Cloud Function.
-// It allows unauthenticated requests from Twilio.
+// This is a standard Next.js API Route, NOT a Server Action.
+// It will be deployed as a public Cloud Function by App Hosting.
+
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const fetchCache = 'default-no-store';
@@ -41,7 +40,6 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
 
     const lastMessageText = body || (mediaUrl ? `[${messageData.mediaType || 'Archivo'}]` : '[Mensaje vacío]');
     
-    // Use set with merge to create or update the conversation summary
     await conversationRef.set({
       lastMessageText,
       lastMessageTimestamp: FieldValue.serverTimestamp(),
@@ -61,15 +59,16 @@ export async function POST(request: NextRequest) {
             return new NextResponse('Missing "From" parameter', { status: 400 });
         }
         
-        // Save the message asynchronously. We don't need to wait for it.
+        // Asynchronously save the message, but don't block the response to Twilio.
         saveMessage(from, body, mediaUrl, mediaType).catch(console.error);
 
-        // Respond to Twilio immediately to acknowledge receipt.
+        // Respond to Twilio immediately with an empty TwiML response.
         const xmlResponse = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
         return new NextResponse(xmlResponse, {
             status: 200,
             headers: { 'Content-Type': 'text/xml' }
         });
+
     } catch (error) {
         console.error('Error processing Twilio webhook:', error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';

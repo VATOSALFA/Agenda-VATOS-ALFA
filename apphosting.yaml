@@ -1,5 +1,6 @@
 # apphosting.yaml
 run:
+  public: true
   build:
     - npm ci
     - npm run build

@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -11,11 +12,8 @@ export const fetchCache = 'default-no-store';
  * Saves an incoming message to the Firestore database.
  */
 async function saveMessage(from: string, body: string | null, mediaUrl: string | null, mediaType: string | null) {
+  try {
     const db = getDb();
-    if (!db) {
-        console.error("Database not initialized for webhook.");
-        throw new Error("Database not initialized for webhook.");
-    }
     const conversationId = from; // e.g., 'whatsapp:+14155238886'
     const conversationRef = db.collection('conversations').doc(conversationId);
     
@@ -40,28 +38,48 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
     // Use a transaction to ensure atomicity
     await db.runTransaction(async (transaction) => {
         const convDoc = await transaction.get(conversationRef);
-
         const lastMessageText = body || `[${messageData.mediaType || 'Archivo'}]`;
 
         if (convDoc.exists) {
-        transaction.update(conversationRef, {
-            lastMessageText,
-            lastMessageTimestamp: FieldValue.serverTimestamp(),
-            unreadCount: FieldValue.increment(1),
-        });
+            transaction.update(conversationRef, {
+                lastMessageText,
+                lastMessageTimestamp: FieldValue.serverTimestamp(),
+                unreadCount: FieldValue.increment(1),
+            });
         } else {
-        transaction.set(conversationRef, {
-            clientName: from, // Use the number as a placeholder name
-            lastMessageText,
-            lastMessageTimestamp: FieldValue.serverTimestamp(),
-            unreadCount: 1,
-        });
+            let clientName = from; // Default to phone number
+            try {
+                const phoneOnly = from.replace('whatsapp:+', '');
+                const clientsRef = db.collection('clientes');
+                // Check for different formats of phone numbers
+                const querySnapshot = await clientsRef.where('telefono', 'in', [phoneOnly, phoneOnly.slice(2)]).limit(1).get();
+                if (!querySnapshot.empty) {
+                    const clientData = querySnapshot.docs[0].data();
+                    clientName = `${clientData.nombre} ${clientData.apellido}`;
+                }
+            } catch(clientError) {
+                console.warn("Could not fetch client name:", clientError);
+            }
+
+            transaction.set(conversationRef, {
+                clientName: clientName,
+                lastMessageText,
+                lastMessageTimestamp: FieldValue.serverTimestamp(),
+                unreadCount: 1,
+            });
         }
 
         const messagesCollectionRef = conversationRef.collection("messages");
-        const newMessageRef = messagesCollectionRef.doc(); // Auto-generate ID
+        const newMessageRef = messagesCollectionRef.doc();
         transaction.set(newMessageRef, messageData);
     });
+
+    console.log(`Message from ${from} saved successfully.`);
+
+  } catch (error) {
+    console.error(`[CRITICAL] Failed to save message from ${from}:`, error);
+    // Log but don't re-throw to ensure Twilio gets a 200 OK
+  }
 }
 
 /**
@@ -77,7 +95,8 @@ export async function POST(request: NextRequest) {
 
         if (!from) {
             console.error("Webhook received without 'From' parameter.");
-            return new NextResponse('Missing "From" parameter', { status: 400 });
+            // Still send a 200 to Twilio to prevent retries for a bad request
+            return new NextResponse('<Response/>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
         }
         
         // Asynchronously save the message, but don't block the response to Twilio.
@@ -91,8 +110,12 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('Error processing Twilio webhook:', error);
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        return new NextResponse(`Internal Server Error: ${errorMessage}`, { status: 500 });
+        console.error('[FATAL] Unhandled error in twilioWebhook route:', error);
+        // If something unexpected goes wrong, send a generic success to Twilio
+        // to prevent it from retrying, while logging the real error.
+        return new NextResponse('<Response/>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/xml' }
+        });
     }
 }

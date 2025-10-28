@@ -31,7 +31,7 @@ async function validateTwilioWebhook(request: NextRequest) {
 
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
-    const db = getDb();
+    const db = getDb(); // Call getDb inside the function
     const normalizedMessage = messageBody.trim().toLowerCase();
     
     const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
@@ -118,7 +118,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
 
 export async function POST(request: NextRequest) {
   try {
-    const db = getDb();
+    const db = getDb(); // Call getDb inside the function
     const formData = await request.formData();
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string || '';

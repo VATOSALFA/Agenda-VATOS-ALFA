@@ -43,6 +43,13 @@ const nextConfig = {
       }
     ],
   },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals.push('@opentelemetry/exporter-jaeger');
+      config.externals.push('require-in-the-middle');
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;

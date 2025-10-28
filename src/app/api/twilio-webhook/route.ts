@@ -1,5 +1,4 @@
 
-// src/app/api/twilio-webhook/route.ts
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -8,35 +7,6 @@ import type { NextRequest } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { parseISO, format } from 'date-fns';
 import twilio from 'twilio';
-
-// Helper function to validate the Twilio signature
-async function validateTwilioWebhook(request: NextRequest) {
-  const signature = request.headers.get('x-twilio-signature');
-  const host = request.headers.get('host');
-  // Reconstruct the original URL from headers, as the request.url might be modified by proxies.
-  const webhookUrl = `https://${host}${request.nextUrl.pathname}`;
-  
-  const formData = await request.formData();
-  const params: { [key: string]: string } = {};
-  formData.forEach((value, key) => {
-    params[key] = value.toString();
-  });
-
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!signature || !authToken) {
-    console.warn('[DIAGNOSTIC] Twilio signature or auth token is missing. Validation skipped.');
-    return false;
-  }
-
-  try {
-      return twilio.validateRequest(authToken, signature, webhookUrl, params);
-  } catch (error) {
-      console.error('[DIAGNOSTIC] Error validating Twilio request:', error);
-      return false;
-  }
-}
-
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
     const db = getDb();
@@ -136,22 +106,12 @@ export async function POST(request: NextRequest) {
         return new NextResponse("Internal Server Error: Database not initialized", { status: 500 });
     }
     
-    // IMPORTANT: It's crucial to consume the form data ONCE and use it for both validation and processing.
     const formData = await request.formData();
     
-    const isValid = await validateTwilioWebhook(request);
-    if (!isValid) {
-      console.warn('[DIAGNOSTIC] Invalid Twilio Signature. Request rejected.');
-      return new NextResponse('Invalid Twilio Signature', { status: 401 });
-    }
-    console.log('[DIAGNOSTIC] Twilio signature validated successfully.');
-
-
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string || '';
     const mediaUrl = formData.get('MediaUrl0') as string | null;
     const mediaType = formData.get('MediaContentType0') as string | null;
-
 
     if (!from) {
       return new NextResponse('Missing "From" parameter', { status: 400 });

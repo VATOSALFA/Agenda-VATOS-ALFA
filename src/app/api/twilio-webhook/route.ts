@@ -1,19 +1,20 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
 
-// This is a standard Next.js API Route, NOT a Server Action.
-// It will be deployed as a public Cloud Function by App Hosting.
-
+// These exports are required for Next.js API Routes.
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const fetchCache = 'default-no-store';
 
+/**
+ * Saves an incoming message to the Firestore database.
+ */
 async function saveMessage(from: string, body: string | null, mediaUrl: string | null, mediaType: string | null) {
     const db = getDb();
     if (!db) {
-        throw new Error("Database not initialized.");
+        console.error("Database not initialized for webhook.");
+        throw new Error("Database not initialized for webhook.");
     }
     const conversationId = from; // e.g., 'whatsapp:+14155238886'
     const conversationRef = db.collection('conversations').doc(conversationId);
@@ -36,17 +37,36 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
         }
     }
 
-    await conversationRef.collection('messages').add(messageData);
+    // Use a transaction to ensure atomicity
+    await db.runTransaction(async (transaction) => {
+        const convDoc = await transaction.get(conversationRef);
 
-    const lastMessageText = body || (mediaUrl ? `[${messageData.mediaType || 'Archivo'}]` : '[Mensaje vacío]');
-    
-    await conversationRef.set({
-      lastMessageText,
-      lastMessageTimestamp: FieldValue.serverTimestamp(),
-      unreadCount: FieldValue.increment(1),
-    }, { merge: true });
+        const lastMessageText = body || `[${messageData.mediaType || 'Archivo'}]`;
+
+        if (convDoc.exists) {
+        transaction.update(conversationRef, {
+            lastMessageText,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            unreadCount: FieldValue.increment(1),
+        });
+        } else {
+        transaction.set(conversationRef, {
+            clientName: from, // Use the number as a placeholder name
+            lastMessageText,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            unreadCount: 1,
+        });
+        }
+
+        const messagesCollectionRef = conversationRef.collection("messages");
+        const newMessageRef = messagesCollectionRef.doc(); // Auto-generate ID
+        transaction.set(newMessageRef, messageData);
+    });
 }
 
+/**
+ * API Route to handle incoming Twilio webhook requests.
+ */
 export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
@@ -56,6 +76,7 @@ export async function POST(request: NextRequest) {
         const mediaType = formData.get('MediaContentType0') as string | null;
 
         if (!from) {
+            console.error("Webhook received without 'From' parameter.");
             return new NextResponse('Missing "From" parameter', { status: 400 });
         }
         

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/firebase-server';
+import { getDb, getAuth } from '@/lib/firebase-server'; // Import from the correct path
 import { FieldValue } from 'firebase-admin/firestore';
 import { validateRequest } from 'twilio';
 
@@ -37,15 +37,31 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
         }
     }
 
-    await conversationRef.collection('messages').add(messageData);
+    // Use a transaction to ensure atomicity
+    await db.runTransaction(async (transaction) => {
+        const convDoc = await transaction.get(conversationRef);
 
-    const lastMessageText = body || (mediaUrl ? `[${messageData.mediaType || 'Archivo'}]` : '[Mensaje vacío]');
-    
-    await conversationRef.set({
-      lastMessageText,
-      lastMessageTimestamp: FieldValue.serverTimestamp(),
-      unreadCount: FieldValue.increment(1),
-    }, { merge: true });
+        const lastMessageText = body || `[${messageData.mediaType || 'Archivo'}]`;
+
+        if (convDoc.exists) {
+        transaction.update(conversationRef, {
+            lastMessageText,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            unreadCount: FieldValue.increment(1),
+        });
+        } else {
+        transaction.set(conversationRef, {
+            clientName: from, // Use the number as a placeholder name
+            lastMessageText,
+            lastMessageTimestamp: FieldValue.serverTimestamp(),
+            unreadCount: 1,
+        });
+        }
+
+        const messagesCollectionRef = conversationRef.collection("messages");
+        const newMessageRef = messagesCollectionRef.doc(); // Auto-generate ID
+        transaction.set(newMessageRef, messageData);
+    });
 }
 
 /**

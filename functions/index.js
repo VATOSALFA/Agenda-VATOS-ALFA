@@ -1,11 +1,10 @@
 
 const { onRequest } = require("firebase-functions/v2/https");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const { initializeApp, getApps } = require("firebase-admin/app");
+const admin = require("firebase-admin");
 
 // Initialize Firebase Admin SDK only once
-if (getApps().length === 0) {
-  initializeApp();
+if (admin.apps.length === 0) {
+  admin.initializeApp();
 }
 
 /**
@@ -14,13 +13,13 @@ if (getApps().length === 0) {
  */
 async function saveMessage(from, body, mediaUrl, mediaType) {
   try {
-    const db = getFirestore();
-    const conversationId = from;
+    const db = admin.firestore();
+    const conversationId = from; // e.g., 'whatsapp:+14155238886'
     const conversationRef = db.collection("conversations").doc(conversationId);
 
     const messageData = {
       senderId: "client",
-      timestamp: FieldValue.serverTimestamp(),
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       read: false,
     };
 
@@ -44,14 +43,28 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
       if (convDoc.exists) {
         transaction.update(conversationRef, {
           lastMessageText,
-          lastMessageTimestamp: FieldValue.serverTimestamp(),
-          unreadCount: FieldValue.increment(1),
+          lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+          unreadCount: admin.firestore.FieldValue.increment(1),
         });
       } else {
+        // Attempt to find client name from phone number
+        let clientName = from; // Default to phone number
+        try {
+            const phoneOnly = from.replace('whatsapp:+', '');
+            const clientsRef = db.collection('clientes');
+            const querySnapshot = await clientsRef.where('telefono', '==', phoneOnly).limit(1).get();
+            if (!querySnapshot.empty) {
+                const clientData = querySnapshot.docs[0].data();
+                clientName = `${clientData.nombre} ${clientData.apellido}`;
+            }
+        } catch(clientError) {
+            console.warn("Could not fetch client name:", clientError);
+        }
+
         transaction.set(conversationRef, {
-          clientName: from,
+          clientName: clientName,
           lastMessageText,
-          lastMessageTimestamp: FieldValue.serverTimestamp(),
+          lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
           unreadCount: 1,
         });
       }

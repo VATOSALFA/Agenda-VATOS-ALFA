@@ -12,8 +12,10 @@ import twilio from 'twilio';
 // Helper function to validate the Twilio signature
 async function validateTwilioWebhook(request: NextRequest) {
   const signature = request.headers.get('x-twilio-signature');
-  // Use a stable URL, as the request URL can vary with query params etc.
-  const webhookUrl = `${process.env.HOST || ''}/api/twilio-webhook`;
+  const host = request.headers.get('host');
+  // Reconstruct the original URL from headers, as the request.url might be modified by proxies.
+  const webhookUrl = `https://${host}${request.nextUrl.pathname}`;
+  
   const formData = await request.formData();
   const params: { [key: string]: string } = {};
   formData.forEach((value, key) => {
@@ -23,15 +25,24 @@ async function validateTwilioWebhook(request: NextRequest) {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
 
   if (!signature || !authToken) {
+    console.warn('[DIAGNOSTIC] Twilio signature or auth token is missing. Validation skipped.');
     return false;
   }
 
-  return twilio.validateRequest(authToken, signature, webhookUrl, params);
+  try {
+      return twilio.validateRequest(authToken, signature, webhookUrl, params);
+  } catch (error) {
+      console.error('[DIAGNOSTIC] Error validating Twilio request:', error);
+      return false;
+  }
 }
 
 
 async function handleClientResponse(from: string, messageBody: string): Promise<{ handled: boolean, clientId: string | null }> {
-    const db = getDb(); // Call getDb inside the function
+    const db = getDb();
+    if (!db) {
+        throw new Error("La base de datos no está inicializada para handleClientResponse.");
+    }
     const normalizedMessage = messageBody.trim().toLowerCase();
     
     const confirmationKeywords = ['confirmado', 'confirmo', 'confirmar', 'si', 'yes', 'confirm'];
@@ -58,7 +69,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
     const clientsSnapshot = await clientsQuery.get();
 
     if (clientsSnapshot.empty) {
-        console.log(`Client not found with phone: ${clientPhone10Digits}`);
+        console.log(`[DIAGNOSTIC] Webhook: Client not found with phone: ${clientPhone10Digits}`);
         return { handled: false, clientId: null };
     }
 
@@ -75,7 +86,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
     const reservationsSnapshot = await reservationsQuery.get();
     
     if (reservationsSnapshot.empty) {
-        console.log(`No pending reservations found for client: ${clientId}`);
+        console.log(`[DIAGNOSTIC] Webhook: No pending reservations found for client: ${clientId}`);
         return { handled: true, clientId: clientId };
     }
     
@@ -84,7 +95,7 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
       .filter(r => r.estado !== 'Cancelado');
 
     if (upcomingReservations.length === 0) {
-      console.log(`No non-cancelled upcoming reservations found for client: ${clientId}`);
+      console.log(`[DIAGNOSTIC] Webhook: No non-cancelled upcoming reservations found for client: ${clientId}`);
       return { handled: true, clientId: clientId };
     }
 
@@ -112,14 +123,30 @@ async function handleClientResponse(from: string, messageBody: string): Promise<
             break;
     }
     await batch.commit();
+    console.log(`[DIAGNOSTIC] Webhook: Action '${action}' processed for client ${clientId} on reservation ${reservationToUpdate.id}`);
     return { handled: true, clientId: clientId };
 }
 
 
 export async function POST(request: NextRequest) {
   try {
-    const db = getDb(); // Call getDb inside the function
+    const db = getDb();
+    if (!db) {
+        console.error('[DIAGNOSTIC] Webhook Error: Database not initialized.');
+        return new NextResponse("Internal Server Error: Database not initialized", { status: 500 });
+    }
+    
+    // IMPORTANT: It's crucial to consume the form data ONCE and use it for both validation and processing.
     const formData = await request.formData();
+    
+    const isValid = await validateTwilioWebhook(request);
+    if (!isValid) {
+      console.warn('[DIAGNOSTIC] Invalid Twilio Signature. Request rejected.');
+      return new NextResponse('Invalid Twilio Signature', { status: 401 });
+    }
+    console.log('[DIAGNOSTIC] Twilio signature validated successfully.');
+
+
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string || '';
     const mediaUrl = formData.get('MediaUrl0') as string | null;
@@ -129,12 +156,6 @@ export async function POST(request: NextRequest) {
     if (!from) {
       return new NextResponse('Missing "From" parameter', { status: 400 });
     }
-    
-    // In a production environment, you should validate the Twilio signature.
-    // const isValid = await validateTwilioWebhook(request);
-    // if (!isValid) {
-    //   return new NextResponse('Invalid Twilio Signature', { status: 401 });
-    // }
 
     const conversationId = from; // Use the full 'whatsapp:+...' string as ID
     
@@ -181,6 +202,8 @@ export async function POST(request: NextRequest) {
       unreadCount: FieldValue.increment(1),
     }, { merge: true });
 
+    console.log(`[DIAGNOSTIC] Webhook: Message from ${from} saved to conversation.`);
+
     // Respond to Twilio to avoid an error on their end.
     const xmlResponse = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
     return new NextResponse(xmlResponse, { 
@@ -189,7 +212,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Twilio Webhook Error:', error);
+    console.error('[DIAGNOSTIC] Twilio Webhook Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     return new NextResponse(`Internal Server Error: ${errorMessage}`, { status: 500 });
   }

@@ -1,6 +1,9 @@
 
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const fetch = require("node-fetch");
+const { getStorage } = require("firebase-admin/storage");
+const { v4: uuidv4 } = require('uuid');
 
 // Initialize Firebase Admin SDK only once
 if (admin.apps.length === 0) {
@@ -8,8 +11,51 @@ if (admin.apps.length === 0) {
 }
 
 /**
+ * Downloads media from Twilio and uploads it to Firebase Storage.
+ * @param {string} mediaUrl The private Twilio media URL.
+ * @param {string} from The sender's WhatsApp number.
+ * @param {string} mediaType The content type of the media.
+ * @returns {Promise<string>} The public URL of the uploaded file in Firebase Storage.
+ */
+async function transferMediaToStorage(mediaUrl, from, mediaType) {
+  const bucket = getStorage().bucket();
+
+  // 1. Download from Twilio
+  const twilioResponse = await fetch(mediaUrl, {
+    headers: {
+        'Authorization': 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+    }
+  });
+
+  if (!twilioResponse.ok) {
+    throw new Error(`Failed to download media from Twilio: ${twilioResponse.statusText}`);
+  }
+
+  const mediaBuffer = await twilioResponse.buffer();
+
+  // 2. Upload to Firebase Storage
+  const extension = mediaType.split('/')[1] || 'bin';
+  const fileName = `whatsapp_media/${from.replace(/\D/g, '')}/${uuidv4()}.${extension}`;
+  const file = bucket.file(fileName);
+
+  await file.save(mediaBuffer, {
+    metadata: {
+      contentType: mediaType,
+    },
+  });
+
+  // 3. Get public URL
+  const [publicUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: '03-09-2491' // A very distant future date
+  });
+
+  return publicUrl;
+}
+
+
+/**
  * Saves an incoming message to the Firestore database.
- * This function is designed to be robust and not throw errors that would crash the main function.
  */
 async function saveMessage(from, body, mediaUrl, mediaType) {
   try {
@@ -24,21 +70,31 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
     };
 
     if (body) messageData.text = body;
-    if (mediaUrl) {
-      messageData.mediaUrl = mediaUrl;
-      if (mediaType?.startsWith("image/")) {
-        messageData.mediaType = "image";
-      } else if (mediaType?.startsWith("audio/")) {
-        messageData.mediaType = "audio";
-      } else if (mediaType === "application/pdf") {
-        messageData.mediaType = "document";
+    
+    let finalMediaUrl = null;
+    if (mediaUrl && mediaType) {
+      try {
+        finalMediaUrl = await transferMediaToStorage(mediaUrl, from, mediaType);
+        messageData.mediaUrl = finalMediaUrl;
+        
+        if (mediaType.startsWith("image/")) {
+            messageData.mediaType = "image";
+        } else if (mediaType.startsWith("audio/")) {
+            messageData.mediaType = "audio";
+        } else if (mediaType === "application/pdf") {
+            messageData.mediaType = "document";
+        }
+
+      } catch (mediaError) {
+        console.error(`[MEDIA_ERROR] Failed to transfer media for ${from}:`, mediaError);
+        // Fallback: save the original URL but add a note about the error
+        messageData.text = (body || '') + `\n\n[Error al procesar archivo adjunto]`;
       }
     }
 
-    // Use a transaction to ensure atomicity
     await db.runTransaction(async (transaction) => {
       const convDoc = await transaction.get(conversationRef);
-      const lastMessageText = body || `[${messageData.mediaType || 'Archivo'}]`;
+      const lastMessageText = body || (finalMediaUrl ? `[${messageData.mediaType || 'Archivo'}]` : '[Mensaje sin texto]');
 
       if (convDoc.exists) {
         transaction.update(conversationRef, {
@@ -47,8 +103,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
           unreadCount: admin.firestore.FieldValue.increment(1),
         });
       } else {
-        // Attempt to find client name from phone number
-        let clientName = from; // Default to phone number
+        let clientName = from;
         try {
             const phoneOnly = from.replace('whatsapp:+', '');
             const clientsRef = db.collection('clientes');
@@ -78,37 +133,29 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 
   } catch (error) {
     console.error(`[CRITICAL] Failed to save message from ${from}:`, error);
-    // We log the error but don't re-throw, to avoid a 500 error to Twilio.
   }
 }
 
 /**
  * Cloud Function to handle incoming Twilio webhook requests.
  */
-exports.twilioWebhook = onRequest(async (request, response) => {
+exports.twilioWebhook = onRequest({secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]}, async (request, response) => {
   try {
-    // The body is parsed by Cloud Functions for `application/x-www-form-urlencoded`
     const { From, Body, MediaUrl0, MediaContentType0 } = request.body;
 
     if (!From) {
       console.error("Webhook received without 'From' parameter.");
-      // Still send a 200 to Twilio to prevent retries for a bad request
       response.status(200).send('<Response/>');
       return;
     }
 
-    // Asynchronously save the message, but don't block the response to Twilio.
-    // We don't await this, allowing the response to be sent immediately.
-    saveMessage(From, Body, MediaUrl0, MediaContentType0);
+    await saveMessage(From, Body, MediaUrl0, MediaContentType0);
     
-    // Respond to Twilio immediately with an empty TwiML response to acknowledge receipt.
     response.set('Content-Type', 'text/xml');
     response.status(200).send('<Response/>');
 
   } catch (error) {
     console.error('[FATAL] Unhandled error in twilioWebhook function:', error);
-    // If something unexpected goes wrong, send a generic success to Twilio
-    // to prevent it from retrying, while logging the real error.
     response.set('Content-Type', 'text/xml');
     response.status(200).send('<Response/>');
   }

@@ -147,11 +147,13 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
  */
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const from = formData.get('From') as string;
-    const body = formData.get('Body') as string | null;
-    const mediaUrl = formData.get('MediaUrl0') as string | null;
-    const mediaType = formData.get('MediaContentType0') as string | null;
+    const bodyText = await request.text();
+    const params = new URLSearchParams(bodyText);
+
+    const from = params.get('From');
+    const body = params.get('Body');
+    const mediaUrl = params.get('MediaUrl0');
+    const mediaType = params.get('MediaContentType0');
     
     if (!from) {
       console.error("Webhook received without 'From' parameter.");

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { validateRequest } from 'twilio';
+import { getStorage } from 'firebase-admin/storage';
 import { Buffer } from 'buffer';
 
 // These exports are required for Next.js API Routes.
@@ -12,19 +12,50 @@ export const fetchCache = 'default-no-store';
 
 /**
  * Downloads media from Twilio and uploads it to Firebase Storage.
- * IMPORTANT: Firebase Admin SDK for Storage is not available in this environment.
- * We will return the private Twilio URL and handle it on the client side for now.
- * A more robust solution would use a separate function or service for this transfer.
  * @param {string} mediaUrl The private Twilio media URL.
- * @returns {Promise<string>} The same private Twilio media URL.
+ * @returns {Promise<string>} The public URL of the uploaded file in Firebase Storage.
  */
-async function transferMediaToStorage(mediaUrl: string, from: string, mediaType: string) {
-  // NOTE: Firebase Admin SDK's Storage component is not fully supported in this environment.
-  // We will return the private Twilio URL. The frontend will need to handle it.
-  // This is a temporary measure. For a production app, a separate Cloud Function
-  // would be triggered to handle the media transfer asynchronously.
-  console.log(`Media transfer step: returning original Twilio URL: ${mediaUrl}`);
-  return mediaUrl;
+async function transferMediaToStorage(mediaUrl: string, from: string, mediaType: string): Promise<string> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!accountSid || !authToken) {
+    throw new Error('Twilio credentials are not configured for media transfer.');
+  }
+
+  // 1. Download from Twilio
+  const twilioAuth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+  const response = await fetch(mediaUrl, {
+    headers: {
+      Authorization: `Basic ${twilioAuth}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to download media from Twilio: ${response.statusText}`);
+  }
+
+  const imageBuffer = await response.arrayBuffer();
+  
+  // 2. Upload to Firebase Storage
+  const bucket = getStorage().bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
+  if (!bucket) {
+      throw new Error("Firebase Storage bucket not configured.");
+  }
+
+  const extension = mediaType.split('/')[1] || 'jpeg';
+  const fileName = `whatsapp_media/${from.replace(/\D/g, '')}-${Date.now()}.${extension}`;
+  const file = bucket.file(fileName);
+
+  await file.save(Buffer.from(imageBuffer), {
+    metadata: {
+      contentType: mediaType,
+      cacheControl: 'public, max-age=31536000',
+    },
+  });
+
+  // 3. Get Public URL
+  return file.publicUrl();
 }
 
 
@@ -53,8 +84,6 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
   let finalMediaUrl = null;
   if (mediaUrl && mediaType) {
     try {
-      // For now, we just pass the Twilio URL directly.
-      // The client will need to handle displaying it (which might fail due to auth).
       finalMediaUrl = await transferMediaToStorage(mediaUrl, from, mediaType);
       messageData.mediaUrl = finalMediaUrl;
       
@@ -87,16 +116,9 @@ async function saveMessage(from: string, body: string | null, mediaUrl: string |
     } else {
         let clientName = from;
         try {
-            const phoneOnly = from.replace('whatsapp:+', '');
+            const phoneOnly = from.replace(/\D/g, '').slice(-10); // Get last 10 digits
             const clientsRef = db.collection('clientes');
-            // Check for phone with and without Mexico's prefixes
-            const q1 = clientsRef.where('telefono', '==', phoneOnly).limit(1);
-            const q2 = clientsRef.where('telefono', '==', phoneOnly.slice(3)).limit(1); // Assuming +521 prefix
-            
-            let querySnapshot = await q1.get();
-            if (querySnapshot.empty) {
-                querySnapshot = await q2.get();
-            }
+            const querySnapshot = await clientsRef.where('telefono', '==', phoneOnly).limit(1).get();
 
             if (!querySnapshot.empty) {
                 const clientData = querySnapshot.docs[0].data();
@@ -149,7 +171,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error processing Twilio webhook:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     // Return a generic success to Twilio to prevent retries, but log the real error.
     const xmlResponse = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
      return new NextResponse(xmlResponse, {

@@ -383,6 +383,7 @@ export default function ConversationsPage() {
                                         <div className="space-y-2">
                                             {msg.mediaType === 'image' && (
                                                 <Image 
+                                                    key={msg.mediaUrl}
                                                     src={msg.mediaUrl}
                                                     alt="Imagen adjunta" 
                                                     width={300} 
@@ -465,5 +466,3 @@ export default function ConversationsPage() {
     </>
   );
 }
-
-    

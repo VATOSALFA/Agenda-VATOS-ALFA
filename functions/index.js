@@ -1,5 +1,5 @@
 
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest } = require("firebase-functions/v2/onRequest");
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
 const { getStorage } = require("firebase-admin/storage");
@@ -20,7 +20,7 @@ if (admin.apps.length === 0) {
 async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const bucket = getStorage().bucket();
 
-  // 1. Download from Twilio
+  // 1. Download from Twilio with Authentication
   const twilioResponse = await fetch(mediaUrl, {
     headers: {
         'Authorization': 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
@@ -44,13 +44,10 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
     },
   });
 
-  // 3. Get public URL
-  const [publicUrl] = await file.getSignedUrl({
-      action: 'read',
-      expires: '03-09-2491' // A very distant future date
-  });
+  // 3. Get public URL (make it public)
+  await file.makePublic();
 
-  return publicUrl;
+  return file.publicUrl();
 }
 
 
@@ -87,7 +84,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 
       } catch (mediaError) {
         console.error(`[MEDIA_ERROR] Failed to transfer media for ${from}:`, mediaError);
-        // Fallback: save the original URL but add a note about the error
+        // Fallback: add a note about the error
         messageData.text = (body || '') + `\n\n[Error al procesar archivo adjunto]`;
       }
     }

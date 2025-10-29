@@ -19,6 +19,12 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'placehold.co',
         port: '',
         pathname: '/**',
@@ -30,12 +36,6 @@ const nextConfig = {
         pathname: '/**',
       },
        {
-        protocol: 'https',
-        hostname: 'storage.googleapis.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
         protocol: 'https',
         hostname: 'api.twilio.com',
         port: '',

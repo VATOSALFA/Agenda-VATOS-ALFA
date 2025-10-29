@@ -383,11 +383,12 @@ export default function ConversationsPage() {
                                         <div className="space-y-2">
                                             {msg.mediaType === 'image' && (
                                                 <Image 
-                                                    src={msg.mediaUrl.startsWith('https://storage.googleapis.com') ? msg.mediaUrl : `https://placehold.co/300x300?text=Error`} 
+                                                    src={msg.mediaUrl}
                                                     alt="Imagen adjunta" 
                                                     width={300} 
                                                     height={300} 
-                                                    className="rounded-lg object-cover" 
+                                                    className="rounded-lg object-cover"
+                                                    unoptimized
                                                 />
                                             )}
                                             {msg.mediaType === 'audio' && <AudioPlayer src={msg.mediaUrl} />}
@@ -464,3 +465,5 @@ export default function ConversationsPage() {
     </>
   );
 }
+
+    

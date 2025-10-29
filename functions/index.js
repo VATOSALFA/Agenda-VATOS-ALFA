@@ -44,12 +44,13 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const imageBuffer = await response.buffer();
 
   // 2. Upload to Firebase Storage
-  const bucket = admin.storage().bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-  if (!bucket) {
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucketName) {
     throw new Error(
       "Firebase Storage bucket not configured. Check NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET env var."
     );
   }
+  const bucket = admin.storage().bucket(bucketName);
 
   const extension = mediaType.split("/")[1] || "jpeg"; // E.g., 'image/jpeg' -> 'jpeg'
   const fileName = `whatsapp_media/${from.replace(
@@ -65,12 +66,10 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
     },
   });
   
-  // 3. Return a publicly accessible URL with a long-lived token
-  const [url] = await file.getSignedUrl({
-      action: 'read',
-      expires: '03-09-2491' // A date far in the future
-  });
-  return url;
+  // 3. Make the file public and return its public URL
+  await file.makePublic();
+  
+  return `https://storage.googleapis.com/${bucketName}/${fileName}`;
 }
 
 /**

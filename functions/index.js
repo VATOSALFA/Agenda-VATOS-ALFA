@@ -1,5 +1,5 @@
 
-const { onRequest } = require("firebase-functions/v2/onRequest");
+const { https } = require("firebase-functions");
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
 const { getStorage } = require("firebase-admin/storage");
@@ -136,7 +136,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 /**
  * Cloud Function to handle incoming Twilio webhook requests.
  */
-exports.twilioWebhook = onRequest({secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]}, async (request, response) => {
+exports.twilioWebhook = https.onRequest({secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]}, async (request, response) => {
   try {
     const { From, Body, MediaUrl0, MediaContentType0 } = request.body;
 

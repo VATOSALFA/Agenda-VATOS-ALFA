@@ -21,9 +21,17 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const bucket = getStorage().bucket();
 
   // 1. Download from Twilio with Authentication
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!accountSid || !authToken) {
+      console.error("Twilio credentials are not set in the function's environment.");
+      throw new Error("Twilio credentials missing.");
+  }
+
   const twilioResponse = await fetch(mediaUrl, {
     headers: {
-        'Authorization': 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+        'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64')
     }
   });
 
@@ -104,7 +112,15 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
         try {
             const phoneOnly = from.replace('whatsapp:+', '');
             const clientsRef = db.collection('clientes');
-            const querySnapshot = await clientsRef.where('telefono', '==', phoneOnly).limit(1).get();
+            // Check for phone with country code and without
+            const q1 = clientsRef.where('telefono', '==', phoneOnly).limit(1);
+            const q2 = clientsRef.where('telefono', '==', phoneOnly.slice(3)).limit(1); // Assuming +521 prefix
+            
+            let querySnapshot = await q1.get();
+            if (querySnapshot.empty) {
+                querySnapshot = await q2.get();
+            }
+
             if (!querySnapshot.empty) {
                 const clientData = querySnapshot.docs[0].data();
                 clientName = `${clientData.nombre} ${clientData.apellido}`;
@@ -136,7 +152,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 /**
  * Cloud Function to handle incoming Twilio webhook requests.
  */
-exports.twilioWebhook = https.onRequest({secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]}, async (request, response) => {
+exports.twilioWebhook = https.onRequest({secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "NEXT_PUBLIC_TWILIO_PHONE_NUMBER"]}, async (request, response) => {
   try {
     const { From, Body, MediaUrl0, MediaContentType0 } = request.body;
 

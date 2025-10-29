@@ -78,9 +78,9 @@ const AudioPlayer = ({ src }: { src: string }) => {
   }, []);
 
   return (
-    <div className="flex items-center gap-2 p-2 rounded-md">
+    <div className="flex items-center gap-2 py-1 px-2 rounded-md min-w-[120px]">
       <audio ref={audioRef} src={src} preload="metadata"></audio>
-      <Button onClick={togglePlayPause} size="icon" variant="ghost" className="h-8 w-8">
+      <Button onClick={togglePlayPause} size="icon" variant="ghost" className="h-8 w-8 flex-shrink-0">
         {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       </Button>
       <span className="text-xs text-muted-foreground">Audio</span>

@@ -27,7 +27,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import type { Client } from '@/lib/types';
 import { NewConversationModal } from '@/components/admin/conversations/new-conversation-modal';
@@ -382,14 +381,12 @@ export default function ConversationsPage() {
                                     {msg.mediaUrl ? (
                                         <div className="space-y-2">
                                             {msg.mediaType === 'image' && (
-                                                <Image 
+                                                <img 
                                                     key={msg.mediaUrl}
                                                     src={msg.mediaUrl}
                                                     alt="Imagen adjunta" 
-                                                    width={300} 
-                                                    height={300} 
-                                                    className="rounded-lg object-cover"
-                                                    unoptimized
+                                                    className="rounded-lg object-cover max-w-full h-auto"
+                                                    style={{ maxWidth: '300px' }}
                                                 />
                                             )}
                                             {msg.mediaType === 'audio' && <AudioPlayer src={msg.mediaUrl} />}

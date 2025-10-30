@@ -1,14 +1,33 @@
 
-const {onRequest} = require("firebase-functions/v2/https");
+const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {Buffer} = require("buffer");
 const {v4: uuidv4} = require("uuid");
 const fetch = require("node-fetch");
+const { MercadoPagoConfig, Point } = require("mercadopago");
+
 
 // Initialize Firebase Admin SDK only once
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
+
+// --- MERCADO PAGO CONFIG ---
+const getMercadoPagoClient = () => {
+    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    if (!accessToken) {
+        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set.");
+        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor.');
+    }
+    return new MercadoPagoConfig({ accessToken });
+};
+
+
+/**
+ * =================================================================
+ * TWILIO FUNCTIONS
+ * =================================================================
+ */
 
 /**
  * Downloads media from Twilio and uploads it to Firebase Storage.
@@ -258,3 +277,78 @@ exports.twilioWebhook = onRequest(
     }
   }
 );
+
+
+
+/**
+ * =================================================================
+ * MERCADO PAGO FUNCTIONS
+ * =================================================================
+ */
+
+exports.getPointTerminals = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, async (request) => {
+  try {
+    const client = getMercadoPagoClient();
+    const point = new Point(client);
+    const devices = await point.getDevices();
+    return { success: true, devices: devices.devices };
+  } catch(error) {
+    console.error("Error fetching Mercado Pago terminals: ", error);
+    return { success: false, message: error.message };
+  }
+});
+
+
+exports.setTerminalPDVMode = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, async (request) => {
+  const { terminalId } = request.data;
+  if (!terminalId) {
+    throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
+  }
+
+  try {
+    const client = getMercadoPagoClient();
+    const point = new Point(client);
+    const result = await point.changeDeviceOperatingMode({
+      device_id: terminalId,
+      operating_mode: "PDV"
+    });
+    return { success: true, data: result };
+  } catch (error) {
+    console.error(`Error setting PDV mode for ${terminalId}:`, error);
+    return { success: false, message: error.message };
+  }
+});
+
+
+exports.createPointPayment = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, async (request) => {
+    const { amount, terminalId, referenceId } = request.data;
+
+    if (!amount || !terminalId || !referenceId) {
+        throw new HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
+    }
+
+    try {
+        const client = getMercadoPagoClient();
+        const point = new Point(client);
+
+        const result = await point.createPaymentIntent({
+            device_id: terminalId,
+            body: {
+                amount: amount,
+                payment: {
+                    type: "credit_card",
+                    installments: 1
+                },
+                additional_info: {
+                    external_reference: referenceId,
+                    print_on_terminal: true,
+                }
+            }
+        });
+
+        return { success: true, data: result };
+    } catch(error) {
+        console.error("Error creating payment intent:", error);
+        return { success: false, message: error.message };
+    }
+});

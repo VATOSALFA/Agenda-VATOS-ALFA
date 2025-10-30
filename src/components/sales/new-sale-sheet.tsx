@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -878,7 +876,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             Cobrar ${total.toLocaleString('es-MX')} en Terminal
                                         </Button>
                                     </div>
-                                    {!terminals.length && !isFetchingTerminals && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes &gt; Sistema de Caja para activarlas.</p>}
+                                    {!terminals.length && !isFetchingTerminals && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes > Sistema de Caja para activarlas.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (

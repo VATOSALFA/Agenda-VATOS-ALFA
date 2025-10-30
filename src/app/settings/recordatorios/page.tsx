@@ -70,34 +70,8 @@ export default function RecordatoriosPage() {
         try {
             const settingsRef = doc(db, 'configuracion', 'recordatorios');
             
-            const dataToSave: ReminderSettings = {
-                notifications: {}
-            };
-
-            for (const type of notificationTypes) {
-                const id = type.id;
-                const notificationConfig = data.notifications?.[id];
-                
-                if (notificationConfig) {
-                    const newConfig: AutomaticNotification = {
-                        enabled: notificationConfig.enabled || false,
-                    };
-
-                    if (id === 'appointment_reminder' && notificationConfig.timing) {
-                        const timingData: ReminderTiming = {
-                            type: notificationConfig.timing.type || 'day_before',
-                        };
-
-                        if (notificationConfig.timing.type === 'same_day' && typeof notificationConfig.timing.hours_before === 'number' && !isNaN(notificationConfig.timing.hours_before)) {
-                            timingData.hours_before = notificationConfig.timing.hours_before;
-                        }
-                         newConfig.timing = timingData;
-                    }
-                    dataToSave.notifications[id] = newConfig;
-                }
-            }
-            
-            await setDoc(settingsRef, dataToSave, { merge: true });
+            // We save the entire 'notifications' object as it is structured in the form.
+            await setDoc(settingsRef, data, { merge: true });
             
             toast({
                 title: "Configuración guardada con éxito",

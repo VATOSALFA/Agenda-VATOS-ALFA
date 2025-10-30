@@ -10,7 +10,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
-import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Reservation, Client, Local, Profesional } from '@/lib/types';
 import { addHours, startOfHour, setHours, format, parse, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -74,17 +73,28 @@ async function sendReminder(reservation: Reservation) {
         if (client.telefono) {
             const fullDateStr = `${format(parse(reservation.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${reservation.hora_inicio}`;
             
-            await sendTemplatedWhatsAppMessage({
-                to: client.telefono,
-                contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
-                contentVariables: {
-                    '1': client.nombre,
-                    '2': local.name,
-                    '3': fullDateStr,
-                    '4': reservation.servicio,
-                    '5': professional.name,
-                },
+            const response = await fetch('/api/send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: client.telefono,
+                    contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
+                    contentVariables: {
+                        '1': client.nombre,
+                        '2': local.name,
+                        '3': fullDateStr,
+                        '4': reservation.servicio,
+                        '5': professional.name,
+                    },
+                }),
             });
+            
+            const result = await response.json();
+            if (!result.success) {
+                console.error(`Failed to send reminder to ${client.telefono}:`, result.error);
+                return false;
+            }
+
             return true;
         }
     }

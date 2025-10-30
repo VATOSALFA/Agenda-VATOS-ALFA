@@ -45,7 +45,6 @@ import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
 import Link from 'next/link';
-import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 
@@ -173,7 +172,10 @@ export function ReservationDetailModal({
         
         const fullDateStr = `${format(parse(reservation.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${reservation.hora_inicio}`;
 
-        const result = await sendTemplatedWhatsAppMessage({
+        const response = await fetch('/api/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             to: reservation.customer.telefono,
             contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
             contentVariables: {
@@ -183,7 +185,10 @@ export function ReservationDetailModal({
                 '4': reservation.servicio,
                 '5': professional.name,
             },
+          })
         });
+
+        const result = await response.json();
         
         if (result.success) {
             toast({ title: 'Recordatorio enviado', description: 'El mensaje de recordatorio ha sido enviado al cliente.' });

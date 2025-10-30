@@ -10,7 +10,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
-import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import type { Client } from '@/lib/types';
 import { format } from 'date-fns';
 
@@ -81,12 +80,16 @@ const sendBirthdayWishesFlow = ai.defineFlow(
 
       for (const client of clientsWithBirthday) {
         if (client.telefono && client.nombre) {
-          await sendTemplatedWhatsAppMessage({
-            to: client.telefono,
-            contentSid: 'HX61a03ed45a32f9ddf4a46ee5a10fe15b', // Birthday template
-            contentVariables: {
-              '1': client.nombre,
-            },
+          await fetch('/api/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: client.telefono,
+              contentSid: 'HX61a03ed45a32f9ddf4a46ee5a10fe15b', // Birthday template
+              contentVariables: {
+                '1': client.nombre,
+              },
+            }),
           });
           sentCount++;
         }

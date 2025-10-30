@@ -49,7 +49,6 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { TemplateSelectionModal } from '@/components/admin/whatsapp/template-selection-modal';
 import { TemplateEditorModal } from '@/components/admin/whatsapp/template-editor-modal';
-import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
 
 interface WhatsappConfig {
@@ -122,7 +121,7 @@ export default function WhatsappPage() {
     setIsSelectionModalOpen(false);
   }
 
-  const handleSaveTemplate = async (templateId: string, data: { name: string, body: string, contentSid: string }) => {
+  const handleSaveTemplate = async (templateId: string, data: { name: string; body: string; contentSid: string }) => {
     if (!db) return;
     try {
         const templateRef = doc(db, 'whatsapp_templates', templateId);
@@ -141,17 +140,23 @@ export default function WhatsappPage() {
   const handleSendTest = async () => {
     setIsSendingTest(true);
     try {
-      const result = await sendTemplatedWhatsAppMessage({
-        to: '5561042575', // Hardcoded test number
-        contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada'
-        contentVariables: {
-          '1': 'Alejandro',
-          '2': 'Corte y Barba',
-          '3': '25 de Julio a las 15:00',
-          '4': 'El Patrón'
-        }
+      const response = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            to: '5561042575', // Hardcoded test number
+            contentSid: 'HX18fff4936a83e0ec91cd5bf3099efaa9', // 'agendada'
+            contentVariables: {
+              '1': 'Alejandro',
+              '2': 'Corte y Barba',
+              '3': '25 de Julio a las 15:00',
+              '4': 'El Patrón'
+            }
+        }),
       });
-      if(result.success) {
+
+      const result = await response.json();
+      if (result.success) {
         toast({ title: "Mensaje de prueba enviado", description: `SID: ${result.sid}` });
       } else {
         throw new Error(result.error || 'Error desconocido');

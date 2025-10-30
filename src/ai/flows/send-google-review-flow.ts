@@ -9,7 +9,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { sendTemplatedWhatsAppMessage } from './send-templated-whatsapp-flow';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import type { Client } from '@/lib/types';
@@ -55,14 +54,20 @@ const sendGoogleReviewRequestFlow = ai.defineFlow(
         return { success: false, message: 'Review request already sent to this client.' };
       }
 
-      const result = await sendTemplatedWhatsAppMessage({
-        to: input.clientPhone,
-        contentSid: 'HXe0e696ca1a1178edc8284bab55555e1c',
-        contentVariables: {
-          '1': input.clientName,
-          '2': input.localName,
-        },
+      const response = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            to: input.clientPhone,
+            contentSid: 'HXe0e696ca1a1178edc8284bab55555e1c',
+            contentVariables: {
+              '1': input.clientName,
+              '2': input.localName,
+            },
+        }),
       });
+
+      const result = await response.json();
 
       if (result.success) {
         await updateDoc(clientRef, { reviewRequestSent: true });

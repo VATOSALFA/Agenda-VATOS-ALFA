@@ -51,7 +51,7 @@ interface Terminal {
     operating_mode: string;
 }
 
-const ToggleField = ({ name, label, control }: { name: string, label: string, control: any }) => (
+const ToggleField = ({ name, label, control }: { name: keyof PagosSettings, label: string, control: any }) => (
     <div className="flex items-center justify-between py-3 border-b last:border-b-0">
         <Label htmlFor={name} className="flex-1 pr-4">{label}</Label>
         <Controller
@@ -108,14 +108,14 @@ export default function SistemaCajaPage() {
             const settingsRef = doc(db, 'configuracion', 'caja');
             const docSnap = await getDoc(settingsRef);
             if (docSnap.exists()) {
-                form.reset(docSnap.data());
+                form.reset(docSnap.data() as PagosSettings);
             }
             setIsLoadingSettings(false);
         };
         fetchSettings();
     }, [form]);
 
-    const onSubmit = async (data: any) => {
+    const onSubmit = async (data: PagosSettings) => {
         setIsSubmitting(true);
         try {
             const settingsRef = doc(db, 'configuracion', 'caja');

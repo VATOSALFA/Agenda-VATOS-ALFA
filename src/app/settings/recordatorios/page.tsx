@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm, Controller, useWatch } from 'react-hook-form';
@@ -31,10 +32,10 @@ interface ReminderSettings {
 }
 
 const notificationTypes = [
-    { id: 'google_review', name: 'Opinión de Google Maps', description: 'Esta notificación se enviará un día después de la cita del cliente para invitarlo a dejar una opinión.' },
     { id: 'appointment_notification', name: 'Notificación de citas', description: 'Esta notificación se manda de manera automática cuando se crea una cita ya sea desde la misma agenda, desde el sitio web o aplicación siempre y cuando la opción este habilitada' },
     { id: 'appointment_reminder', name: 'Recordatorio de cita', description: 'Este recordatorio no se envía si el cliente ya confirmó la cita y para que se envíe se debe de configurar cuanto tiempo antes se manda.' },
     { id: 'birthday_notification', name: 'Notificación de Cumpleaños', description: 'Saluda a tus clientes en su día especial.' },
+    { id: 'google_review', name: 'Opinión de Google Maps', description: 'Esta notificación se enviará un día después de la cita del cliente para invitarlo a dejar una opinión.' },
 ];
 
 export default function RecordatoriosPage() {

@@ -21,7 +21,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { User, Calendar, Scissors, CheckCircle, Loader2 } from 'lucide-react';
-import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 
 interface ReminderSettings {
     notifications: {
@@ -143,24 +142,30 @@ function ConfirmPageContent() {
             // Send WhatsApp notification only if enabled
             if (data.telefono && isNotificationEnabled) {
                 const fullDateStr = `${format(parse(dateStr, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${time}`;
-                const result = await sendTemplatedWhatsAppMessage({
-                    to: data.telefono,
-                    contentSid: 'HX6162105c1002a6cf84fa345393869746', // Cita Agendada
-                    contentVariables: {
-                        '1': data.nombre,
-                        '2': reservationData.servicio,
-                        '3': fullDateStr,
-                        '4': selectedProfessional.name,
-                    },
+                
+                const response = await fetch('/api/send-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: data.telefono,
+                        contentSid: 'HX6162105c1002a6cf84fa345393869746', // Cita Agendada
+                        contentVariables: {
+                            '1': data.nombre,
+                            '2': reservationData.servicio,
+                            '3': fullDateStr,
+                            '4': selectedProfessional.name,
+                        },
+                    }),
                 });
 
-                if(result.success) {
+                const result = await response.json();
+
+                if (result.success) {
                     toast({
                         title: 'Notificación enviada',
-                        description: 'El mensaje de WhatsApp de confirmación ha sido enviado al cliente.',
+                        description: `El mensaje de WhatsApp de confirmación ha sido enviado. SID: ${result.sid}`,
                     });
                 } else {
-                    // Throw an error to be caught by the catch block and inform the user
                     throw new Error(result.error || 'Error desconocido al enviar WhatsApp');
                 }
             } else if (data.telefono && !isNotificationEnabled) {

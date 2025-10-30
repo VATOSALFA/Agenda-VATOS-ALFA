@@ -72,11 +72,90 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   return `https://storage.googleapis.com/${bucketName}/${fileName}`;
 }
 
+
 /**
- * Saves an incoming message to the Firestore database.
+ * Handles automated replies for appointment confirmation/cancellation.
+ * @param {admin.firestore.Firestore} db The Firestore database instance.
+ * @param {string} from The sender's phone number (e.g., 'whatsapp:+1...').
+ * @param {string} body The text of the incoming message.
+ * @returns {Promise<boolean>} True if the reply was handled as a command, false otherwise.
+ */
+async function handleAutomatedReply(db, from, body) {
+  const normalizedBody = body.toLowerCase().trim();
+  const isConfirmation = normalizedBody.includes("confirmado");
+  const isCancellation = normalizedBody.includes("cancelar");
+
+  if (!isConfirmation && !isCancellation) {
+    return false; // Not a command we handle automatically
+  }
+  
+  const phoneOnly = from.replace(/\D/g, "").slice(-10);
+  const clientsRef = db.collection("clientes");
+  const clientQuery = await clientsRef.where("telefono", "==", phoneOnly).limit(1).get();
+
+  if (clientQuery.empty) {
+    console.log(`No client found for phone number: ${phoneOnly}`);
+    return false;
+  }
+  const clientId = clientQuery.docs[0].id;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+  const todayStr = today.toISOString().split('T')[0];
+
+  const reservationsRef = db.collection("reservas");
+  const reservationQuery = await reservationsRef
+      .where("cliente_id", "==", clientId)
+      .where("fecha", ">=", todayStr)
+      .orderBy("fecha")
+      .orderBy("hora_inicio")
+      .limit(1)
+      .get();
+  
+  if (reservationQuery.empty) {
+    console.log(`No upcoming reservations found for client ID: ${clientId}`);
+    return false;
+  }
+
+  const reservationDoc = reservationQuery.docs[0];
+  const reservation = reservationDoc.data();
+  
+  // Don't process already finalized states
+  if (["Asiste", "Cancelado", "No asiste"].includes(reservation.estado)) {
+      return false;
+  }
+
+  if (isConfirmation) {
+      await reservationDoc.ref.update({ estado: "Confirmado" });
+      console.log(`Reservation ${reservationDoc.id} confirmed for client ${clientId}.`);
+  } else if (isCancellation) {
+      await db.runTransaction(async (transaction) => {
+          const clientRef = db.collection("clientes").doc(clientId);
+          transaction.update(reservationDoc.ref, { estado: "Cancelado" });
+          transaction.update(clientRef, { citas_canceladas: admin.firestore.FieldValue.increment(1) });
+      });
+      console.log(`Reservation ${reservationDoc.id} cancelled for client ${clientId}.`);
+  }
+
+  return true; // Command was handled
+}
+
+
+/**
+ * Saves a general incoming message to the Firestore database.
  */
 async function saveMessage(from, body, mediaUrl, mediaType) {
   const db = admin.firestore();
+
+  // First, try to handle it as an automated reply.
+  if (body) {
+    const wasHandled = await handleAutomatedReply(db, from, body);
+    if (wasHandled) {
+      // If it was a confirmation/cancellation, we don't need to save it as a chat message.
+      return; 
+    }
+  }
+
   const conversationId = from; // e.g., 'whatsapp:+14155238886'
   const conversationRef = db.collection("conversations").doc(conversationId);
 

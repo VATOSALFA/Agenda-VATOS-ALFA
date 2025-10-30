@@ -1,4 +1,3 @@
-
 'use client';
 
 import { initMercadoPago } from '@mercadopago/sdk-react';

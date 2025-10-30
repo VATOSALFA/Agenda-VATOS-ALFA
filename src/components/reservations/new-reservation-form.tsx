@@ -46,7 +46,6 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
-import { sendTemplatedWhatsAppMessage } from '@/ai/flows/send-templated-whatsapp-flow';
 import { ScrollArea } from '../ui/scroll-area';
 
 interface ReminderSettings {
@@ -469,18 +468,21 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             if (client?.telefono && professional) {
                 const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
                 // No need to await this, it can run in the background
-                sendTemplatedWhatsAppMessage({
-                    to: client.telefono,
-                    contentSid: 'HX6162105c1002a6cf84fa345393869746',
-                    contentVariables: {
-                        '1': client.nombre,
-                        '2': dataToSave.servicio!,
-                        '3': fullDateStr,
-                        '4': professional.name,
-                    }
+                fetch('/api/send-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: client.telefono,
+                        contentSid: 'HX6162105c1002a6cf84fa345393869746',
+                        contentVariables: {
+                            '1': client.nombre,
+                            '2': dataToSave.servicio!,
+                            '3': fullDateStr,
+                            '4': professional.name,
+                        },
+                    }),
                 }).catch(waError => {
                     console.warn("WhatsApp notification failed to send:", waError);
-                    // Optionally show a non-blocking warning toast here
                 });
             }
         }

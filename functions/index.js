@@ -52,17 +52,7 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   }
   const bucket = admin.storage().bucket(bucketName);
 
-  // Handle different media types for correct extension
-  let extension = 'bin'; // Default extension
-  if (mediaType.startsWith('image/')) {
-    extension = mediaType.split('/')[1] || 'jpg';
-  } else if (mediaType.startsWith('audio/')) {
-    // Twilio often sends ogg with opus codec
-    extension = mediaType.includes('ogg') ? 'ogg' : (mediaType.split('/')[1] || 'mp3');
-  } else if (mediaType === 'application/pdf') {
-    extension = 'pdf';
-  }
-
+  const extension = mediaType.split("/")[1] || "jpeg"; // E.g., 'image/jpeg' -> 'jpeg'
   const fileName = `whatsapp_media/${from.replace(
     /\D/g,
     ""

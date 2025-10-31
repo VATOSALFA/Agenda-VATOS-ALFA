@@ -286,7 +286,7 @@ exports.twilioWebhook = onRequest(
  * =================================================================
  */
 
-exports.getPointTerminals = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, async (request) => {
+exports.getPointTerminals = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"], enforceAppCheck: false}, async (request) => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -299,7 +299,7 @@ exports.getPointTerminals = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, asy
 });
 
 
-exports.setTerminalPDVMode = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, async (request) => {
+exports.setTerminalPDVMode = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"], enforceAppCheck: false}, async (request) => {
   const { terminalId } = request.data;
   if (!terminalId) {
     throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
@@ -320,7 +320,7 @@ exports.setTerminalPDVMode = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, as
 });
 
 
-exports.createPointPayment = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]}, async (request) => {
+exports.createPointPayment = onCall({secrets: ["MERCADO_PAGO_ACCESS_TOKEN"], enforceAppCheck: false}, async (request) => {
     const { amount, terminalId, referenceId } = request.data;
 
     if (!amount || !terminalId || !referenceId) {

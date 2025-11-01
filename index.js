@@ -1,4 +1,3 @@
-
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {Buffer} = require("buffer");

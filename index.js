@@ -255,7 +255,9 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 /**
  * Cloud Function to handle incoming Twilio webhook requests.
  */
-exports.twilioWebhook = onRequest(async (request, response) => {
+exports.twilioWebhook = onRequest(
+  {secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"]},
+  async (request, response) => {
     try {
       const {From, Body, MediaUrl0, MediaContentType0} = request.body;
 

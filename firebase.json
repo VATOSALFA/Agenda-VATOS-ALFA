@@ -16,7 +16,11 @@
   },
   "functions": {
     "source": ".",
-    "runtime": "nodejs20"
+    "runtime": "nodejs20",
+    "ignore": [
+      ".env",
+      ".env.local"
+    ]
   },
   "emulators": {
     "auth": {

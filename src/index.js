@@ -1,1 +1,0 @@
-// This file is intentionally left empty. Cloud Functions source is in the root index.js

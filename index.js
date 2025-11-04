@@ -351,6 +351,3 @@ exports.createPointPayment = onCall({enforceAppCheck: false}, async (request) =>
         return { success: false, message: error.message };
     }
 });
-
-
-    

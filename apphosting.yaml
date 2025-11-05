@@ -32,6 +32,8 @@ env:
     secret: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
   - variable: MERCADO_PAGO_ACCESS_TOKEN
     secret: MERCADO_PAGO_ACCESS_TOKEN
+    availability:
+      - RUNTIME
   - variable: MERCADO_PAGO_WEBHOOK_SECRET
     secret: MERCADO_PAGO_WEBHOOK_SECRET
   # --- GEMINI CONFIG ---

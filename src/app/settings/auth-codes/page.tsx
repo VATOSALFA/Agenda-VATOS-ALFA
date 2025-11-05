@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -244,7 +243,7 @@ export default function AuthCodesSettingsPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                     <AlertDialogDescription>
-                       Esta acción no se puede deshacer. Se eliminará permanentemente el código de autorización para "{codeToDelete.name}".
+                       Esta acción no se puede deshacer. Se eliminará permanentemente el código de autorización para &quot;{codeToDelete.name}&quot;.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -259,5 +258,3 @@ export default function AuthCodesSettingsPage() {
     </>
   );
 }
-
-    

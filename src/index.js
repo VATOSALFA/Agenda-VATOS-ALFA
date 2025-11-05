@@ -17,8 +17,8 @@ if (admin.apps.length === 0) {
 const getMercadoPagoClient = () => {
     const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
     if (!accessToken) {
-        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set.");
-        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor.');
+        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set in the server environment.");
+        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor. Revisa los secretos de la aplicación.');
     }
     return new MercadoPagoConfig({ accessToken });
 };
@@ -285,9 +285,7 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall(async (data, context) => {
-  // context contains auth information if the user is authenticated.
-  // We are not using it here, but it's good practice to include it.
+exports.getPointTerminals = onCall(async () => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -295,8 +293,10 @@ exports.getPointTerminals = onCall(async (data, context) => {
     return { success: true, devices: devices.devices };
   } catch(error) {
     console.error("Error fetching Mercado Pago terminals: ", error);
-    const errorMessage = error.cause?.message || error.message || "Unknown error";
-    return { success: false, message: errorMessage };
+    if (error instanceof HttpsError) {
+        throw error;
+    }
+    throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
   }
 });
 
@@ -317,8 +317,10 @@ exports.setTerminalPDVMode = onCall(async (request) => {
     return { success: true, data: result };
   } catch (error) {
     console.error(`Error setting PDV mode for ${terminalId}:`, error);
-    const errorMessage = error.cause?.message || error.message || "Unknown error";
-    return { success: false, message: errorMessage };
+    if (error instanceof HttpsError) {
+        throw error;
+    }
+    throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
   }
 });
 
@@ -352,8 +354,10 @@ exports.createPointPayment = onCall(async (request) => {
         return { success: true, data: result };
     } catch(error) {
         console.error("Error creating payment intent:", error);
-        const errorMessage = error.cause?.message || error.message || "Unknown error";
-        return { success: false, message: errorMessage };
+         if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
     }
 });
 
@@ -374,15 +378,3 @@ exports.mercadoPagoWebhookTest = onRequest(async (request, response) => {
   
   response.status(200).send("OK");
 });
-
-exports.mercadoPagoWebhook = onRequest(async (request, response) => {
-    console.log("========== MERCADO PAGO LIVE WEBHOOK RECEIVED ==========");
-    console.log("Body:", JSON.stringify(request.body, null, 2));
-    
-    // Placeholder for future logic to update sale status in Firestore
-    
-    response.status(200).send("OK");
-});
-
-    
-    

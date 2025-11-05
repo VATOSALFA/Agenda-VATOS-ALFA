@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -91,9 +92,9 @@ export default function PagosAgendaProPage() {
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Agenda VATOS ALFA</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Pagos</h2>
         <p className="text-muted-foreground">
-          Cobra en la terminal con Agenda VATOS ALFA.
+          Configura tus métodos de pago, comisiones y credenciales.
         </p>
       </div>
 

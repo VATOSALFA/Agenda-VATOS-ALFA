@@ -285,7 +285,9 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall(async () => {
+exports.getPointTerminals = onCall(async (data, context) => {
+  // context contains auth information if the user is authenticated.
+  // We are not using it here, but it's good practice to include it.
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -293,7 +295,6 @@ exports.getPointTerminals = onCall(async () => {
     return { success: true, devices: devices.devices };
   } catch(error) {
     console.error("Error fetching Mercado Pago terminals: ", error);
-    // Propagate a more specific error message if available
     const errorMessage = error.cause?.message || error.message || "Unknown error";
     return { success: false, message: errorMessage };
   }
@@ -373,3 +374,15 @@ exports.mercadoPagoWebhookTest = onRequest(async (request, response) => {
   
   response.status(200).send("OK");
 });
+
+exports.mercadoPagoWebhook = onRequest(async (request, response) => {
+    console.log("========== MERCADO PAGO LIVE WEBHOOK RECEIVED ==========");
+    console.log("Body:", JSON.stringify(request.body, null, 2));
+    
+    // Placeholder for future logic to update sale status in Firestore
+    
+    response.status(200).send("OK");
+});
+
+    
+    

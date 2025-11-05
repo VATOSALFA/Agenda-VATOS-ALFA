@@ -285,7 +285,7 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall({enforceAppCheck: false}, async (request) => {
+exports.getPointTerminals = onCall(async (request) => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -298,7 +298,7 @@ exports.getPointTerminals = onCall({enforceAppCheck: false}, async (request) => 
 });
 
 
-exports.setTerminalPDVMode = onCall({enforceAppCheck: false}, async (request) => {
+exports.setTerminalPDVMode = onCall(async (request) => {
   const { terminalId } = request.data;
   if (!terminalId) {
     throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
@@ -319,7 +319,7 @@ exports.setTerminalPDVMode = onCall({enforceAppCheck: false}, async (request) =>
 });
 
 
-exports.createPointPayment = onCall({enforceAppCheck: false}, async (request) => {
+exports.createPointPayment = onCall(async (request) => {
     const { amount, terminalId, referenceId } = request.data;
 
     if (!amount || !terminalId || !referenceId) {
@@ -350,4 +350,22 @@ exports.createPointPayment = onCall({enforceAppCheck: false}, async (request) =>
         console.error("Error creating payment intent:", error);
         return { success: false, message: error.message };
     }
+});
+
+
+exports.mercadoPagoWebhookTest = onRequest(async (request, response) => {
+  console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
+  console.log("Headers:", JSON.stringify(request.headers, null, 2));
+  console.log("Body:", JSON.stringify(request.body, null, 2));
+  console.log("===================================================");
+  
+  // You would typically verify the signature here using the webhook secret
+  // const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+  // ... verification logic ...
+  
+  // For now, we just log and respond.
+  // In a real app, you would process the payment status from the body
+  // and update your database (e.g., mark an order as 'paid').
+  
+  response.status(200).send("OK");
 });

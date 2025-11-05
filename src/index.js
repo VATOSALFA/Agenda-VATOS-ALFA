@@ -285,7 +285,7 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall(async (request) => {
+exports.getPointTerminals = onCall(async () => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -293,7 +293,9 @@ exports.getPointTerminals = onCall(async (request) => {
     return { success: true, devices: devices.devices };
   } catch(error) {
     console.error("Error fetching Mercado Pago terminals: ", error);
-    return { success: false, message: error.message };
+    // Propagate a more specific error message if available
+    const errorMessage = error.cause?.message || error.message || "Unknown error";
+    return { success: false, message: errorMessage };
   }
 });
 
@@ -314,7 +316,8 @@ exports.setTerminalPDVMode = onCall(async (request) => {
     return { success: true, data: result };
   } catch (error) {
     console.error(`Error setting PDV mode for ${terminalId}:`, error);
-    return { success: false, message: error.message };
+    const errorMessage = error.cause?.message || error.message || "Unknown error";
+    return { success: false, message: errorMessage };
   }
 });
 
@@ -348,7 +351,8 @@ exports.createPointPayment = onCall(async (request) => {
         return { success: true, data: result };
     } catch(error) {
         console.error("Error creating payment intent:", error);
-        return { success: false, message: error.message };
+        const errorMessage = error.cause?.message || error.message || "Unknown error";
+        return { success: false, message: errorMessage };
     }
 });
 

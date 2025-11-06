@@ -1,19 +1,4 @@
-<<<<<<< HEAD
 
-'use client';
-
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-
-// This page is deprecated and redirects to the /admin/comisiones page.
-export default function DeprecatedComisionesPage() {
-    const router = useRouter();
-    useEffect(() => {
-        router.replace('/admin/comisiones');
-    }, [router]);
-
-    return null;
-=======
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -25,41 +10,16 @@ import { EditProductComisionModal } from '@/components/admin/comisiones/edit-pro
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Profesional, Service, Product } from '@/lib/types';
 
-export interface Commission {
-    value: number;
-    type: '%' | '$';
-}
-
-export interface Professional {
-  id: string;
-  name: string;
-  serviceCount?: number; // This might be a calculated field
-  defaultCommission: Commission;
-  comisionesPorServicio?: { [serviceName: string]: Commission };
-}
-
-export interface Service {
-  id: string;
-  name: string;
-  defaultCommission: Commission;
-  comisionesPorProfesional?: { [profesionalId: string]: Commission };
-}
-
-export interface Product {
-  id: string;
-  nombre: string;
-  defaultCommission: Commission;
-  comisionesPorProfesional?: { [profesionalId: string]: Commission };
-}
 
 export default function ComisionesPage() {
   const [queryKey, setQueryKey] = useState(0);
-  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Professional>('profesionales', queryKey);
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
 
-  const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
+  const [editingProfessional, setEditingProfessional] = useState<Profesional | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
@@ -186,5 +146,4 @@ export default function ComisionesPage() {
       )}
     </>
   );
->>>>>>> 60cf1f8d0b3789f86b791394cdfe7c4c76964d24
 }

@@ -38,6 +38,7 @@ import {
   Scissors,
   Percent,
   Store,
+  User,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -80,7 +81,7 @@ const reportsNavLinks = [
 ];
 
 const finanzasNavLinks = [
-  { href: '/finanzas/resumen', label: 'Resumen', permission: 'ver_finanzas' },
+  { href: '/finanzas', label: 'Resumen', permission: 'ver_finanzas' },
   { isSeparator: true },
   { href: '/finanzas/enero', label: 'Enero', permission: 'ver_finanzas' },
   { href: '/finanzas/febrero', label: 'Febrero', permission: 'ver_finanzas' },
@@ -97,9 +98,9 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-    { href: '/settings/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
-    { href: '/settings/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
-    { href: '/settings/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
+    { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
+    { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
+    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
 interface EmpresaSettings {
@@ -449,7 +450,7 @@ export default function Header() {
                 <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
                         <Link href="/admin/profile">
-                            <Users className="mr-2 h-4 w-4" />
+                            <User className="mr-2 h-4 w-4" />
                             <span>Mi Perfil</span>
                         </Link>
                     </DropdownMenuItem>

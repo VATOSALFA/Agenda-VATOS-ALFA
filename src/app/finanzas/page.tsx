@@ -12,5 +12,3 @@ export default function FinanzasPage() {
 
     return null; // Or a loading spinner
 }
-
-    

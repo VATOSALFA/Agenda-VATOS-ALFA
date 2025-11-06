@@ -51,3 +51,4 @@ env:
     secret: FIREBASE_SERVICE_ACCOUNT_KEY
     availability:
       - RUNTIME
+

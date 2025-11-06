@@ -38,7 +38,8 @@ import {
   MessagesSquare,
   User,
   Scissors,
-  Percent
+  Percent,
+  Store,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -98,9 +99,11 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-    { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
-    { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
-    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
+    { href: '/settings/empresa', label: 'Empresa', icon: Landmark, permission: 'ver_administracion' },
+    { href: '/settings/locales', label: 'Locales', icon: Store, permission: 'ver_administracion' },
+    { href: '/settings/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
+    { href: '/settings/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
+    { href: '/settings/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
 interface EmpresaSettings {
@@ -334,30 +337,16 @@ export default function Header() {
             )}
 
             {canSee('ver_administracion') && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Link href="/settings" passHref>
                     <Button variant="ghost" className={cn(
                         'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                        pathname.startsWith('/admin')
+                        pathname.startsWith('/settings')
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white'
                     )}>
-                        Administración <ChevronDown className="w-4 h-4 ml-1" />
+                        Configuración
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="start">
-                      {adminNavLinks.map(({href, label, icon: Icon, permission}) => (
-                          canSee(permission!) && (
-                            <DropdownMenuItem key={href} asChild>
-                                <Link href={href!}>
-                                    <Icon className="mr-2 h-4 w-4" />
-                                    <span>{label}</span>
-                                </Link>
-                            </DropdownMenuItem>
-                          )
-                      ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                </Link>
             )}
 
           </nav>
@@ -385,7 +374,7 @@ export default function Header() {
             </DropdownMenu>
             
             {canSee('ver_conversaciones') && (
-                <Link href="/admin/conversations" passHref>
+                <Link href="/settings/conversations" passHref>
                     <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
                         <MessagesSquare className="h-5 w-5" />
                         {unreadCount > 0 && (
@@ -396,14 +385,6 @@ export default function Header() {
                     </Button>
                 </Link>
              )}
-            
-            {canSee('ver_administracion') && (
-              <Link href="/settings" passHref>
-                  <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
-                      <Settings className="h-5 w-5" />
-                  </Button>
-              </Link>
-            )}
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -451,7 +432,7 @@ export default function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
-                        <Link href="/admin/profile">
+                        <Link href="/settings/profile">
                             <User className="mr-2 h-4 w-4" />
                             <span>Mi Perfil</span>
                         </Link>
@@ -470,5 +451,3 @@ export default function Header() {
     </>
   );
 }
-
-    

@@ -98,9 +98,11 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-    { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
-    { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
-    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
+    { href: '/settings/empresa', label: 'Empresa', icon: Landmark, permission: 'ver_administracion' },
+    { href: '/settings/locales', label: 'Locales', icon: Store, permission: 'ver_administracion' },
+    { href: '/settings/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
+    { href: '/settings/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
+    { href: '/settings/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
 interface EmpresaSettings {
@@ -383,7 +385,7 @@ export default function Header() {
             </DropdownMenu>
             
             {canSee('ver_conversaciones') && (
-                <Link href="/admin/conversations" passHref>
+                <Link href="/settings/conversations" passHref>
                     <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
                         <MessagesSquare className="h-5 w-5" />
                         {unreadCount > 0 && (
@@ -394,14 +396,6 @@ export default function Header() {
                     </Button>
                 </Link>
              )}
-            
-            {canSee('ver_administracion') && (
-              <Link href="/settings" passHref>
-                  <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
-                      <Settings className="h-5 w-5" />
-                  </Button>
-              </Link>
-            )}
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -449,7 +443,7 @@ export default function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
-                        <Link href="/admin/profile">
+                        <Link href="/settings/profile">
                             <User className="mr-2 h-4 w-4" />
                             <span>Mi Perfil</span>
                         </Link>

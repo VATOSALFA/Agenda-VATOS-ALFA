@@ -17,8 +17,8 @@ if (admin.apps.length === 0) {
 const getMercadoPagoClient = () => {
     const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
     if (!accessToken) {
-        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set in the server environment.");
-        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor. Revisa los secretos de la aplicación.');
+        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set.");
+        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor.');
     }
     return new MercadoPagoConfig({ accessToken });
 };
@@ -285,7 +285,7 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall(async () => {
+exports.getPointTerminals = onCall(async (request) => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -293,10 +293,7 @@ exports.getPointTerminals = onCall(async () => {
     return { success: true, devices: devices.devices };
   } catch(error) {
     console.error("Error fetching Mercado Pago terminals: ", error);
-    if (error instanceof HttpsError) {
-        throw error;
-    }
-    throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
+    return { success: false, message: error.message };
   }
 });
 
@@ -317,10 +314,7 @@ exports.setTerminalPDVMode = onCall(async (request) => {
     return { success: true, data: result };
   } catch (error) {
     console.error(`Error setting PDV mode for ${terminalId}:`, error);
-    if (error instanceof HttpsError) {
-        throw error;
-    }
-    throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
+    return { success: false, message: error.message };
   }
 });
 
@@ -354,10 +348,7 @@ exports.createPointPayment = onCall(async (request) => {
         return { success: true, data: result };
     } catch(error) {
         console.error("Error creating payment intent:", error);
-         if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
+        return { success: false, message: error.message };
     }
 });
 
@@ -378,3 +369,5 @@ exports.mercadoPagoWebhookTest = onRequest(async (request, response) => {
   
   response.status(200).send("OK");
 });
+
+    

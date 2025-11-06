@@ -1,4 +1,5 @@
 
+
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 
 interface SettingsLayoutProps {
@@ -17,6 +18,8 @@ const sidebarNavItems = [
     { title: "Emails", href: "/settings/emails" },
     { title: "Clientes", href: "/settings/clients-settings" },
     { title: "Usuarios", href: "/settings/users" },
+    { title: "Comisiones", href: "/settings/comisiones" },
+    { title: "Integraciones", href: "/settings/integrations" },
     { title: "Códigos de autorización", href: "/settings/auth-codes" },
     { title: "Diagnóstico", href: "/settings/diagnostico" },
 ];

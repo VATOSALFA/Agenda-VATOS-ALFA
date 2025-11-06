@@ -99,7 +99,7 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-    { href: '/settings/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
+    { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
     { href: '/settings/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
     { href: '/settings/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
@@ -339,7 +339,7 @@ export default function Header() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className={cn(
                         'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                        ['/settings/profesionales', '/settings/servicios', '/settings/comisiones'].includes(pathname)
+                        ['/admin/profesionales', '/settings/servicios', '/settings/comisiones'].includes(pathname)
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white'
                     )}>

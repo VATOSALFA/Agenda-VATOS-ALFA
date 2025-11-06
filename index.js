@@ -285,7 +285,7 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall(async () => {
+exports.getPointTerminals = onCall(async (request) => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);

@@ -103,7 +103,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
         <Avatar>
-          <AvatarImage src={prof.avatarUrl} />
+          <AvatarImage src={prof.avatarUrl} alt={prof.name} />
           <AvatarFallback>{prof.name ? prof.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
         </Avatar>
         <span className="font-medium">{prof.name}</span>
@@ -457,3 +457,4 @@ export default function ProfesionalesPage() {
     </TooltipProvider>
   );
 }
+

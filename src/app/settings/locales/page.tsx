@@ -29,9 +29,11 @@ import {
   Filter,
   PlusCircle,
   Pencil,
-  ChevronDown,
-  Info,
+  Clock,
   Circle,
+  ChevronDown,
+  GripVertical,
+  Info,
   Trash2,
 } from 'lucide-react';
 import { NewLocalModal } from '@/components/admin/locales/new-local-modal';

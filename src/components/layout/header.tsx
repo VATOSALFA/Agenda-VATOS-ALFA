@@ -82,7 +82,7 @@ const reportsNavLinks = [
 ];
 
 const finanzasNavLinks = [
-  { href: '/finanzas', label: 'Resumen', permission: 'ver_finanzas' },
+  { href: '/finanzas/resumen', label: 'Resumen', permission: 'ver_finanzas' },
   { isSeparator: true },
   { href: '/finanzas/enero', label: 'Enero', permission: 'ver_finanzas' },
   { href: '/finanzas/febrero', label: 'Febrero', permission: 'ver_finanzas' },
@@ -339,7 +339,7 @@ export default function Header() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className={cn(
                         'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                        pathname.startsWith('/admin') || ['/settings/profesionales', '/settings/servicios', '/settings/comisiones'].includes(pathname)
+                        ['/settings/profesionales', '/settings/servicios', '/settings/comisiones'].includes(pathname)
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white'
                     )}>
@@ -384,7 +384,7 @@ export default function Header() {
             </DropdownMenu>
             
             {canSee('ver_conversaciones') && (
-                <Link href="/settings/conversations" passHref>
+                <Link href="/conversations" passHref>
                     <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
                         <MessagesSquare className="h-5 w-5" />
                         {unreadCount > 0 && (

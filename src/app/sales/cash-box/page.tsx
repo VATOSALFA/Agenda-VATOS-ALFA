@@ -165,10 +165,7 @@ export default function CashBoxPage() {
   const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
   const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
   
-  const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
   const [cashboxSettings, setCashboxSettings] = useState<any>(null);
-  const [terminals, setTerminals] = useState<any[]>([]);
-  const [isFetchingTerminals, setIsFetchingTerminals] = useState(false);
 
 
    useEffect(() => {
@@ -492,75 +489,6 @@ export default function CashBoxPage() {
     setAuthAction(null);
   };
   
-  const handleChargeWithTerminal = async () => {
-    if (!selectedSale) {
-      toast({ variant: 'destructive', title: 'Error', description: 'No hay una venta seleccionada para cobrar.' });
-      return;
-    }
-    
-    const terminalId = cashboxSettings?.mercadoPagoTerminalId;
-
-    if (!terminalId) {
-      toast({ variant: 'destructive', title: 'Terminal no configurada', description: 'Por favor, selecciona una terminal principal en los ajustes del sistema de caja.' });
-      return;
-    }
-    
-    setIsSendingToTerminal(true);
-    try {
-        const createPayment = httpsCallable(functions, 'createPointPayment');
-        const result: any = await createPayment({
-            amount: selectedSale.total,
-            referenceId: selectedSale.id,
-            terminalId: terminalId,
-        });
-
-        if (result.data.success) {
-            toast({
-                title: 'Orden enviada a la terminal',
-                description: 'Por favor, completa el pago en el dispositivo.',
-            });
-        } else {
-            throw new Error(result.data.message || 'Error desconocido al enviar a la terminal.');
-        }
-
-    } catch (error: any) {
-        console.error("Error creating payment order:", error);
-        toast({
-            variant: "destructive",
-            title: "Error al enviar a la terminal",
-            description: error.message || "No se pudo comunicar con la terminal de Mercado Pago.",
-        });
-    } finally {
-        setIsSendingToTerminal(false);
-    }
-  };
-
-  const handleFetchTerminals = async () => {
-    setIsFetchingTerminals(true);
-    try {
-        const getTerminals = httpsCallable(functions, 'getPointTerminals');
-        const result: any = await getTerminals();
-        if (result.data.success) {
-            const pdvTerminals = result.data.devices.filter((d: any) => d.operating_mode === 'PDV');
-            setTerminals(pdvTerminals);
-            toast({
-                title: 'Terminales actualizadas',
-                description: `Se encontraron ${pdvTerminals.length} terminales en modo PDV.`,
-            });
-        } else {
-            throw new Error(result.data.message || 'Error desconocido');
-        }
-    } catch (error: any) {
-        toast({
-            variant: 'destructive',
-            title: 'Error al buscar terminales',
-            description: error.message,
-        });
-    } finally {
-        setIsFetchingTerminals(false);
-    }
-  }
-
 
   const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
@@ -599,12 +527,9 @@ export default function CashBoxPage() {
   
   return (
     <>
-    <Tabs defaultValue="caja" className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between">
-            <TabsList>
-                <TabsTrigger value="caja">Caja</TabsTrigger>
-                <TabsTrigger value="configuracion">Configuración</TabsTrigger>
-            </TabsList>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-bold tracking-tight">Caja</h2>
              <div className="flex items-center space-x-2">
                 <Button variant="outline" onClick={() => setIsCommissionModalOpen(true)}><Percent className="mr-2 h-4 w-4"/>Pago de Comisiones</Button>
                 <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4"/>Realizar corte de caja</Button>
@@ -612,7 +537,7 @@ export default function CashBoxPage() {
                 <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>Agregar Egreso</Button>
             </div>
         </div>
-        <TabsContent value="caja" className="space-y-4">
+        <div className="space-y-4">
              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-stretch">
                 <Card className="h-full">
                     <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
@@ -961,54 +886,8 @@ export default function CashBoxPage() {
                     </Tabs>
                 </CardContent>
             </Card>
-        </TabsContent>
-        <TabsContent value="configuracion" className="space-y-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Configuración de Terminal</CardTitle>
-                    <CardDescription>Conecta y gestiona tus terminales de pago de Mercado Pago.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4">
-                        <Button onClick={handleFetchTerminals} disabled={isFetchingTerminals}>
-                            {isFetchingTerminals && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Refrescar Terminales
-                        </Button>
-                    </div>
-                    <div className="mt-4 border rounded-md">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Nombre</TableHead>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Modo de Operación</TableHead>
-                                    <TableHead>Principal</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isFetchingTerminals ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="animate-spin h-6 w-6"/></TableCell></TableRow>
-                                ) : terminals.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales en modo PDV.</TableCell></TableRow>
-                                ) : (
-                                    terminals.map((terminal: any) => (
-                                        <TableRow key={terminal.id}>
-                                            <TableCell className="font-medium">{terminal.name}</TableCell>
-                                            <TableCell>{terminal.id}</TableCell>
-                                            <TableCell>{terminal.operating_mode}</TableCell>
-                                            <TableCell>
-                                                <Switch checked={cashboxSettings?.mercadoPagoTerminalId === terminal.id} onCheckedChange={(checked) => { /* Update settings */ }}/>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-        </TabsContent>
-    </Tabs>
+        </div>
+    </div>
     
     <AddEgresoModal
         isOpen={isEgresoModalOpen}
@@ -1211,3 +1090,5 @@ export default function CashBoxPage() {
     </>
   );
 }
+
+    

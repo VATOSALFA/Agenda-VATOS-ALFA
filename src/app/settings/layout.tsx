@@ -14,6 +14,7 @@ const sidebarNavItems = [
     { title: "Recordatorios", href: "/settings/recordatorios" },
     { title: "WhatsApp", href: "/settings/whatsapp" },
     { title: "Pagos", href: "/settings/pagos" },
+    { title: "Terminal", href: "/settings/terminal" },
     { title: "Emails", href: "/settings/emails" },
     { title: "Clientes", href: "/settings/clients-settings" },
     { title: "Usuarios", href: "/settings/users" },
@@ -38,3 +39,5 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
     </div>
   );
 }
+
+    

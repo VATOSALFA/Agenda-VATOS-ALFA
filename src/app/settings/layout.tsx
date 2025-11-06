@@ -1,4 +1,5 @@
 
+
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 
 interface SettingsLayoutProps {
@@ -7,16 +8,20 @@ interface SettingsLayoutProps {
 
 const sidebarNavItems = [
     { title: "Empresa", href: "/settings/empresa" },
-    { title: "Locales", href: "/admin/locales" },
+    { title: "Locales", href: "/settings/locales" },
+    { title: "Profesionales", href: "/settings/profesionales" },
+    { title: "Servicios", href: "/settings/servicios" },
     { title: "Sitio Web", href: "/settings/sitio-web" },
     { title: "Agenda", href: "/settings/agenda" },
-    { title: "Sistema de caja", href: "/settings/sistema-caja" },
+    { title: "Caja", href: "/sales/cash-box" },
     { title: "Recordatorios", href: "/settings/recordatorios" },
     { title: "WhatsApp", href: "/settings/whatsapp" },
     { title: "Pagos", href: "/settings/pagos" },
     { title: "Emails", href: "/settings/emails" },
     { title: "Clientes", href: "/settings/clients-settings" },
     { title: "Usuarios", href: "/settings/users" },
+    { title: "Comisiones", href: "/settings/comisiones" },
+    { title: "Integraciones", href: "/settings/integrations" },
     { title: "Códigos de autorización", href: "/settings/auth-codes" },
     { title: "Diagnóstico", href: "/settings/diagnostico" },
 ];

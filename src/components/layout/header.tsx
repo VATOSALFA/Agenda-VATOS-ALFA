@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Link from 'next/link';
@@ -36,9 +35,9 @@ import {
   Landmark,
   LogOut,
   MessagesSquare,
-  User,
   Scissors,
-  Percent
+  Percent,
+  Store,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -338,7 +337,7 @@ export default function Header() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className={cn(
                         'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                        pathname.startsWith('/admin')
+                        (pathname.startsWith('/admin') || pathname.startsWith('/settings/profesionales') || pathname.startsWith('/settings/servicios') || pathname.startsWith('/settings/comisiones'))
                         ? 'bg-white/10 text-white'
                         : 'text-gray-300 hover:bg-white/10 hover:text-white'
                     )}>
@@ -470,5 +469,3 @@ export default function Header() {
     </>
   );
 }
-
-    

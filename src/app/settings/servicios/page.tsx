@@ -4,11 +4,11 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-// This page is deprecated and redirects to the /sales/cash-box page.
-export default function DeprecatedSistemaCajaPage() {
+// This page is deprecated and redirects to the /admin/servicios page.
+export default function DeprecatedServiciosPage() {
     const router = useRouter();
     useEffect(() => {
-        router.replace('/sales/cash-box');
+        router.replace('/admin/servicios');
     }, [router]);
 
     return null;

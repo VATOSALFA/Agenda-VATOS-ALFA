@@ -7,10 +7,10 @@ interface SettingsLayoutProps {
 
 const sidebarNavItems = [
     { title: "Empresa", href: "/settings/empresa" },
-    { title: "Locales", href: "/admin/locales" },
+    { title: "Locales", href: "/settings/locales" },
     { title: "Sitio Web", href: "/settings/sitio-web" },
     { title: "Agenda", href: "/settings/agenda" },
-    { title: "Sistema de caja", href: "/settings/sistema-caja" },
+    { title: "Sistema de caja", href: "/sales/cash-box" },
     { title: "Recordatorios", href: "/settings/recordatorios" },
     { title: "WhatsApp", href: "/settings/whatsapp" },
     { title: "Pagos", href: "/settings/pagos" },

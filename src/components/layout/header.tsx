@@ -38,7 +38,8 @@ import {
   MessagesSquare,
   User,
   Scissors,
-  Percent
+  Percent,
+  Store,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';

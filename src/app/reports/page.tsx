@@ -12,5 +12,3 @@ export default function ReportsPage() {
 
     return null; // Or a loading spinner
 }
-
-    

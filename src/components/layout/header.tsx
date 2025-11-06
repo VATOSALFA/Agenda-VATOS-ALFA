@@ -101,7 +101,7 @@ const finanzasNavLinks = [
 const adminNavLinks = [
     { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
     { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
-    { href: '/settings/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
+    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
 interface EmpresaSettings {

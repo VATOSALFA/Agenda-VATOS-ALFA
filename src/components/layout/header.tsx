@@ -98,8 +98,6 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-    { href: '/settings/empresa', label: 'Empresa', icon: Landmark, permission: 'ver_administracion' },
-    { href: '/settings/locales', label: 'Locales', icon: Store, permission: 'ver_administracion' },
     { href: '/settings/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
     { href: '/settings/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
     { href: '/settings/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
@@ -335,30 +333,30 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className={cn(
-                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                    pathname.startsWith('/admin')
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                )}>
-                    Administración <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
-                    {adminNavLinks.map(({href, label, icon: Icon, permission}) => (
-                        canSee(permission!) && (
-                        <DropdownMenuItem key={href} asChild>
-                            <Link href={href!}>
-                                <Icon className="mr-2 h-4 w-4" />
-                                <span>{label}</span>
-                            </Link>
-                        </DropdownMenuItem>
-                        )
-                    ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {canSee('ver_administracion') && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className={cn(
+                        'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                        pathname.startsWith('/admin') || ['/settings/profesionales', '/settings/servicios', '/settings/comisiones'].includes(pathname)
+                        ? 'bg-white/10 text-white'
+                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                    )}>
+                        Administración <ChevronDown className="w-4 h-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="start">
+                      {adminNavLinks.map(({href, label, icon: Icon, permission}) => (
+                          <DropdownMenuItem key={href} asChild>
+                              <Link href={href!}>
+                                  <Icon className="mr-2 h-4 w-4" />
+                                  <span>{label}</span>
+                              </Link>
+                          </DropdownMenuItem>
+                      ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            )}
 
           </nav>
           <div className="ml-auto flex items-center space-x-2">
@@ -397,30 +395,13 @@ export default function Header() {
                 </Link>
              )}
             
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="bg-transparent text-gray-300 border-gray-500 hover:bg-white/10 hover:text-white hover:border-white/80">
-                  <Globe className="mr-2 h-4 w-4" />
-                  Sitio web
+            {canSee('ver_administracion') && (
+              <Link href="/settings/empresa" passHref>
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                  <Settings className="h-5 w-5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-4">
-                 <div className="space-y-2">
-                    <p className="font-semibold text-sm">¡Comparte tu link y recibe citas!</p>
-                     <div className="flex items-center space-x-2">
-                        <Input readOnly value={websiteUrl} className="flex-1 text-xs h-9" />
-                        <Button size="icon" className="h-9 w-9" onClick={copyToClipboard}><Copy className="h-4 w-4" /></Button>
-                    </div>
-                 </div>
-                 <DropdownMenuSeparator />
-                 <DropdownMenuItem asChild>
-                    <a href={`https://${websiteUrl}`} target="_blank" rel="noopener noreferrer" className="flex items-center">
-                        <Share2 className="mr-2 h-4 w-4" />
-                        <span>Ir a mi sitio web</span>
-                    </a>
-                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </Link>
+            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

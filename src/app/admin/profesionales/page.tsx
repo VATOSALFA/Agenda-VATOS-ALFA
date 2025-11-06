@@ -104,7 +104,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </div>
         <Avatar>
           <AvatarImage src={prof.avatarUrl} />
-          <AvatarFallback>{prof.name ? prof.name.substring(0, 2) : '??'}</AvatarFallback>
+          <AvatarFallback>{prof.name ? prof.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
         </Avatar>
         <span className="font-medium">{prof.name}</span>
       </div>

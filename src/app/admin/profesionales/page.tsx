@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -73,7 +74,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Local, Profesional, Schedule, ScheduleDay } from '@/lib/types';
+import type { Local, Profesional, Schedule } from '@/lib/types';
 
 
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -102,7 +103,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
         <Avatar>
-          <AvatarImage src={prof.avatarUrl} data-ai-hint={prof.dataAiHint} />
+          <AvatarImage src={prof.avatarUrl} />
           <AvatarFallback>{prof.name ? prof.name.substring(0, 2) : '??'}</AvatarFallback>
         </Avatar>
         <span className="font-medium">{prof.name}</span>
@@ -188,7 +189,7 @@ export default function ProfesionalesPage() {
 
   useEffect(() => {
     if (professionalsData) {
-      const sorted = [...professionalsData].sort((a, b) => a.order - b.order);
+      const sorted = [...professionalsData].sort((a, b) => (a.order || 99) - (b.order || 99));
       setProfessionals(sorted);
     }
   }, [professionalsData]);
@@ -247,6 +248,9 @@ export default function ProfesionalesPage() {
     if (over && active.id !== over.id) {
       const oldIndex = professionals.findIndex((item) => item.id === active.id);
       const newIndex = professionals.findIndex((item) => item.id === over.id);
+      
+      if (oldIndex === -1 || newIndex === -1) return;
+
       const newOrder = arrayMove(professionals, oldIndex, newIndex);
       setProfessionals(newOrder);
 
@@ -283,7 +287,7 @@ export default function ProfesionalesPage() {
           return true;
         }
         return false;
-      }).sort((a,b) => a.order - b.order);
+      }).sort((a,b) => (a.order || 99) - (b.order || 99));
       
       return {
         ...local,
@@ -293,7 +297,7 @@ export default function ProfesionalesPage() {
   
     const unassignedProfessionals = professionals
       .filter(p => !p.local_id || !assignedProfessionals.has(p.id))
-      .sort((a,b) => a.order - b.order);
+      .sort((a,b) => (a.order || 99) - (b.order || 99));
   
     const result: ({ professionals: Profesional[] } & Partial<Local>)[] = [...byLocal];
   
@@ -453,3 +457,4 @@ export default function ProfesionalesPage() {
     </TooltipProvider>
   );
 }
+

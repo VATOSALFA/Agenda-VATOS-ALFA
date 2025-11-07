@@ -286,9 +286,7 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  */
 
 exports.getPointTerminals = onCall({cors: true}, async (request) => {
-  // Correctly destructure auth from the request object.
   const { auth } = request;
-
   if (!auth) {
     throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
@@ -309,10 +307,11 @@ exports.getPointTerminals = onCall({cors: true}, async (request) => {
 
 
 exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
-  if (!request.auth) {
+  const { auth, data } = request;
+  if (!auth) {
     throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
-  const { terminalId } = request.data;
+  const { terminalId } = data;
   if (!terminalId) {
     throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
   }
@@ -336,10 +335,11 @@ exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
 
 
 exports.createPointPayment = onCall({cors: true}, async (request) => {
-    if (!request.auth) {
+    const { auth, data } = request;
+    if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }
-    const { amount, terminalId, referenceId } = request.data;
+    const { amount, terminalId, referenceId } = data;
 
     if (!amount || !terminalId || !referenceId) {
         throw new HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
@@ -391,3 +391,5 @@ exports.mercadoPagoWebhookTest = onRequest({cors: true}, async (request, respons
   
   response.status(200).send("OK");
 });
+
+    

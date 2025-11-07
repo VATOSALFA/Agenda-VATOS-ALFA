@@ -285,7 +285,11 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall({cors: true}, async () => {
+exports.getPointTerminals = onCall({cors: true}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+  }
+
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -302,6 +306,9 @@ exports.getPointTerminals = onCall({cors: true}, async () => {
 
 
 exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+  }
   const { terminalId } = request.data;
   if (!terminalId) {
     throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
@@ -326,6 +333,9 @@ exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
 
 
 exports.createPointPayment = onCall({cors: true}, async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+    }
     const { amount, terminalId, referenceId } = request.data;
 
     if (!amount || !terminalId || !referenceId) {
@@ -378,5 +388,3 @@ exports.mercadoPagoWebhookTest = onRequest({cors: true}, async (request, respons
   
   response.status(200).send("OK");
 });
-
-    

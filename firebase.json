@@ -26,7 +26,7 @@
         "firebase-debug.*.log"
       ],
       "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" ci"
+        "npm --prefix \"$RESOURCE_DIR\" install"
       ]
     }
   ],

@@ -255,7 +255,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 /**
  * Cloud Function to handle incoming Twilio webhook requests.
  */
-exports.twilioWebhook = onRequest(async (request, response) => {
+exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
     try {
       const {From, Body, MediaUrl0, MediaContentType0} = request.body;
 
@@ -285,7 +285,7 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall(async (request) => {
+exports.getPointTerminals = onCall({cors: true}, async () => {
   try {
     const client = getMercadoPagoClient();
     const point = new Point(client);
@@ -301,7 +301,7 @@ exports.getPointTerminals = onCall(async (request) => {
 });
 
 
-exports.setTerminalPDVMode = onCall(async (request) => {
+exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
   const { terminalId } = request.data;
   if (!terminalId) {
     throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
@@ -325,7 +325,7 @@ exports.setTerminalPDVMode = onCall(async (request) => {
 });
 
 
-exports.createPointPayment = onCall(async (request) => {
+exports.createPointPayment = onCall({cors: true}, async (request) => {
     const { amount, terminalId, referenceId } = request.data;
 
     if (!amount || !terminalId || !referenceId) {
@@ -362,7 +362,7 @@ exports.createPointPayment = onCall(async (request) => {
 });
 
 
-exports.mercadoPagoWebhookTest = onRequest(async (request, response) => {
+exports.mercadoPagoWebhookTest = onRequest({cors: true}, async (request, response) => {
   console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
   console.log("Headers:", JSON.stringify(request.headers, null, 2));
   console.log("Body:", JSON.stringify(request.body, null, 2));

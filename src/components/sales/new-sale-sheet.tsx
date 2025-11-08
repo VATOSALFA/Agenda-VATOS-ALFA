@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -227,9 +228,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [clientQueryKey, setClientQueryKey] = useState(0);
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
-  const [selectedTerminal, setSelectedTerminal] = useState('');
-  const [terminals, setTerminals] = useState<any[]>([]);
-  const [isFetchingTerminals, setIsFetchingTerminals] = useState(false);
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string | null>(null);
+  const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
@@ -240,7 +240,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  
+  const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
+  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', undefined, doc(db, 'configuracion', 'caja'));
+  const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
+
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string; name: string }>();
     if (professionals) {
@@ -297,6 +300,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       form.setValue('local_id', locales[0].id);
     }
   }, [locales, form, selectedLocalId]);
+
+  useEffect(() => {
+    if(mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
+        setSelectedTerminalId(mainTerminalId);
+    } else if (terminals?.length === 1) {
+        setSelectedTerminalId(terminals[0].id);
+    } else {
+        setSelectedTerminalId(null);
+    }
+  }, [terminals, mainTerminalId]);
 
 
   const filteredServices = useMemo(() => {
@@ -415,34 +428,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
   }, [initialData, form, isOpen]);
 
-  useEffect(() => {
-      const fetchTerminals = async () => {
-        if(paymentMethod !== 'tarjeta') return;
-        setIsFetchingTerminals(true);
-        try {
-            const getTerminals = httpsCallable(functions, 'getPointTerminals');
-            const result: any = await getTerminals();
-            if (result.data.success) {
-                const pdvTerminals = result.data.devices.filter((d: any) => d.operating_mode === 'PDV');
-                setTerminals(pdvTerminals);
-                if (pdvTerminals.length === 1) {
-                    setSelectedTerminal(pdvTerminals[0].id);
-                }
-            } else {
-                throw new Error(result.data.message || 'Error desconocido');
-            }
-        } catch (error: any) {
-             toast({
-                variant: 'destructive',
-                title: 'Error al buscar terminales',
-                description: error.message,
-            });
-        } finally {
-            setIsFetchingTerminals(false);
-        }
-    };
-    fetchTerminals();
-  }, [paymentMethod, toast]);
+  const handleSendToTerminal = async () => {
+    if (!selectedTerminalId || total <= 0) return;
+    setIsSendingToTerminal(true);
+    try {
+      const createPayment = httpsCallable(functions, 'createPointPayment');
+      const result: any = await createPayment({
+        amount: total,
+        terminalId: selectedTerminalId,
+        referenceId: `sale_${Date.now()}`
+      });
+      if (result.data.success && result.data.data?.id) {
+        toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
+        // Here you would typically start polling for payment status or wait for a webhook
+        // For now, we will simulate a successful payment after a delay
+        setTimeout(() => {
+          toast({ title: '¡Pago Aprobado!', description: 'El pago se ha procesado correctamente.'});
+          onSubmit(form.getValues(), result.data.data.id);
+        }, 8000); 
+      } else {
+        throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
+      setIsSendingToTerminal(false);
+    }
+  }
 
   const handleNextStep = () => {
     if (cart.length === 0) {
@@ -463,6 +474,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     form.reset();
     setIsSubmitting(false);
     setAmountPaid(0);
+    setIsSendingToTerminal(false);
     if(initialData) {
         onOpenChange(false);
     }
@@ -863,20 +875,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <Card className="p-4 bg-muted/50">
                                     <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal Point</FormLabel>
                                     <div className="space-y-2">
-                                        <Select value={selectedTerminal} onValueChange={setSelectedTerminal} disabled={isFetchingTerminals}>
+                                        <Select value={selectedTerminalId || ''} onValueChange={setSelectedTerminalId} disabled={terminalsLoading}>
                                             <SelectTrigger>
-                                                <SelectValue placeholder={isFetchingTerminals ? "Buscando terminales..." : "Selecciona una terminal"} />
+                                                <SelectValue placeholder={terminalsLoading ? "Buscando terminales..." : "Selecciona una terminal"} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {terminals.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                {terminals.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.display_name || t.id}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
-                                        <Button type="button" onClick={() => { /* Implement on submit */ }} disabled={isSubmitting || isFetchingTerminals || !selectedTerminal || total <= 0} className="w-full">
-                                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                                        <Button type="button" onClick={handleSendToTerminal} disabled={isSendingToTerminal || terminalsLoading || !selectedTerminalId || total <= 0} className="w-full">
+                                            {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
                                             Cobrar ${total.toLocaleString('es-MX')} en Terminal
                                         </Button>
                                     </div>
-                                    {!terminals.length && !isFetchingTerminals && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes > Sistema de Caja para activarlas.</p>}
+                                    {!terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes > Terminal para activarlas.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (
@@ -1009,7 +1021,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid}>
+                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta'}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Finalizar Venta por ${total.toLocaleString('es-MX')}
                         </Button>

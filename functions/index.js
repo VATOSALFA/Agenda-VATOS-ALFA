@@ -1,6 +1,7 @@
 
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 const {Buffer} = require("buffer");
 const {v4: uuidv4} = require("uuid");
 const fetch = require("node-fetch");
@@ -383,19 +384,88 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
 });
 
 
-exports.mercadoPagoWebhookTest = onRequest({cors: true}, async (request, response) => {
-  console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
-  console.log("Headers:", JSON.stringify(request.headers, null, 2));
-  console.log("Body:", JSON.stringify(request.body, null, 2));
-  console.log("===================================================");
-  
-  // You would typically verify the signature here using the webhook secret
-  // const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-  // ... verification logic ...
-  
-  // For now, we just log and respond.
-  // In a real app, you would process the payment status from the body
-  // and update your database (e.g., mark an order as 'paid').
-  
-  response.status(200).send("OK");
+exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
+    console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("Headers:", JSON.stringify(request.headers, null, 2));
+    console.log("Query:", JSON.stringify(request.query, null, 2));
+    console.log("Body:", JSON.stringify(request.body, null, 2));
+    
+    // 1. Verify Signature
+    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+    if (!secret) {
+        console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
+        response.status(500).send("Webhook secret not configured.");
+        return;
+    }
+
+    try {
+        const xSignature = request.headers['x-signature'];
+        const xRequestId = request.headers['x-request-id'];
+        
+        if (!xSignature) {
+            console.warn("Webhook received without x-signature header.");
+            response.status(400).send("Missing x-signature header.");
+            return;
+        }
+
+        const parts = xSignature.split(',');
+        const tsPart = parts.find(p => p.startsWith('ts='));
+        const v1Part = parts.find(p => p.startsWith('v1='));
+
+        if (!tsPart || !v1Part) {
+            throw new Error("Invalid signature format");
+        }
+        
+        const ts = tsPart.split('=')[1];
+        const v1 = v1Part.split('=')[1];
+
+        // The 'id' in the template must be the one from the query params
+        const dataId = request.query['data.id'];
+        
+        const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+        
+        const hmac = crypto.createHmac('sha256', secret);
+        hmac.update(manifest);
+        const sha = hmac.digest('hex');
+
+        if (sha !== v1) {
+            console.warn("Webhook signature validation failed.");
+            response.status(403).send("Invalid signature.");
+            return;
+        }
+        console.log("Webhook signature validation successful.");
+        
+        // 2. Process the notification
+        const { body } = request;
+        if (body.action === 'payment.updated') {
+            const paymentId = body.data.id;
+            
+            // You would typically fetch the full payment details from Mercado Pago API here
+            // For now, let's find the corresponding 'venta' using the external_reference
+            // Note: This requires you to save the paymentIntentId or a unique reference when creating the payment.
+            const externalReference = body.external_reference; // This might not be available directly in the webhook, you might need to query the order first.
+            
+            // Assuming the `external_reference` in `createPointPayment` is the venta ID
+            if (externalReference) {
+                const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+                const ventaDoc = await ventaRef.get();
+                if (ventaDoc.exists) {
+                    await ventaRef.update({
+                        pago_estado: 'Pagado',
+                        mercado_pago_status: 'approved', // Or whatever status MP sends
+                        mercado_pago_id: paymentId,
+                    });
+                    console.log(`Updated sale ${externalReference} to 'Pagado'.`);
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Error processing Mercado Pago webhook:", error);
+        // Respond with 200 even on error to prevent Mercado Pago from retrying endlessly
+        response.status(200).send("OK_WITH_ERROR");
+        return;
+    }
+    
+    console.log("===================================================");
+    response.status(200).send("OK");
 });

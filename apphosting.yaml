@@ -36,6 +36,8 @@ env:
       - RUNTIME
   - variable: MERCADO_PAGO_WEBHOOK_SECRET
     secret: MERCADO_PAGO_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
   # --- GEMINI CONFIG ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY

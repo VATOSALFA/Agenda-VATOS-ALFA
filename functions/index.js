@@ -13,14 +13,24 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-// --- MERCADO PAGO CONFIG ---
-const getMercadoPagoClient = (accessToken) => {
-  if (!accessToken) {
-      console.error("MERCADO_PAGO_ACCESS_TOKEN is not defined.");
-      throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado.');
-  }
-  // Retorna el objeto de configuración del SDK
-  return new MercadoPagoConfig({ accessToken });
+// --- MERCADO PAGO CONFIG (CORREGIDO PARA USAR FIRESTORE) ---
+const getMercadoPagoConfig = async () => {
+    const db = admin.firestore(); // Asegurar acceso a DB
+    const settingsDoc = await db.collection('configuracion').doc('pagos').get();
+    
+    if (!settingsDoc.exists) {
+        throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
+    }
+    
+    const settings = settingsDoc.data();
+    const accessToken = settings?.mercadoPagoAccessToken;
+    
+    if (!accessToken) {
+        throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
+    }
+    
+    // Retorna el objeto de configuración del SDK y el token
+    return { client: new MercadoPagoConfig({ accessToken }), accessToken };
 };
 
 
@@ -278,7 +288,6 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
 );
 
 
-
 /**
  * =================================================================
  * MERCADO PAGO FUNCTIONS
@@ -291,10 +300,10 @@ exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
   }
 
   try {
-    const client = getMercadoPagoClient();
+    const { client } = await getMercadoPagoConfig();
     const point = new Point(client);
     const devices = await point.getDevices();
-    return { success: true, devices: devices.devices };
+    return { success: true, devices: devices.devices || [] };
   } catch(error) {
     console.error("Error fetching Mercado Pago terminals: ", error);
     if (error instanceof HttpsError) {
@@ -315,7 +324,7 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
   }
 
   try {
-    const client = getMercadoPagoClient();
+    const { client } = await getMercadoPagoConfig();
     const point = new Point(client);
     const result = await point.changeDeviceOperatingMode({
       device_id: terminalId,
@@ -343,7 +352,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     }
 
     try {
-        const client = getMercadoPagoClient();
+        const { client } = await getMercadoPagoConfig();
         const point = new Point(client);
 
         const result = await point.createPaymentIntent({

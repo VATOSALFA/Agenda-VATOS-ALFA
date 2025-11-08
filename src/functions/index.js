@@ -13,14 +13,24 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-// --- MERCADO PAGO CONFIG ---
-const getMercadoPagoClient = () => {
-    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-    if (!accessToken) {
-        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set in the server environment.");
-        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor. Revisa los secretos de la aplicación.');
-    }
-    return new MercadoPagoConfig({ accessToken });
+// --- MERCADO PAGO CONFIG (CORREGIDO PARA USAR FIRESTORE) ---
+const getMercadoPagoClient = async () => {
+  const db = admin.firestore();
+  const settingsDoc = await db.collection('configuracion').doc('pagos').get();
+  
+  if (!settingsDoc.exists) {
+      throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
+  }
+  
+  const settings = settingsDoc.data();
+  const accessToken = settings?.mercadoPagoAccessToken;
+  
+  if (!accessToken) {
+      throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
+  }
+  
+  // Retorna el objeto de configuración del SDK
+  return new MercadoPagoConfig({ accessToken });
 };
 
 
@@ -278,36 +288,35 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
 );
 
 
-
 /**
  * =================================================================
  * MERCADO PAGO FUNCTIONS
  * =================================================================
  */
 
-exports.getPointTerminals = onCall({cors: true}, async (request) => {
-  const { auth } = request;
+exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
   if (!auth) {
-    throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
 
   try {
-    const client = getMercadoPagoClient();
-    const point = new Point(client);
-    const devices = await point.getDevices();
-    return { success: true, devices: devices.devices };
+      const client = await getMercadoPagoClient();
+      const point = new Point(client); 
+      
+      const devices = await point.getDevices({}); 
+
+      return { success: true, devices: devices.devices || [] };
   } catch(error) {
-    console.error("Error fetching Mercado Pago terminals: ", error);
-    if (error instanceof HttpsError) {
-        throw error;
-    }
-    throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
+      console.error("Error fetching Mercado Pago terminals: ", error);
+      if (error instanceof HttpsError) {
+          throw error;
+      }
+      throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
   }
 });
 
 
-exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
-  const { auth, data } = request;
+exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
   if (!auth) {
     throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
@@ -317,7 +326,7 @@ exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
   }
 
   try {
-    const client = getMercadoPagoClient();
+    const client = await getMercadoPagoClient();
     const point = new Point(client);
     const result = await point.changeDeviceOperatingMode({
       device_id: terminalId,
@@ -334,8 +343,7 @@ exports.setTerminalPDVMode = onCall({cors: true}, async (request) => {
 });
 
 
-exports.createPointPayment = onCall({cors: true}, async (request) => {
-    const { auth, data } = request;
+exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }
@@ -346,7 +354,7 @@ exports.createPointPayment = onCall({cors: true}, async (request) => {
     }
 
     try {
-        const client = getMercadoPagoClient();
+        const client = await getMercadoPagoClient();
         const point = new Point(client);
 
         const result = await point.createPaymentIntent({
@@ -391,5 +399,3 @@ exports.mercadoPagoWebhookTest = onRequest({cors: true}, async (request, respons
   
   response.status(200).send("OK");
 });
-
-    

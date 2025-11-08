@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -62,7 +60,15 @@ export default function TerminalSettingsPage() {
     }
 
     const handleSetMainTerminal = async (terminalId: string, isChecked: boolean) => {
-        if (!isChecked) return; // Only handle turning it on
+        if (!isChecked) {
+            // Un-setting the main terminal is not a standard operation, handle as needed
+            const settingsRef = doc(db, 'configuracion', 'caja');
+            await setDoc(settingsRef, { mercadoPagoTerminalId: null }, { merge: true });
+            setCashboxSettings((prev: any) => ({...prev, mercadoPagoTerminalId: null}));
+            toast({ title: "Terminal principal deseleccionada." });
+            return;
+        }; 
+
         try {
             const settingsRef = doc(db, 'configuracion', 'caja');
             await setDoc(settingsRef, { mercadoPagoTerminalId: terminalId }, { merge: true });
@@ -108,7 +114,7 @@ export default function TerminalSettingsPage() {
                                 {isFetchingTerminals ? (
                                     <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="animate-spin h-6 w-6"/></TableCell></TableRow>
                                 ) : terminals.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales en modo PDV.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales en modo PDV. Haz clic en "Refrescar Terminales".</TableCell></TableRow>
                                 ) : (
                                     terminals.map((terminal: any) => (
                                         <TableRow key={terminal.id}>

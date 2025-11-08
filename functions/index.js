@@ -300,17 +300,11 @@ exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
   }
 
   try {
-      // CORRECCIÓN: Obtenemos el cliente de MP desde el Helper
       const client = await getMercadoPagoClient();
-      
-      // CORRECCIÓN: Instanciamos el Point Client con la configuración
       const point = new Point(client); 
       
-      // Llamada al método getDevices (o list)
-      // Nota: Asumo que el SDK usa getDevices() o getDevices({}), no la sintaxis de lista antigua
-      const devices = await point.getDevices(); 
+      const devices = await point.getDevices({}); 
 
-      // El SDK devuelve un objeto que contiene 'devices'
       return { success: true, devices: devices.devices || [] };
   } catch(error) {
       console.error("Error fetching Mercado Pago terminals: ", error);
@@ -332,7 +326,7 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
   }
 
   try {
-    const { client } = await getMercadoPagoConfig();
+    const client = await getMercadoPagoClient();
     const point = new Point(client);
     const result = await point.changeDeviceOperatingMode({
       device_id: terminalId,
@@ -360,7 +354,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     }
 
     try {
-        const { client } = await getMercadoPagoConfig();
+        const client = await getMercadoPagoClient();
         const point = new Point(client);
 
         const result = await point.createPaymentIntent({

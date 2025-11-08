@@ -14,23 +14,23 @@ if (admin.apps.length === 0) {
 }
 
 // --- MERCADO PAGO CONFIG (CORREGIDO PARA USAR FIRESTORE) ---
-const getMercadoPagoConfig = async () => {
-    const db = admin.firestore(); // Asegurar acceso a DB
-    const settingsDoc = await db.collection('configuracion').doc('pagos').get();
-    
-    if (!settingsDoc.exists) {
-        throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
-    }
-    
-    const settings = settingsDoc.data();
-    const accessToken = settings?.mercadoPagoAccessToken;
-    
-    if (!accessToken) {
-        throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
-    }
-    
-    // Retorna el objeto de configuración del SDK y el token
-    return { client: new MercadoPagoConfig({ accessToken }), accessToken };
+const getMercadoPagoClient = async () => {
+  const db = admin.firestore();
+  const settingsDoc = await db.collection('configuracion').doc('pagos').get();
+  
+  if (!settingsDoc.exists) {
+      throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
+  }
+  
+  const settings = settingsDoc.data();
+  const accessToken = settings?.mercadoPagoAccessToken;
+  
+  if (!accessToken) {
+      throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
+  }
+  
+  // Retorna el objeto de configuración del SDK
+  return new MercadoPagoConfig({ accessToken });
 };
 
 
@@ -296,20 +296,28 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
 
 exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
   if (!auth) {
-    throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
 
   try {
-    const { client } = await getMercadoPagoConfig();
-    const point = new Point(client);
-    const devices = await point.getDevices();
-    return { success: true, devices: devices.devices || [] };
+      // CORRECCIÓN: Obtenemos el cliente de MP desde el Helper
+      const client = await getMercadoPagoClient();
+      
+      // CORRECCIÓN: Instanciamos el Point Client con la configuración
+      const point = new Point(client); 
+      
+      // Llamada al método getDevices (o list)
+      // Nota: Asumo que el SDK usa getDevices() o getDevices({}), no la sintaxis de lista antigua
+      const devices = await point.getDevices(); 
+
+      // El SDK devuelve un objeto que contiene 'devices'
+      return { success: true, devices: devices.devices || [] };
   } catch(error) {
-    console.error("Error fetching Mercado Pago terminals: ", error);
-    if (error instanceof HttpsError) {
-        throw error;
-    }
-    throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
+      console.error("Error fetching Mercado Pago terminals: ", error);
+      if (error instanceof HttpsError) {
+          throw error;
+      }
+      throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
   }
 });
 

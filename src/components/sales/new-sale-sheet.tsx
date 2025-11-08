@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -295,14 +295,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [selectedClientId, clients]);
 
   useEffect(() => {
-    if (initialData?.local_id) {
-        form.setValue('local_id', initialData.local_id);
-    } else if (selectedLocalId) {
-      form.setValue('local_id', selectedLocalId);
-    } else if (locales.length > 0) {
-      form.setValue('local_id', locales[0].id);
+    if (isOpen) {
+        if (initialData?.local_id) {
+            form.setValue('local_id', initialData.local_id);
+        } else if (selectedLocalId) {
+          form.setValue('local_id', selectedLocalId);
+        } else if (!localesLoading && locales.length > 0) {
+          form.setValue('local_id', locales[0].id);
+        }
     }
-  }, [locales, form, selectedLocalId, initialData]);
+  }, [isOpen, locales, localesLoading, form, selectedLocalId, initialData]);
 
   useEffect(() => {
     if(mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {

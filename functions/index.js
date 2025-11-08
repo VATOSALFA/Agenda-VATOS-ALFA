@@ -14,13 +14,13 @@ if (admin.apps.length === 0) {
 }
 
 // --- MERCADO PAGO CONFIG ---
-const getMercadoPagoClient = () => {
-    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-    if (!accessToken) {
-        console.error("MERCADO_PAGO_ACCESS_TOKEN is not set in the server environment.");
-        throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado en el servidor. Revisa los secretos de la aplicación.');
-    }
-    return new MercadoPagoConfig({ accessToken });
+const getMercadoPagoClient = (accessToken) => {
+  if (!accessToken) {
+      console.error("MERCADO_PAGO_ACCESS_TOKEN is not defined.");
+      throw new HttpsError('internal', 'El access token de Mercado Pago no está configurado.');
+  }
+  // Retorna el objeto de configuración del SDK
+  return new MercadoPagoConfig({ accessToken });
 };
 
 

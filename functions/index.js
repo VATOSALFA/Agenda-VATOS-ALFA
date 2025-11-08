@@ -15,7 +15,7 @@ if (admin.apps.length === 0) {
 }
 
 // --- MERCADO PAGO CONFIG (CORREGIDO PARA USAR FIRESTORE) ---
-const getMercadoPagoClient = async () => {
+const getMercadoPagoConfig = async () => {
   const db = admin.firestore();
   const settingsDoc = await db.collection('configuracion').doc('pagos').get();
   
@@ -30,8 +30,8 @@ const getMercadoPagoClient = async () => {
       throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
   }
   
-  // Retorna el objeto de configuración del SDK
-  return new MercadoPagoConfig({ accessToken });
+  // Retorna el objeto de configuración del SDK y el token
+  return { client: new MercadoPagoConfig({ accessToken }), accessToken };
 };
 
 
@@ -301,7 +301,7 @@ exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
   }
 
   try {
-      const client = await getMercadoPagoClient();
+      const { client } = await getMercadoPagoConfig();
       const point = new Point(client); 
       
       const devices = await point.getDevices({}); 
@@ -327,7 +327,7 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
   }
 
   try {
-    const client = await getMercadoPagoClient();
+    const { client } = await getMercadoPagoConfig();
     const point = new Point(client);
     const result = await point.changeDeviceOperatingMode({
       device_id: terminalId,
@@ -355,27 +355,51 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     }
 
     try {
-        const client = await getMercadoPagoClient();
-        const point = new Point(client);
+        const { accessToken } = await getMercadoPagoConfig();
 
-        const result = await point.createPaymentIntent({
-            device_id: terminalId,
-            body: {
-                amount: amount,
-                payment: {
-                    type: "credit_card",
-                    installments: 1
-                },
-                additional_info: {
-                    external_reference: referenceId,
-                    print_on_terminal: true,
-                }
-            }
+        const orderData = {
+          type: "point",
+          external_reference: referenceId,
+          expiration_time: "PT15M", // 15 minutos para pagar
+          transactions: {
+              payments: [
+                  {
+                      amount: amount.toFixed(2).toString()
+                  }
+              ]
+          },
+          config: {
+              point: {
+                  terminal_id: terminalId,
+                  print_on_terminal: "no_ticket"
+              },
+              payment_method: {
+                  default_type: "credit_card"
+              }
+          },
+          description: `Venta en VATOS ALFA`,
+        };
+
+        const response = await fetch('https://api.mercadopago.com/v1/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'X-Idempotency-Key': uuidv4()
+          },
+          body: JSON.stringify(orderData),
         });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          console.error("Error response from Mercado Pago:", result);
+          throw new HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
+        }
 
         return { success: true, data: result };
     } catch(error) {
-        console.error("Error creating payment intent:", error);
+        console.error("Error creating payment order:", error);
          if (error instanceof HttpsError) {
             throw error;
         }
@@ -390,7 +414,6 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("Query:", JSON.stringify(request.query, null, 2));
     console.log("Body:", JSON.stringify(request.body, null, 2));
     
-    // 1. Verify Signature
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
         console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
@@ -419,10 +442,14 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
 
-        // The 'id' in the template must be the one from the query params
         const dataId = request.query['data.id'];
+        if (!dataId) {
+             console.warn("Webhook received without data.id in query params.");
+             response.status(400).send("Missing data.id in query params.");
+             return;
+        }
         
-        const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+        const manifest = `id:${dataId.toLowerCase()};request-id:${xRequestId};ts:${ts};`;
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
@@ -435,25 +462,18 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         }
         console.log("Webhook signature validation successful.");
         
-        // 2. Process the notification
         const { body } = request;
         if (body.action === 'payment.updated') {
-            const paymentId = body.data.id;
+            const externalReference = body.external_reference; 
             
-            // You would typically fetch the full payment details from Mercado Pago API here
-            // For now, let's find the corresponding 'venta' using the external_reference
-            // Note: This requires you to save the paymentIntentId or a unique reference when creating the payment.
-            const externalReference = body.external_reference; // This might not be available directly in the webhook, you might need to query the order first.
-            
-            // Assuming the `external_reference` in `createPointPayment` is the venta ID
             if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 const ventaDoc = await ventaRef.get();
                 if (ventaDoc.exists) {
                     await ventaRef.update({
                         pago_estado: 'Pagado',
-                        mercado_pago_status: 'approved', // Or whatever status MP sends
-                        mercado_pago_id: paymentId,
+                        mercado_pago_status: 'approved',
+                        mercado_pago_id: body.data.id,
                     });
                     console.log(`Updated sale ${externalReference} to 'Pagado'.`);
                 }
@@ -461,7 +481,6 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         }
     } catch (error) {
         console.error("Error processing Mercado Pago webhook:", error);
-        // Respond with 200 even on error to prevent Mercado Pago from retrying endlessly
         response.status(200).send("OK_WITH_ERROR");
         return;
     }

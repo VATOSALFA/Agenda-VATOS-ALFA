@@ -232,6 +232,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [currentSaleId, setCurrentSaleId] = useState<string | null>(null);
 
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
@@ -294,12 +295,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [selectedClientId, clients]);
 
   useEffect(() => {
-    if (selectedLocalId) {
+    if (initialData?.local_id) {
+        form.setValue('local_id', initialData.local_id);
+    } else if (selectedLocalId) {
       form.setValue('local_id', selectedLocalId);
     } else if (locales.length > 0) {
       form.setValue('local_id', locales[0].id);
     }
-  }, [locales, form, selectedLocalId]);
+  }, [locales, form, selectedLocalId, initialData]);
 
   useEffect(() => {
     if(mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -431,27 +434,35 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const handleSendToTerminal = async () => {
     if (!selectedTerminalId || total <= 0) return;
     setIsSendingToTerminal(true);
+
+    const saleRef = doc(collection(db, 'ventas'));
+    setCurrentSaleId(saleRef.id);
+
     try {
+      // Pre-save the sale document so the webhook can find it
+      await onSubmit(form.getValues(), saleRef.id, 'Pendiente');
+
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
         terminalId: selectedTerminalId,
-        referenceId: `sale_${Date.now()}`
+        referenceId: saleRef.id,
       });
-      if (result.data.success && result.data.data?.id) {
+
+      if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
-        // Here you would typically start polling for payment status or wait for a webhook
-        // For now, we will simulate a successful payment after a delay
-        setTimeout(() => {
-          toast({ title: '¡Pago Aprobado!', description: 'El pago se ha procesado correctamente.'});
-          onSubmit(form.getValues(), result.data.data.id);
-        }, 8000); 
+        // The webhook will handle the rest.
       } else {
         throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
       setIsSendingToTerminal(false);
+      // Here you might want to delete the pre-saved sale document if the intent creation fails
+      if(currentSaleId) {
+          await deleteDoc(doc(db, 'ventas', currentSaleId));
+          setCurrentSaleId(null);
+      }
     }
   }
 
@@ -475,6 +486,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setIsSubmitting(false);
     setAmountPaid(0);
     setIsSendingToTerminal(false);
+    setCurrentSaleId(null);
     if(initialData) {
         onOpenChange(false);
     }
@@ -486,7 +498,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
-  async function onSubmit(data: SaleFormData, paymentId?: string) {
+  async function onSubmit(data: SaleFormData, saleDocId?: string, paymentStatus: 'Pagado' | 'Pendiente' = 'Pagado') {
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
@@ -515,24 +527,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             }
             transaction.update(ref, { stock: newStock });
             
-            // Check for stock alarm
             if (productData.stock_alarm_threshold && newStock <= productData.stock_alarm_threshold && productData.notification_email) {
-                // This will run in the background, no need to await
                 sendStockAlert({
                     productName: productData.nombre,
                     currentStock: newStock,
                     recipientEmail: productData.notification_email,
-                }).then(() => {
-                  toast({
-                    variant: "destructive",
-                    title: "Alerta de stock bajo",
-                    description: `El producto ${productData.nombre} tiene solo ${newStock} unidades.`,
-                  });
                 }).catch(console.error);
             }
         }
         
-        const ventaRef = doc(collection(db, "ventas"));
+        const ventaRef = saleDocId ? doc(db, "ventas", saleDocId) : doc(collection(db, "ventas"));
         const itemsToSave = cart.map(item => {
             const itemSubtotal = (item.precio || 0) * item.cantidad;
             const itemDiscountValue = Number(item.discountValue) || 0;
@@ -570,11 +574,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             fecha_hora_venta: Timestamp.now(),
             creado_por_id: user?.uid,
             creado_por_nombre: user?.displayName || user?.email,
+            pago_estado: paymentStatus,
         };
-
-        if(paymentId) {
-            saleDataToSave.mercado_pago_id = paymentId;
-        }
         
         if (data.metodo_pago === 'combinado') {
             saleDataToSave.detalle_pago_combinado = {
@@ -587,8 +588,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             saleDataToSave.reservationId = reservationId;
         }
 
-        transaction.set(ventaRef, saleDataToSave);
-
+        if (saleDocId) {
+            transaction.set(ventaRef, saleDataToSave);
+        } else {
+             transaction.set(ventaRef, {
+                ...saleDataToSave,
+                creado_en: Timestamp.now(),
+            });
+        }
+        
         if (reservationId) {
             const reservationRef = doc(db, 'reservas', reservationId);
             transaction.update(reservationRef, { 
@@ -598,39 +606,37 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
       });
 
-      toast({
-        title: '¡Venta registrada!',
-        description: 'La venta se ha guardado correctamente.',
-      });
+      if (paymentStatus === 'Pagado') {
+        toast({
+          title: '¡Venta registrada!',
+          description: 'La venta se ha guardado correctamente.',
+        });
 
-      // Send Google Review Request if enabled
-      const settingsRef = doc(db, 'configuracion', 'recordatorios');
-      const settingsSnap = await getDoc(settingsRef);
-      const settings = settingsSnap.data() as ReminderSettings | undefined;
-      const isReviewEnabled = settings?.notifications?.google_review?.enabled ?? false;
+        const settingsRef = doc(db, 'configuracion', 'recordatorios');
+        const settingsSnap = await getDoc(settingsRef);
+        const settings = settingsSnap.data() as ReminderSettings | undefined;
+        const isReviewEnabled = settings?.notifications?.google_review?.enabled ?? false;
 
-      if (isReviewEnabled) {
-          const client = clients.find(c => c.id === data.cliente_id);
-          const local = locales.find(l => l.id === data.local_id);
-          if (client?.telefono && local) {
-              setTimeout(() => {
-                  sendGoogleReviewRequest({
-                      clientId: client.id,
-                      clientName: client.nombre,
-                      clientPhone: client.telefono,
-                      localName: local.name,
-                  }).catch(err => {
-                      console.error("Failed to send Google review request:", err);
-                      // Non-blocking, so we just log the error.
-                  });
-              }, 30 * 60 * 1000); // 30 minutes
-          }
+        if (isReviewEnabled) {
+            const client = clients.find(c => c.id === data.cliente_id);
+            const local = locales.find(l => l.id === data.local_id);
+            if (client?.telefono && local) {
+                setTimeout(() => {
+                    sendGoogleReviewRequest({
+                        clientId: client.id,
+                        clientName: client.nombre,
+                        clientPhone: client.telefono,
+                        localName: local.name,
+                    }).catch(err => {
+                        console.error("Failed to send Google review request:", err);
+                    });
+                }, 30 * 60 * 1000);
+            }
+        }
+        resetFlow();
+        onOpenChange(false);
+        onSaleComplete?.();
       }
-
-
-      resetFlow();
-      onOpenChange(false);
-      onSaleComplete?.();
     } catch (error: any) {
       console.error('Error al registrar la venta: ', error);
       toast({
@@ -639,7 +645,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         description: error.message || 'No se pudo registrar la venta. Por favor, intenta de nuevo.',
       });
     } finally {
-      setIsSubmitting(false);
+      if (paymentStatus === 'Pagado') {
+          setIsSubmitting(false);
+      }
     }
   }
 

@@ -165,8 +165,8 @@ export default function CashBoxPage() {
   const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
   const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
   
-  const [cashboxSettings, setCashboxSettings] = useState<any>(null);
-
+  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', 'caja-settings', where('__name__', '==', 'caja'));
+  const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
 
    useEffect(() => {
     setIsClientMounted(true);
@@ -235,17 +235,6 @@ export default function CashBoxPage() {
     ...ingresosQueryConstraints
   );
   
-  useEffect(() => {
-    const fetchCashboxSettings = async () => {
-        const settingsRef = doc(db, 'configuracion', 'caja');
-        const docSnap = await getDoc(settingsRef);
-        if (docSnap.exists()) {
-            setCashboxSettings(docSnap.data());
-        }
-    }
-    fetchCashboxSettings();
-  }, []);
-
   const egresos = useMemo(() => {
     if (activeFilters.localId === 'todos') {
         return allEgresos;

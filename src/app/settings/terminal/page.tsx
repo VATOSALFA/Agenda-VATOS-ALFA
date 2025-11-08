@@ -1,23 +1,27 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { httpsCallable, functions } from '@/lib/firebase-client';
 import { db } from '@/lib/firebase-client';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, writeBatch, collection } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 export default function TerminalSettingsPage() {
     const { toast } = useToast();
     const { user } = useAuth();
     const [cashboxSettings, setCashboxSettings] = useState<any>(null);
-    const [terminals, setTerminals] = useState<any[]>([]);
     const [isFetchingTerminals, setIsFetchingTerminals] = useState(false);
+    const [queryKey, setQueryKey] = useState(0);
+
+    const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales', queryKey);
 
     useEffect(() => {
         const fetchCashboxSettings = async () => {
@@ -29,20 +33,28 @@ export default function TerminalSettingsPage() {
             }
         }
         fetchCashboxSettings();
-    }, [user]);
+    }, [user, queryKey]);
 
-    const handleFetchTerminals = async () => {
+    const handleFetchAndSaveTerminals = async () => {
         setIsFetchingTerminals(true);
         try {
-            const getTerminals = httpsCallable(functions, 'getPointTerminals');
-            const result: any = await getTerminals();
+            const getTerminalsFunction = httpsCallable(functions, 'getPointTerminals');
+            const result: any = await getTerminalsFunction();
             
             if (result.data.success) {
-                const pdvTerminals = result.data.devices.filter((d: any) => d.operating_mode === 'PDV');
-                setTerminals(pdvTerminals);
+                const fetchedTerminals = result.data.devices.filter((d: any) => d.operating_mode === 'PDV');
+                
+                const batch = writeBatch(db);
+                fetchedTerminals.forEach((terminal: any) => {
+                    const terminalRef = doc(db, 'terminales', terminal.id);
+                    batch.set(terminalRef, terminal, { merge: true });
+                });
+                await batch.commit();
+
+                setQueryKey(prev => prev + 1); // Trigger refetch from our DB
                 toast({
                     title: 'Terminales actualizadas',
-                    description: `Se encontraron ${pdvTerminals.length} terminales en modo PDV.`,
+                    description: `Se encontraron y guardaron ${fetchedTerminals.length} terminales en modo PDV.`,
                 });
             } else {
                 throw new Error(result.data.error || 'Error desconocido al obtener terminales.');
@@ -60,19 +72,11 @@ export default function TerminalSettingsPage() {
     }
 
     const handleSetMainTerminal = async (terminalId: string, isChecked: boolean) => {
-        if (!isChecked) {
-            // Un-setting the main terminal is not a standard operation, handle as needed
-            const settingsRef = doc(db, 'configuracion', 'caja');
-            await setDoc(settingsRef, { mercadoPagoTerminalId: null }, { merge: true });
-            setCashboxSettings((prev: any) => ({...prev, mercadoPagoTerminalId: null}));
-            toast({ title: "Terminal principal deseleccionada." });
-            return;
-        }; 
-
+        const newTerminalId = isChecked ? terminalId : null;
         try {
             const settingsRef = doc(db, 'configuracion', 'caja');
-            await setDoc(settingsRef, { mercadoPagoTerminalId: terminalId }, { merge: true });
-            setCashboxSettings((prev: any) => ({...prev, mercadoPagoTerminalId: terminalId}));
+            await setDoc(settingsRef, { mercadoPagoTerminalId: newTerminalId }, { merge: true });
+            setCashboxSettings((prev: any) => ({...prev, mercadoPagoTerminalId: newTerminalId}));
             toast({ title: "Terminal principal actualizada." });
         } catch (error) {
             console.error("Error setting main terminal:", error);
@@ -95,7 +99,7 @@ export default function TerminalSettingsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="flex items-center gap-4">
-                        <Button onClick={handleFetchTerminals} disabled={isFetchingTerminals}>
+                        <Button onClick={handleFetchAndSaveTerminals} disabled={isFetchingTerminals}>
                             {isFetchingTerminals && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                             Refrescar Terminales
                         </Button>
@@ -111,14 +115,14 @@ export default function TerminalSettingsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {isFetchingTerminals ? (
+                                {terminalsLoading ? (
                                     <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="animate-spin h-6 w-6"/></TableCell></TableRow>
                                 ) : terminals.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales en modo PDV. Haz clic en "Refrescar Terminales".</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales. Haz clic en "Refrescar Terminales".</TableCell></TableRow>
                                 ) : (
                                     terminals.map((terminal: any) => (
                                         <TableRow key={terminal.id}>
-                                            <TableCell className="font-medium">{terminal.name}</TableCell>
+                                            <TableCell className="font-medium">{terminal.display_name || 'Terminal sin nombre'}</TableCell>
                                             <TableCell>{terminal.id}</TableCell>
                                             <TableCell>{terminal.operating_mode}</TableCell>
                                             <TableCell>

@@ -423,9 +423,12 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id'];
         
-        if (!xSignature || !xRequestId) {
-            console.warn("Webhook received without x-signature or x-request-id header.");
-            response.status(400).send("Missing required headers.");
+        // This is a 'payment' notification, not an 'order' notification, so data.id is in the body.
+        const dataId = request.body.data?.id;
+
+        if (!xSignature || !xRequestId || !dataId) {
+            console.warn("Webhook received without x-signature, x-request-id, or data.id in body.");
+            response.status(400).send("Missing required headers or body data.");
             return;
         }
 
@@ -439,17 +442,8 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
-
-        // The data.id comes from the query parameters, as per MP docs
-        const dataId = request.query['data.id'];
-        if (!dataId) {
-             console.warn("Webhook received without data.id in query params.");
-             response.status(400).send("Missing data.id in query params.");
-             return;
-        }
         
-        // Correct manifest construction
-        const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
+        const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
@@ -462,10 +456,8 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         }
         console.log("Webhook signature validation successful.");
         
-        // Process the notification
         const { body } = request;
         if (body.action === 'payment.updated' && body.data?.id) {
-            // It's a payment notification, we need to get the order to find our external_reference
             const { accessToken } = await getMercadoPagoConfig();
             const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -488,17 +480,13 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         }
     } catch (error) {
         console.error("Error processing Mercado Pago webhook:", error);
-        // Respond with 200 even on error to prevent MP from retrying indefinitely
-        response.status(200).send("OK_WITH_ERROR");
+        response.status(500).send("Internal Server Error");
         return;
     }
     
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
-    
-
     
 
     

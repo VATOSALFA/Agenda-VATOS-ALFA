@@ -434,33 +434,44 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [initialData, form, isOpen]);
 
   const handleSendToTerminal = async () => {
-    if (!selectedTerminalId || total <= 0) return;
+    if (!selectedTerminalId || total <= 0 || !selectedClient) return;
     setIsSendingToTerminal(true);
 
     const saleRef = doc(collection(db, 'ventas'));
     setCurrentSaleId(saleRef.id);
 
     try {
-      // Pre-save the sale document so the webhook can find it
       await onSubmit(form.getValues(), saleRef.id, 'Pendiente');
+
+      const payer = {
+          first_name: selectedClient.nombre,
+          last_name: selectedClient.apellido,
+          email: selectedClient.correo,
+      };
+
+      const items = cart.map(item => ({
+        title: item.nombre,
+        quantity: item.cantidad,
+        unit_price: item.precio,
+      }));
 
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
         terminalId: selectedTerminalId,
         referenceId: saleRef.id,
+        payer: payer,
+        items: items
       });
 
       if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
-        // The webhook will handle the rest.
       } else {
         throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
       setIsSendingToTerminal(false);
-      // Here you might want to delete the pre-saved sale document if the intent creation fails
       if(currentSaleId) {
           await deleteDoc(doc(db, 'ventas', currentSaleId));
           setCurrentSaleId(null);

@@ -1,5 +1,4 @@
 
-
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -42,13 +41,6 @@ const getMercadoPagoConfig = async () => {
  * =================================================================
  */
 
-/**
- * Downloads media from Twilio and uploads it to Firebase Storage.
- * @param {string} mediaUrl The private Twilio media URL.
- * @param {string} from The sender's phone number.
- * @param {string} mediaType The MIME type of the media.
- * @returns {Promise<string>} The public URL of the uploaded file in Firebase Storage.
- */
 async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -59,7 +51,6 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
     );
   }
 
-  // 1. Download from Twilio using Basic Authentication
   const twilioAuth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
   const response = await fetch(mediaUrl, {
     headers: {
@@ -75,7 +66,6 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
 
   const imageBuffer = await response.buffer();
 
-  // 2. Upload to Firebase Storage
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) {
     throw new Error(
@@ -84,7 +74,7 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   }
   const bucket = admin.storage().bucket(bucketName);
 
-  const extension = mediaType.split("/")[1] || "jpeg"; // E.g., 'image/jpeg' -> 'jpeg'
+  const extension = mediaType.split("/")[1] || "jpeg";
   const fileName = `whatsapp_media/${from.replace(
     /\D/g,
     ""
@@ -94,31 +84,22 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   await file.save(imageBuffer, {
     metadata: {
       contentType: mediaType,
-      cacheControl: "public, max-age=31536000", // Cache for 1 year
+      cacheControl: "public, max-age=31536000",
     },
   });
   
-  // 3. Make the file public and return its public URL
   await file.makePublic();
   
   return `https://storage.googleapis.com/${bucketName}/${fileName}`;
 }
 
-
-/**
- * Handles automated replies for appointment confirmation/cancellation.
- * @param {admin.firestore.Firestore} db The Firestore database instance.
- * @param {string} from The sender's phone number (e.g., 'whatsapp:+1...').
- * @param {string} body The text of the incoming message.
- * @returns {Promise<boolean>} True if the reply was handled as a command, false otherwise.
- */
 async function handleAutomatedReply(db, from, body) {
   const normalizedBody = body.toLowerCase().trim();
   const isConfirmation = normalizedBody.includes("confirmado");
   const isCancellation = normalizedBody.includes("cancelar");
 
   if (!isConfirmation && !isCancellation) {
-    return false; // Not a command we handle automatically
+    return false;
   }
   
   const phoneOnly = from.replace(/\D/g, "").slice(-10);
@@ -132,7 +113,7 @@ async function handleAutomatedReply(db, from, body) {
   const clientId = clientQuery.docs[0].id;
   
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Start of today
+  today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().split('T')[0];
 
   const reservationsRef = db.collection("reservas");
@@ -152,7 +133,6 @@ async function handleAutomatedReply(db, from, body) {
   const reservationDoc = reservationQuery.docs[0];
   const reservation = reservationDoc.data();
   
-  // Don't process already finalized states
   if (["Asiste", "Cancelado", "No asiste"].includes(reservation.estado)) {
       return false;
   }
@@ -169,26 +149,20 @@ async function handleAutomatedReply(db, from, body) {
       console.log(`Reservation ${reservationDoc.id} cancelled for client ${clientId}.`);
   }
 
-  return true; // Command was handled
+  return true;
 }
 
-
-/**
- * Saves a general incoming message to the Firestore database.
- */
 async function saveMessage(from, body, mediaUrl, mediaType) {
   const db = admin.firestore();
 
-  // First, try to handle it as an automated reply.
   if (body) {
     const wasHandled = await handleAutomatedReply(db, from, body);
     if (wasHandled) {
-      // If it was a confirmation/cancellation, we don't need to save it as a chat message.
       return; 
     }
   }
 
-  const conversationId = from; // e.g., 'whatsapp:+14155238886'
+  const conversationId = from;
   const conversationRef = db.collection("conversations").doc(conversationId);
 
   const messageData = {
@@ -221,7 +195,6 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
     }
   }
 
-  // Use a transaction to ensure atomicity
   await db.runTransaction(async (transaction) => {
     const convDoc = await transaction.get(conversationRef);
     const lastMessageText = body || `[${messageData.mediaType || "Archivo"}]`;
@@ -264,9 +237,6 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
   });
 }
 
-/**
- * Cloud Function to handle incoming Twilio webhook requests.
- */
 exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
     try {
       const {From, Body, MediaUrl0, MediaContentType0} = request.body;
@@ -417,7 +387,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
         console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
-        response.status(500).send("Webhook secret not configured.");
+        response.status(500).send("OK_BUT_SECRET_NOT_CONFIGURED"); // Respond with 500 to signal a server-side configuration issue.
         return;
     }
 
@@ -530,5 +500,3 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
-    

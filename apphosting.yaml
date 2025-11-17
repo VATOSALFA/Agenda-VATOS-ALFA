@@ -31,8 +31,12 @@ env:
     secret: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
   - variable: MERCADO_PAGO_ACCESS_TOKEN
     secret: MERCADO_PAGO_ACCESS_TOKEN
+    availability:
+      - RUNTIME
   - variable: MERCADO_PAGO_WEBHOOK_SECRET
     secret: MERCADO_PAGO_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
   # --- GEMINI CONFIG ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
@@ -46,10 +50,7 @@ env:
   # --- FIREBASE ADMIN SDK ---
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY
     secret: FIREBASE_SERVICE_ACCOUNT_KEY
-backend:
-  functions: "functions"
-  env:
-    - variable: MERCADO_PAGO_WEBHOOK_SECRET
-      secret: MERCADO_PAGO_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
 secretManagement:
   grantAccess: true

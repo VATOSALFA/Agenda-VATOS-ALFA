@@ -380,7 +380,6 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     }
 });
 
-
 exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
     console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
     
@@ -395,23 +394,29 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id'];
         
-        // The data object from Mercado Pago notification can be a stringified JSON.
-        // We need to parse it if it is.
-        let notificationData;
-        if (typeof request.body.data === 'string') {
+        // Robustly get dataId from either query (for payments) or body (for orders/simulations)
+        let dataId = request.query['data.id'];
+        let notificationData = request.body.data;
+
+        // The simulator might send data as a JSON string within the 'data' field.
+        if (typeof notificationData === 'string') {
             try {
-                notificationData = JSON.parse(request.body.data);
-            } catch (parseError) {
-                console.error("Error parsing request.body.data:", parseError);
-                response.status(400).send("Invalid format for data field.");
-                return;
+                notificationData = JSON.parse(notificationData);
+            } catch (e) {
+                console.error("Error parsing request.body.data:", e);
+                // The string is not a valid JSON. Treat it as a plain string if needed, or ignore.
+                // For this webhook, we expect a JSON object or a stringified JSON.
             }
-        } else {
-            notificationData = request.body.data;
         }
 
-        const dataId = request.query['data.id'] || notificationData?.id;
+        if (!dataId && notificationData?.id) {
+            dataId = notificationData.id;
+        }
         
+        console.log(`[Webhook] data.id found: ${dataId}`);
+        console.log(`[Webhook] x-signature found: ${xSignature}`);
+        console.log(`[Webhook] x-request-id found: ${xRequestId}`);
+
         if (!xSignature || !dataId) {
              console.warn("[Webhook] Webhook received without x-signature or data.id.");
              response.status(400).send("Missing required headers or data.id.");
@@ -431,18 +436,20 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
         
+        // Build the manifest according to Mercado Pago's documentation, handling optional parts.
         let manifest = `id:${String(dataId).toLowerCase()};`;
         if (xRequestId) {
            manifest += `request-id:${xRequestId};`;
         }
         manifest += `ts:${ts};`;
         
-        console.log(`[Webhook] Generated manifest for validation: ${manifest}`);
+        console.log(`[Webhook] Generated manifest: ${manifest}`);
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
+        // Signature validation
         if (sha !== v1) {
             console.warn("[Webhook] Signature validation failed. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
@@ -453,8 +460,9 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         
         const { body } = request;
 
-        if (body.action === 'order.processed' || (notificationData && notificationData.status === 'processed')) {
-             const externalReference = notificationData.external_reference;
+        // Process the notification based on its type
+        if (body.type === 'order' && body.action === 'order.processed') {
+             const externalReference = notificationData?.external_reference;
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 const ventaDoc = await ventaRef.get();
@@ -462,19 +470,43 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                     await ventaRef.update({
                         pago_estado: 'Pagado',
                         mercado_pago_status: 'processed',
-                        mercado_pago_id: notificationData.id,
+                        mercado_pago_id: notificationData?.id,
                     });
                     console.log(`[Webhook] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
                 } else {
                      console.log(`[Webhook] Sale with external_reference ${externalReference} not found.`);
                 }
             } else {
-                 console.log("[Webhook] Webhook received for processed order without external_reference.");
+                 console.log("[Webhook] Webhook received for processed order without external_reference in data object.");
+            }
+        } else if (body.type === 'payment' && (body.action === 'payment.updated' || body.action === 'payment.created')) {
+            console.log("[Webhook] Received 'payment' type webhook. Processing...");
+            const { accessToken } = await getMercadoPagoConfig();
+            const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const paymentData = await paymentResponse.json();
+            
+            if (paymentData.status === 'approved' && paymentData.external_reference) {
+                const ventaRef = admin.firestore().collection('ventas').doc(paymentData.external_reference);
+                const ventaDoc = await ventaRef.get();
+                if (ventaDoc.exists) {
+                    await ventaRef.update({
+                        pago_estado: 'Pagado',
+                        mercado_pago_status: 'approved',
+                        mercado_pago_id: paymentData.id,
+                        mercado_pago_order_id: paymentData.order?.id
+                    });
+                    console.log(`[Webhook] Updated sale ${paymentData.external_reference} to 'Pagado' via payment webhook.`);
+                }
+            } else {
+                console.log('[Webhook] Payment not approved or no external reference found.', paymentData);
             }
         }
     } catch (error) {
         console.error("[Webhook] Error processing Mercado Pago webhook:", error);
-        response.status(200).send("OK_WITH_ERROR"); // Respond 200 to prevent MP from retrying.
+        // Respond with 200 even on internal error to prevent MP from retrying.
+        response.status(200).send("OK_WITH_ERROR");
         return;
     }
     

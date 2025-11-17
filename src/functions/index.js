@@ -21,14 +21,14 @@ const getMercadoPagoConfig = async () => {
   const settingsDoc = await db.collection('configuracion').doc('pagos').get();
   
   if (!settingsDoc.exists) {
-    throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
+      throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
   }
   
   const settings = settingsDoc.data();
   const accessToken = settings?.mercadoPagoAccessToken;
   
   if (!accessToken) {
-    throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
+      throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
   }
   
   // Retorna el objeto de configuración del SDK y el token
@@ -296,19 +296,15 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  * =================================================================
  */
 
-// 1. Get Mercado Pago Terminals (CORRECCIÓN DE SINTAXIS)
 exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
   if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
 
   try {
-      // CORRECCIÓN: Usamos await para obtener el cliente, resolviendo la promesa
       const { client } = await getMercadoPagoConfig();
-      
       const point = new Point(client); 
       
-      // Llamada al método getDevices (o list). Usamos el objeto de parámetros vacío para el SDK.
       const devices = await point.getDevices({}); 
 
       return { success: true, devices: devices.devices || [] };
@@ -322,7 +318,6 @@ exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
 });
 
 
-// 2. Set Terminal to PDV Mode
 exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
   if (!auth) {
     throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
@@ -333,7 +328,6 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
   }
 
   try {
-    // CORRECCIÓN: Usamos await para obtener el cliente
     const { client } = await getMercadoPagoConfig();
     const point = new Point(client);
     const result = await point.changeDeviceOperatingMode({
@@ -351,12 +345,11 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
 });
 
 
-// 3. Create Mercado Pago Point Payment
 exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }
-    const { amount, terminalId, referenceId, payer, items } = data;
+    const { amount, terminalId, referenceId } = data;
 
     if (!amount || !terminalId || !referenceId) {
         throw new HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
@@ -366,45 +359,161 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
         const { accessToken } = await getMercadoPagoConfig();
 
         const orderData = {
+          type: "point",
           external_reference: referenceId,
-          title: "Venta en VATOS ALFA",
-          description: `Venta en VATOS ALFA Barber Shop`,
-          notification_url: `https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook`,
-          total_amount: amount,
-          items: items,
+          expiration_time: "PT15M", // 15 minutos para pagar
+          transactions: {
+              payments: [
+                  {
+                      amount: amount.toFixed(2).toString()
+                  }
+              ]
+          },
+          config: {
+              point: {
+                  terminal_id: terminalId,
+                  print_on_terminal: "no_ticket"
+              },
+              payment_method: {
+                  default_type: "credit_card"
+              }
+          },
+          description: `Venta en VATOS ALFA`,
         };
 
-        // CORRECCIÓN: Usamos el Access Token y el endpoint correcto de la API
-        const response = await fetch(`https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`, {
+        const response = await fetch('https://api.mercadopago.com/v1/orders', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`, // Usamos el token real
+            'Authorization': `Bearer ${accessToken}`,
+            'X-Idempotency-Key': uuidv4()
           },
-          body: JSON.stringify({
-              amount: amount,
-              additional_info: {
-                  external_reference: referenceId,
-                  print_on_terminal: true, // Corregido a true para imprimir ticket
-                  // MP Point API requiere estructura específica, enviamos solo los datos relevantes
-                  // Aquí se asume que los datos adicionales ya están en el payload.
-              }
-          })
+          body: JSON.stringify(orderData),
         });
 
-        const pointResult = await response.json();
+        const result = await response.json();
 
         if (!response.ok) {
-          console.error("Error response from Mercado Pago Point:", pointResult);
-          throw new HttpsError('internal', pointResult.message || 'Error al enviar la intención de pago a la terminal.');
+          console.error("Error response from Mercado Pago:", result);
+          throw new HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
         }
 
-        return { success: true, data: pointResult };
+        return { success: true, data: result };
     } catch(error) {
         console.error("Error creating payment order:", error);
-        if (error instanceof HttpsError) {
-             throw error;
+         if (error instanceof HttpsError) {
+            throw error;
         }
         throw new HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
     }
+});
+
+
+exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
+    console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
+    
+    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+    if (!secret) {
+        console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
+        response.status(500).send("Webhook secret not configured.");
+        return;
+    }
+
+    try {
+        const xSignature = request.headers['x-signature'];
+        const xRequestId = request.headers['x-request-id'];
+        
+        // The data.id comes from the query parameters for 'payment' notifications,
+        // but from body for 'order' notifications or simulations.
+        const dataId = request.query['data.id'] || request.body.data?.id;
+        
+        if (!xSignature || !dataId) {
+             console.warn("Webhook received without x-signature or data.id.");
+             response.status(400).send("Missing required headers or data.id.");
+             return;
+        }
+
+        const parts = xSignature.split(',');
+        const tsPart = parts.find(p => p.startsWith('ts='));
+        const v1Part = parts.find(p => p.startsWith('v1='));
+
+        if (!tsPart || !v1Part) {
+            console.warn("Invalid signature format");
+            response.status(400).send("Invalid signature format.");
+            return;
+        }
+        
+        const ts = tsPart.split('=')[1];
+        const v1 = v1Part.split('=')[1];
+        
+        let manifest = `id:${String(dataId).toLowerCase()};`;
+        if (xRequestId) {
+           manifest += `request-id:${xRequestId};`;
+        }
+        manifest += `ts:${ts};`;
+        
+        const hmac = crypto.createHmac('sha256', secret);
+        hmac.update(manifest);
+        const sha = hmac.digest('hex');
+
+        if (sha !== v1) {
+            console.warn("Webhook signature validation failed. Expected:", sha, "Got:", v1);
+            console.log("Manifest used:", manifest);
+            response.status(403).send("Invalid signature.");
+            return;
+        }
+        
+        console.log("Webhook signature validation successful.");
+        
+        const { body } = request;
+
+        if (body.type === 'order' && body.action === 'order.processed') {
+             const externalReference = body.data?.external_reference;
+             if (externalReference) {
+                const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+                const ventaDoc = await ventaRef.get();
+                if (ventaDoc.exists) {
+                    await ventaRef.update({
+                        pago_estado: 'Pagado',
+                        mercado_pago_status: 'processed',
+                        mercado_pago_id: body.data?.id
+                    });
+                    console.log(`Updated sale ${externalReference} to 'Pagado' via order webhook.`);
+                } else {
+                     console.log(`Sale with external_reference ${externalReference} not found.`);
+                }
+            } else {
+                 console.log("Webhook received for processed order without external_reference.");
+            }
+        } else if (body.type === 'payment') {
+            console.log("Received 'payment' type webhook. This is usually a fallback. Processing...");
+            const { accessToken } = await getMercadoPagoConfig();
+            const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const paymentData = await paymentResponse.json();
+            
+            if (paymentData.status === 'approved' && paymentData.external_reference) {
+                const ventaRef = admin.firestore().collection('ventas').doc(paymentData.external_reference);
+                const ventaDoc = await ventaRef.get();
+                if (ventaDoc.exists) {
+                    await ventaRef.update({
+                        pago_estado: 'Pagado',
+                        mercado_pago_status: 'approved',
+                        mercado_pago_id: paymentData.id,
+                        mercado_pago_order_id: paymentData.order.id
+                    });
+                    console.log(`Updated sale ${paymentData.external_reference} to 'Pagado' via payment webhook.`);
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Error processing Mercado Pago webhook:", error);
+        // Respond with 200 even on internal error to prevent MP from retrying.
+        response.status(200).send("OK_WITH_ERROR"); 
+        return;
+    }
+    
+    console.log("===================================================");
+    response.status(200).send("OK");
 });

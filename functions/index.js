@@ -440,11 +440,12 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
 
-        // The data.id comes from the query parameters, as per MP docs
-        const dataId = request.query['data.id'];
+        // The data.id comes from the query parameters for 'payment' notifications, but from body for 'order'
+        const dataId = request.query['data.id'] || request.body.data?.id;
+
         if (!dataId) {
-             console.warn("Webhook received without data.id in query params.");
-             response.status(400).send("Missing data.id in query params.");
+             console.warn("Webhook received without data.id in query params or body.");
+             response.status(400).send("Missing data.id.");
              return;
         }
         
@@ -464,8 +465,25 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         
         // Process the notification
         const { body } = request;
-        if (body.action === 'payment.updated' && body.data?.id) {
-            // It's a payment notification, we need to get the order to find our external_reference
+
+        // Handle 'order' type notifications
+        if (body.type === 'order' && body.action === 'order.processed') {
+             const externalReference = body.data?.external_reference;
+             if (externalReference) {
+                const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+                const ventaDoc = await ventaRef.get();
+                if (ventaDoc.exists) {
+                    await ventaRef.update({
+                        pago_estado: 'Pagado',
+                        mercado_pago_status: 'processed',
+                        mercado_pago_id: body.data?.id
+                    });
+                    console.log(`Updated sale ${externalReference} to 'Pagado' via order webhook.`);
+                }
+            }
+        }
+        // Handle 'payment' type notifications (fallback)
+        else if (body.type === 'payment' && body.action === 'payment.updated') {
             const { accessToken } = await getMercadoPagoConfig();
             const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -482,14 +500,13 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                         mercado_pago_id: paymentData.id,
                         mercado_pago_order_id: paymentData.order.id
                     });
-                    console.log(`Updated sale ${paymentData.external_reference} to 'Pagado'.`);
+                    console.log(`Updated sale ${paymentData.external_reference} to 'Pagado' via payment webhook.`);
                 }
             }
         }
     } catch (error) {
         console.error("Error processing Mercado Pago webhook:", error);
-        // Respond with 200 even on error to prevent MP from retrying indefinitely
-        response.status(200).send("OK_WITH_ERROR");
+        response.status(200).send("OK_WITH_ERROR"); // Respond with 200 even on error
         return;
     }
     
@@ -500,3 +517,4 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     
 
     
+

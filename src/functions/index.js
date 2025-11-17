@@ -378,7 +378,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
                   default_type: "credit_card"
               }
           },
-          description: `Venta en VATOS ALFA`,
+          description: `Venta en VATOS ALFA Barber Shop`,
         };
 
         const response = await fetch('https://api.mercadopago.com/v1/orders', {

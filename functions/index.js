@@ -349,7 +349,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }
-    const { amount, terminalId, referenceId } = data;
+    const { amount, terminalId, referenceId, payer, items } = data;
 
     if (!amount || !terminalId || !referenceId) {
         throw new HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
@@ -362,6 +362,8 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
           type: "point",
           external_reference: referenceId,
           expiration_time: "PT15M", // 15 minutos para pagar
+          payer: payer,
+          items: items,
           transactions: {
               payments: [
                   {
@@ -423,10 +425,14 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id'];
         
-        if (!xSignature || !xRequestId) {
-            console.warn("Webhook received without x-signature or x-request-id header.");
-            response.status(400).send("Missing required headers.");
-            return;
+        // The data.id comes from the query parameters for 'payment' notifications,
+        // but from body for 'order' notifications or simulations.
+        const dataId = request.query['data.id'] || request.body.data?.id;
+        
+        if (!xSignature || !dataId) {
+             console.warn("Webhook received without x-signature or data.id.");
+             response.status(400).send("Missing required headers or data.id.");
+             return;
         }
 
         const parts = xSignature.split(',');
@@ -434,23 +440,19 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const v1Part = parts.find(p => p.startsWith('v1='));
 
         if (!tsPart || !v1Part) {
-            throw new Error("Invalid signature format");
+            console.warn("Invalid signature format");
+            response.status(400).send("Invalid signature format.");
+            return;
         }
         
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
-
-        // The data.id comes from the query parameters for 'payment' notifications, but from body for 'order'
-        const dataId = request.query['data.id'] || request.body.data?.id;
-
-        if (!dataId) {
-             console.warn("Webhook received without data.id in query params or body.");
-             response.status(400).send("Missing data.id.");
-             return;
-        }
         
-        // Correct manifest construction
-        const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
+        let manifest = `id:${String(dataId).toLowerCase()};`;
+        if (xRequestId) {
+           manifest += `request-id:${xRequestId};`;
+        }
+        manifest += `ts:${ts};`;
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
@@ -458,15 +460,15 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
 
         if (sha !== v1) {
             console.warn("Webhook signature validation failed. Expected:", sha, "Got:", v1);
+            console.log("Manifest used:", manifest);
             response.status(403).send("Invalid signature.");
             return;
         }
+        
         console.log("Webhook signature validation successful.");
         
-        // Process the notification
         const { body } = request;
 
-        // Handle 'order' type notifications
         if (body.type === 'order' && body.action === 'order.processed') {
              const externalReference = body.data?.external_reference;
              if (externalReference) {
@@ -479,11 +481,14 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                         mercado_pago_id: body.data?.id
                     });
                     console.log(`Updated sale ${externalReference} to 'Pagado' via order webhook.`);
+                } else {
+                     console.log(`Sale with external_reference ${externalReference} not found.`);
                 }
+            } else {
+                 console.log("Webhook received for processed order without external_reference.");
             }
-        }
-        // Handle 'payment' type notifications (fallback)
-        else if (body.type === 'payment' && body.action === 'payment.updated') {
+        } else if (body.type === 'payment') {
+            console.log("Received 'payment' type webhook. This is usually a fallback. Processing...");
             const { accessToken } = await getMercadoPagoConfig();
             const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -506,15 +511,11 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         }
     } catch (error) {
         console.error("Error processing Mercado Pago webhook:", error);
-        response.status(200).send("OK_WITH_ERROR"); // Respond with 200 even on error
+        // Respond with 200 even on internal error to prevent MP from retrying.
+        response.status(200).send("OK_WITH_ERROR"); 
         return;
     }
     
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
-    
-
-    
-

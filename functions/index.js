@@ -41,13 +41,6 @@ const getMercadoPagoConfig = async () => {
  * =================================================================
  */
 
-/**
- * Downloads media from Twilio and uploads it to Firebase Storage.
- * @param {string} mediaUrl The private Twilio media URL.
- * @param {string} from The sender's phone number.
- * @param {string} mediaType The MIME type of the media.
- * @returns {Promise<string>} The public URL of the uploaded file in Firebase Storage.
- */
 async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -58,7 +51,6 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
     );
   }
 
-  // 1. Download from Twilio using Basic Authentication
   const twilioAuth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
   const response = await fetch(mediaUrl, {
     headers: {
@@ -74,7 +66,6 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
 
   const imageBuffer = await response.buffer();
 
-  // 2. Upload to Firebase Storage
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) {
     throw new Error(
@@ -83,7 +74,7 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   }
   const bucket = admin.storage().bucket(bucketName);
 
-  const extension = mediaType.split("/")[1] || "jpeg"; // E.g., 'image/jpeg' -> 'jpeg'
+  const extension = mediaType.split("/")[1] || "jpeg";
   const fileName = `whatsapp_media/${from.replace(
     /\D/g,
     ""
@@ -93,31 +84,22 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   await file.save(imageBuffer, {
     metadata: {
       contentType: mediaType,
-      cacheControl: "public, max-age=31536000", // Cache for 1 year
+      cacheControl: "public, max-age=31536000",
     },
   });
   
-  // 3. Make the file public and return its public URL
   await file.makePublic();
   
   return `https://storage.googleapis.com/${bucketName}/${fileName}`;
 }
 
-
-/**
- * Handles automated replies for appointment confirmation/cancellation.
- * @param {admin.firestore.Firestore} db The Firestore database instance.
- * @param {string} from The sender's phone number (e.g., 'whatsapp:+1...').
- * @param {string} body The text of the incoming message.
- * @returns {Promise<boolean>} True if the reply was handled as a command, false otherwise.
- */
 async function handleAutomatedReply(db, from, body) {
   const normalizedBody = body.toLowerCase().trim();
   const isConfirmation = normalizedBody.includes("confirmado");
   const isCancellation = normalizedBody.includes("cancelar");
 
   if (!isConfirmation && !isCancellation) {
-    return false; // Not a command we handle automatically
+    return false;
   }
   
   const phoneOnly = from.replace(/\D/g, "").slice(-10);
@@ -131,7 +113,7 @@ async function handleAutomatedReply(db, from, body) {
   const clientId = clientQuery.docs[0].id;
   
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Start of today
+  today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().split('T')[0];
 
   const reservationsRef = db.collection("reservas");
@@ -151,7 +133,6 @@ async function handleAutomatedReply(db, from, body) {
   const reservationDoc = reservationQuery.docs[0];
   const reservation = reservationDoc.data();
   
-  // Don't process already finalized states
   if (["Asiste", "Cancelado", "No asiste"].includes(reservation.estado)) {
       return false;
   }
@@ -168,26 +149,20 @@ async function handleAutomatedReply(db, from, body) {
       console.log(`Reservation ${reservationDoc.id} cancelled for client ${clientId}.`);
   }
 
-  return true; // Command was handled
+  return true;
 }
 
-
-/**
- * Saves a general incoming message to the Firestore database.
- */
 async function saveMessage(from, body, mediaUrl, mediaType) {
   const db = admin.firestore();
 
-  // First, try to handle it as an automated reply.
   if (body) {
     const wasHandled = await handleAutomatedReply(db, from, body);
     if (wasHandled) {
-      // If it was a confirmation/cancellation, we don't need to save it as a chat message.
       return; 
     }
   }
 
-  const conversationId = from; // e.g., 'whatsapp:+14155238886'
+  const conversationId = from;
   const conversationRef = db.collection("conversations").doc(conversationId);
 
   const messageData = {
@@ -220,7 +195,6 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
     }
   }
 
-  // Use a transaction to ensure atomicity
   await db.runTransaction(async (transaction) => {
     const convDoc = await transaction.get(conversationRef);
     const lastMessageText = body || `[${messageData.mediaType || "Archivo"}]`;
@@ -263,9 +237,6 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
   });
 }
 
-/**
- * Cloud Function to handle incoming Twilio webhook requests.
- */
 exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
     try {
       const {From, Body, MediaUrl0, MediaContentType0} = request.body;
@@ -416,25 +387,43 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
         console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
-        // Respond with 200 to prevent retries, but log the critical error.
-        response.status(200).send("OK_BUT_SECRET_NOT_CONFIGURED");
+        response.status(500).send("Webhook secret not configured."); // Respond with 500 to signal a server-side configuration issue.
         return;
     }
 
     try {
-        const xSignature = request.headers['x-signature'];
-        const xRequestId = request.headers['x-request-id']; // Optional
-        
-        // Robustly get dataId from either query (for payments) or body (for orders/simulations)
-        const dataId = request.query['data.id'] || request.body.data?.id;
-        
-        console.log(`[Webhook] data.id found: ${dataId}`);
-        console.log(`[Webhook] x-signature found: ${xSignature}`);
-        console.log(`[Webhook] x-request-id found: ${xRequestId}`);
+        console.log("Request Body:", JSON.stringify(request.body, null, 2));
+        console.log("Request Query:", JSON.stringify(request.query, null, 2));
 
-        if (!xSignature || !dataId) {
-             console.warn("[Webhook] Webhook received without x-signature or data.id.");
-             response.status(400).send("Missing required headers or data.id.");
+        const xSignature = request.headers['x-signature'];
+        const xRequestId = request.headers['x-request-id'];
+        
+        if (!xSignature) {
+             console.warn("[Webhook] Webhook received without x-signature header.");
+             response.status(400).send("Missing x-signature header.");
+             return;
+        }
+
+        // The data object from Mercado Pago notification can be a stringified JSON.
+        // We need to parse it if it is.
+        let notificationData;
+        if (typeof request.body.data === 'string') {
+            try {
+                notificationData = JSON.parse(request.body.data);
+            } catch (parseError) {
+                console.error("Error parsing request.body.data:", parseError);
+                response.status(400).send("Invalid format for data field.");
+                return;
+            }
+        } else {
+            notificationData = request.body.data;
+        }
+
+        const dataId = request.query['data.id'] || notificationData?.id;
+        
+        if (!dataId) {
+             console.warn("[Webhook] Webhook received without data.id.");
+             response.status(400).send("Missing data.id in query params or body.");
              return;
         }
 
@@ -451,21 +440,18 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
         
-        // Build the manifest according to Mercado Pago's documentation
-        // id:{data.id};request-id:{x-request-id};ts:{ts};
         let manifest = `id:${String(dataId).toLowerCase()};`;
         if (xRequestId) {
            manifest += `request-id:${xRequestId};`;
         }
         manifest += `ts:${ts};`;
         
-        console.log(`[Webhook] Generated manifest: ${manifest}`);
+        console.log(`[Webhook] Generated manifest for validation: ${manifest}`);
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
-        // Signature validation
         if (sha !== v1) {
             console.warn("[Webhook] Signature validation failed. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
@@ -476,9 +462,8 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         
         const { body } = request;
 
-        // Process the notification based on its type
-        if (body.type === 'order' && body.action === 'order.processed') {
-             const externalReference = body.data?.external_reference;
+        if (body.action === 'order.processed' || (body.data && notificationData.status === 'processed')) {
+             const externalReference = notificationData.external_reference;
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 const ventaDoc = await ventaRef.get();
@@ -486,7 +471,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                     await ventaRef.update({
                         pago_estado: 'Pagado',
                         mercado_pago_status: 'processed',
-                        mercado_pago_id: body.data?.id
+                        mercado_pago_id: notificationData.id,
                     });
                     console.log(`[Webhook] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
                 } else {
@@ -495,40 +480,13 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
             } else {
                  console.log("[Webhook] Webhook received for processed order without external_reference.");
             }
-        } else if (body.type === 'payment' && (body.action === 'payment.updated' || body.action === 'payment.created')) {
-            console.log("[Webhook] Received 'payment' type webhook. Processing...");
-            const { accessToken } = await getMercadoPagoConfig();
-            const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            const paymentData = await paymentResponse.json();
-            
-            if (paymentData.status === 'approved' && paymentData.external_reference) {
-                const ventaRef = admin.firestore().collection('ventas').doc(paymentData.external_reference);
-                const ventaDoc = await ventaRef.get();
-                if (ventaDoc.exists) {
-                    await ventaRef.update({
-                        pago_estado: 'Pagado',
-                        mercado_pago_status: 'approved',
-                        mercado_pago_id: paymentData.id,
-                        mercado_pago_order_id: paymentData.order?.id
-                    });
-                    console.log(`[Webhook] Updated sale ${paymentData.external_reference} to 'Pagado' via payment webhook.`);
-                }
-            } else {
-                console.log('[Webhook] Payment not approved or no external reference found.', paymentData);
-            }
         }
     } catch (error) {
         console.error("[Webhook] Error processing Mercado Pago webhook:", error);
-        // Respond with 200 even on internal error to prevent MP from retrying.
-        // Log the error for debugging.
-        response.status(200).send("OK_WITH_ERROR"); 
+        response.status(200).send("OK_WITH_ERROR"); // Respond 200 to prevent MP from retrying.
         return;
     }
     
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
-    

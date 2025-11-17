@@ -387,23 +387,14 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
         console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
-        response.status(500).send("Webhook secret not configured."); // Respond with 500 to signal a server-side configuration issue.
+        response.status(500).send("Webhook secret not configured.");
         return;
     }
 
     try {
-        console.log("Request Body:", JSON.stringify(request.body, null, 2));
-        console.log("Request Query:", JSON.stringify(request.query, null, 2));
-
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id'];
         
-        if (!xSignature) {
-             console.warn("[Webhook] Webhook received without x-signature header.");
-             response.status(400).send("Missing x-signature header.");
-             return;
-        }
-
         // The data object from Mercado Pago notification can be a stringified JSON.
         // We need to parse it if it is.
         let notificationData;
@@ -421,9 +412,9 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
 
         const dataId = request.query['data.id'] || notificationData?.id;
         
-        if (!dataId) {
-             console.warn("[Webhook] Webhook received without data.id.");
-             response.status(400).send("Missing data.id in query params or body.");
+        if (!xSignature || !dataId) {
+             console.warn("[Webhook] Webhook received without x-signature or data.id.");
+             response.status(400).send("Missing required headers or data.id.");
              return;
         }
 
@@ -462,7 +453,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         
         const { body } = request;
 
-        if (body.action === 'order.processed' || (body.data && notificationData.status === 'processed')) {
+        if (body.action === 'order.processed' || (notificationData && notificationData.status === 'processed')) {
              const externalReference = notificationData.external_reference;
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);

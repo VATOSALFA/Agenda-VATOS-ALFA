@@ -1,4 +1,3 @@
-
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -396,18 +395,17 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         // 2. Extract Headers and Query Params for Validation
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id']; // Optional
-        const dataIdFromQuery = request.query['data.id']; 
+        const dataIdFromQuery = request.query['data.id']; // For signature validation as per docs
 
         if (!xSignature) {
             console.warn("Webhook received without 'x-signature' header. Rejecting.");
             response.status(400).send("Missing 'x-signature' header.");
             return;
         }
-
-        // The 'data.id' for signature comes from query params.
-        // It might be missing in some simulations, but should be present in real notifications.
+        
+        // This ID from the query is REQUIRED for signature validation
         if (!dataIdFromQuery) {
-            console.warn("Webhook received without 'data.id' in query params. This might be a simulation that cannot be validated.");
+            console.warn("Webhook received without 'data.id' in query params. This might be a simulation that cannot be validated or an invalid request.");
             response.status(400).send("Missing 'data.id' in query params for signature validation.");
             return;
         }
@@ -427,6 +425,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const v1 = v1Part.split('=')[1];
         
         // 4. Construct the Manifest String for HMAC Validation
+        // Template: id:[data.id_url];request-id:[x-request-id_header];ts:[ts_header];
         let manifest = `id:${String(dataIdFromQuery).toLowerCase()};`;
         if (xRequestId) {
            manifest += `request-id:${xRequestId};`;
@@ -451,6 +450,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         // 6. Process the Notification Body
         const { body } = request;
 
+        // Ensure body.data is an object, parsing if it's a string (handles both simulations and real webhooks)
         let notificationData = body.data;
         if (typeof notificationData === 'string') {
             try {
@@ -481,12 +481,13 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                  console.log("[Webhook] Webhook received for processed order without external_reference in data object.");
             }
         } else if (body.type === 'payment') {
-            console.log("[Webhook] 'payment' type webhook received. Ignoring as we process 'order'.");
+            console.log("[Webhook] 'payment' type webhook received. Ignoring as we process 'order' notifications for Point terminals.");
         } else {
             console.log(`[Webhook] Received unhandled action/type: ${body.action}/${body.type}`);
         }
     } catch (error) {
         console.error("[Webhook] FATAL Error processing Mercado Pago webhook:", error);
+        // Respond with 200 to prevent retries, but log the error for debugging.
         response.status(200).send("OK_WITH_ERROR");
         return;
     }
@@ -494,5 +495,3 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
-    

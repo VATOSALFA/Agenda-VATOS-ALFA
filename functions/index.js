@@ -1,5 +1,4 @@
 
-
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -417,19 +416,24 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
         console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
-        response.status(500).send("Webhook secret not configured.");
+        // Respond with 200 to prevent retries, but log the critical error.
+        response.status(200).send("OK_BUT_SECRET_NOT_CONFIGURED");
         return;
     }
 
     try {
         const xSignature = request.headers['x-signature'];
-        const xRequestId = request.headers['x-request-id'];
+        const xRequestId = request.headers['x-request-id']; // Optional
         
         // Robustly get dataId from either query (for payments) or body (for orders/simulations)
         const dataId = request.query['data.id'] || request.body.data?.id;
         
+        console.log(`[Webhook] data.id found: ${dataId}`);
+        console.log(`[Webhook] x-signature found: ${xSignature}`);
+        console.log(`[Webhook] x-request-id found: ${xRequestId}`);
+
         if (!xSignature || !dataId) {
-             console.warn("Webhook received without x-signature or data.id.");
+             console.warn("[Webhook] Webhook received without x-signature or data.id.");
              response.status(400).send("Missing required headers or data.id.");
              return;
         }
@@ -439,7 +443,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const v1Part = parts.find(p => p.startsWith('v1='));
 
         if (!tsPart || !v1Part) {
-            console.warn("Invalid signature format");
+            console.warn("[Webhook] Invalid signature format");
             response.status(400).send("Invalid signature format.");
             return;
         }
@@ -450,10 +454,12 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         // Build the manifest according to Mercado Pago's documentation
         // id:{data.id};request-id:{x-request-id};ts:{ts};
         let manifest = `id:${String(dataId).toLowerCase()};`;
-        if (xRequestId) { // request-id is optional
+        if (xRequestId) {
            manifest += `request-id:${xRequestId};`;
         }
         manifest += `ts:${ts};`;
+        
+        console.log(`[Webhook] Generated manifest: ${manifest}`);
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
@@ -461,13 +467,12 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
 
         // Signature validation
         if (sha !== v1) {
-            console.warn("Webhook signature validation failed. Expected:", sha, "Got:", v1);
-            console.log("Manifest used:", manifest);
+            console.warn("[Webhook] Signature validation failed. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
         
-        console.log("Webhook signature validation successful.");
+        console.log("[Webhook] Signature validation successful.");
         
         const { body } = request;
 
@@ -483,15 +488,15 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                         mercado_pago_status: 'processed',
                         mercado_pago_id: body.data?.id
                     });
-                    console.log(`Updated sale ${externalReference} to 'Pagado' via order webhook.`);
+                    console.log(`[Webhook] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
                 } else {
-                     console.log(`Sale with external_reference ${externalReference} not found.`);
+                     console.log(`[Webhook] Sale with external_reference ${externalReference} not found.`);
                 }
             } else {
-                 console.log("Webhook received for processed order without external_reference.");
+                 console.log("[Webhook] Webhook received for processed order without external_reference.");
             }
         } else if (body.type === 'payment' && (body.action === 'payment.updated' || body.action === 'payment.created')) {
-            console.log("Received 'payment' type webhook. Processing...");
+            console.log("[Webhook] Received 'payment' type webhook. Processing...");
             const { accessToken } = await getMercadoPagoConfig();
             const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -508,14 +513,14 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                         mercado_pago_id: paymentData.id,
                         mercado_pago_order_id: paymentData.order?.id
                     });
-                    console.log(`Updated sale ${paymentData.external_reference} to 'Pagado' via payment webhook.`);
+                    console.log(`[Webhook] Updated sale ${paymentData.external_reference} to 'Pagado' via payment webhook.`);
                 }
             } else {
-                console.log('Payment not approved or no external reference found.', paymentData);
+                console.log('[Webhook] Payment not approved or no external reference found.', paymentData);
             }
         }
     } catch (error) {
-        console.error("Error processing Mercado Pago webhook:", error);
+        console.error("[Webhook] Error processing Mercado Pago webhook:", error);
         // Respond with 200 even on internal error to prevent MP from retrying.
         // Log the error for debugging.
         response.status(200).send("OK_WITH_ERROR"); 
@@ -525,3 +530,5 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
+
+    

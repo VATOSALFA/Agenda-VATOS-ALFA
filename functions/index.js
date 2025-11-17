@@ -394,33 +394,15 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id'];
         
-        let dataId = request.query['data.id'];
+        // El 'data.id' para la firma viene de la URL de la notificación.
+        const dataIdForSignature = request.query['data.id'];
         
-        // CORRECCIÓN: Si `data` es un string, parsearlo.
-        let notificationData = request.body.data;
-        if (typeof notificationData === 'string') {
-            try {
-                notificationData = JSON.parse(notificationData);
-            } catch (e) {
-                console.error("Error parsing request.body.data, it's not valid JSON:", e.message);
-                // Si no es un JSON válido, no podemos continuar.
-                response.status(400).send("Invalid format for 'data' field in body.");
-                return;
-            }
-        }
-        
-        // Si data.id no vino en la query, lo tomamos del body.
-        if (!dataId && notificationData?.id) {
-            dataId = notificationData.id;
-        }
-        
-        console.log(`[Webhook] data.id found: ${dataId}`);
-        console.log(`[Webhook] x-signature found: ${xSignature}`);
-        console.log(`[Webhook] x-request-id found: ${xRequestId}`);
+        console.log(`[Webhook] Signature data.id from query: ${dataIdForSignature}`);
+        console.log(`[Webhook] x-signature header: ${xSignature}`);
 
-        if (!xSignature || !dataId) {
-             console.warn("[Webhook] Webhook received without x-signature or data.id.");
-             response.status(400).send("Missing required headers or data.id.");
+        if (!xSignature || !dataIdForSignature) {
+             console.warn("[Webhook] Webhook received without x-signature or data.id in query.");
+             response.status(400).send("Missing required headers or data.id in query.");
              return;
         }
 
@@ -437,33 +419,44 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
         
-        // Construir el manifest según la documentación, manejando el `x-request-id` opcional.
-        let manifest = `id:${String(dataId).toLowerCase()};`;
+        // Construcción del manifest según la documentación
+        let manifest = `id:${String(dataIdForSignature).toLowerCase()};`;
         if (xRequestId) {
            manifest += `request-id:${xRequestId};`;
         }
         manifest += `ts:${ts};`;
         
-        console.log(`[Webhook] Generated manifest: ${manifest}`);
+        console.log(`[Webhook] Generated manifest for signature: ${manifest}`);
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
-        // Signature validation
+        // Validación de la firma
         if (sha !== v1) {
-            console.warn("[Webhook] Signature validation failed. Expected:", sha, "Got:", v1);
+            console.warn("[Webhook] Signature validation FAILED. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
         
-        console.log("[Webhook] Signature validation successful.");
+        console.log("[Webhook] Signature validation SUCCESSFUL.");
         
         const { body } = request;
 
         // Procesar la notificación de la orden
         if (body.type === 'order' && body.action === 'order.processed') {
-             // CORRECCIÓN: La external_reference está DENTRO del objeto `data`.
+             // IMPORTANTE: El 'data' puede ser un string o un objeto. Hay que manejar ambos.
+             let notificationData = body.data;
+             if (typeof notificationData === 'string') {
+                try {
+                    notificationData = JSON.parse(notificationData);
+                } catch (e) {
+                    console.error("Error parsing request.body.data, it's not valid JSON:", e.message);
+                    response.status(400).send("Invalid format for 'data' field in body.");
+                    return;
+                }
+            }
+            
              const externalReference = notificationData?.external_reference;
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
@@ -485,8 +478,8 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
             console.log("[Webhook] 'payment' type webhook received. Ignoring as we process 'order'.");
         }
     } catch (error) {
-        console.error("[Webhook] Error processing Mercado Pago webhook:", error);
-        // Responde 200 incluso con error para evitar que MP reintente.
+        console.error("[Webhook] FATAL Error processing Mercado Pago webhook:", error);
+        // Respondemos 200 OK para evitar que MP reintente.
         response.status(200).send("OK_WITH_ERROR");
         return;
     }
@@ -494,5 +487,4 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
     

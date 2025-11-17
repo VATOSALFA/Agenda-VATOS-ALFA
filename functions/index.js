@@ -383,35 +383,42 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
 exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
     console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
     
+    // 1. Get the Secret
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
-        console.error("MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
+        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
         response.status(500).send("Webhook secret not configured.");
         return;
     }
+    console.log("Secret found. Proceeding with validation.");
 
     try {
+        // 2. Extract Headers and Query Params for Validation
         const xSignature = request.headers['x-signature'];
-        const xRequestId = request.headers['x-request-id'];
-        
-        // El 'data.id' para la firma viene de la URL de la notificación.
-        const dataIdForSignature = request.query['data.id'];
-        
-        console.log(`[Webhook] Signature data.id from query: ${dataIdForSignature}`);
-        console.log(`[Webhook] x-signature header: ${xSignature}`);
+        const xRequestId = request.headers['x-request-id']; // Optional
+        const dataIdFromQuery = request.query['data.id']; 
 
-        if (!xSignature || !dataIdForSignature) {
-             console.warn("[Webhook] Webhook received without x-signature or data.id in query.");
-             response.status(400).send("Missing required headers or data.id in query.");
-             return;
+        if (!xSignature) {
+            console.warn("Webhook received without 'x-signature' header. Rejecting.");
+            response.status(400).send("Missing 'x-signature' header.");
+            return;
         }
 
+        // The 'data.id' for signature comes from query params.
+        // It might be missing in some simulations, but should be present in real notifications.
+        if (!dataIdFromQuery) {
+            console.warn("Webhook received without 'data.id' in query params. This might be a simulation that cannot be validated.");
+            response.status(400).send("Missing 'data.id' in query params for signature validation.");
+            return;
+        }
+
+        // 3. Parse the Signature Header
         const parts = xSignature.split(',');
         const tsPart = parts.find(p => p.startsWith('ts='));
         const v1Part = parts.find(p => p.startsWith('v1='));
 
         if (!tsPart || !v1Part) {
-            console.warn("[Webhook] Invalid signature format");
+            console.warn("Invalid 'x-signature' format. Rejecting.");
             response.status(400).send("Invalid signature format.");
             return;
         }
@@ -419,8 +426,8 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
         
-        // Construcción del manifest según la documentación
-        let manifest = `id:${String(dataIdForSignature).toLowerCase()};`;
+        // 4. Construct the Manifest String for HMAC Validation
+        let manifest = `id:${String(dataIdFromQuery).toLowerCase()};`;
         if (xRequestId) {
            manifest += `request-id:${xRequestId};`;
         }
@@ -428,35 +435,34 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         
         console.log(`[Webhook] Generated manifest for signature: ${manifest}`);
         
+        // 5. Calculate and Validate the HMAC
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
-        // Validación de la firma
         if (sha !== v1) {
-            console.warn("[Webhook] Signature validation FAILED. Expected:", sha, "Got:", v1);
+            console.warn("[Webhook] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
         
         console.log("[Webhook] Signature validation SUCCESSFUL.");
         
+        // 6. Process the Notification Body
         const { body } = request;
 
-        // Procesar la notificación de la orden
-        if (body.type === 'order' && body.action === 'order.processed') {
-             // IMPORTANTE: El 'data' puede ser un string o un objeto. Hay que manejar ambos.
-             let notificationData = body.data;
-             if (typeof notificationData === 'string') {
-                try {
-                    notificationData = JSON.parse(notificationData);
-                } catch (e) {
-                    console.error("Error parsing request.body.data, it's not valid JSON:", e.message);
-                    response.status(400).send("Invalid format for 'data' field in body.");
-                    return;
-                }
+        let notificationData = body.data;
+        if (typeof notificationData === 'string') {
+            try {
+                notificationData = JSON.parse(notificationData);
+            } catch (e) {
+                console.error("Error parsing request.body.data, it's not valid JSON:", e.message);
+                response.status(400).send("Invalid format for 'data' field in body.");
+                return;
             }
-            
+        }
+        
+        if (body.type === 'order' && body.action === 'order.processed') {
              const externalReference = notificationData?.external_reference;
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
@@ -476,10 +482,11 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
             }
         } else if (body.type === 'payment') {
             console.log("[Webhook] 'payment' type webhook received. Ignoring as we process 'order'.");
+        } else {
+            console.log(`[Webhook] Received unhandled action/type: ${body.action}/${body.type}`);
         }
     } catch (error) {
         console.error("[Webhook] FATAL Error processing Mercado Pago webhook:", error);
-        // Respondemos 200 OK para evitar que MP reintente.
         response.status(200).send("OK_WITH_ERROR");
         return;
     }
@@ -487,4 +494,5 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
+
     

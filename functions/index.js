@@ -1,3 +1,4 @@
+
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -380,43 +381,39 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
 });
 
 exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
-    console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
-    // 1. Get the Secret
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
-        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured.");
+        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured. Check App Hosting backend environment variables.");
         response.status(500).send("Webhook secret not configured.");
         return;
     }
-    console.log("Secret found. Proceeding with validation.");
+    console.log("[v4] Secret found. Proceeding with validation.");
 
     try {
-        // 2. Extract Headers and Query Params for Validation
         const xSignature = request.headers['x-signature'];
-        const xRequestId = request.headers['x-request-id']; // Optional
-        const dataIdFromQuery = request.query['data.id']; // For signature validation as per docs
+        const xRequestId = request.headers['x-request-id']; 
+        const dataIdFromQuery = request.query['data.id'];
 
         if (!xSignature) {
-            console.warn("Webhook received without 'x-signature' header. Rejecting.");
+            console.warn("[v4] Webhook received without 'x-signature' header. Rejecting.");
             response.status(400).send("Missing 'x-signature' header.");
             return;
         }
         
-        // This ID from the query is REQUIRED for signature validation
         if (!dataIdFromQuery) {
-            console.warn("Webhook received without 'data.id' in query params. This might be a simulation that cannot be validated or an invalid request.");
+            console.warn("[v4] Webhook received without 'data.id' in query params for signature validation.");
             response.status(400).send("Missing 'data.id' in query params for signature validation.");
             return;
         }
 
-        // 3. Parse the Signature Header
         const parts = xSignature.split(',');
         const tsPart = parts.find(p => p.startsWith('ts='));
         const v1Part = parts.find(p => p.startsWith('v1='));
 
         if (!tsPart || !v1Part) {
-            console.warn("Invalid 'x-signature' format. Rejecting.");
+            console.warn("[v4] Invalid 'x-signature' format. Rejecting.");
             response.status(400).send("Invalid signature format.");
             return;
         }
@@ -424,39 +421,37 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
         
-        // 4. Construct the Manifest String for HMAC Validation
-        // Template: id:[data.id_url];request-id:[x-request-id_header];ts:[ts_header];
-        let manifest = `id:${String(dataIdFromQuery).toLowerCase()};`;
+        const manifestParts = [
+            `id:${String(dataIdFromQuery).toLowerCase()}`,
+            `ts:${ts}`
+        ];
         if (xRequestId) {
-           manifest += `request-id:${xRequestId};`;
+           manifestParts.splice(1, 0, `request-id:${xRequestId}`);
         }
-        manifest += `ts:${ts};`;
+        const manifest = manifestParts.join(';') + ';';
         
-        console.log(`[Webhook] Generated manifest for signature: ${manifest}`);
+        console.log(`[v4] Generated manifest for signature: ${manifest}`);
         
-        // 5. Calculate and Validate the HMAC
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
         if (sha !== v1) {
-            console.warn("[Webhook] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
+            console.warn("[v4] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
         
-        console.log("[Webhook] Signature validation SUCCESSFUL.");
+        console.log("[v4] Signature validation SUCCESSFUL.");
         
-        // 6. Process the Notification Body
         const { body } = request;
-
-        // Ensure body.data is an object, parsing if it's a string (handles both simulations and real webhooks)
+        
         let notificationData = body.data;
         if (typeof notificationData === 'string') {
             try {
                 notificationData = JSON.parse(notificationData);
             } catch (e) {
-                console.error("Error parsing request.body.data, it's not valid JSON:", e.message);
+                console.error("[v4] Error parsing request.body.data, it's not valid JSON:", e.message);
                 response.status(400).send("Invalid format for 'data' field in body.");
                 return;
             }
@@ -473,21 +468,20 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
                         mercado_pago_status: 'processed',
                         mercado_pago_id: notificationData?.id,
                     });
-                    console.log(`[Webhook] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
+                    console.log(`[v4] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
                 } else {
-                     console.log(`[Webhook] Sale with external_reference ${externalReference} not found.`);
+                     console.log(`[v4] Sale with external_reference ${externalReference} not found.`);
                 }
             } else {
-                 console.log("[Webhook] Webhook received for processed order without external_reference in data object.");
+                 console.log("[v4] Webhook received for processed order without external_reference in data object.");
             }
         } else if (body.type === 'payment') {
-            console.log("[Webhook] 'payment' type webhook received. Ignoring as we process 'order' notifications for Point terminals.");
+            console.log("[v4] 'payment' type webhook received. Ignoring as we process 'order' notifications for Point terminals.");
         } else {
-            console.log(`[Webhook] Received unhandled action/type: ${body.action}/${body.type}`);
+            console.log(`[v4] Received unhandled action/type: ${body.action}/${body.type}`);
         }
     } catch (error) {
-        console.error("[Webhook] FATAL Error processing Mercado Pago webhook:", error);
-        // Respond with 200 to prevent retries, but log the error for debugging.
+        console.error("[v4] FATAL Error processing Mercado Pago webhook:", error);
         response.status(200).send("OK_WITH_ERROR");
         return;
     }

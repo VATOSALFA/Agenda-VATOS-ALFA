@@ -5,12 +5,26 @@ run:
     - npm run build
   start:
     - next start
+backend:
+  id: functions
+  env:
+    - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+      secret: FIREBASE_SERVICE_ACCOUNT_KEY
+    - variable: TWILIO_ACCOUNT_SID
+      secret: TWILIO_ACCOUNT_SID
+    - variable: TWILIO_AUTH_TOKEN
+      secret: TWILIO_AUTH_TOKEN
+    - variable: MERCADO_PAGO_ACCESS_TOKEN
+      secret: MERCADO_PAGO_ACCESS_TOKEN
+    - variable: MERCADO_PAGO_WEBHOOK_SECRET
+      secret: MERCADO_PAGO_WEBHOOK_SECRET
 runConfig:
   minInstances: 0
   maxInstances: 2
   cpu: 1
   memoryMiB: 512
 env:
+  # Variables de entorno para el frontend (Next.js)
   # --- FIREBASE PROJECT CONFIG ---
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     secret: NEXT_PUBLIC_FIREBASE_API_KEY
@@ -29,32 +43,11 @@ env:
   # --- MERCADO PAGO CONFIG ---
   - variable: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
     secret: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
-  - variable: MERCADO_PAGO_ACCESS_TOKEN
-    secret: MERCADO_PAGO_ACCESS_TOKEN
-    availability:
-      - RUNTIME
-  - variable: MERCADO_PAGO_WEBHOOK_SECRET
-    secret: MERCADO_PAGO_WEBHOOK_SECRET
-    availability:
-      - RUNTIME
   # --- GEMINI CONFIG ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
   # --- TWILIO CONFIG ---
-  - variable: TWILIO_ACCOUNT_SID
-    secret: TWILIO_ACCOUNT_SID
-    availability:
-      - RUNTIME
-  - variable: TWILIO_AUTH_TOKEN
-    secret: TWILIO_AUTH_TOKEN
-    availability:
-      - RUNTIME
   - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
-  # --- FIREBASE ADMIN SDK ---
-  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
-    secret: FIREBASE_SERVICE_ACCOUNT_KEY
-    availability:
-      - RUNTIME
 secretManagement:
   grantAccess: true

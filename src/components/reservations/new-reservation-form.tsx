@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
-import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local } from '@/lib/types';
+import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
@@ -291,7 +291,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
-        let fecha = new Date();
+        let fecha: Date = new Date();
         if (typeof initialData.fecha === 'string') {
             const dateParts = initialData.fecha.split('-').map(Number);
             if (dateParts.length === 3) {
@@ -308,7 +308,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         
         let itemsToSet;
         if(isEditMode && initialData.items && services.length > 0) {
-            itemsToSet = initialData.items.map(i => ({
+            itemsToSet = initialData.items.map((i: SaleItemType) => ({
                 servicio: services.find(s => s.name === i.servicio)?.id || '',
                 barbero_id: i.barbero_id || ''
             }));
@@ -798,4 +798,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-

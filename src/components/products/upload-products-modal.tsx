@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -66,7 +67,9 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
           const getIndex = (name: string) => headers.indexOf(name);
 
-          const data: ParsedProduct[] = json.slice(1).map((row: any[]) => ({
+          const data: ParsedProduct[] = json.slice(1).map((row: any[]) => {
+              const commissionTypeFromSheet = String(row[getIndex('comision de venta (tipo)')]);
+              return {
                 nombre: row[getIndex('nombre')] || '',
                 barcode: row[getIndex('codigo de barras')] ? String(row[getIndex('codigo de barras')]) : undefined,
                 brand_id: row[getIndex('marca')] || '',
@@ -78,14 +81,15 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
                 internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
                 commission: {
                     value: Number(row[getIndex('comision de venta (valor)')]) || 0,
-                    type: String(row[getIndex('comision de venta (tipo)')]) === '$' ? '$' : '%'
+                    type: commissionTypeFromSheet === '$' ? '$' : '%'
                 },
                 includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
                 description: row[getIndex('descripcion')] || undefined,
                 stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,
                 notification_email: row[getIndex('email para notificaciones')] || undefined,
                 images: row[getIndex('imagenes')] ? String(row[getIndex('imagenes')]).split(',').map(s => s.trim()) : []
-          })).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
+              }
+          }).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
 
           if (data.length === 0) {
             toast({ variant: 'destructive', title: 'No se encontraron datos válidos', description: 'Revisa el contenido del archivo y asegúrate de que los datos requeridos estén presentes.' });

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -298,7 +297,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             if (typeof rawDate === 'string') {
                 fecha = parseISO(rawDate);
             } else if (typeof rawDate === 'object' && rawDate !== null && 'seconds' in rawDate) {
-                 // Firestore Timestamp
+                // Firestore Timestamp
                 fecha = new Date((rawDate as any).seconds * 1000);
             } else if (rawDate instanceof Date) {
                 // JavaScript Date object
@@ -806,4 +805,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   );
 }
 
-    

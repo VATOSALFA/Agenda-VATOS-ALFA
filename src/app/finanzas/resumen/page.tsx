@@ -9,10 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Edit, Save, Loader2, TrendingDown } from 'lucide-react';
 import { AddDepositoModal } from '@/components/finanzas/add-deposito-modal';
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { Input } from '@/components/ui/input';
+import { Timestamp } from 'firebase/firestore';
 
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
@@ -67,7 +68,7 @@ export default function FinanzasResumenPage() {
         });
 
         const allEgresos: { fecha: Date; monto: number }[] = [
-            ...egresos.map(e => ({ ...e, fecha: e.fecha.toDate() })),
+            ...egresos.map(e => ({ ...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : e.fecha })),
             ...sales.flatMap(sale => {
                 const saleDate = sale.fecha_hora_venta.toDate();
                 return sale.items?.map(item => {

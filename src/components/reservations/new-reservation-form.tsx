@@ -289,73 +289,77 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return allItemsValid;
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
 
-    useEffect(() => {
-        if (initialData && form && services.length > 0) {
-            let fecha: Date = new Date();
-            const rawDate = initialData.fecha;
-            
-            if (rawDate) {
-              if (typeof rawDate === 'string') {
-                  fecha = parseISO(rawDate);
-              } else if (typeof rawDate === 'object' && rawDate !== null && 'seconds' in rawDate) {
-                  fecha = new Date((rawDate as any).seconds * 1000);
-              } else if (rawDate instanceof Date) {
-                  fecha = rawDate;
-              }
+  useEffect(() => {
+    if (initialData && form && services.length > 0) {
+        let fecha: Date = new Date();
+        const rawDate = initialData.fecha;
+        
+        if (rawDate) {
+            if (typeof rawDate === 'string') {
+                fecha = parseISO(rawDate);
+            } else if (typeof rawDate === 'object' && rawDate !== null) {
+                if ('seconds' in rawDate) {
+                    // Firestore Timestamp
+                    fecha = new Date((rawDate as any).seconds * 1000);
+                } else if (rawDate instanceof Date) {
+                    // JavaScript Date object
+                    fecha = rawDate;
+                }
             }
-
-            const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
-            const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
-            
-            let itemsToSet: { servicio: string; barbero_id: string; }[] = [];
-            if(isEditMode && initialData.items && Array.isArray(initialData.items) && services.length > 0) {
-                itemsToSet = initialData.items.map((i: SaleItemType) => {
-                    const service = services.find(s => s.name === i.servicio || s.name === i.nombre);
-                    return {
-                        servicio: service?.id || '',
-                        barbero_id: i.barbero_id || ''
-                    };
-                });
-            } else {
-                itemsToSet = [{ 
-                    servicio: '', 
-                    barbero_id: (initialData as any).barbero_id || '' 
-                }];
-            }
-            
-            form.reset({
-                ...initialData,
-                cliente_id: initialData.cliente_id,
-                items: itemsToSet,
-                fecha,
-                hora_inicio_hora: startHour,
-                hora_inicio_minuto: startMinute,
-                hora_fin_hora: endHour,
-                hora_fin_minuto: endMinute,
-                estado: initialData.estado,
-                precio: initialData.precio || 0,
-                notas: initialData.notas || '',
-                nota_interna: initialData.nota_interna || '',
-                notifications: initialData.notifications || {
-                  whatsapp_notification: true,
-                  whatsapp_reminder: true
-                },
-                local_id: initialData.local_id
-            });
-        } else if (isOpen) {
-            form.reset({
-                notas: '',
-                nota_interna: '',
-                estado: 'Reservado',
-                precio: 0,
-                items: [{ servicio: '', barbero_id: '' }],
-                notifications: {
-                  whatsapp_notification: true,
-                  whatsapp_reminder: true
-                },
-                local_id: selectedLocalId || '',
-            });
         }
+
+        const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
+        const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
+            
+        let itemsToSet: { servicio: string; barbero_id: string; }[] = [];
+        if(isEditMode && initialData.items && Array.isArray(initialData.items) && services.length > 0) {
+            itemsToSet = initialData.items.map((i: SaleItemType) => {
+                const service = services.find(s => s.name === i.servicio || s.name === i.nombre);
+                return {
+                    servicio: service?.id || '',
+                    barbero_id: i.barbero_id || ''
+                };
+            });
+        } else {
+            itemsToSet = [{ 
+                servicio: '', 
+                barbero_id: (initialData as any).barbero_id || '' 
+            }];
+        }
+            
+        form.reset({
+            ...initialData,
+            cliente_id: initialData.cliente_id,
+            items: itemsToSet,
+            fecha,
+            hora_inicio_hora: startHour,
+            hora_inicio_minuto: startMinute,
+            hora_fin_hora: endHour,
+            hora_fin_minuto: endMinute,
+            estado: initialData.estado,
+            precio: initialData.precio || 0,
+            notas: initialData.notas || '',
+            nota_interna: initialData.nota_interna || '',
+            notifications: initialData.notifications || {
+              whatsapp_notification: true,
+              whatsapp_reminder: true
+            },
+            local_id: initialData.local_id
+        });
+    } else if (isOpen) {
+        form.reset({
+            notas: '',
+            nota_interna: '',
+            estado: 'Reservado',
+            precio: 0,
+            items: [{ servicio: '', barbero_id: '' }],
+            notifications: {
+              whatsapp_notification: true,
+              whatsapp_reminder: true
+            },
+            local_id: selectedLocalId || '',
+        });
+    }
   }, [initialData, form, isOpen, services, isEditMode, selectedLocalId]);
   
   useEffect(() => {

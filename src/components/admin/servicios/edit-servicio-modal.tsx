@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,8 +17,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { useAuth } from '@/firebase';
 import { collection, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import type { Service, ServiceCategory, Profesional } from '@/lib/types';
 
 
@@ -335,3 +334,5 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
     </>
   );
 }
+
+    

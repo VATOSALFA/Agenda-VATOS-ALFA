@@ -93,13 +93,14 @@ export function ReservationDetailModal({
   }
 
   const handleCancelReservation = async (reservationId: string) => {
-    if (!reservation.cliente_id) {
-         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado." });
+    if (!reservation.cliente_id || !db) {
+         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado o la base de datos no está disponible." });
          return;
     }
     
     try {
         await runTransaction(db, async (transaction) => {
+            if (!db) throw new Error("Database not available in transaction");
             const resRef = doc(db, 'reservas', reservationId);
             const clientRef = doc(db, 'clientes', reservation.cliente_id!);
 
@@ -128,6 +129,7 @@ export function ReservationDetailModal({
   };
 
   const handleViewPayment = async () => {
+    if(!db) return;
     setIsLoadingSale(true);
     try {
         const salesQuery = query(collection(db, 'ventas'), where('reservationId', '==', reservation.id));

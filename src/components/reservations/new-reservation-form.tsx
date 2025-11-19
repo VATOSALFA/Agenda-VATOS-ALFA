@@ -506,7 +506,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    if(setClientQueryKey) setClientQueryKey(prev => prev + 1);
+    if(setClientQueryKey) setClientQueryKey((prev: number) => prev + 1);
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 

@@ -225,13 +225,13 @@ export default function AgendaView() {
     return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
   }, [professionals, selectedProfessionalFilter, selectedLocalId]);
 
-  const allEvents = useMemo(() => {
+  const allEvents: AgendaEvent[] = useMemo(() => {
     if (!reservations || !timeBlocks || !clients || !professionals) return [];
 
     const clientMap = new Map(clients.map(c => [c.id, c]));
     const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
 
-    const appointmentEvents = reservations
+    const appointmentEvents: AgendaEvent[] = reservations
         .filter(res => res.estado !== 'Cancelado')
         .map(res => {
         const [startH, startM] = res.hora_inicio.split(':').map(Number);
@@ -242,16 +242,17 @@ export default function AgendaView() {
         return {
             ...res,
             customer: clientMap.get(res.cliente_id),
-            professionalNames: res.items?.map(i => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
+            professionalNames: res.items?.map((i: SaleItem) => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
             start: start,
             end: end,
             duration: Math.max(0.5, end - start),
             color: getStatusColor(res.estado),
-            type: 'appointment' as const
+            type: 'appointment' as const,
+            layout: { width: 100, left: 0, col: 0, totalCols: 1 }
         };
     });
 
-    const blockEvents = timeBlocks.map(block => {
+    const blockEvents: AgendaEvent[] = timeBlocks.map(block => {
         const [startH, startM] = block.hora_inicio.split(':').map(Number);
         const [endH, endM] = block.hora_fin.split(':').map(Number);
         const start = startH + startM / 60;
@@ -260,20 +261,21 @@ export default function AgendaView() {
           ...block,
           id: block.id,
           barbero_id: block.barbero_id,
-          customer: { nombre: block.motivo },
+          customer: { nombre: block.motivo } as any,
           service: 'Bloqueado',
           start: start,
           end: end,
           duration: Math.max(0.5, end - start),
           color: 'bg-striped-gray border-gray-400 text-gray-600',
           type: 'block' as const,
+          layout: { width: 100, left: 0, col: 0, totalCols: 1 }
         };
       });
 
       return [...appointmentEvents, ...blockEvents];
   }, [reservations, timeBlocks, clients, professionals]);
 
-    const eventsWithLayout = useMemo(() => {
+    const eventsWithLayout: AgendaEvent[] = useMemo(() => {
         const processedEvents: AgendaEvent[] = allEvents.map(event => ({ ...event, layout: { width: 100, left: 0, col: 0, totalCols: 1 }}));
 
         for (let i = 0; i < processedEvents.length; i++) {
@@ -284,8 +286,8 @@ export default function AgendaView() {
             for (let j = i + 1; j < processedEvents.length; j++) {
                 const eventB = processedEvents[j];
                 
-                const eventAProfessionals = eventA.type === 'appointment' ? eventA.items.map((item: SaleItem) => item.barbero_id) : [eventA.barbero_id];
-                const eventBProfessionals = eventB.type === 'appointment' ? eventB.items.map((item: SaleItem) => item.barbero_id) : [eventB.barbero_id];
+                const eventAProfessionals = eventA.type === 'appointment' && eventA.items ? eventA.items.map((item) => item.barbero_id) : [eventA.barbero_id];
+                const eventBProfessionals = eventB.type === 'appointment' && eventB.items ? eventB.items.map((item) => item.barbero_id) : [eventB.barbero_id];
                 
                 const hasCommonProfessional = eventAProfessionals.some(p => eventBProfessionals.includes(p));
 
@@ -746,12 +748,12 @@ export default function AgendaView() {
 
                                 {/* Events */}
                                 {eventsWithLayout
-                                    .filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id)))
-                                    .map(event => (
+                                    .filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some((i: SaleItem) => i.barbero_id === barber.id)))
+                                    .map((event: AgendaEvent) => (
                                     <Tooltip key={event.id}>
                                     <TooltipTrigger asChild>
                                         <div
-                                            onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
+                                            onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event); } else if (event.type === 'block') { setBlockToDelete(event); } }}
                                             className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", event.color)} 
                                             style={{...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%`}}
                                         >
@@ -865,3 +867,4 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+

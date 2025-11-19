@@ -43,7 +43,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { useAuth } from '@/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { cn } from '@/lib/utils';
 import type { Local } from '@/lib/types';
 

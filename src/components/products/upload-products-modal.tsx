@@ -6,9 +6,9 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { writeBatch, collection, doc, Timestamp } from 'firebase/firestore';
+import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
 import type { Product } from '@/lib/types';
-import { useAuth } from '@/contexts/firebase-auth-context';
 
 import {
   Dialog,
@@ -37,7 +37,6 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
   const [parsedData, setParsedData] = useState<ParsedProduct[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
-  const { db } = useAuth();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -69,6 +68,8 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
           const data: ParsedProduct[] = json.slice(1).map((row: any[]) => {
               const commissionTypeFromSheet = String(row[getIndex('comision de venta (tipo)')]);
+              const commissionType = commissionTypeFromSheet === '$' ? '$' : '%';
+              
               return {
                 nombre: row[getIndex('nombre')] || '',
                 barcode: row[getIndex('codigo de barras')] ? String(row[getIndex('codigo de barras')]) : undefined,
@@ -81,7 +82,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
                 internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
                 commission: {
                     value: Number(row[getIndex('comision de venta (valor)')]) || 0,
-                    type: commissionTypeFromSheet === '$' ? '$' : '%'
+                    type: commissionType
                 },
                 includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
                 description: row[getIndex('descripcion')] || undefined,

@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
-import type { Product } from '@/lib/types';
+import type { Product, Commission } from '@/lib/types';
 
 import {
   Dialog,
@@ -67,8 +67,13 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
           const getIndex = (name: string) => headers.indexOf(name);
 
           const data: ParsedProduct[] = json.slice(1).map((row: any[]) => {
+              const commissionValue = Number(row[getIndex('comision de venta (valor)')]) || 0;
               const commissionTypeFromSheet = String(row[getIndex('comision de venta (tipo)')]);
-              const commissionType = commissionTypeFromSheet === '$' ? '$' : '%';
+              
+              const commission: Commission = {
+                value: commissionValue,
+                type: commissionTypeFromSheet === '$' ? '$' : '%',
+              };
               
               return {
                 nombre: row[getIndex('nombre')] || '',
@@ -80,10 +85,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
                 stock: Number(row[getIndex('cantidad en stock')]) || 0,
                 purchase_cost: Number(row[getIndex('costo de compra')]) || undefined,
                 internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
-                commission: {
-                    value: Number(row[getIndex('comision de venta (valor)')]) || 0,
-                    type: commissionType
-                },
+                commission: commission,
                 includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
                 description: row[getIndex('descripcion')] || undefined,
                 stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,

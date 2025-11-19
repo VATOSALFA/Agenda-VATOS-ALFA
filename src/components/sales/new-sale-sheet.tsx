@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -35,6 +34,7 @@ import {
   DialogTrigger,
   DialogClose,
   DialogDescription,
+  DialogFooter
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -763,7 +763,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             <ScrollArea className="flex-grow mt-4 pr-4">
                                 <TabsContent value="servicios" className="mt-0">
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {(servicesLoading ? Array.from({length: 6}) : filteredServices).map((service, idx) => (
+                                    {(servicesLoading ? Array.from({length: 6}) : filteredServices).map((service: ServiceType | undefined, idx: number) => (
                                         service ? (
                                         <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
                                             <CardContent className="p-4">
@@ -779,7 +779,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </TabsContent>
                                 <TabsContent value="productos" className="mt-0">
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {(productsLoading ? Array.from({length: 6}) : filteredProducts).map((product, idx) => (
+                                    {(productsLoading ? Array.from({length: 6}) : filteredProducts).map((product: Product | undefined, idx: number) => (
                                         product ? (
                                         <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                             <CardContent className="p-4">
@@ -789,7 +789,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </CardContent>
                                         </Card>
                                         ) : (
-                                            <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+                                            <Card key={idx}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
                                         )
                                     ))}
                                     </div>
@@ -1020,7 +1020,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <ScrollArea className="flex-grow mt-4 pr-4">
                                     <TabsContent value="servicios" className="mt-0">
                                         <div className="space-y-2">
-                                        {(servicesLoading ? Array.from({length: 3}) : addItemFilteredServices).map((service, idx) => (
+                                        {(servicesLoading ? Array.from({length: 3}) : addItemFilteredServices).map((service: ServiceType | undefined, idx) => (
                                             service ? (
                                             <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
                                                 <div>
@@ -1037,7 +1037,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     </TabsContent>
                                     <TabsContent value="productos" className="mt-0">
                                         <div className="space-y-2">
-                                        {(productsLoading ? Array.from({length: 3}) : addItemFilteredProducts).map((product, idx) => (
+                                        {(productsLoading ? Array.from({length: 3}) : addItemFilteredProducts).map((product: Product | undefined, idx) => (
                                             product ? (
                                             <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
                                                 <div>

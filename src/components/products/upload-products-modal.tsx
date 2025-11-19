@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -8,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp } from 'firebase/firestore';
 import type { Product } from '@/lib/types';
-import { useAuth } from '@/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 import {
   Dialog,
@@ -23,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface UploadProductsModalProps {
   isOpen: boolean;
@@ -78,7 +78,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
                 internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
                 commission: {
                     value: Number(row[getIndex('comision de venta (valor)')]) || 0,
-                    type: row[getIndex('comision de venta (tipo)')] === '$' ? '$' : '%'
+                    type: String(row[getIndex('comision de venta (tipo)')]) === '$' ? '$' : '%'
                 },
                 includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
                 description: row[getIndex('descripcion')] || undefined,

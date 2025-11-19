@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -11,7 +10,7 @@ import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, g
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, getDay, addMinutes, getHours, getMinutes, isToday as dateFnsIsToday } from 'date-fns';
+import { parse, format, set, getDay, addMinutes, getHours, getMinutes, isToday as dateFnsIsToday, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -289,69 +288,74 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return allItemsValid;
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
 
-  useEffect(() => {
-    if (initialData && form && services.length > 0) {
-        let fecha: Date = new Date();
-        if (typeof initialData.fecha === 'string') {
-            const dateParts = initialData.fecha.split('-').map(Number);
-            if (dateParts.length === 3) {
-                fecha = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    useEffect(() => {
+        if (initialData && form && services.length > 0) {
+            let fecha: Date = new Date();
+            if (initialData.fecha) {
+                if (typeof initialData.fecha === 'string') {
+                    // Handles 'yyyy-MM-dd'
+                    fecha = parseISO(initialData.fecha);
+                } else if ((initialData.fecha as any).seconds) {
+                    // Handles Firestore Timestamp
+                    fecha = new Date((initialData.fecha as any).seconds * 1000);
+                } else if (initialData.fecha instanceof Date) {
+                    // Handles JS Date object
+                    fecha = initialData.fecha;
+                }
             }
-        } else if (initialData.fecha && typeof initialData.fecha === 'object' && initialData.fecha instanceof Date) {
-            fecha = initialData.fecha;
-        } else if ((initialData.fecha as any)?.seconds) {
-            fecha = new Date((initialData.fecha as any).seconds * 1000);
-        }
 
-        const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
-        const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
-        
-        let itemsToSet;
-        if(isEditMode && initialData.items && services.length > 0) {
-            itemsToSet = initialData.items.map((i: SaleItemType) => ({
-                servicio: services.find(s => s.name === i.servicio)?.id || '',
-                barbero_id: i.barbero_id || ''
-            }));
-        } else {
-            itemsToSet = [{ 
-                servicio: '', 
-                barbero_id: (initialData as any).barbero_id || '' 
-            }];
+            const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
+            const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
+            
+            let itemsToSet: { servicio: string; barbero_id: string; }[] = [];
+            if(isEditMode && initialData.items && Array.isArray(initialData.items) && services.length > 0) {
+                itemsToSet = initialData.items.map((i: SaleItemType) => {
+                    const service = services.find(s => s.name === i.servicio || s.name === i.nombre);
+                    return {
+                        servicio: service?.id || '',
+                        barbero_id: i.barbero_id || ''
+                    };
+                });
+            } else {
+                itemsToSet = [{ 
+                    servicio: '', 
+                    barbero_id: (initialData as any).barbero_id || '' 
+                }];
+            }
+            
+            form.reset({
+                ...initialData,
+                cliente_id: initialData.cliente_id,
+                items: itemsToSet,
+                fecha,
+                hora_inicio_hora: startHour,
+                hora_inicio_minuto: startMinute,
+                hora_fin_hora: endHour,
+                hora_fin_minuto: endMinute,
+                estado: initialData.estado,
+                precio: initialData.precio || 0,
+                notas: initialData.notas || '',
+                nota_interna: initialData.nota_interna || '',
+                notifications: initialData.notifications || {
+                  whatsapp_notification: true,
+                  whatsapp_reminder: true
+                },
+                local_id: initialData.local_id
+            });
+        } else if (isOpen) {
+            form.reset({
+                notas: '',
+                nota_interna: '',
+                estado: 'Reservado',
+                precio: 0,
+                items: [{ servicio: '', barbero_id: '' }],
+                notifications: {
+                  whatsapp_notification: true,
+                  whatsapp_reminder: true
+                },
+                local_id: selectedLocalId || '',
+            });
         }
-        
-        form.reset({
-            ...initialData,
-            cliente_id: initialData.cliente_id,
-            items: itemsToSet,
-            fecha,
-            hora_inicio_hora: startHour,
-            hora_inicio_minuto: startMinute,
-            hora_fin_hora: endHour,
-            hora_fin_minuto: endMinute,
-            estado: initialData.estado,
-            precio: initialData.precio || 0,
-            notas: initialData.notas || '',
-            nota_interna: initialData.nota_interna || '',
-            notifications: initialData.notifications || {
-              whatsapp_notification: true,
-              whatsapp_reminder: true
-            },
-            local_id: initialData.local_id
-        });
-    } else if (isOpen) {
-        form.reset({
-            notas: '',
-            nota_interna: '',
-            estado: 'Reservado',
-            precio: 0,
-            items: [{ servicio: '', barbero_id: '' }],
-            notifications: {
-              whatsapp_notification: true,
-              whatsapp_reminder: true
-            },
-            local_id: selectedLocalId || '',
-        });
-    }
   }, [initialData, form, isOpen, services, isEditMode, selectedLocalId]);
   
   useEffect(() => {

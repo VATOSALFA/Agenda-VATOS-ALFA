@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { db } from '@/lib/firebase-client';
 import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -345,6 +345,13 @@ export default function FinanzasMensualesPage() {
         }
     };
 
+    const safeFormatDate = (date: Timestamp | Date | undefined) => {
+        if (!date) return 'Fecha inválida';
+        const dateObj = date instanceof Timestamp ? date.toDate() : new Date(date);
+        if (!isValid(dateObj)) return 'Fecha inválida';
+        return format(dateObj, 'yyyy-MM-dd');
+    };
+
 
     return (
         <>
@@ -504,7 +511,7 @@ export default function FinanzasMensualesPage() {
                             ) : (
                                 calculatedEgresos.map((egreso) => (
                                     <TableRow key={egreso.id}>
-                                        <TableCell>{(egreso.fecha && isValid(new Date(egreso.fecha))) ? format(new Date(egreso.fecha), 'yyyy-MM-dd') : 'Fecha inválida'}</TableCell>
+                                        <TableCell>{safeFormatDate(egreso.fecha)}</TableCell>
                                         <TableCell>{egreso.concepto}</TableCell>
                                         <TableCell>{egreso.aQuien}</TableCell>
                                         <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-MX')}</TableCell>

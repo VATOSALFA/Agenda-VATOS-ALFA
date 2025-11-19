@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { useForm, Controller } from "react-hook-form";
 import { doc, setDoc } from "firebase/firestore";
-import { useAuth } from "@/firebase";
+import { useAuth } from "@/contexts/firebase-auth-context";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
@@ -59,6 +59,14 @@ export default function EmpresaPage() {
                 variant: "destructive",
                 title: "Error de base de datos",
                 description: "No se pudo conectar con la base de datos.",
+            });
+            return;
+        }
+        if (!settings.id) {
+            toast({
+                variant: "destructive",
+                title: "Error de configuración",
+                description: "No se encontró el ID de la configuración de la empresa.",
             });
             return;
         }

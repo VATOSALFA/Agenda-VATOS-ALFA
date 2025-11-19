@@ -31,7 +31,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { useAuth } from '@/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface SpecialDayModalProps {
   profesional: Profesional;

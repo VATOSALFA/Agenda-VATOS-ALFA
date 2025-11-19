@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -55,7 +55,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
@@ -243,7 +243,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
-  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', undefined, doc(db, 'configuracion', 'caja'));
+  
+  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>(
+    'configuracion',
+    db ? 'cashbox-settings' : undefined,
+    doc(db!, 'configuracion', 'caja')
+  );
+
   const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
 
   const sellers = useMemo(() => {
@@ -348,8 +354,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         );
       }
       
-      const itemPrice = tipo === 'producto' ? (item as Product).public_price : (item as ServiceType).price;
-      const itemName = tipo === 'producto' ? (item as Product).nombre : (item as ServiceType).name;
+      const itemPrice = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
+      const itemName = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
       const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
 
       return [...prev, { id: item.id, nombre: itemName, precio: itemPrice || 0, cantidad: 1, tipo, presentation_id }];
@@ -414,10 +420,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if(initialData.reservationId) {
             setReservationId(initialData.reservationId);
         }
-        const initialCartItems = initialData.items.map(item => {
+        const initialCartItems: CartItem[] = initialData.items.map(item => {
             const tipo = 'duration' in item ? 'servicio' : 'producto';
             const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
-            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as ServiceType).nombre;
+            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
             const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
             return {
                 id: item.id,
@@ -435,7 +441,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [initialData, form, isOpen]);
 
   const handleSendToTerminal = async () => {
-    if (!selectedTerminalId || total <= 0 || !selectedClient) return;
+    if (!db || !selectedTerminalId || total <= 0 || !selectedClient) return;
     setIsSendingToTerminal(true);
 
     const saleRef = doc(collection(db, 'ventas'));
@@ -513,6 +519,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }
 
   async function onSubmit(data: SaleFormData, saleDocId?: string, paymentStatus: 'Pagado' | 'Pendiente' = 'Pagado') {
+     if (!db) return;
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
@@ -1001,14 +1008,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <ScrollArea className="flex-grow mt-4 pr-4">
                                     <TabsContent value="servicios" className="mt-0">
                                         <div className="space-y-2">
-                                        {(servicesLoading ? Array.from({ length: 3 }) : addItemFilteredServices).map((service, idx) => (
+                                        {(servicesLoading ? Array.from({length: 3}) : addItemFilteredServices).map((service, idx) => (
                                             service ? (
                                             <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
                                                 <div>
                                                 <p className="font-semibold">{service.name}</p>
                                                 <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
                                                 </div>
-                                                <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
+                                                <DialogClose asChild>
+                                                    <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
+                                                </DialogClose>
                                             </div>
                                             ) : (<div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" />)
                                         ))}
@@ -1016,7 +1025,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     </TabsContent>
                                     <TabsContent value="productos" className="mt-0">
                                         <div className="space-y-2">
-                                        {(productsLoading ? Array.from({ length: 3 }) : addItemFilteredProducts).map((product, idx) => (
+                                        {(productsLoading ? Array.from({length: 3}) : addItemFilteredProducts).map((product, idx) => (
                                             product ? (
                                             <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
                                                 <div>
@@ -1024,7 +1033,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
                                                 <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                                 </div>
-                                                <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
+                                                <DialogClose asChild>
+                                                  <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
+                                                </DialogClose>
                                             </div>
                                             ) : (<div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" />)
                                         ))}

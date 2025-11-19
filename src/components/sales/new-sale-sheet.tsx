@@ -61,6 +61,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
+import { Skeleton } from '../ui/skeleton';
 
 interface ReminderSettings {
     notifications: {
@@ -234,6 +235,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [currentSaleId, setCurrentSaleId] = useState<string | null>(null);
+  const [cashboxSettings, setCashboxSettings] = useState<any>(null);
+  const [cashboxSettingsLoading, setCashboxSettingsLoading] = useState(true);
 
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
@@ -244,13 +247,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
   
-  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>(
-    'configuracion',
-    db ? 'cashbox-settings' : undefined,
-    doc(db!, 'configuracion', 'caja')
-  );
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!db) return;
+      setCashboxSettingsLoading(true);
+      const settingsRef = doc(db, 'configuracion', 'caja');
+      const docSnap = await getDoc(settingsRef);
+      if (docSnap.exists()) {
+        setCashboxSettings(docSnap.data());
+      }
+      setCashboxSettingsLoading(false);
+    };
+    fetchSettings();
+  }, [db]);
 
-  const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
+
+  const mainTerminalId = cashboxSettings?.mercadoPagoTerminalId;
 
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string; name: string }>();
@@ -302,14 +314,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [selectedClientId, clients]);
 
   useEffect(() => {
-    if (isOpen) {
-        if (initialData?.local_id) {
-            form.setValue('local_id', initialData.local_id);
-        } else if (selectedLocalId) {
-          form.setValue('local_id', selectedLocalId);
-        } else if (!localesLoading && locales.length > 0) {
-          form.setValue('local_id', locales[0].id);
-        }
+    if (isOpen && initialData?.local_id) {
+        form.setValue('local_id', initialData.local_id);
+    } else if (isOpen && selectedLocalId) {
+      form.setValue('local_id', selectedLocalId);
+    } else if (isOpen && !localesLoading && locales.length > 0) {
+      form.setValue('local_id', locales[0].id);
     }
   }, [isOpen, locales, localesLoading, form, selectedLocalId, initialData]);
 
@@ -326,22 +336,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   const filteredServices = useMemo(() => {
     if (!services) return [];
-    return services.filter(s => s && s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    return services.filter(s => s?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, services]);
   
   const filteredProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+    return products.filter(p => p?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, products]);
   
   const addItemFilteredServices = useMemo(() => {
     if (!services) return [];
-    return services.filter(s => s && s.name && s.name.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+    return services.filter(s => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
   }, [addItemSearchTerm, services]);
 
   const addItemFilteredProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+    return products.filter(p => p?.nombre?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
   }, [addItemSearchTerm, products]);
 
 
@@ -427,10 +437,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
             return {
                 id: item.id,
-                nombre,
+                nombre: nombre,
                 precio: precio || 0,
                 cantidad: 1,
-                tipo,
+                tipo: tipo,
                 presentation_id,
                 barbero_id: (item as any).barbero_id || undefined,
             };
@@ -480,7 +490,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
       setIsSendingToTerminal(false);
       if(currentSaleId) {
-          await deleteDoc(doc(db, 'ventas', currentSaleId));
+          if (db) {
+            await deleteDoc(doc(db, 'ventas', currentSaleId));
+          }
           setCurrentSaleId(null);
       }
     }
@@ -760,7 +772,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </CardContent>
                                         </Card>
                                         ) : (
-                                            <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
+                                            <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
                                         )
                                     ))}
                                     </div>
@@ -777,7 +789,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </CardContent>
                                         </Card>
                                         ) : (
-                                            <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
+                                            <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
                                         )
                                     ))}
                                     </div>
@@ -791,7 +803,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
-                <form onSubmit={form.handleSubmit((data) => onSubmit(data))} className="h-full flex flex-col overflow-hidden">
+                <div className="h-full flex flex-col overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                         {/* Sale Details Form */}
                         <div className="space-y-4">
@@ -917,7 +929,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             Cobrar ${total.toLocaleString('es-MX')} en Terminal
                                         </Button>
                                     </div>
-                                    {!terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes > Terminal para activarlas.</p>}
+                                    {terminals && !terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes &gt; Terminal para activarlas.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (
@@ -1019,7 +1031,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
                                                 </DialogClose>
                                             </div>
-                                            ) : (<div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" />)
+                                            ) : (<Skeleton key={idx} className="h-16 w-full" />)
                                         ))}
                                         </div>
                                     </TabsContent>
@@ -1037,18 +1049,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                   <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
                                                 </DialogClose>
                                             </div>
-                                            ) : (<div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" />)
+                                            ) : (<Skeleton key={idx} className="h-20 w-full" />)
                                         ))}
                                         </div>
                                     </TabsContent>
                                     </ScrollArea>
                                 </Tabs>
                                 </div>
-                                <SheetFooter>
+                                <DialogFooter>
                                 <DialogClose asChild>
                                     <Button type="button" variant="secondary">Cerrar</Button>
                                 </DialogClose>
-                                </SheetFooter>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -1059,7 +1071,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             Finalizar Venta por ${total.toLocaleString('es-MX')}
                         </Button>
                     </SheetFooter>
-                  </form>
+                  </div>
             )}
         </Form>
         

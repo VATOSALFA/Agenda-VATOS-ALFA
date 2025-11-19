@@ -291,16 +291,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     useEffect(() => {
         if (initialData && form && services.length > 0) {
             let fecha: Date = new Date();
-            if (initialData.fecha) {
-                if (typeof initialData.fecha === 'string') {
-                    // Handles 'yyyy-MM-dd'
-                    fecha = parseISO(initialData.fecha);
-                } else if ((initialData.fecha as any).seconds) {
-                    // Handles Firestore Timestamp
-                    fecha = new Date((initialData.fecha as any).seconds * 1000);
-                } else if (initialData.fecha instanceof Date) {
-                    // Handles JS Date object
-                    fecha = initialData.fecha;
+            const rawDate = initialData.fecha;
+            
+            if (rawDate) {
+                if (typeof rawDate === 'string') {
+                    fecha = parseISO(rawDate);
+                } else if ((rawDate as any).seconds) { // Firestore Timestamp
+                    fecha = new Date((rawDate as any).seconds * 1000);
+                } else if (rawDate instanceof Date) { // JS Date object
+                    fecha = rawDate;
                 }
             }
 
@@ -368,9 +367,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         if (!items || !servicesMap.size) return;
 
-        const { totalPrice, totalDuration } = items.reduce(
+        const { totalPrice, totalDuration } = (items as { servicio: string }[]).reduce(
           (acc, currentItem) => {
-            const service = servicesMap.get(currentItem?.servicio);
+            if(!currentItem) return acc;
+            const service = servicesMap.get(currentItem.servicio);
             if (service) {
               acc.totalPrice += service.price || 0;
               acc.totalDuration += service.duration || 0;

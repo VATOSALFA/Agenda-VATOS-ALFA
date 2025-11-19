@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2 } from 'lucide-react';
-import type { ServiceCategory } from '@/app/admin/servicios/page';
+import type { ServiceCategory } from '@/lib/types';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { collection, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 

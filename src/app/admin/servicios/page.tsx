@@ -15,8 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Input } from '@/components/ui/input';
-import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, sortableKeyboardCoordinates, DragOverlay, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, DragOverlay, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import {

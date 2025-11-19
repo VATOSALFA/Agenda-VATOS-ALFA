@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -13,12 +12,12 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import type { Profesional, Schedule, Service, ServiceCategory } from '@/lib/types';
+import type { Profesional, Schedule, Service, ServiceCategory, Local } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Copy, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
-import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch } from 'firebase/firestore';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +28,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { Local } from '@/components/admin/locales/new-local-modal';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { db, auth } from '@/lib/firebase-client';
@@ -41,7 +39,7 @@ interface EditProfesionalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataSaved: () => void;
-  local: Local | null; // This might be deprecated if we fetch all locales
+  local: Local | null;
 }
 
 const daysOfWeek = [
@@ -129,7 +127,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         }
     }
     return options;
-  }, [locales, form.watch('local_id')]);
+  }, [locales, form]);
 
   useEffect(() => {
     if(isOpen) {

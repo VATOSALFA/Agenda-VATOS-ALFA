@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,9 +24,9 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Service } from '@/lib/types';
+import type { Service, Commission } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { useAuth } from '@/firebase';
 
 interface EditDefaultServiceComisionModalProps {
   service: Service;
@@ -39,7 +40,7 @@ export function EditDefaultServiceComisionModal({ service, isOpen, onClose, onDa
   const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { control, handleSubmit, reset } = useForm({
+  const { control, handleSubmit, reset } = useForm<{ defaultCommission: Commission }>({
     defaultValues: {
       defaultCommission: service.defaultCommission || { value: 0, type: '%' },
     },

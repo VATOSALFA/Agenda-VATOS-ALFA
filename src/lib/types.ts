@@ -181,6 +181,10 @@ export interface CartItem {
     precio: number;
     cantidad: number;
     tipo: 'producto' | 'servicio';
+    barbero_id?: string;
+    presentation_id?: string;
+    discountValue?: string | number;
+    discountType?: 'fixed' | 'percentage';
 }
 
 export interface Sale {

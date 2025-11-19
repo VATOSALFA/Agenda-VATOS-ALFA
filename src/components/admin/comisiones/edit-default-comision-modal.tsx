@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,9 +24,9 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Professional } from '@/lib/types';
+import type { Profesional as Professional } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { useAuth } from '@/firebase';
 
 interface EditDefaultComisionModalProps {
   professional: Professional;

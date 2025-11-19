@@ -66,25 +66,26 @@ export default function FinanzasResumenPage() {
             monthlyData[monthName].ingresos += sale.total;
         });
 
-        const allEgresos = [
+        const allEgresos: { fecha: Date; monto: number }[] = [
             ...egresos.map(e => ({ ...e, fecha: e.fecha.toDate() })),
             ...sales.flatMap(sale => {
                 const saleDate = sale.fecha_hora_venta.toDate();
                 return sale.items?.map(item => {
+                    if (!item.barbero_id) return null;
                     const professional = professionalMap.get(item.barbero_id);
                     if (!professional) return null;
 
                     let commissionConfig = null;
                     if (item.tipo === 'servicio') {
-                        const service = serviceMap.get(item.id);
-                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.name] || service.defaultCommission || professional.defaultCommission;
+                        const service = services.find(s => s.name === item.nombre);
+                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
                     } else if (item.tipo === 'producto') {
                         const product = productMap.get(item.id);
                         if (product) commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                     }
 
                     if (commissionConfig) {
-                        const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                        const itemSubtotal = item.subtotal || item.precio || 0;
                         const itemDiscount = item.descuento?.monto || 0;
                         const finalItemPrice = itemSubtotal - itemDiscount;
 
@@ -92,10 +93,10 @@ export default function FinanzasResumenPage() {
                             ? finalItemPrice * (commissionConfig.value / 100)
                             : commissionConfig.value;
                             
-                        return { fecha: saleDate, monto: commissionAmount, aQuien: professional.id, concepto: `Comisión ${item.tipo}` };
+                        return { fecha: saleDate, monto: commissionAmount };
                     }
                     return null;
-                }).filter(e => e !== null) as { fecha: Date, monto: number, aQuien: string, concepto: string }[]
+                }).filter(e => e !== null) as { fecha: Date, monto: number }[]
             })
         ];
 
@@ -113,7 +114,7 @@ export default function FinanzasResumenPage() {
                 return sum + (sale.items || [])
                     .filter(i => i.tipo === 'producto')
                     .reduce((itemSum, i) => {
-                        const itemSubtotal = i.subtotal || i.precio_unitario || 0;
+                        const itemSubtotal = i.subtotal || i.precio || 0;
                         const itemDiscount = i.descuento?.monto || 0;
                         return itemSum + (itemSubtotal - itemDiscount);
                     }, 0);
@@ -150,7 +151,7 @@ export default function FinanzasResumenPage() {
         sales.forEach(sale => {
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
-                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                    const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
                     const itemDiscount = item.descuento?.monto || 0;
                     const finalItemPrice = itemSubtotal - itemDiscount;
                     

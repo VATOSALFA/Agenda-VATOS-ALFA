@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { useForm, Controller } from "react-hook-form";
 import { doc, setDoc } from "firebase/firestore";
-import { useAuth } from "@/contexts/firebase-auth-context";
+import { useAuth } from "@/firebase";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";

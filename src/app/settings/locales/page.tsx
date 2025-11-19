@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -42,18 +43,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { useAuth } from '@/firebase';
 import { cn } from '@/lib/utils';
+import type { Local } from '@/lib/types';
 
 
-interface Local {
-  id: string;
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  status: 'active' | 'inactive';
-}
 
 export default function LocalesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -86,6 +80,7 @@ export default function LocalesPage() {
   }
 
   const handleToggleStatus = async (local: Local) => {
+    if (!db) return;
     const newStatus = local.status === 'active' ? 'inactive' : 'active';
     try {
         const localRef = doc(db, 'locales', local.id);

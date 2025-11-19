@@ -13,7 +13,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
+import { db } from '@/firebase';
 import { Input } from '@/components/ui/input';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, sortableKeyboardCoordinates, DragOverlay, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -29,23 +29,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { Service, ServiceCategory } from '@/lib/types';
 
-
-export interface Service {
-  id: string;
-  name: string;
-  duration: number;
-  price: number;
-  category: string;
-  active: boolean;
-  order: number;
-}
-
-export interface ServiceCategory {
-  id: string;
-  name: string;
-  order: number;
-}
 
 const SortableServiceItem = ({ service, categoryName, onToggleActive, onEdit, onDelete }: { service: Service, categoryName: string, onToggleActive: (service: Service) => void, onEdit: (service: Service) => void, onDelete: (service: Service) => void }) => {
   const {
@@ -156,7 +141,7 @@ export default function ServiciosPage() {
   };
   
   const handleDeleteService = async () => {
-    if (!serviceToDelete) return;
+    if (!serviceToDelete || !db) return;
     try {
         await deleteDoc(doc(db, 'servicios', serviceToDelete.id));
         toast({ title: "Servicio eliminado con éxito" });
@@ -169,6 +154,7 @@ export default function ServiciosPage() {
   }
 
   const handleToggleActive = async (service: Service) => {
+    if (!db) return;
     try {
         const serviceRef = doc(db, 'servicios', service.id);
         await updateDoc(serviceRef, { active: !service.active });
@@ -198,6 +184,7 @@ export default function ServiciosPage() {
         const newOrder = arrayMove(services, oldIndex, newIndex);
         setServices(newOrder); // Optimistic update
         
+        if (!db) return;
         try {
             const batch = writeBatch(db);
             newOrder.forEach((service, index) => {

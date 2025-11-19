@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -25,12 +26,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Trash2, CalendarIcon } from 'lucide-react';
-import type { Profesional } from '@/app/admin/profesionales/page';
+import type { Profesional } from '@/lib/types';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { useAuth } from '@/firebase';
 
 interface SpecialDayModalProps {
   profesional: Profesional;

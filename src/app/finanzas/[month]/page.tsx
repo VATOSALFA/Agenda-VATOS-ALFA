@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { where, Timestamp, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
+import { db } from '@/firebase';
 import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -92,7 +92,7 @@ export default function FinanzasMensualesPage() {
         ]
     }, [startDate, endDate]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}`, ...salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}-${queryKey}`, ...salesQueryConstraints);
     const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-${monthName}-${queryKey}`, ...egresosQueryConstraints);
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
@@ -141,6 +141,7 @@ export default function FinanzasMensualesPage() {
                 const saleDate = sale.fecha_hora_venta.toDate();
                 
                 sale.items?.forEach(item => {
+                    if (!item.barbero_id) return;
                     const professional = professionalMap.get(item.barbero_id);
                     if (!professional) return;
                     
@@ -150,9 +151,9 @@ export default function FinanzasMensualesPage() {
 
                     let commissionConfig = null;
                     if (item.tipo === 'servicio') {
-                        const service = serviceMap.get(item.id);
+                        const service = services.find(s => s.name === item.nombre);
                         if (service) {
-                            commissionConfig = professional.comisionesPorServicio?.[service.name] || service.defaultCommission || professional.defaultCommission;
+                            commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
                         }
                     } else if (item.tipo === 'producto') {
                         const product = productMap.get(item.id);
@@ -235,7 +236,7 @@ export default function FinanzasMensualesPage() {
         sales.forEach(sale => {
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
-                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                    const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
                     const itemDiscount = item.descuento?.monto || 0;
                     const finalItemPrice = itemSubtotal - itemDiscount;
 
@@ -246,13 +247,15 @@ export default function FinanzasMensualesPage() {
                         reinversion += product.purchase_cost * item.cantidad;
                     }
                     
-                    const professional = professionalMap.get(item.barbero_id);
-                    if (product && professional) {
-                        const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                        if(commissionConfig) {
-                            comisionProfesionales += commissionConfig.type === '%'
-                                ? finalItemPrice * (commissionConfig.value / 100)
-                                : commissionConfig.value;
+                    if (product && item.barbero_id) {
+                        const professional = professionalMap.get(item.barbero_id);
+                        if (professional) {
+                            const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
+                            if(commissionConfig) {
+                                comisionProfesionales += commissionConfig.type === '%'
+                                    ? finalItemPrice * (commissionConfig.value / 100)
+                                    : commissionConfig.value;
+                            }
                         }
                     }
                 }
@@ -322,7 +325,7 @@ export default function FinanzasMensualesPage() {
     };
 
     const handleDeleteEgreso = async () => {
-        if (!egresoToDelete) return;
+        if (!egresoToDelete || !db) return;
         try {
             await deleteDoc(doc(db, "egresos", egresoToDelete.id));
             toast({

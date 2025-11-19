@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,9 +18,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { useAuth } from '@/firebase';
 import { collection, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
-import type { Service, ServiceCategory } from '@/app/admin/servicios/page';
+import type { Service, ServiceCategory, Profesional } from '@/lib/types';
+
 
 interface EditServicioModalProps {
   isOpen: boolean;
@@ -27,19 +29,6 @@ interface EditServicioModalProps {
   service: Service | null;
   onDataSaved: () => void;
 }
-
-interface Profesional {
-    id: string;
-    name: string;
-}
-
-const professionals: Profesional[] = [
-  { id: 'prof_1', name: 'Beatriz Elizarraga Casas' },
-  { id: 'prof_2', name: 'Erick' },
-  { id: 'prof_3', name: 'Karina Ruiz Rosales' },
-  { id: 'prof_4', name: 'Lupita' },
-  { id: 'prof_5', name: 'Gloria Ivon' },
-];
 
 const ImageUploader = () => (
     <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-full">
@@ -59,6 +48,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
   const { control, handleSubmit, setValue, watch, reset } = useForm();
   

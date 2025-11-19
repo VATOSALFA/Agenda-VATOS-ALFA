@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
-import type { Sender } from '@/app/admin/emails/page';
+import type { Sender } from '@/app/settings/emails/page';
 
 interface AddSenderModalProps {
   isOpen: boolean;
@@ -47,9 +48,9 @@ export function AddSenderModal({ isOpen, onClose, onSave, sender }: AddSenderMod
     if (sender) {
         form.setValue('email', sender.email);
     } else {
-        form.reset();
+        form.reset({ email: '' });
     }
-  }, [sender, form]);
+  }, [sender, form, isOpen]);
 
   const onSubmit = (data: SenderFormData) => {
     setIsSubmitting(true);

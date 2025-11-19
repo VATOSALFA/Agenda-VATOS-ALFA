@@ -297,9 +297,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             if (rawDate) {
               if (typeof rawDate === 'string') {
                   fecha = parseISO(rawDate);
-              } else if (typeof rawDate === 'object' && rawDate !== null && 'seconds' in rawDate) { // Firestore Timestamp
+              } else if (typeof rawDate === 'object' && rawDate !== null && 'seconds' in rawDate) {
                   fecha = new Date((rawDate as any).seconds * 1000);
-              } else if (rawDate instanceof Date) { // JS Date object
+              } else if (rawDate instanceof Date) {
                   fecha = rawDate;
               }
             }

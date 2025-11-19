@@ -35,6 +35,7 @@ import {
   DialogTrigger,
   DialogClose,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -1007,7 +1008,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         {/* Order Summary */}
                         <Dialog>
                             <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
-                             <DialogContent className="sm:max-w-2xl">
+                            <DialogContent className="sm:max-w-2xl">
                                 <DialogHeader>
                                 <DialogTitle>Agregar Ítem a la Venta</DialogTitle>
                                 </DialogHeader>
@@ -1022,41 +1023,45 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <TabsTrigger value="productos">Productos</TabsTrigger>
                                     </TabsList>
                                     <ScrollArea className="flex-grow mt-4 pr-4">
-                                    <TabsContent value="servicios" className="mt-0">
-                                        <div className="space-y-2">
-                                        {(servicesLoading ? Array.from({length: 3}) : addItemFilteredServices).map((service: ServiceType | undefined, idx) => (
-                                            service ? (
-                                            <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
-                                                <div>
-                                                <p className="font-semibold">{service.name}</p>
-                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                                </div>
-                                                <DialogClose asChild>
-                                                    <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
-                                                </DialogClose>
+                                        <TabsContent value="servicios" className="mt-0">
+                                            <div className="space-y-2">
+                                                {servicesLoading ? (
+                                                    Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-16 w-full" />)
+                                                ) : (
+                                                    addItemFilteredServices.map((service: ServiceType) => (
+                                                        <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
+                                                            <div>
+                                                                <p className="font-semibold">{service.name}</p>
+                                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                            </div>
+                                                            <DialogClose asChild>
+                                                                <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
+                                                            </DialogClose>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
-                                            ) : (<Skeleton key={idx} className="h-16 w-full" />)
-                                        ))}
-                                        </div>
-                                    </TabsContent>
-                                    <TabsContent value="productos" className="mt-0">
-                                        <div className="space-y-2">
-                                        {(productsLoading ? Array.from({length: 3}) : addItemFilteredProducts).map((product: Product | undefined, idx) => (
-                                            product ? (
-                                            <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
-                                                <div>
-                                                <p className="font-semibold">{product.nombre}</p>
-                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
-                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
-                                                </div>
-                                                <DialogClose asChild>
-                                                  <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
-                                                </DialogClose>
+                                        </TabsContent>
+                                        <TabsContent value="productos" className="mt-0">
+                                            <div className="space-y-2">
+                                                {productsLoading ? (
+                                                    Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-20 w-full" />)
+                                                ) : (
+                                                    addItemFilteredProducts.map((product: Product) => (
+                                                        <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
+                                                            <div>
+                                                                <p className="font-semibold">{product.nombre}</p>
+                                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                                            </div>
+                                                            <DialogClose asChild>
+                                                              <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
+                                                            </DialogClose>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
-                                            ) : (<Skeleton key={idx} className="h-20 w-full" />)
-                                        ))}
-                                        </div>
-                                    </TabsContent>
+                                        </TabsContent>
                                     </ScrollArea>
                                 </Tabs>
                                 </div>

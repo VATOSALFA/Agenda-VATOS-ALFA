@@ -297,7 +297,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             if (dateParts.length === 3) {
                 fecha = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
             }
-        } else if (initialData.fecha instanceof Date) {
+        } else if (initialData.fecha && typeof initialData.fecha === 'object' && initialData.fecha instanceof Date) {
             fecha = initialData.fecha;
         } else if ((initialData.fecha as any)?.seconds) {
             fecha = new Date((initialData.fecha as any).seconds * 1000);

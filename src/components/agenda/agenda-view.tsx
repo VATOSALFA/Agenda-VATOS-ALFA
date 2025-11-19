@@ -59,6 +59,11 @@ interface EmpresaSettings {
     receipt_logo_url?: string;
 }
 
+// Define a union type for events to be displayed on the agenda
+type AgendaEvent = (Reservation & { type: 'appointment', duration: number, start: number, end: number, color: string, layout: any }) | 
+                   (TimeBlock & { type: 'block', duration: number, start: number, end: number, color: string, layout: any });
+
+
 const ROW_HEIGHT = 48; // This is the visual height of one time slot row in the agenda.
 
 const useCurrentTime = () => {
@@ -242,7 +247,7 @@ export default function AgendaView() {
             end: end,
             duration: Math.max(0.5, end - start),
             color: getStatusColor(res.estado),
-            type: 'appointment'
+            type: 'appointment' as const
         };
     });
 
@@ -261,7 +266,7 @@ export default function AgendaView() {
           end: end,
           duration: Math.max(0.5, end - start),
           color: 'bg-striped-gray border-gray-400 text-gray-600',
-          type: 'block',
+          type: 'block' as const,
         };
       });
 
@@ -269,18 +274,18 @@ export default function AgendaView() {
   }, [reservations, timeBlocks, clients, professionals]);
 
     const eventsWithLayout = useMemo(() => {
-        const processedEvents = allEvents.map(event => ({ ...event, layout: { width: 100, left: 0, col: 0, totalCols: 1 }}));
+        const processedEvents: AgendaEvent[] = allEvents.map(event => ({ ...event, layout: { width: 100, left: 0, col: 0, totalCols: 1 }}));
 
         for (let i = 0; i < processedEvents.length; i++) {
             const eventA = processedEvents[i];
             
-            const overlappingEvents: typeof eventA[] = [eventA];
+            const overlappingEvents: AgendaEvent[] = [eventA];
             
             for (let j = i + 1; j < processedEvents.length; j++) {
                 const eventB = processedEvents[j];
-                // Check if same professional
-                const eventAProfessionals = eventA.type === 'appointment' ? eventA.items.map(item => item.barbero_id) : [eventA.barbero_id];
-                const eventBProfessionals = eventB.type === 'appointment' ? eventB.items.map(item => item.barbero_id) : [eventB.barbero_id];
+                
+                const eventAProfessionals = eventA.type === 'appointment' ? eventA.items.map((item: SaleItem) => item.barbero_id) : [eventA.barbero_id];
+                const eventBProfessionals = eventB.type === 'appointment' ? eventB.items.map((item: SaleItem) => item.barbero_id) : [eventB.barbero_id];
                 
                 const hasCommonProfessional = eventAProfessionals.some(p => eventBProfessionals.includes(p));
 
@@ -292,7 +297,7 @@ export default function AgendaView() {
             if (overlappingEvents.length > 1) {
                 overlappingEvents.sort((a,b) => a.start - b.start);
 
-                const columns: (typeof eventA)[][] = [];
+                const columns: AgendaEvent[][] = [];
                 overlappingEvents.forEach(event => {
                     let placed = false;
                     for (let colIndex = 0; colIndex < columns.length; colIndex++) {
@@ -385,7 +390,7 @@ export default function AgendaView() {
     }
   };
   
-  const handleOpenDetailModal = (event: any) => {
+  const handleOpenDetailModal = (event: AgendaEvent) => {
       const fullReservation = allEvents.find(r => r.id === event.id) as Reservation | undefined;
       if (fullReservation) {
         setSelectedReservation(fullReservation);
@@ -405,12 +410,12 @@ export default function AgendaView() {
     if (client && selectedReservation.items) {
         const cartItems = selectedReservation.items.map(item => {
             const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
-            return service ? { ...service, barbero_id: item.barbero_id, nombre: service.name } : null;
-        }).filter((i): i is ServiceType & { barbero_id: string } => !!i);
+            return service ? { ...service, barbero_id: item.barbero_id } : null;
+        }).filter((i): i is (ServiceType & { barbero_id: string }) => !!i);
 
         setSaleInitialData({
             client,
-            items: cartItems,
+            items: cartItems.map(i => ({...i, nombre: i.name})),
             reservationId: selectedReservation.id,
             local_id: selectedReservation.local_id
         });
@@ -420,6 +425,10 @@ export default function AgendaView() {
   }
   
   const handleUpdateStatus = async (reservationId: string, newStatus: string) => {
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No hay conexión con la base de datos.'});
+        return;
+    }
     try {
         const resRef = doc(db, 'reservas', reservationId);
         await updateDoc(resRef, { estado: newStatus });
@@ -433,13 +442,14 @@ export default function AgendaView() {
   };
   
   const handleCancelReservation = async (reservationId: string) => {
-    if (!selectedReservation || !selectedReservation.cliente_id) {
-         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado." });
+    if (!selectedReservation || !selectedReservation.cliente_id || !db) {
+         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado o no hay conexión con la base de datos." });
          return;
     }
     
     try {
         await runTransaction(db, async (transaction) => {
+            if (!db) throw new Error("Database not available in transaction");
             const resRef = doc(db, 'reservas', reservationId);
             const clientRef = doc(db, 'clientes', selectedReservation.cliente_id!);
 
@@ -470,7 +480,7 @@ export default function AgendaView() {
   };
 
   const handleDeleteBlock = async () => {
-    if (!blockToDelete) return;
+    if (!blockToDelete || !db) return;
     try {
       await deleteDoc(doc(db, "bloqueos_horario", blockToDelete.id));
       toast({
@@ -542,7 +552,7 @@ export default function AgendaView() {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   
   const getProfessionalAvatar = (profesional: Profesional): string | undefined => {
-    const userDoc = userMap.get(profesional.id);
+    const userDoc = userMap.get(profesional.userId);
     return userDoc?.avatarUrl;
   };
 
@@ -684,7 +694,7 @@ export default function AgendaView() {
                         <div key={barber.id} className="relative">
                             <div 
                                 className="relative h-full"
-                                ref={el => gridRefs.current[barber.id] = el}
+                                ref={(el: HTMLDivElement | null) => { gridRefs.current[barber.id] = el; }}
                                 onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
                                 onMouseLeave={handleMouseLeave}
                                 onClick={(e) => isWorking && handleClickSlot(e)}
@@ -735,18 +745,20 @@ export default function AgendaView() {
                                 )}
 
                                 {/* Events */}
-                                {eventsWithLayout.filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id))).map(event => (
+                                {eventsWithLayout
+                                    .filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some(i => i.barbero_id === barber.id)))
+                                    .map(event => (
                                     <Tooltip key={event.id}>
                                     <TooltipTrigger asChild>
                                         <div
                                             onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event as Reservation); } else if (event.type === 'block') { setBlockToDelete(event as TimeBlock); } }}
-                                            className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", (event as any).color)} 
-                                            style={{...calculatePosition((event as any).start, (event as any).duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%`}}
+                                            className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", event.color)} 
+                                            style={{...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%`}}
                                         >
                                           <div className="flex-grow overflow-hidden pr-1">
-                                                <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? ((event as any).customer?.nombre || 'Cliente Eliminado') : (event as any).motivo}</p>
+                                                <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event.customer?.nombre || 'Cliente Eliminado') : event.motivo}</p>
                                             </div>
-                                            {(event.type === 'appointment' && (event as Reservation).pago_estado === 'Pagado') && (
+                                            {(event.type === 'appointment' && event.pago_estado === 'Pagado') && (
                                                 <div className="absolute top-0 right-0 h-full w-6 bg-green-500 flex items-center justify-center">
                                                     <DollarSign className="h-4 w-4 text-black font-bold" />
                                                 </div>
@@ -756,26 +768,26 @@ export default function AgendaView() {
                                     {event.type === 'appointment' ? (
                                         <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                             <div className="space-y-2">
-                                                <p className="font-bold text-base text-foreground">{((event as any).customer?.nombre || 'Cliente Eliminado')}</p>
-                                                <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : (event as any).servicio}</p>
+                                                <p className="font-bold text-base text-foreground">{(event.customer?.nombre || 'Cliente Eliminado')}</p>
+                                                <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : event.servicio}</p>
                                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                     <Clock className="w-4 h-4" />
-                                                    <span>{formatHour((event as any).start)} - {formatHour((event as any).end)}</span>
+                                                    <span>{formatHour(event.start)} - {formatHour(event.end)}</span>
                                                 </div>
-                                                {(event as Reservation).pago_estado &&
+                                                {event.pago_estado &&
                                                     <div className="flex items-center gap-2 text-sm">
                                                         <DollarSign className="w-4 h-4" />
                                                         <span className={cn(
-                                                            (event as Reservation).pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                                            event.pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
                                                         )}>
-                                                            {(event as Reservation).pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
+                                                            {event.pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
                                                         </span>
                                                     </div>
                                                 }
                                             </div>
                                         </TooltipContent>
                                     ) : (
-                                        <TooltipContent><p>Horario Bloqueado: {(event as any).customer.nombre}</p></TooltipContent>
+                                        <TooltipContent><p>Horario Bloqueado: {event.motivo}</p></TooltipContent>
                                     )}
                                     </Tooltip>
                                 ))}

@@ -153,6 +153,16 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 });
 ClientCombobox.displayName = 'ClientCombobox';
 
+// Helper function to safely parse date from various formats
+const safeParseDate = (rawDate: any): Date | null => {
+    if (!rawDate) return null;
+    if (rawDate instanceof Date) return rawDate;
+    if (typeof rawDate === 'string') return parseISO(rawDate);
+    if (typeof rawDate === 'object' && rawDate !== null && typeof (rawDate as any).seconds === 'number') {
+        return new Date((rawDate as any).seconds * 1000);
+    }
+    return null;
+}
 
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
   const { toast } = useToast();
@@ -287,21 +297,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     setAvailabilityErrors(errors);
     return allItemsValid;
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
-
+  
   useEffect(() => {
     if (initialData && form && services.length > 0) {
-        let fecha: Date = new Date();
-        const rawDate = initialData.fecha;
-        
-        if (rawDate) {
-          if (typeof rawDate === 'string') {
-            fecha = parseISO(rawDate);
-          } else if (typeof rawDate === 'object' && rawDate !== null && 'seconds' in rawDate) {
-            fecha = new Date((rawDate as any).seconds * 1000);
-          } else if (typeof rawDate === 'object' && rawDate instanceof Date) {
-            fecha = rawDate;
-          }
-        }
+        const fecha = safeParseDate(initialData.fecha) || new Date();
 
         const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
         const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];

@@ -16,13 +16,16 @@ backend:
       secret: TWILIO_AUTH_TOKEN
     - variable: MERCADO_PAGO_ACCESS_TOKEN
       secret: MERCADO_PAGO_ACCESS_TOKEN
-    - variable: MERCADO_PAGO_WEBHOOK_SECRET
-      secret: MERCADO_PAGO_WEBHOOK_SECRET
+    - variable: MERCADO_PAGO_WEBHOOK_SECRET_TEST
+      secret: MERCADO_PAGO_WEBHOOK_SECRET_TEST
 runConfig:
   minInstances: 0
   maxInstances: 2
   cpu: 1
   memoryMiB: 512
+headers:
+  - source: /api/mercado-pago-webhook
+    function: functions
 env:
   # Variables de entorno para el frontend (Next.js)
   # --- FIREBASE PROJECT CONFIG ---

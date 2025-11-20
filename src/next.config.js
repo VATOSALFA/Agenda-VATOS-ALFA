@@ -10,13 +10,10 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   async rewrites() {
-    const backend = process.env.SERVICE_ID || 'functions';
-    const backendUrl = `https://_ah/functions/${backend}`;
-
     return [
       {
         source: '/api/mercado-pago-webhook',
-        destination: `${backendUrl}/mercadoPagoWebhook`,
+        destination: 'https://_ah/functions/mercadoPagoWebhook',
       },
     ];
   },
@@ -57,6 +54,8 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
+
+
 
 
 

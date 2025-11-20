@@ -383,9 +383,9 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
 exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
     console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
-    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET_TEST;
+    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
-        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET_TEST is not configured. Check App Hosting backend environment variables.");
+        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured. Check App Hosting backend environment variables.");
         response.status(500).send("Webhook secret not configured.");
         return;
     }
@@ -490,4 +490,5 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     response.status(200).send("OK");
 });
 
+    
     

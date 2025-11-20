@@ -383,9 +383,9 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
 exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
     console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
-    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET_TEST;
     if (!secret) {
-        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured. Check App Hosting backend environment variables.");
+        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET_TEST is not configured. Check App Hosting backend environment variables.");
         response.status(500).send("Webhook secret not configured.");
         return;
     }
@@ -437,7 +437,7 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
         const sha = hmac.digest('hex');
 
         if (sha !== v1) {
-            console.warn("[v4] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
+            console.warn("[v3] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
@@ -489,3 +489,5 @@ exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
+
+    

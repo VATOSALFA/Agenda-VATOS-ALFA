@@ -13,7 +13,7 @@ const nextConfig = {
     return [
       {
         source: '/api/mercado-pago-webhook',
-        destination: 'https://_ah/functions/mercadoPagoWebhook',
+        destination: 'https://_ah/functions/mercadopagowebhook',
       },
     ];
   },

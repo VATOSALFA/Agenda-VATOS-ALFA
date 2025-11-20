@@ -16,8 +16,8 @@ backend:
       secret: TWILIO_AUTH_TOKEN
     - variable: MERCADO_PAGO_ACCESS_TOKEN
       secret: MERCADO_PAGO_ACCESS_TOKEN
-    - variable: MERCADO_PAGO_WEBHOOK_SECRET_TEST
-      secret: MERCADO_PAGO_WEBHOOK_SECRET_TEST
+    - variable: MERCADO_PAGO_WEBHOOK_SECRET
+      secret: MERCADO_PAGO_WEBHOOK_SECRET
 runConfig:
   minInstances: 0
   maxInstances: 2

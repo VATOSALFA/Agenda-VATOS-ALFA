@@ -350,7 +350,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
                   default_type: "credit_card"
               }
           },
-          description: `Venta en VATOS ALFA`,
+          description: `Venta en VATOS ALFA Barber Shop`,
         };
 
         const response = await fetch('https://api.mercadopago.com/v1/orders', {
@@ -380,7 +380,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
     }
 });
 
-exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
+exports.mercadopagowebhook = onRequest({cors: true}, async (request, response) => {
     console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;

@@ -5,9 +5,6 @@ run:
     - npm run build
   start:
     - next start
-runConfig:
-  minInstances: 0
-  maxInstances: 2
 env:
   # --- FIREBASE PROJECT CONFIG ---
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
@@ -26,7 +23,7 @@ env:
     secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
   # --- MERCADO PAGO CONFIG ---
   - variable: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
-    secret: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
+    secret: NEXT_PUBLIC_MercadoPago_PUBLIC_KEY
   - variable: MERCADO_PAGO_ACCESS_TOKEN
     secret: MERCADO_PAGO_ACCESS_TOKEN
     availability:

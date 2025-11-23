@@ -1,4 +1,6 @@
-const functions = require("firebase-functions");
+
+
+const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const {Buffer} = require("buffer");
@@ -19,14 +21,14 @@ const getMercadoPagoConfig = async () => {
   const settingsDoc = await db.collection('configuracion').doc('pagos').get();
   
   if (!settingsDoc.exists) {
-      throw new functions.https.HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
+      throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
   }
   
   const settings = settingsDoc.data();
   const accessToken = settings?.mercadoPagoAccessToken;
   
   if (!accessToken) {
-      throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
+      throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
   }
   
   // Retorna el objeto de configuración del SDK y el token
@@ -265,7 +267,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 /**
  * Cloud Function to handle incoming Twilio webhook requests.
  */
-exports.twilioWebhook = functions.https.onRequest(async (request, response) => {
+exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
     try {
       const {From, Body, MediaUrl0, MediaContentType0} = request.body;
 
@@ -294,9 +296,9 @@ exports.twilioWebhook = functions.https.onRequest(async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-      throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
+  if (!auth) {
+      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
 
   try {
@@ -308,21 +310,21 @@ exports.getPointTerminals = functions.https.onCall(async (data, context) => {
       return { success: true, devices: devices.devices || [] };
   } catch(error) {
       console.error("Error fetching Mercado Pago terminals: ", error);
-      if (error instanceof functions.https.HttpsError) {
+      if (error instanceof HttpsError) {
           throw error;
       }
-      throw new functions.https.HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
+      throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
   }
 });
 
 
-exports.setTerminalPDVMode = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
+  if (!auth) {
+    throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
   const { terminalId } = data;
   if (!terminalId) {
-    throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
+    throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
   }
 
   try {
@@ -335,22 +337,22 @@ exports.setTerminalPDVMode = functions.https.onCall(async (data, context) => {
     return { success: true, data: result };
   } catch (error) {
     console.error(`Error setting PDV mode for ${terminalId}:`, error);
-    if (error instanceof functions.https.HttpsError) {
+    if (error instanceof HttpsError) {
         throw error;
     }
-    throw new functions.https.HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
+    throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
   }
 });
 
 
-exports.createPointPayment = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
+    if (!auth) {
+      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }
     const { amount, terminalId, referenceId } = data;
 
     if (!amount || !terminalId || !referenceId) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
+        throw new HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
     }
 
     try {
@@ -393,25 +395,22 @@ exports.createPointPayment = functions.https.onCall(async (data, context) => {
 
         if (!response.ok) {
           console.error("Error response from Mercado Pago:", result);
-          throw new functions.https.HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
+          throw new HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
         }
 
         return { success: true, data: result };
     } catch(error) {
         console.error("Error creating payment order:", error);
-         if (error instanceof functions.https.HttpsError) {
+         if (error instanceof HttpsError) {
             throw error;
         }
-        throw new functions.https.HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
+        throw new HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
     }
 });
 
 
-exports.mercadoPagoWebhook = functions.https.onRequest(async (request, response) => {
+exports.mercadoPagoWebhook = onRequest({cors: true}, async (request, response) => {
     console.log("========== MERCADO PAGO WEBHOOK RECEIVED ==========");
-    console.log("Headers:", JSON.stringify(request.headers, null, 2));
-    console.log("Query:", JSON.stringify(request.query, null, 2));
-    console.log("Body:", JSON.stringify(request.body, null, 2));
     
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
@@ -424,9 +423,9 @@ exports.mercadoPagoWebhook = functions.https.onRequest(async (request, response)
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id'];
         
-        if (!xSignature) {
-            console.warn("Webhook received without x-signature header.");
-            response.status(400).send("Missing x-signature header.");
+        if (!xSignature || !xRequestId) {
+            console.warn("Webhook received without x-signature or x-request-id header.");
+            response.status(400).send("Missing required headers.");
             return;
         }
 
@@ -441,6 +440,7 @@ exports.mercadoPagoWebhook = functions.https.onRequest(async (request, response)
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
 
+        // The data.id comes from the query parameters, as per MP docs
         const dataId = request.query['data.id'];
         if (!dataId) {
              console.warn("Webhook received without data.id in query params.");
@@ -448,38 +448,47 @@ exports.mercadoPagoWebhook = functions.https.onRequest(async (request, response)
              return;
         }
         
-        const manifest = `id:${dataId.toLowerCase()};request-id:${xRequestId};ts:${ts};`;
+        // Correct manifest construction
+        const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
         
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
         if (sha !== v1) {
-            console.warn("Webhook signature validation failed.");
+            console.warn("Webhook signature validation failed. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
         console.log("Webhook signature validation successful.");
         
+        // Process the notification
         const { body } = request;
-        if (body.action === 'payment.updated' || body.action === 'order.action_required') { // Handle both relevant actions
-            const externalReference = body.external_reference; 
+        if (body.action === 'payment.updated' && body.data?.id) {
+            // It's a payment notification, we need to get the order to find our external_reference
+            const { accessToken } = await getMercadoPagoConfig();
+            const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${body.data.id}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const paymentData = await paymentResponse.json();
             
-            if (externalReference) {
-                const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+            if (paymentData.status === 'approved' && paymentData.external_reference) {
+                const ventaRef = admin.firestore().collection('ventas').doc(paymentData.external_reference);
                 const ventaDoc = await ventaRef.get();
                 if (ventaDoc.exists) {
                     await ventaRef.update({
                         pago_estado: 'Pagado',
                         mercado_pago_status: 'approved',
-                        mercado_pago_id: body.data.id,
+                        mercado_pago_id: paymentData.id,
+                        mercado_pago_order_id: paymentData.order.id
                     });
-                    console.log(`Updated sale ${externalReference} to 'Pagado'.`);
+                    console.log(`Updated sale ${paymentData.external_reference} to 'Pagado'.`);
                 }
             }
         }
     } catch (error) {
         console.error("Error processing Mercado Pago webhook:", error);
+        // Respond with 200 even on error to prevent MP from retrying indefinitely
         response.status(200).send("OK_WITH_ERROR");
         return;
     }
@@ -487,3 +496,5 @@ exports.mercadoPagoWebhook = functions.https.onRequest(async (request, response)
     console.log("===================================================");
     response.status(200).send("OK");
 });
+
+    

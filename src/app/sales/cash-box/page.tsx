@@ -290,7 +290,7 @@ export default function CashBoxPage() {
   };
 
    const handleDeleteSale = async () => {
-    if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR') return;
+    if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR' || !db) return;
     try {
         await deleteDoc(doc(db, 'ventas', saleToDelete.id));
         toast({
@@ -321,7 +321,7 @@ export default function CashBoxPage() {
   };
 
   const handleDeleteEgreso = async () => {
-    if (!egresoToDelete || egresoDeleteConfirmationText !== 'ELIMINAR') return;
+    if (!egresoToDelete || egresoDeleteConfirmationText !== 'ELIMINAR' || !db) return;
     try {
         await deleteDoc(doc(db, 'egresos', egresoToDelete.id));
         toast({
@@ -364,7 +364,7 @@ export default function CashBoxPage() {
   };
 
   const handleDeleteIngreso = async () => {
-    if (!ingresoToDelete || ingresoDeleteConfirmationText !== 'ELIMINAR') return;
+    if (!ingresoToDelete || ingresoDeleteConfirmationText !== 'ELIMINAR' || !db) return;
      try {
         await deleteDoc(doc(db, 'ingresos_manuales', ingresoToDelete.id));
         toast({
@@ -396,7 +396,7 @@ export default function CashBoxPage() {
     }));
 
     const egresosData = egresosWithData.map(egreso => ({
-        Fecha: format(egreso.fecha.toDate(), 'dd-MM-yyyy'),
+        Fecha: egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd-MM-yyyy') : format(egreso.fecha, 'dd-MM-yyyy'),
         Local: localMap.get(egreso.local_id ?? ''),
         Concepto: egreso.concepto,
         'A quién se entrega': egreso.aQuien,
@@ -434,7 +434,7 @@ export default function CashBoxPage() {
   }
 
   const handleDownloadRequest = async () => {
-    if (!authCode) {
+    if (!authCode || !db) {
         toast({ variant: 'destructive', title: 'Código requerido' });
         return;
     }
@@ -456,7 +456,7 @@ export default function CashBoxPage() {
   };
   
    const handleAuthCodeSubmit = async () => {
-    if (!authCode) {
+    if (!authCode || !db) {
       toast({ variant: 'destructive', title: 'Código requerido' });
       return;
     }
@@ -813,7 +813,7 @@ export default function CashBoxPage() {
                                             <TableRow><TableCell colSpan={7} className="text-center h-24">No hay egresos para el período seleccionado.</TableCell></TableRow>
                                         ) : paginatedEgresos.map((egreso) => (
                                             <TableRow key={egreso.id}>
-                                                <TableCell>{format(egreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
+                                                <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd-MM-yyyy') : format(egreso.fecha, 'dd-MM-yyyy')}</TableCell>
                                                 <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
                                                 <TableCell>{egreso.concepto}</TableCell>
                                                 <TableCell>{egreso.aQuien}</TableCell>
@@ -1079,4 +1079,3 @@ export default function CashBoxPage() {
     </>
   );
 }
-

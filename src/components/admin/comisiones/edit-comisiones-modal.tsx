@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,7 +24,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Professional, Service, Commission } from '@/lib/types';
+import type { Profesional as Professional, Service, Commission } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Separator } from '@/components/ui/separator';
@@ -39,7 +40,7 @@ interface EditComisionesModalProps {
 const getDefaultValues = (professional: Professional, services: Service[]) => {
     const values: { [key: string]: Commission } = {};
     services.forEach(service => {
-        values[service.name] = professional.comisionesPorServicio?.[service.name] || professional.defaultCommission || { value: 0, type: '%' };
+        values[service.name] = professional.comisionesPorServicio?.[service.id] || professional.defaultCommission || { value: 0, type: '%' };
     });
     return values;
 }
@@ -65,10 +66,19 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
   const onSubmit = async (data: Record<string, Commission>) => {
     if (!db) return;
     setIsSubmitting(true);
+    
+    // Remap data from service name to service ID
+    const comisionesPorServicio: { [key: string]: Commission } = {};
+    services.forEach(service => {
+      if (data[service.name]) {
+        comisionesPorServicio[service.id] = data[service.name];
+      }
+    });
+
     try {
         const professionalRef = doc(db, 'profesionales', professional.id);
         await updateDoc(professionalRef, {
-            comisionesPorServicio: data
+            comisionesPorServicio
         });
         toast({
             title: 'Comisiones guardadas con éxito',

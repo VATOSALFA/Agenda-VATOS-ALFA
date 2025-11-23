@@ -32,7 +32,7 @@ import {
   Eye,
   MessageCircle,
 } from 'lucide-react';
-import type { Reservation, Sale } from '@/lib/types';
+import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -83,8 +83,8 @@ export function ReservationDetailModal({
   const { toast } = useToast();
   const { db } = useAuth();
   
-  const { data: locales } = useFirestoreQuery('locales');
-  const { data: professionals } = useFirestoreQuery('profesionales');
+  const { data: locales } = useFirestoreQuery<Local>('locales');
+  const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
 
   if (!reservation) return null;
   
@@ -93,13 +93,14 @@ export function ReservationDetailModal({
   }
 
   const handleCancelReservation = async (reservationId: string) => {
-    if (!reservation.cliente_id) {
-         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado." });
+    if (!reservation.cliente_id || !db) {
+         toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado o la base de datos no está disponible." });
          return;
     }
     
     try {
         await runTransaction(db, async (transaction) => {
+            if (!db) throw new Error("Database not available in transaction");
             const resRef = doc(db, 'reservas', reservationId);
             const clientRef = doc(db, 'clientes', reservation.cliente_id!);
 
@@ -128,6 +129,7 @@ export function ReservationDetailModal({
   };
 
   const handleViewPayment = async () => {
+    if(!db) return;
     setIsLoadingSale(true);
     try {
         const salesQuery = query(collection(db, 'ventas'), where('reservationId', '==', reservation.id));
@@ -162,9 +164,9 @@ export function ReservationDetailModal({
     setIsSending(true);
 
     try {
-        const local = locales.find(l => l.id === reservation.local_id);
+        const local = locales.find((l: Local) => l.id === reservation.local_id);
         const professionalId = reservation.items?.[0]?.barbero_id;
-        const professional = professionalId ? professionals.find(p => p.id === professionalId) : null;
+        const professional = professionalId ? professionals.find((p: Profesional) => p.id === professionalId) : null;
 
         if(!local || !professional) {
             throw new Error("No se pudo encontrar el local o el profesional asociado.");

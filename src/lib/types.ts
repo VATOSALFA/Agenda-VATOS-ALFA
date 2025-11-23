@@ -181,6 +181,10 @@ export interface CartItem {
     precio: number;
     cantidad: number;
     tipo: 'producto' | 'servicio';
+    barbero_id?: string;
+    presentation_id?: string;
+    discountValue?: string | number;
+    discountType?: 'fixed' | 'percentage';
 }
 
 export interface Sale {
@@ -227,7 +231,7 @@ export interface SaleItem {
 
 export interface Egreso {
   id: string;
-  fecha: Timestamp; // Firestore Timestamp
+  fecha: Timestamp | Date;
   monto: number;
   concepto: string;
   aQuien: string; // professional ID

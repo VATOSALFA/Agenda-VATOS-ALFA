@@ -6,9 +6,9 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { writeBatch, collection, doc, Timestamp } from 'firebase/firestore';
-import type { Product } from '@/lib/types';
-import { useAuth } from '@/contexts/firebase-auth-context';
+import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
+import type { Product, Commission } from '@/lib/types';
 
 import {
   Dialog,
@@ -37,7 +37,6 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
   const [parsedData, setParsedData] = useState<ParsedProduct[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
-  const { db } = useAuth();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -67,7 +66,16 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
           const getIndex = (name: string) => headers.indexOf(name);
 
-          const data: ParsedProduct[] = json.slice(1).map((row: any[]) => ({
+          const data: ParsedProduct[] = json.slice(1).map((row: any[]) => {
+              const commissionValue = Number(row[getIndex('comision de venta (valor)')]) || 0;
+              const commissionTypeFromSheet = String(row[getIndex('comision de venta (tipo)')]);
+              
+              const commission: Commission = {
+                value: commissionValue,
+                type: commissionTypeFromSheet === '$' ? '$' : '%',
+              };
+              
+              return {
                 nombre: row[getIndex('nombre')] || '',
                 barcode: row[getIndex('codigo de barras')] ? String(row[getIndex('codigo de barras')]) : undefined,
                 brand_id: row[getIndex('marca')] || '',
@@ -77,16 +85,14 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
                 stock: Number(row[getIndex('cantidad en stock')]) || 0,
                 purchase_cost: Number(row[getIndex('costo de compra')]) || undefined,
                 internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
-                commission: {
-                    value: Number(row[getIndex('comision de venta (valor)')]) || 0,
-                    type: row[getIndex('comision de venta (tipo)')] === '$' ? '$' : '%'
-                },
+                commission: commission,
                 includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
                 description: row[getIndex('descripcion')] || undefined,
                 stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,
                 notification_email: row[getIndex('email para notificaciones')] || undefined,
                 images: row[getIndex('imagenes')] ? String(row[getIndex('imagenes')]).split(',').map(s => s.trim()) : []
-          })).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
+              }
+          }).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
 
           if (data.length === 0) {
             toast({ variant: 'destructive', title: 'No se encontraron datos válidos', description: 'Revisa el contenido del archivo y asegúrate de que los datos requeridos estén presentes.' });

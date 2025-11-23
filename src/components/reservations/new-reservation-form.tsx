@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -11,7 +10,7 @@ import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, g
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import { parse, format, set, getDay, addMinutes, getHours, getMinutes, isToday as dateFnsIsToday } from 'date-fns';
+import { parse, format, set, getDay, addMinutes, getHours, getMinutes, isToday as dateFnsIsToday, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
-import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local } from '@/lib/types';
+import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
@@ -154,6 +153,16 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 });
 ClientCombobox.displayName = 'ClientCombobox';
 
+// Helper function to safely parse date from various formats
+const safeParseDate = (rawDate: any): Date | null => {
+    if (!rawDate) return null;
+    if (rawDate instanceof Date) return rawDate;
+    if (typeof rawDate === 'string') return parseISO(rawDate);
+    if (typeof rawDate === 'object' && rawDate !== null && typeof (rawDate as any).seconds === 'number') {
+        return new Date((rawDate as any).seconds * 1000);
+    }
+    return null;
+}
 
 export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
   const { toast } = useToast();
@@ -288,37 +297,30 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     setAvailabilityErrors(errors);
     return allItemsValid;
   }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
-
+  
   useEffect(() => {
     if (initialData && form && services.length > 0) {
-        let fecha = new Date();
-        if (typeof initialData.fecha === 'string') {
-            const dateParts = initialData.fecha.split('-').map(Number);
-            if (dateParts.length === 3) {
-                fecha = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            }
-        } else if (initialData.fecha instanceof Date) {
-            fecha = initialData.fecha;
-        } else if ((initialData.fecha as any)?.seconds) {
-            fecha = new Date((initialData.fecha as any).seconds * 1000);
-        }
+        const fecha = safeParseDate(initialData.fecha) || new Date();
 
         const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
         const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
-        
-        let itemsToSet;
-        if(isEditMode && initialData.items && services.length > 0) {
-            itemsToSet = initialData.items.map(i => ({
-                servicio: services.find(s => s.name === i.servicio)?.id || '',
-                barbero_id: i.barbero_id || ''
-            }));
+            
+        let itemsToSet: { servicio: string; barbero_id: string; }[] = [];
+        if(isEditMode && initialData.items && Array.isArray(initialData.items) && services.length > 0) {
+            itemsToSet = initialData.items.map((i: SaleItemType) => {
+                const service = services.find(s => s.name === i.servicio || s.name === i.nombre);
+                return {
+                    servicio: service?.id || '',
+                    barbero_id: i.barbero_id || ''
+                };
+            });
         } else {
             itemsToSet = [{ 
                 servicio: '', 
                 barbero_id: (initialData as any).barbero_id || '' 
             }];
         }
-        
+            
         form.reset({
             ...initialData,
             cliente_id: initialData.cliente_id,
@@ -364,9 +366,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         if (!items || !servicesMap.size) return;
 
-        const { totalPrice, totalDuration } = items.reduce(
+        const { totalPrice, totalDuration } = (items as { servicio: string }[]).reduce(
           (acc, currentItem) => {
-            const service = servicesMap.get(currentItem?.servicio);
+            if(!currentItem) return acc;
+            const service = servicesMap.get(currentItem.servicio);
             if (service) {
               acc.totalPrice += service.price || 0;
               acc.totalDuration += service.duration || 0;
@@ -506,7 +509,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    if(setClientQueryKey) setClientQueryKey(prev => prev + 1);
+    if(setClientQueryKey) setClientQueryKey((prev: number) => prev + 1);
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
@@ -798,4 +801,3 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     </Dialog>
   );
 }
-

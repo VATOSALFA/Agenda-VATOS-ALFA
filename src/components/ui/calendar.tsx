@@ -60,62 +60,41 @@ function Calendar({
       components={{
         IconLeft: () => <ChevronLeft className="h-4 w-4" />,
         IconRight: () => <ChevronRight className="h-4 w-4" />,
-        Dropdown: (dropdownProps: DropdownProps) => {
-            const { fromDate, toDate } = props;
-            const { fromMonth, toMonth, fromYear, toYear } = dropdownProps;
-            const options: { label: string; value: string }[] = [];
-            let selectValue: string | undefined;
-
-            if (dropdownProps.name === 'months') {
-                const months = Array.from({ length: 12 }, (_, i) => new Date(new Date().getFullYear(), i, 1));
-                options.push(...months.map((month, i) => ({
-                    value: i.toString(),
-                    label: month.toLocaleString('default', { month: 'long' })
-                })));
-                selectValue = dropdownProps.value !== undefined ? String(dropdownProps.value) : undefined;
-            } else if (dropdownProps.name === 'years') {
-                const startYear = fromYear || fromDate?.getFullYear() || new Date().getFullYear() - 100;
-                const endYear = toYear || toDate?.getFullYear() || new Date().getFullYear();
-                 for (let i = endYear; i >= startYear; i--) {
-                    options.push({ value: i.toString(), label: i.toString() });
-                }
-                selectValue = (dropdownProps.value !== undefined) ? String(dropdownProps.value) : undefined;
-            }
-
+        Dropdown: ({ name, value, onChange, children }) => {
+            const options = React.Children.toArray(children) as React.ReactElement<React.HTMLProps<HTMLOptionElement>>[];
             const handleValueChange = (newValue: string) => {
-                if (dropdownProps.onChange) {
-                    const changeEvent = {
-                        target: { value: newValue }
-                    } as React.ChangeEvent<HTMLSelectElement>;
-                    dropdownProps.onChange(changeEvent);
-                }
+              const changeEvent = {
+                target: { value: newValue },
+              } as React.ChangeEvent<HTMLSelectElement>;
+              if (onChange) onChange(changeEvent);
             };
 
-            let triggerDisplayValue = dropdownProps.caption;
-            if(dropdownProps.name === 'months' && dropdownProps.value !== undefined) {
-                triggerDisplayValue = new Date(new Date().getFullYear(), dropdownProps.value as number).toLocaleString('default', { month: 'long' });
-            } else if (dropdownProps.name === 'years' && dropdownProps.value !== undefined) {
-                triggerDisplayValue = String(dropdownProps.value);
-            }
+            let selectValue: string | undefined;
+            let triggerDisplayValue = value;
 
+            if (name === 'months' && value !== undefined) {
+              selectValue = String(value);
+              triggerDisplayValue = new Date(new Date().getFullYear(), value as number).toLocaleString('default', { month: 'long' });
+            } else if (name === 'years' && value !== undefined) {
+              selectValue = String(value);
+              triggerDisplayValue = String(value);
+            }
+            
             return (
-                 <Select
-                    onValueChange={handleValueChange}
-                    value={selectValue}
-                >
-                    <SelectTrigger className="w-[120px]">{triggerDisplayValue}</SelectTrigger>
-                    <SelectContent>
-                        <ScrollArea className="h-80">
-                            {options.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </ScrollArea>
-                    </SelectContent>
-                </Select>
-            )
-        }
+              <Select onValueChange={handleValueChange} value={selectValue}>
+                <SelectTrigger className="w-[120px]">{triggerDisplayValue}</SelectTrigger>
+                <SelectContent>
+                  <ScrollArea className="h-80">
+                    {options.map((option, index) => (
+                      <SelectItem key={`${option.props.value}-${index}`} value={String(option.props.value)}>
+                        {option.props.children}
+                      </SelectItem>
+                    ))}
+                  </ScrollArea>
+                </SelectContent>
+              </Select>
+            );
+        },
       }}
       {...props}
     />

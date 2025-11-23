@@ -9,10 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Edit, Save, Loader2, TrendingDown } from 'lucide-react';
 import { AddDepositoModal } from '@/components/finanzas/add-deposito-modal';
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
 import { Input } from '@/components/ui/input';
+import { Timestamp } from 'firebase/firestore';
 
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
@@ -66,25 +67,26 @@ export default function FinanzasResumenPage() {
             monthlyData[monthName].ingresos += sale.total;
         });
 
-        const allEgresos = [
-            ...egresos.map(e => ({ ...e, fecha: e.fecha.toDate() })),
+        const allEgresos: { fecha: Date; monto: number }[] = [
+            ...egresos.map(e => ({ ...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : e.fecha })),
             ...sales.flatMap(sale => {
                 const saleDate = sale.fecha_hora_venta.toDate();
                 return sale.items?.map(item => {
+                    if (!item.barbero_id) return null;
                     const professional = professionalMap.get(item.barbero_id);
                     if (!professional) return null;
 
                     let commissionConfig = null;
                     if (item.tipo === 'servicio') {
-                        const service = serviceMap.get(item.id);
-                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.name] || service.defaultCommission || professional.defaultCommission;
+                        const service = services.find(s => s.name === item.nombre);
+                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
                     } else if (item.tipo === 'producto') {
                         const product = productMap.get(item.id);
                         if (product) commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                     }
 
                     if (commissionConfig) {
-                        const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                        const itemSubtotal = item.subtotal || item.precio || 0;
                         const itemDiscount = item.descuento?.monto || 0;
                         const finalItemPrice = itemSubtotal - itemDiscount;
 
@@ -92,10 +94,10 @@ export default function FinanzasResumenPage() {
                             ? finalItemPrice * (commissionConfig.value / 100)
                             : commissionConfig.value;
                             
-                        return { fecha: saleDate, monto: commissionAmount, aQuien: professional.id, concepto: `Comisión ${item.tipo}` };
+                        return { fecha: saleDate, monto: commissionAmount };
                     }
                     return null;
-                }).filter(e => e !== null) as { fecha: Date, monto: number, aQuien: string, concepto: string }[]
+                }).filter(e => e !== null) as { fecha: Date, monto: number }[]
             })
         ];
 
@@ -113,7 +115,7 @@ export default function FinanzasResumenPage() {
                 return sum + (sale.items || [])
                     .filter(i => i.tipo === 'producto')
                     .reduce((itemSum, i) => {
-                        const itemSubtotal = i.subtotal || i.precio_unitario || 0;
+                        const itemSubtotal = i.subtotal || i.precio || 0;
                         const itemDiscount = i.descuento?.monto || 0;
                         return itemSum + (itemSubtotal - itemDiscount);
                     }, 0);
@@ -150,7 +152,7 @@ export default function FinanzasResumenPage() {
         sales.forEach(sale => {
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
-                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
+                    const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
                     const itemDiscount = item.descuento?.monto || 0;
                     const finalItemPrice = itemSubtotal - itemDiscount;
                     

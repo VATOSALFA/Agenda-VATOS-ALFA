@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,7 +7,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { addDoc, updateDoc, collection, doc, Timestamp } from 'firebase/firestore';
-import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -18,8 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
-import type { Schedule } from '@/app/admin/profesionales/page';
-import { db } from '@/lib/firebase-client';
+import type { Schedule, Local } from '@/lib/types';
+import { db } from '@/firebase';
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
@@ -36,20 +36,6 @@ const daysOfWeek = [
     { id: 'sabado', label: 'Sábado' },
     { id: 'domingo', label: 'Domingo' },
 ];
-
-export interface Local {
-  id: string;
-  name: string;
-  address: string;
-  timezone: string;
-  phone: string;
-  email: string;
-  schedule: Schedule;
-  acceptsOnline: boolean;
-  delivery: boolean;
-  secondaryPhone?: string;
-  description?: string;
-}
 
 const localSchema = z.object({
   name: z.string().min(1, "El nombre es requerido."),

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Product, Professional, Commission } from '@/lib/types';
+import type { Product, Profesional as Professional, Commission } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Separator } from '@/components/ui/separator';

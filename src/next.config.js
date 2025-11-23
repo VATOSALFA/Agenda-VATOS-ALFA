@@ -9,6 +9,14 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/mercado-pago-webhook',
+        destination: 'https://_ah/functions/mercadopagowebhook',
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
@@ -46,3 +54,8 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
+
+
+
+
+

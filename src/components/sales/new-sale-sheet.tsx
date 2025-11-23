@@ -1,11 +1,12 @@
 
+
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ import {
   DialogTrigger,
   DialogClose,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -54,12 +56,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, AvatarIcon, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
+import { Skeleton } from '../ui/skeleton';
 
 interface ReminderSettings {
     notifications: {
@@ -233,6 +236,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [currentSaleId, setCurrentSaleId] = useState<string | null>(null);
+  const [cashboxSettings, setCashboxSettings] = useState<any>(null);
+  const [cashboxSettingsLoading, setCashboxSettingsLoading] = useState(true);
 
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
@@ -242,8 +247,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
-  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', undefined, doc(db, 'configuracion', 'caja'));
-  const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
+  
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!db) return;
+      setCashboxSettingsLoading(true);
+      const settingsRef = doc(db, 'configuracion', 'caja');
+      const docSnap = await getDoc(settingsRef);
+      if (docSnap.exists()) {
+        setCashboxSettings(docSnap.data());
+      }
+      setCashboxSettingsLoading(false);
+    };
+    fetchSettings();
+  }, [db]);
+
+
+  const mainTerminalId = cashboxSettings?.mercadoPagoTerminalId;
 
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string; name: string }>();
@@ -295,14 +315,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [selectedClientId, clients]);
 
   useEffect(() => {
-    if (initialData?.local_id) {
+    if (isOpen && initialData?.local_id) {
         form.setValue('local_id', initialData.local_id);
-    } else if (selectedLocalId) {
+    } else if (isOpen && selectedLocalId) {
       form.setValue('local_id', selectedLocalId);
-    } else if (locales.length > 0) {
+    } else if (isOpen && !localesLoading && locales.length > 0) {
       form.setValue('local_id', locales[0].id);
     }
-  }, [locales, form, selectedLocalId, initialData]);
+  }, [isOpen, locales, localesLoading, form, selectedLocalId, initialData]);
 
   useEffect(() => {
     if(mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -317,22 +337,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   const filteredServices = useMemo(() => {
     if (!services) return [];
-    return services.filter(s => s && s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    return services.filter(s => s?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, services]);
   
   const filteredProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+    return products.filter(p => p?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, products]);
   
   const addItemFilteredServices = useMemo(() => {
     if (!services) return [];
-    return services.filter(s => s && s.name && s.name.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+    return services.filter(s => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
   }, [addItemSearchTerm, services]);
 
   const addItemFilteredProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter(p => p && p.nombre && p.nombre.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+    return products.filter(p => p?.nombre?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
   }, [addItemSearchTerm, products]);
 
 
@@ -345,8 +365,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         );
       }
       
-      const itemPrice = tipo === 'producto' ? (item as Product).public_price : (item as ServiceType).price;
-      const itemName = tipo === 'producto' ? (item as Product).nombre : (item as ServiceType).name;
+      const itemPrice = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
+      const itemName = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
       const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
 
       return [...prev, { id: item.id, nombre: itemName, precio: itemPrice || 0, cantidad: 1, tipo, presentation_id }];
@@ -411,17 +431,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if(initialData.reservationId) {
             setReservationId(initialData.reservationId);
         }
-        const initialCartItems = initialData.items.map(item => {
+        const initialCartItems: CartItem[] = initialData.items.map(item => {
             const tipo = 'duration' in item ? 'servicio' : 'producto';
             const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
-            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as ServiceType).nombre;
+            const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
             const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
             return {
                 id: item.id,
-                nombre,
+                nombre: nombre,
                 precio: precio || 0,
                 cantidad: 1,
-                tipo,
+                tipo: tipo,
                 presentation_id,
                 barbero_id: (item as any).barbero_id || undefined,
             };
@@ -432,35 +452,48 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }, [initialData, form, isOpen]);
 
   const handleSendToTerminal = async () => {
-    if (!selectedTerminalId || total <= 0) return;
+    if (!db || !selectedTerminalId || total <= 0 || !selectedClient) return;
     setIsSendingToTerminal(true);
 
     const saleRef = doc(collection(db, 'ventas'));
     setCurrentSaleId(saleRef.id);
 
     try {
-      // Pre-save the sale document so the webhook can find it
       await onSubmit(form.getValues(), saleRef.id, 'Pendiente');
+
+      const payer = {
+          first_name: selectedClient.nombre,
+          last_name: selectedClient.apellido,
+          email: selectedClient.correo,
+      };
+
+      const items = cart.map(item => ({
+        title: item.nombre,
+        quantity: item.cantidad,
+        unit_price: item.precio,
+      }));
 
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
         terminalId: selectedTerminalId,
         referenceId: saleRef.id,
+        payer: payer,
+        items: items
       });
 
       if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
-        // The webhook will handle the rest.
       } else {
         throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
       setIsSendingToTerminal(false);
-      // Here you might want to delete the pre-saved sale document if the intent creation fails
       if(currentSaleId) {
-          await deleteDoc(doc(db, 'ventas', currentSaleId));
+          if (db) {
+            await deleteDoc(doc(db, 'ventas', currentSaleId));
+          }
           setCurrentSaleId(null);
       }
     }
@@ -499,6 +532,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   }
 
   async function onSubmit(data: SaleFormData, saleDocId?: string, paymentStatus: 'Pagado' | 'Pendiente' = 'Pagado') {
+     if (!db) return;
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
@@ -730,35 +764,39 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             <ScrollArea className="flex-grow mt-4 pr-4">
                                 <TabsContent value="servicios" className="mt-0">
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {(servicesLoading ? Array.from({length: 6}) : filteredServices).map((service, idx) => (
-                                        service ? (
-                                        <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
-                                            <CardContent className="p-4">
-                                                <p className="font-semibold">{service.name}</p>
-                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                            </CardContent>
-                                        </Card>
-                                        ) : (
-                                            <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
-                                        )
-                                    ))}
+                                    {servicesLoading ? (
+                                        Array.from({ length: 6 }).map((_, idx) => (
+                                            <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+                                        ))
+                                    ) : (
+                                        filteredServices.map((service: ServiceType) => (
+                                            <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
+                                                <CardContent className="p-4">
+                                                    <p className="font-semibold">{service.name}</p>
+                                                    <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                </CardContent>
+                                            </Card>
+                                        ))
+                                    )}
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="productos" className="mt-0">
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {(productsLoading ? Array.from({length: 6}) : filteredProducts).map((product, idx) => (
-                                        product ? (
-                                        <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
-                                            <CardContent className="p-4">
-                                                <p className="font-semibold">{product.nombre}</p>
-                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
-                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
-                                            </CardContent>
-                                        </Card>
-                                        ) : (
-                                            <Card key={idx}><CardContent className="p-4"><div className="h-16 w-full bg-muted animate-pulse rounded-md" /></CardContent></Card>
-                                        )
-                                    ))}
+                                    {productsLoading ? (
+                                        Array.from({ length: 6 }).map((_, idx) => (
+                                            <Card key={idx}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+                                        ))
+                                    ) : (
+                                        filteredProducts.map((product: Product) => (
+                                            <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
+                                                <CardContent className="p-4">
+                                                    <p className="font-semibold">{product.nombre}</p>
+                                                    <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                    <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                                </CardContent>
+                                            </Card>
+                                        ))
+                                    )}
                                     </div>
                                 </TabsContent>
                             </ScrollArea>
@@ -770,7 +808,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
-                <form onSubmit={form.handleSubmit((data) => onSubmit(data))} className="h-full flex flex-col overflow-hidden">
+                <div className="h-full flex flex-col overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                         {/* Sale Details Form */}
                         <div className="space-y-4">
@@ -896,7 +934,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             Cobrar ${total.toLocaleString('es-MX')} en Terminal
                                         </Button>
                                     </div>
-                                    {!terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes > Terminal para activarlas.</p>}
+                                    {terminals && !terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes &gt; Terminal para activarlas.</p>}
                                 </Card>
                             )}
                             {paymentMethod === 'efectivo' && (
@@ -970,7 +1008,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         {/* Order Summary */}
                         <Dialog>
                             <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
-                             <DialogContent className="sm:max-w-2xl">
+                            <DialogContent className="sm:max-w-2xl">
                                 <DialogHeader>
                                 <DialogTitle>Agregar Ítem a la Venta</DialogTitle>
                                 </DialogHeader>
@@ -985,45 +1023,53 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <TabsTrigger value="productos">Productos</TabsTrigger>
                                     </TabsList>
                                     <ScrollArea className="flex-grow mt-4 pr-4">
-                                    <TabsContent value="servicios" className="mt-0">
-                                        <div className="space-y-2">
-                                        {(servicesLoading ? Array.from({ length: 3 }) : addItemFilteredServices).map((service, idx) => (
-                                            service ? (
-                                            <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
-                                                <div>
-                                                <p className="font-semibold">{service.name}</p>
-                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                                </div>
-                                                <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
+                                        <TabsContent value="servicios" className="mt-0">
+                                            <div className="space-y-2">
+                                                {servicesLoading ? (
+                                                    Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-16 w-full" />)
+                                                ) : (
+                                                    addItemFilteredServices.map((service: ServiceType) => (
+                                                        <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
+                                                            <div>
+                                                                <p className="font-semibold">{service.name}</p>
+                                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                            </div>
+                                                            <DialogClose asChild>
+                                                                <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
+                                                            </DialogClose>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
-                                            ) : (<div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" />)
-                                        ))}
-                                        </div>
-                                    </TabsContent>
-                                    <TabsContent value="productos" className="mt-0">
-                                        <div className="space-y-2">
-                                        {(productsLoading ? Array.from({ length: 3 }) : addItemFilteredProducts).map((product, idx) => (
-                                            product ? (
-                                            <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
-                                                <div>
-                                                <p className="font-semibold">{product.nombre}</p>
-                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
-                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
-                                                </div>
-                                                <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
+                                        </TabsContent>
+                                        <TabsContent value="productos" className="mt-0">
+                                            <div className="space-y-2">
+                                                {productsLoading ? (
+                                                    Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-20 w-full" />)
+                                                ) : (
+                                                    addItemFilteredProducts.map((product: Product) => (
+                                                        <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
+                                                            <div>
+                                                                <p className="font-semibold">{product.nombre}</p>
+                                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                                            </div>
+                                                            <DialogClose asChild>
+                                                              <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
+                                                            </DialogClose>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
-                                            ) : (<div key={idx} className="h-16 w-full bg-muted animate-pulse rounded-md" />)
-                                        ))}
-                                        </div>
-                                    </TabsContent>
+                                        </TabsContent>
                                     </ScrollArea>
                                 </Tabs>
                                 </div>
-                                <SheetFooter>
+                                <DialogFooter>
                                 <DialogClose asChild>
                                     <Button type="button" variant="secondary">Cerrar</Button>
                                 </DialogClose>
-                                </SheetFooter>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -1034,7 +1080,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             Finalizar Venta por ${total.toLocaleString('es-MX')}
                         </Button>
                     </SheetFooter>
-                  </form>
+                  </div>
             )}
         </Form>
         

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,14 @@ export default function EmpresaPage() {
                 variant: "destructive",
                 title: "Error de base de datos",
                 description: "No se pudo conectar con la base de datos.",
+            });
+            return;
+        }
+        if (!settings.id) {
+            toast({
+                variant: "destructive",
+                title: "Error de configuración",
+                description: "No se encontró el ID de la configuración de la empresa.",
             });
             return;
         }

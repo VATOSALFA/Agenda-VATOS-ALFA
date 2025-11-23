@@ -1,5 +1,4 @@
-
-const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const {Buffer} = require("buffer");
@@ -20,14 +19,14 @@ const getMercadoPagoConfig = async () => {
   const settingsDoc = await db.collection('configuracion').doc('pagos').get();
   
   if (!settingsDoc.exists) {
-      throw new HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
+      throw new functions.https.HttpsError('internal', 'La configuración de Mercado Pago no ha sido establecida en Firestore.');
   }
   
   const settings = settingsDoc.data();
   const accessToken = settings?.mercadoPagoAccessToken;
   
   if (!accessToken) {
-      throw new HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
+      throw new functions.https.HttpsError('internal', 'El Access Token de Mercado Pago no está configurado en Firestore.');
   }
   
   // Retorna el objeto de configuración del SDK y el token
@@ -237,7 +236,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
   });
 }
 
-exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
+exports.twilioWebhook = functions.https.onRequest(async (request, response) => {
     try {
       const {From, Body, MediaUrl0, MediaContentType0} = request.body;
 
@@ -266,9 +265,9 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
-  if (!auth) {
-      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+exports.getPointTerminals = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
 
   try {
@@ -280,21 +279,21 @@ exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
       return { success: true, devices: devices.devices || [] };
   } catch(error) {
       console.error("Error fetching Mercado Pago terminals: ", error);
-      if (error instanceof HttpsError) {
+      if (error instanceof functions.https.HttpsError) {
           throw error;
       }
-      throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
+      throw new functions.https.HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
   }
 });
 
 
-exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
-  if (!auth) {
-    throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+exports.setTerminalPDVMode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
   const { terminalId } = data;
   if (!terminalId) {
-    throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
+    throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
   }
 
   try {
@@ -307,22 +306,22 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
     return { success: true, data: result };
   } catch (error) {
     console.error(`Error setting PDV mode for ${terminalId}:`, error);
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
         throw error;
     }
-    throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
+    throw new functions.https.HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
   }
 });
 
 
-exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+exports.createPointPayment = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }
     const { amount, terminalId, referenceId, payer, items } = data;
 
     if (!amount || !terminalId || !referenceId) {
-        throw new HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
+        throw new functions.https.HttpsError('invalid-argument', 'Missing required arguments: amount, terminalId, or referenceId.');
     }
 
     try {
@@ -350,7 +349,7 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
                   default_type: "credit_card"
               }
           },
-          description: `Venta en VATOS ALFA Barber Shop`,
+          description: `Venta en VATOS ALFA`,
         };
 
         const response = await fetch('https://api.mercadopago.com/v1/orders', {
@@ -367,20 +366,20 @@ exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
 
         if (!response.ok) {
           console.error("Error response from Mercado Pago:", result);
-          throw new HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
+          throw new functions.https.HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
         }
 
         return { success: true, data: result };
     } catch(error) {
         console.error("Error creating payment order:", error);
-         if (error instanceof HttpsError) {
+         if (error instanceof functions.https.HttpsError) {
             throw error;
         }
-        throw new HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
+        throw new functions.https.HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
     }
 });
 
-exports.mercadopagowebhook = onRequest({cors: true}, async (request, response) => {
+exports.mercadoPagoWebhook = functions.https.onRequest(async (request, response) => {
     console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
@@ -421,14 +420,7 @@ exports.mercadopagowebhook = onRequest({cors: true}, async (request, response) =
         const ts = tsPart.split('=')[1];
         const v1 = v1Part.split('=')[1];
         
-        const manifestParts = [
-            `id:${String(dataIdFromQuery).toLowerCase()}`,
-            `ts:${ts}`
-        ];
-        if (xRequestId) {
-           manifestParts.splice(1, 0, `request-id:${xRequestId}`);
-        }
-        const manifest = manifestParts.join(';') + ';';
+        const manifest = `id:${dataIdFromQuery};request-id:${xRequestId};ts:${ts};`;
         
         console.log(`[v4] Generated manifest for signature: ${manifest}`);
         
@@ -437,7 +429,7 @@ exports.mercadopagowebhook = onRequest({cors: true}, async (request, response) =
         const sha = hmac.digest('hex');
 
         if (sha !== v1) {
-            console.warn("[v3] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
+            console.warn("[v4] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
             response.status(403).send("Invalid signature.");
             return;
         }
@@ -489,6 +481,3 @@ exports.mercadopagowebhook = onRequest({cors: true}, async (request, response) =
     console.log("===================================================");
     response.status(200).send("OK");
 });
-
-    
-    

@@ -6,6 +6,7 @@ import { MercadoPagoProvider } from '@/components/sales/mercado-pago-provider';
 import { LocalProvider } from '@/contexts/local-context';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 import AppLayout from '@/components/layout/app-layout';
+import { FirebaseErrorListener } from '@/components/firebase/FirebaseErrorListener';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
                     {children}
                   </AppLayout>
                   <Toaster />
+                  <FirebaseErrorListener />
               </MercadoPagoProvider>
           </LocalProvider>
         </AuthProvider>

@@ -32,6 +32,8 @@ import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
+import { errorEmitter } from '@/lib/error-emitter';
+import { FirestorePermissionError } from '@/lib/errors';
 
 
 interface AgendaSettings {
@@ -204,51 +206,59 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
 
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
-    try {
-        if (!db) throw new Error("Database not available.");
-        
-        const dataToSave: Partial<Client> = {
-          nombre: data.nombre,
-          apellido: data.apellido,
-          telefono: data.telefono,
-          correo: data.correo,
-          notas: data.notas,
-          fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
-        };
-
-        if (isEditMode && client) {
-            const clientRef = doc(db, 'clientes', client.id);
-            await updateDoc(clientRef, dataToSave);
-            toast({
-                title: '¡Cliente Actualizado!',
-                description: `${data.nombre} ${data.apellido} ha sido actualizado.`,
-            });
-            onFormSubmit(client.id);
-        } else {
-            const fullData = {
-                ...dataToSave,
-                creado_en: Timestamp.now(),
-            };
-            const docRef = await addDoc(collection(db, 'clientes'), fullData);
-            toast({
-                title: '¡Cliente Creado!',
-                description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.`,
-            });
-            onFormSubmit(docRef.id);
-        }
-        form.reset();
-
-    } catch (error) {
-        console.error('Error saving client: ', error);
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: 'No se pudo guardar el cliente. Inténtalo de nuevo.',
-        });
-    } finally {
+    if (!db) {
+        toast({ variant: 'destructive', title: 'Error', description: 'La base de datos no está disponible.' });
         setIsSubmitting(false);
+        return;
+    };
+    
+    const dataToSave: Partial<Client> = {
+        nombre: data.nombre,
+        apellido: data.apellido,
+        telefono: data.telefono,
+        correo: data.correo,
+        notas: data.notas,
+        fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
+    };
+
+    if (isEditMode && client) {
+        const clientRef = doc(db, 'clientes', client.id);
+        updateDoc(clientRef, dataToSave).then(() => {
+            toast({ title: '¡Cliente Actualizado!', description: `${data.nombre} ${data.apellido} ha sido actualizado.` });
+            onFormSubmit(client.id);
+            form.reset();
+        }).catch((err) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: clientRef.path,
+                operation: 'update',
+                requestResourceData: dataToSave,
+                message: err.message,
+            }));
+        }).finally(() => {
+            setIsSubmitting(false);
+        });
+
+    } else {
+        const fullData = { ...dataToSave, creado_en: Timestamp.now() };
+        const newClientRef = doc(collection(db, 'clientes'));
+        
+        // Optimistically set the document, but catch permission errors.
+        setDoc(newClientRef, fullData).then(() => {
+            toast({ title: '¡Cliente Creado!', description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.` });
+            onFormSubmit(newClientRef.id);
+            form.reset();
+        }).catch((err) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: newClientRef.path,
+                operation: 'create',
+                requestResourceData: fullData,
+                message: err.message,
+            }));
+        }).finally(() => {
+            setIsSubmitting(false);
+        });
     }
-}
+  }
   
   const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string | number) => {
     const currentDate = form.getValues('fecha_nacimiento') || new Date();

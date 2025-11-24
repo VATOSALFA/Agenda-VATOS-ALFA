@@ -4,12 +4,19 @@
  */
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
+// IMPORTANTE: Importamos defineSecret para manejar la seguridad correctamente
+const { defineSecret } = require("firebase-functions/params");
+
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const { Buffer } = require("buffer");
 const { v4: uuidv4 } = require("uuid");
 const fetch = require("node-fetch");
 const { MercadoPagoConfig, Point } = require("mercadopago");
+
+// --- DEFINICIÓN DE SECRETOS ---
+// Esto conecta tu código con el secreto guardado en Google Cloud Secret Manager
+const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
 
 // Configuración global opcional (puedes ajustar la región si lo necesitas)
 setGlobalOptions({ region: "us-central1" });
@@ -274,10 +281,6 @@ exports.twilioWebhook = onRequest(async (request, response) => {
  * =================================================================
  */
 
-// Nota: En Gen 2, 'onCall' recibe (request) en lugar de (data, context).
-// request.data contiene los datos.
-// request.auth contiene la autenticación.
-
 exports.getPointTerminals = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
@@ -396,105 +399,114 @@ exports.createPointPayment = onCall({ cors: true }, async (request) => {
   }
 });
 
-exports.mercadoPagoWebhook = onRequest(async (request, response) => {
-  console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED (GEN 2) ==========");
+// --- MERCADO PAGO WEBHOOK (CORREGIDO PARA GEN 2) ---
+exports.mercadoPagoWebhook = onRequest(
+  { 
+    invoker: "public",         // ¡CRUCIAL! Hace que la función sea pública para Mercado Pago
+    secrets: [mpWebhookSecret] // Da permiso para leer el secreto de la bóveda
+  }, 
+  async (request, response) => {
+    console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED (GEN 2) ==========");
 
-  const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-  if (!secret) {
-    console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured. Check App Hosting backend environment variables.");
-    response.status(500).send("Webhook secret not configured.");
-    return;
-  }
-  console.log("[v4] Secret found. Proceeding with validation.");
+    // Usamos .value() para obtener el secreto seguro
+    const secret = mpWebhookSecret.value();
 
-  try {
-    const xSignature = request.headers['x-signature'];
-    const xRequestId = request.headers['x-request-id'];
-    const dataIdFromQuery = request.query['data.id'];
-
-    if (!xSignature) {
-      console.warn("[v4] Webhook received without 'x-signature' header. Rejecting.");
-      response.status(400).send("Missing 'x-signature' header.");
+    if (!secret) {
+      console.error("FATAL: Secret could not be loaded from Secret Manager.");
+      response.status(500).send("Webhook secret not configured.");
       return;
     }
+    console.log("[v4] Secret found. Proceeding with validation.");
 
-    if (!dataIdFromQuery) {
-      console.warn("[v4] Webhook received without 'data.id' in query params for signature validation.");
-      response.status(400).send("Missing 'data.id' in query params for signature validation.");
-      return;
-    }
+    try {
+      const xSignature = request.headers['x-signature'];
+      const xRequestId = request.headers['x-request-id'];
+      const dataIdFromQuery = request.query['data.id'];
 
-    const parts = xSignature.split(',');
-    const tsPart = parts.find(p => p.startsWith('ts='));
-    const v1Part = parts.find(p => p.startsWith('v1='));
-
-    if (!tsPart || !v1Part) {
-      console.warn("[v4] Invalid 'x-signature' format. Rejecting.");
-      response.status(400).send("Invalid signature format.");
-      return;
-    }
-
-    const ts = tsPart.split('=')[1];
-    const v1 = v1Part.split('=')[1];
-
-    const manifest = `id:${dataIdFromQuery};request-id:${xRequestId};ts:${ts};`;
-
-    console.log(`[v4] Generated manifest for signature: ${manifest}`);
-
-    const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(manifest);
-    const sha = hmac.digest('hex');
-
-    if (sha !== v1) {
-      console.warn("[v4] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
-      response.status(403).send("Invalid signature.");
-      return;
-    }
-
-    console.log("[v4] Signature validation SUCCESSFUL.");
-
-    const { body } = request;
-
-    let notificationData = body.data;
-    if (typeof notificationData === 'string') {
-      try {
-        notificationData = JSON.parse(notificationData);
-      } catch (e) {
-        console.error("[v4] Error parsing request.body.data, it's not valid JSON:", e.message);
-        response.status(400).send("Invalid format for 'data' field in body.");
+      if (!xSignature) {
+        console.warn("[v4] Webhook received without 'x-signature' header. Rejecting.");
+        response.status(400).send("Missing 'x-signature' header.");
         return;
       }
-    }
 
-    if (body.type === 'order' && body.action === 'order.processed') {
-      const externalReference = notificationData?.external_reference;
-      if (externalReference) {
-        const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
-        const ventaDoc = await ventaRef.get();
-        if (ventaDoc.exists) {
-          await ventaRef.update({
-            pago_estado: 'Pagado',
-            mercado_pago_status: 'processed',
-            mercado_pago_id: notificationData?.id,
-          });
-          console.log(`[v4] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
-        } else {
-          console.log(`[v4] Sale with external_reference ${externalReference} not found.`);
-        }
-      } else {
-        console.log("[v4] Webhook received for processed order without external_reference in data object.");
+      if (!dataIdFromQuery) {
+        console.warn("[v4] Webhook received without 'data.id' in query params for signature validation.");
+        response.status(400).send("Missing 'data.id' in query params for signature validation.");
+        return;
       }
-    } else if (body.type === 'payment') {
-      console.log("[v4] 'payment' type webhook received. Ignoring as we process 'order' notifications for Point terminals.");
-    } else {
-      console.log(`[v4] Received unhandled action/type: ${body.action}/${body.type}`);
-    }
-  } catch (error) {
-    console.error("[v4] FATAL Error processing Mercado Pago webhook:", error);
-    response.status(200).send("OK_WITH_ERROR");
-    return;
-  }
 
-  console.log("===================================================");
-  response.status(200).send("OK");
-});
+      const parts = xSignature.split(',');
+      const tsPart = parts.find(p => p.startsWith('ts='));
+      const v1Part = parts.find(p => p.startsWith('v1='));
+
+      if (!tsPart || !v1Part) {
+        console.warn("[v4] Invalid 'x-signature' format. Rejecting.");
+        response.status(400).send("Invalid signature format.");
+        return;
+      }
+
+      const ts = tsPart.split('=')[1];
+      const v1 = v1Part.split('=')[1];
+
+      const manifest = `id:${dataIdFromQuery};request-id:${xRequestId};ts:${ts};`;
+
+      // console.log(`[v4] Generated manifest for signature: ${manifest}`);
+
+      const hmac = crypto.createHmac('sha256', secret);
+      hmac.update(manifest);
+      const sha = hmac.digest('hex');
+
+      if (sha !== v1) {
+        console.warn("[v4] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
+        response.status(403).send("Invalid signature.");
+        return;
+      }
+
+      console.log("[v4] Signature validation SUCCESSFUL.");
+
+      const { body } = request;
+
+      let notificationData = body.data;
+      if (typeof notificationData === 'string') {
+        try {
+          notificationData = JSON.parse(notificationData);
+        } catch (e) {
+          console.error("[v4] Error parsing request.body.data, it's not valid JSON:", e.message);
+          response.status(400).send("Invalid format for 'data' field in body.");
+          return;
+        }
+      }
+
+      if (body.type === 'order' && body.action === 'order.processed') {
+        const externalReference = notificationData?.external_reference;
+        if (externalReference) {
+          const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+          const ventaDoc = await ventaRef.get();
+          if (ventaDoc.exists) {
+            await ventaRef.update({
+              pago_estado: 'Pagado',
+              mercado_pago_status: 'processed',
+              mercado_pago_id: notificationData?.id,
+            });
+            console.log(`[v4] Updated sale ${externalReference} to 'Pagado' via order webhook.`);
+          } else {
+            console.log(`[v4] Sale with external_reference ${externalReference} not found.`);
+          }
+        } else {
+          console.log("[v4] Webhook received for processed order without external_reference in data object.");
+        }
+      } else if (body.type === 'payment') {
+        console.log("[v4] 'payment' type webhook received. Ignoring as we process 'order' notifications for Point terminals.");
+      } else {
+        console.log(`[v4] Received unhandled action/type: ${body.action}/${body.type}`);
+      }
+    } catch (error) {
+      console.error("[v4] FATAL Error processing Mercado Pago webhook:", error);
+      response.status(200).send("OK_WITH_ERROR");
+      return;
+    }
+
+    console.log("===================================================");
+    response.status(200).send("OK");
+  }
+);

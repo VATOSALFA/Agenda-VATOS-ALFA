@@ -18,11 +18,6 @@ backend:
       secret: MERCADO_PAGO_ACCESS_TOKEN
     - variable: MERCADO_PAGO_WEBHOOK_SECRET
       secret: MERCADO_PAGO_WEBHOOK_SECRET
-runConfig:
-  minInstances: 0
-  maxInstances: 2
-  cpu: 1
-  memoryMiB: 512
 headers:
   - source: /api/mercado-pago-webhook
     function: functions
@@ -54,3 +49,5 @@ env:
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
 secretManagement:
   grantAccess: true
+
+    

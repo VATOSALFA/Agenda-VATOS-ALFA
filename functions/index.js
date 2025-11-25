@@ -3,7 +3,6 @@
  */
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
-// IMPORTANTE: Importamos defineSecret para conectar con tus secretos de la imagen
 const { defineSecret } = require("firebase-functions/params");
 
 const admin = require("firebase-admin");
@@ -13,35 +12,28 @@ const { v4: uuidv4 } = require("uuid");
 const fetch = require("node-fetch");
 const { MercadoPagoConfig, Point } = require("mercadopago");
 
-// --- DEFINICIÓN DE SECRETOS (Conectando con Google Cloud Secret Manager) ---
-// Estos nombres deben coincidir EXACTO con tu captura de pantalla
+// --- DEFINICIÓN DE SECRETOS ---
 const mpAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
 const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
 
 // Configuración global
 setGlobalOptions({ region: "us-central1" });
 
-console.log('Functions starting up (Gen 2 - Secrets Fixed). Version: ' + new Date().toISOString());
+console.log('Functions starting up (Gen 2 - Final Version). Version: ' + new Date().toISOString());
 
-// Initialize Firebase Admin SDK only once
+// Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-// --- NUEVA CONFIGURACIÓN DE MERCADO PAGO ---
-// Ya no es async porque leer el secreto es instantáneo con .value()
+// --- CONFIGURACIÓN MERCADO PAGO ---
 const getMercadoPagoConfig = () => {
-  // Leemos el secreto directamente. Si no existe, devuelve undefined.
   const accessToken = mpAccessToken.value();
-
   if (!accessToken) {
-    // Si ves este error en los logs, es que falta dar permiso al secreto en el deploy
     throw new HttpsError('internal', 'El Access Token de Mercado Pago no se pudo leer desde Secret Manager.');
   }
-
   return { client: new MercadoPagoConfig({ accessToken }), accessToken };
 };
-
 
 /**
  * =================================================================
@@ -53,26 +45,20 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio credentials are not configured as environment variables.");
-  }
+  if (!accountSid || !authToken) throw new Error("Twilio credentials missing.");
 
   const twilioAuth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
   const response = await fetch(mediaUrl, {
     headers: { Authorization: `Basic ${twilioAuth}` },
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to download media from Twilio: ${response.status} ${response.statusText}`);
-  }
+  if (!response.ok) throw new Error(`Twilio download failed: ${response.status}`);
 
   const imageBuffer = await response.buffer();
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) {
-    throw new Error("Firebase Storage bucket not configured.");
-  }
+  if (!bucketName) throw new Error("Bucket not configured.");
+  
   const bucket = admin.storage().bucket(bucketName);
-
   const extension = mediaType.split("/")[1] || "jpeg";
   const fileName = `whatsapp_media/${from.replace(/\D/g,"")}-${uuidv4()}.${extension}`;
   const file = bucket.file(fileName);
@@ -228,48 +214,33 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  * =================================================================
  */
 
+// 1. OBTENER TERMINALES
 exports.getPointTerminals = onCall(
-  { 
-    cors: true, 
-    secrets: [mpAccessToken] // <--- AQUÍ DAMOS PERMISO PARA USAR EL SECRETO
-  }, 
+  { cors: true, secrets: [mpAccessToken] }, 
   async (request) => {
-    // Restauramos la seguridad porque al arreglar el secreto, esto ya funcionará bien
     if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+        throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
-
     try {
-        // Obtenemos la config directamente del secreto (ya no usa await)
         const { client } = getMercadoPagoConfig();
         const point = new Point(client); 
-        
         const devices = await point.getDevices({}); 
-
         return { success: true, devices: devices.devices || [] };
     } catch(error) {
-        console.error("Error fetching Mercado Pago terminals: ", error);
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago para obtener las terminales.");
+        console.error("Error fetching terminals: ", error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago.");
     }
 });
 
-
+// 2. CAMBIAR MODO PDV
 exports.setTerminalPDVMode = onCall(
-  { 
-    cors: true,
-    secrets: [mpAccessToken] // <--- PERMISO SECRETO
-  }, 
+  { cors: true, secrets: [mpAccessToken] }, 
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
-    }
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    
     const { terminalId } = request.data;
-    if (!terminalId) {
-      throw new HttpsError('invalid-argument', 'The function must be called with a "terminalId" argument.');
-    }
+    if (!terminalId) throw new HttpsError('invalid-argument', 'Falta terminalId.');
 
     try {
       const { client } = getMercadoPagoConfig();
@@ -280,114 +251,101 @@ exports.setTerminalPDVMode = onCall(
       });
       return { success: true, data: result };
     } catch (error) {
-      console.error(`Error setting PDV mode for ${terminalId}:`, error);
+      console.error(`Error setting PDV for ${terminalId}:`, error);
       if (error instanceof HttpsError) throw error;
-      throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV para la terminal ${terminalId}.`);
+      throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV.`);
     }
 });
 
-
+// 3. CREAR PAGO (CORREGIDO: SIN DESCRIPTION)
 exports.createPointPayment = onCall(
-  { 
-    cors: true,
-    secrets: [mpAccessToken] // <--- PERMISO SECRETO
-  }, 
+  { cors: true, secrets: [mpAccessToken] }, 
   async (request) => {
+    // Seguridad habilitada
     if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
+      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
-    const { amount, terminalId, referenceId, payer, items } = request.data;
+    
+    const { amount, terminalId, referenceId } = request.data;
 
     if (!amount || !terminalId || !referenceId) {
-        throw new HttpsError('invalid-argument', 'Missing required arguments.');
+        throw new HttpsError('invalid-argument', 'Faltan datos requeridos.');
     }
 
     try {
         const { accessToken } = getMercadoPagoConfig();
 
-        const orderData = {
-          type: "point",
-          external_reference: referenceId,
-          expiration_time: "PT15M",
-          payer: payer,
-          items: items,
-          transactions: {
-              payments: [
-                  { amount: amount.toFixed(2).toString() }
-              ]
-          },
-          config: {
-              point: {
-                  terminal_id: terminalId,
-                  print_on_terminal: "no_ticket"
-              },
-              payment_method: {
-                  default_type: "credit_card"
-              }
-          },
-          description: `Venta en VATOS ALFA`,
+        // API Específica de Point
+        const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
+
+        const paymentIntent = {
+            amount: Math.round(amount * 100), // Monto en centavos
+            // description: "Venta en VATOS ALFA", <--- ELIMINADO PORQUE CAUSA ERROR
+            
+            // Mantenemos esto para intentar sumar puntos de calidad
+            notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
+
+            additional_info: {
+                external_reference: referenceId,
+                print_on_terminal: true 
+            }
         };
 
-        const response = await fetch('https://api.mercadopago.com/v1/orders', {
+        const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
             'X-Idempotency-Key': uuidv4()
           },
-          body: JSON.stringify(orderData),
+          body: JSON.stringify(paymentIntent),
         });
 
         const result = await response.json();
 
         if (!response.ok) {
-          console.error("Error response from Mercado Pago:", result);
-          throw new HttpsError('internal', result.message || 'Error al crear la orden de pago en Mercado Pago.');
+          console.error("MP Error:", result);
+          if (response.status === 409) {
+             throw new HttpsError('aborted', 'La terminal está ocupada. Cancela la operación en el dispositivo.');
+          }
+          throw new HttpsError('internal', result.message || 'Error al enviar la orden.');
         }
 
-        return { success: true, data: result };
+        return { success: true, data: { id: result.id } };
+
     } catch(error) {
-        console.error("Error creating payment order:", error);
-         if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', error.message || "No se pudo crear la intención de pago en la terminal.");
+        console.error("Error creating payment:", error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message || "No se pudo crear el pago.");
     }
 });
 
-// WEBHOOK CORREGIDO PARA USAR defineSecret
+// 4. WEBHOOK (CON CÁLCULO DE PROPINA)
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true, 
     invoker: "public",
-    secrets: [mpWebhookSecret] // <--- PERMISO SECRETO WEBHOOK
+    secrets: [mpWebhookSecret]
   }, 
   async (request, response) => {
-    console.log("========== [v4] MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [v6] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
-    // 1. Get the Secret using .value()
     const secret = mpWebhookSecret.value();
-
     if (!secret) {
-        console.error("FATAL: MERCADO_PAGO_WEBHOOK_SECRET is not configured in Secret Manager.");
-        response.status(500).send("Webhook secret not configured.");
+        console.error("FATAL: Secret missing.");
+        response.status(500).send("Secret missing.");
         return;
     }
-    console.log("[v4] Secret found. Proceeding with validation.");
+    console.log("[v6] Secret found.");
 
     try {
-        // ... (El resto de tu lógica de validación sigue igual, solo cambia el log a v4)
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id']; 
         const dataIdFromQuery = request.query['data.id'];
 
-        if (!xSignature) {
-            console.warn("[v4] Webhook received without 'x-signature' header.");
-            response.status(400).send("Missing 'x-signature' header.");
-            return;
-        }
-        
-        if (!dataIdFromQuery) {
-            console.warn("[v4] Webhook received without 'data.id'.");
-            response.status(400).send("Missing 'data.id'.");
+        if (!xSignature || !dataIdFromQuery) {
+            console.warn("[v6] Missing headers/params.");
+            response.status(400).send("Bad Request.");
             return;
         }
 
@@ -396,7 +354,6 @@ exports.mercadoPagoWebhook = onRequest(
         const v1Part = parts.find(p => p.startsWith('v1='));
 
         if (!tsPart || !v1Part) {
-            console.warn("[v4] Invalid 'x-signature' format.");
             response.status(400).send("Invalid signature format.");
             return;
         }
@@ -405,18 +362,17 @@ exports.mercadoPagoWebhook = onRequest(
         const v1 = v1Part.split('=')[1];
         
         const manifest = `id:${dataIdFromQuery};request-id:${xRequestId};ts:${ts};`;
-        
         const hmac = crypto.createHmac('sha256', secret);
         hmac.update(manifest);
         const sha = hmac.digest('hex');
 
         if (sha !== v1) {
-            console.warn("[v4] SIGNATURE VALIDATION FAILED. Expected:", sha, "Got:", v1);
+            console.warn("[v6] Invalid signature.");
             response.status(403).send("Invalid signature.");
             return;
         }
         
-        console.log("[v4] Signature validation SUCCESSFUL.");
+        console.log("[v6] Signature OK.");
         
         const { body } = request;
         let notificationData = body.data;
@@ -429,21 +385,39 @@ exports.mercadoPagoWebhook = onRequest(
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 const ventaDoc = await ventaRef.get();
+                
                 if (ventaDoc.exists) {
+                    // --- LÓGICA DE PROPINA ---
+                    const ventaData = ventaDoc.data();
+                    
+                    // 1. Obtenemos el total real pagado en la terminal
+                    const montoPagado = Number(notificationData?.total_amount || 0);
+                    // 2. Obtenemos el total que esperábamos cobrar originalmente
+                    const montoOriginal = Number(ventaData.total || 0);
+                    
+                    let propina = 0;
+                    
+                    // 3. Si pagaron más de lo original, la diferencia es propina
+                    if (montoPagado > montoOriginal) {
+                        propina = parseFloat((montoPagado - montoOriginal).toFixed(2));
+                    }
+
                     await ventaRef.update({
                         pago_estado: 'Pagado',
                         mercado_pago_status: 'processed',
                         mercado_pago_id: notificationData?.id,
+                        monto_pagado_real: montoPagado, // Guardamos lo que realmente cobró la terminal
+                        propina: propina                // Guardamos la propina calculada
                     });
-                    console.log(`[v4] Updated sale ${externalReference} to 'Pagado'.`);
+                    
+                    console.log(`[v6] Venta ${externalReference} PAGADA. Total: ${montoPagado}, Propina: ${propina}`);
                 }
             }
         }
     } catch (error) {
-        console.error("[v4] FATAL Error processing webhook:", error);
+        console.error("[v6] Error processing webhook:", error);
         response.status(200).send("OK_WITH_ERROR");
         return;
     }
-    
     response.status(200).send("OK");
 });

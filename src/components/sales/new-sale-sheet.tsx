@@ -1,12 +1,10 @@
-
-
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -232,13 +230,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
   const [selectedTerminalId, setSelectedTerminalId] = useState<string | null>(null);
+  
+  // Modificado: Estado para controlar la espera de la terminal
   const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
+  const [isWaitingForPayment, setIsWaitingForPayment] = useState(false);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [currentSaleId, setCurrentSaleId] = useState<string | null>(null);
   const [cashboxSettings, setCashboxSettings] = useState<any>(null);
   const [cashboxSettingsLoading, setCashboxSettingsLoading] = useState(true);
 
+  // Referencia para guardar la suscripción del snapshot y poder limpiarla
+  const unsubscribeRef = useRef<() => void | undefined>(undefined);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
@@ -248,6 +251,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
   
+  // Limpieza del snapshot al desmontar o cerrar
+  useEffect(() => {
+    return () => {
+        if (unsubscribeRef.current) {
+            unsubscribeRef.current();
+        }
+    };
+  }, []);
+
   useEffect(() => {
     const fetchSettings = async () => {
       if (!db) return;
@@ -451,14 +463,58 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
   }, [initialData, form, isOpen]);
 
+  // --- FUNCIÓN PARA FINALIZAR EL PROCESO DE VENTA (Toast, Review, Close) ---
+  const finalizeSaleProcess = async (clientId: string, localId: string) => {
+        toast({
+            title: '¡Venta registrada!',
+            description: 'La venta se ha completado correctamente.',
+        });
+
+        // Lógica de Google Reviews
+        try {
+            if(db) {
+                const settingsRef = doc(db, 'configuracion', 'recordatorios');
+                const settingsSnap = await getDoc(settingsRef);
+                const settings = settingsSnap.data() as ReminderSettings | undefined;
+                const isReviewEnabled = settings?.notifications?.google_review?.enabled ?? false;
+
+                if (isReviewEnabled) {
+                    const client = clients.find(c => c.id === clientId);
+                    const local = locales.find(l => l.id === localId);
+                    if (client?.telefono && local) {
+                        setTimeout(() => {
+                            sendGoogleReviewRequest({
+                                clientId: client.id,
+                                clientName: client.nombre,
+                                clientPhone: client.telefono,
+                                localName: local.name,
+                            }).catch(err => {
+                                console.error("Failed to send Google review request:", err);
+                            });
+                        }, 30 * 60 * 1000);
+                    }
+                }
+            }
+        } catch(e) {
+            console.error("Error en flujo de reviews:", e);
+        }
+
+        resetFlow();
+        onOpenChange(false);
+        onSaleComplete?.();
+  };
+
   const handleSendToTerminal = async () => {
     if (!db || !selectedTerminalId || total <= 0 || !selectedClient) return;
+    
     setIsSendingToTerminal(true);
+    setIsWaitingForPayment(true); // Indicamos que estamos esperando pago
 
     const saleRef = doc(collection(db, 'ventas'));
     setCurrentSaleId(saleRef.id);
 
     try {
+      // 1. Creamos la venta en Firestore con estado 'Pendiente'
       await onSubmit(form.getValues(), saleRef.id, 'Pendiente');
 
       const payer = {
@@ -473,6 +529,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         unit_price: item.precio,
       }));
 
+      // 2. Llamamos a la Cloud Function para encender la terminal
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
@@ -484,16 +541,46 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
       if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
+        
+        // 3. ESCUCHA EN TIEMPO REAL (MAGIA): Esperamos que el Webhook actualice a 'Pagado'
+        // Si ya había una suscripción, la limpiamos
+        if (unsubscribeRef.current) unsubscribeRef.current();
+
+        const saleDocRef = doc(db, 'ventas', saleRef.id);
+        
+        // Creamos la suscripción
+        const unsubscribe = onSnapshot(saleDocRef, (docSnapshot) => {
+            const data = docSnapshot.data();
+            
+            // Verificamos si el estado cambió a Pagado
+            if (data && data.pago_estado === 'Pagado') {
+                // ÉXITO: El pago se completó en la terminal
+                setIsSendingToTerminal(false);
+                setIsWaitingForPayment(false);
+                
+                // Dejamos de escuchar
+                unsubscribe();
+                unsubscribeRef.current = undefined;
+
+                // Ejecutamos la lógica de finalización (Toast, cerrar modal, etc.)
+                finalizeSaleProcess(data.cliente_id, data.local_id);
+            }
+        });
+        
+        // Guardamos la referencia para limpiar si cierran el modal manualmente
+        unsubscribeRef.current = unsubscribe;
+
       } else {
         throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
       setIsSendingToTerminal(false);
-      if(currentSaleId) {
-          if (db) {
-            await deleteDoc(doc(db, 'ventas', currentSaleId));
-          }
+      setIsWaitingForPayment(false);
+      
+      // Si falla, borramos la venta pendiente para no dejar basura
+      if(currentSaleId && db) {
+          await deleteDoc(doc(db, 'ventas', currentSaleId));
           setCurrentSaleId(null);
       }
     }
@@ -512,6 +599,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   };
 
   const resetFlow = () => {
+    if (unsubscribeRef.current) {
+        unsubscribeRef.current(); // Limpiar listener si existe
+        unsubscribeRef.current = undefined;
+    }
     setCart([]);
     setSearchTerm('');
     setStep(1);
@@ -519,6 +610,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setIsSubmitting(false);
     setAmountPaid(0);
     setIsSendingToTerminal(false);
+    setIsWaitingForPayment(false);
     setCurrentSaleId(null);
     if(initialData) {
         onOpenChange(false);
@@ -536,6 +628,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
+        // Solo descontamos stock si es una venta directa (Pagado) o si la política de negocio lo requiere.
+        // En este caso, asumimos que al enviar a terminal YA reservamos el stock.
+        
         const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
         for (const item of cart) {
           if (item.tipo === 'producto') {
@@ -634,43 +729,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (reservationId) {
             const reservationRef = doc(db, 'reservas', reservationId);
             transaction.update(reservationRef, { 
-                pago_estado: 'Pagado',
+                pago_estado: paymentStatus, // Actualizamos según si es Pagado o Pendiente
                 estado: 'Asiste'
             });
         }
       });
 
+      // Si el pago es directo (Efectivo, etc) y no terminal, finalizamos aquí.
       if (paymentStatus === 'Pagado') {
-        toast({
-          title: '¡Venta registrada!',
-          description: 'La venta se ha guardado correctamente.',
-        });
-
-        const settingsRef = doc(db, 'configuracion', 'recordatorios');
-        const settingsSnap = await getDoc(settingsRef);
-        const settings = settingsSnap.data() as ReminderSettings | undefined;
-        const isReviewEnabled = settings?.notifications?.google_review?.enabled ?? false;
-
-        if (isReviewEnabled) {
-            const client = clients.find(c => c.id === data.cliente_id);
-            const local = locales.find(l => l.id === data.local_id);
-            if (client?.telefono && local) {
-                setTimeout(() => {
-                    sendGoogleReviewRequest({
-                        clientId: client.id,
-                        clientName: client.nombre,
-                        clientPhone: client.telefono,
-                        localName: local.name,
-                    }).catch(err => {
-                        console.error("Failed to send Google review request:", err);
-                    });
-                }, 30 * 60 * 1000);
-            }
-        }
-        resetFlow();
-        onOpenChange(false);
-        onSaleComplete?.();
+        await finalizeSaleProcess(data.cliente_id, data.local_id);
       }
+      
     } catch (error: any) {
       console.error('Error al registrar la venta: ', error);
       toast({
@@ -717,37 +786,37 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                            {selectedClient ? (
                                 <Card>
                                     <CardContent className="p-3">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar className="h-9 w-9">
-                                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                                    <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-9 w-9">
+                                                        <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                                        <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
+                                                    </div>
                                                 </div>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                                             </div>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                                        </div>
                                     </CardContent>
                                 </Card>
                             ) : (
                                 <FormField control={form.control} name="cliente_id" render={({ field }) => (
                                     <FormItem>
-                                        <div className="flex justify-between items-center">
-                                        <FormLabel>Cliente *</FormLabel>
-                                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                        </Button>
-                                        </div>
-                                         <Combobox
-                                            options={clientOptions}
-                                            value={field.value}
-                                            onChange={field.onChange}
-                                            placeholder="Busca o selecciona un cliente..."
-                                            loading={clientsLoading}
-                                        />
-                                        <FormMessage />
+                                            <div className="flex justify-between items-center">
+                                            <FormLabel>Cliente *</FormLabel>
+                                            <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                            </Button>
+                                            </div>
+                                             <Combobox
+                                                options={clientOptions}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                placeholder="Busca o selecciona un cliente..."
+                                                loading={clientsLoading}
+                                            />
+                                            <FormMessage />
                                     </FormItem>
                                 )}/>
                             )}
@@ -816,43 +885,43 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             {selectedClient ? (
                                 <Card>
                                     <CardContent className="p-4">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <Avatar className="h-10 w-10">
-                                                    <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                                    <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                                        <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
-                                                        <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
-                                                    </p>
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <Avatar className="h-10 w-10">
+                                                        <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-bold">{selectedClient.nombre} {selectedClient.apellido}</p>
+                                                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                                            <Mail className="h-3 w-3" /> {selectedClient.correo || 'Sin correo'}
+                                                            <Phone className="h-3 w-3 ml-2" /> {selectedClient.telefono}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                                            </div>
-                                        </div>
                                     </CardContent>
                                 </Card>
                             ) : (
                                 <FormField control={form.control} name="cliente_id" render={({ field }) => (
                                     <FormItem>
-                                        <div className="flex justify-between items-center">
-                                        <FormLabel>Cliente</FormLabel>
-                                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
-                                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                        </Button>
-                                        </div>
-                                         <Combobox
-                                            options={clientOptions}
-                                            value={field.value}
-                                            onChange={field.onChange}
-                                            placeholder="Busca o selecciona un cliente..."
-                                            loading={clientsLoading}
-                                        />
-                                        <FormMessage />
+                                            <div className="flex justify-between items-center">
+                                            <FormLabel>Cliente</FormLabel>
+                                            <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                                    <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                            </Button>
+                                            </div>
+                                             <Combobox
+                                                options={clientOptions}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                placeholder="Busca o selecciona un cliente..."
+                                                loading={clientsLoading}
+                                            />
+                                            <FormMessage />
                                     </FormItem>
                                 )}/>
                             )}
@@ -864,18 +933,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <FormItem>
                                     <FormLabel>Local</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value} disabled={isLocalAdmin}>
-                                        <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecciona un local" />
-                                        </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                        {locales.map(l => (
-                                            <SelectItem key={l.id} value={l.id}>
-                                            {l.name}
-                                            </SelectItem>
-                                        ))}
-                                        </SelectContent>
+                                            <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecciona un local" />
+                                            </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                            {locales.map(l => (
+                                                <SelectItem key={l.id} value={l.id}>
+                                                {l.name}
+                                                </SelectItem>
+                                            ))}
+                                            </SelectContent>
                                     </Select>
                                     <FormMessage />
                                     </FormItem>
@@ -895,20 +964,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     className="flex flex-wrap gap-2"
                                     >
                                     <FormItem>
-                                        <FormControl><RadioGroupItem value="efectivo" id="efectivo" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
+                                            <FormControl><RadioGroupItem value="efectivo" id="efectivo" className="sr-only" /></FormControl>
+                                            <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
                                     </FormItem>
                                     <FormItem>
-                                        <FormControl><RadioGroupItem value="tarjeta" id="tarjeta" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
+                                            <FormControl><RadioGroupItem value="tarjeta" id="tarjeta" className="sr-only" /></FormControl>
+                                            <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
                                     </FormItem>
                                     <FormItem>
-                                        <FormControl><RadioGroupItem value="transferencia" id="transferencia" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
+                                            <FormControl><RadioGroupItem value="transferencia" id="transferencia" className="sr-only" /></FormControl>
+                                            <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
                                     </FormItem>
                                     <FormItem>
-                                        <FormControl><RadioGroupItem value="combinado" id="combinado" className="sr-only" /></FormControl>
-                                        <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
+                                            <FormControl><RadioGroupItem value="combinado" id="combinado" className="sr-only" /></FormControl>
+                                            <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
                                     </FormItem>
                                     </RadioGroup>
                                 </FormControl>
@@ -921,18 +990,33 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <Card className="p-4 bg-muted/50">
                                     <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal Point</FormLabel>
                                     <div className="space-y-2">
-                                        <Select value={selectedTerminalId || ''} onValueChange={setSelectedTerminalId} disabled={terminalsLoading}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={terminalsLoading ? "Buscando terminales..." : "Selecciona una terminal"} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {terminals.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.display_name || t.id}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button type="button" onClick={handleSendToTerminal} disabled={isSendingToTerminal || terminalsLoading || !selectedTerminalId || total <= 0} className="w-full">
-                                            {isSendingToTerminal ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                                            Cobrar ${total.toLocaleString('es-MX')} en Terminal
-                                        </Button>
+                                            <Select value={selectedTerminalId || ''} onValueChange={setSelectedTerminalId} disabled={terminalsLoading}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder={terminalsLoading ? "Buscando terminales..." : "Selecciona una terminal"} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {terminals.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.display_name || t.id}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <Button 
+                                                type="button" 
+                                                onClick={handleSendToTerminal} 
+                                                disabled={isSendingToTerminal || isWaitingForPayment || terminalsLoading || !selectedTerminalId || total <= 0} 
+                                                className="w-full"
+                                                variant={isWaitingForPayment ? "secondary" : "default"}
+                                            >
+                                                {isWaitingForPayment ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+                                                        Esperando pago en terminal...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Send className="mr-2 h-4 w-4" />
+                                                        Cobrar ${total.toLocaleString('es-MX')} en Terminal
+                                                    </>
+                                                )}
+                                            </Button>
                                     </div>
                                     {terminals && !terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes &gt; Terminal para activarlas.</p>}
                                 </Card>
@@ -941,19 +1025,19 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <Card className="p-4 bg-muted/50">
                                     <FormLabel className="flex items-center text-sm font-medium mb-2"><Calculator className="mr-2 h-4 w-4" /> Calculadora de Cambio</FormLabel>
                                     <div className="space-y-2">
-                                        <div className="grid grid-cols-2 gap-4 items-center">
-                                            <FormItem>
-                                                <FormLabel className="text-xs">Paga con</FormLabel>
-                                                <div className="relative">
-                                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                                  <Input type="number" placeholder="0" className="pl-6" value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
+                                            <div className="grid grid-cols-2 gap-4 items-center">
+                                                <FormItem>
+                                                    <FormLabel className="text-xs">Paga con</FormLabel>
+                                                    <div className="relative">
+                                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                                      <Input type="number" placeholder="0" className="pl-6" value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
+                                                    </div>
+                                                </FormItem>
+                                                <div className="text-center">
+                                                    <p className="text-xs text-muted-foreground">Cambio</p>
+                                                    <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - total).toLocaleString('es-MX')}</p>
                                                 </div>
-                                            </FormItem>
-                                            <div className="text-center">
-                                                <p className="text-xs text-muted-foreground">Cambio</p>
-                                                <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - total).toLocaleString('es-MX')}</p>
                                             </div>
-                                        </div>
                                     </div>
                                 </Card>
                             )}
@@ -1075,7 +1159,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta'}>
+                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Finalizar Venta por ${total.toLocaleString('es-MX')}
                         </Button>

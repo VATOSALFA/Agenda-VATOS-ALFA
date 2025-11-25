@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -231,7 +232,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { selectedLocalId } = useLocal();
   const [selectedTerminalId, setSelectedTerminalId] = useState<string | null>(null);
   
-  // Modificado: Estado para controlar la espera de la terminal
   const [isSendingToTerminal, setIsSendingToTerminal] = useState(false);
   const [isWaitingForPayment, setIsWaitingForPayment] = useState(false);
   
@@ -240,7 +240,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [cashboxSettings, setCashboxSettings] = useState<any>(null);
   const [cashboxSettingsLoading, setCashboxSettingsLoading] = useState(true);
 
-  // Referencia para guardar la suscripción del snapshot y poder limpiarla
   const unsubscribeRef = useRef<() => void | undefined>(undefined);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', clientQueryKey);
@@ -251,7 +250,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
   
-  // Limpieza del snapshot al desmontar o cerrar
   useEffect(() => {
     return () => {
         if (unsubscribeRef.current) {
@@ -463,14 +461,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
   }, [initialData, form, isOpen]);
 
-  // --- FUNCIÓN PARA FINALIZAR EL PROCESO DE VENTA (Toast, Review, Close) ---
   const finalizeSaleProcess = async (clientId: string, localId: string) => {
         toast({
             title: '¡Venta registrada!',
             description: 'La venta se ha completado correctamente.',
         });
 
-        // Lógica de Google Reviews
         try {
             if(db) {
                 const settingsRef = doc(db, 'configuracion', 'recordatorios');
@@ -508,66 +504,42 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     if (!db || !selectedTerminalId || total <= 0 || !selectedClient) return;
     
     setIsSendingToTerminal(true);
-    setIsWaitingForPayment(true); // Indicamos que estamos esperando pago
+    setIsWaitingForPayment(true);
 
     const saleRef = doc(collection(db, 'ventas'));
     setCurrentSaleId(saleRef.id);
 
     try {
-      // 1. Creamos la venta en Firestore con estado 'Pendiente'
       await onSubmit(form.getValues(), saleRef.id, 'Pendiente');
 
-      const payer = {
-          first_name: selectedClient.nombre,
-          last_name: selectedClient.apellido,
-          email: selectedClient.correo,
-      };
-
-      const items = cart.map(item => ({
-        title: item.nombre,
-        quantity: item.cantidad,
-        unit_price: item.precio,
-      }));
-
-      // 2. Llamamos a la Cloud Function para encender la terminal
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
         terminalId: selectedTerminalId,
         referenceId: saleRef.id,
-        payer: payer,
-        items: items
       });
 
       if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
         
-        // 3. ESCUCHA EN TIEMPO REAL (MAGIA): Esperamos que el Webhook actualice a 'Pagado'
-        // Si ya había una suscripción, la limpiamos
         if (unsubscribeRef.current) unsubscribeRef.current();
 
         const saleDocRef = doc(db, 'ventas', saleRef.id);
         
-        // Creamos la suscripción
         const unsubscribe = onSnapshot(saleDocRef, (docSnapshot) => {
             const data = docSnapshot.data();
             
-            // Verificamos si el estado cambió a Pagado
             if (data && data.pago_estado === 'Pagado') {
-                // ÉXITO: El pago se completó en la terminal
                 setIsSendingToTerminal(false);
                 setIsWaitingForPayment(false);
                 
-                // Dejamos de escuchar
                 unsubscribe();
                 unsubscribeRef.current = undefined;
 
-                // Ejecutamos la lógica de finalización (Toast, cerrar modal, etc.)
                 finalizeSaleProcess(data.cliente_id, data.local_id);
             }
         });
         
-        // Guardamos la referencia para limpiar si cierran el modal manualmente
         unsubscribeRef.current = unsubscribe;
 
       } else {
@@ -578,7 +550,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       setIsSendingToTerminal(false);
       setIsWaitingForPayment(false);
       
-      // Si falla, borramos la venta pendiente para no dejar basura
       if(currentSaleId && db) {
           await deleteDoc(doc(db, 'ventas', currentSaleId));
           setCurrentSaleId(null);
@@ -600,7 +571,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   const resetFlow = () => {
     if (unsubscribeRef.current) {
-        unsubscribeRef.current(); // Limpiar listener si existe
+        unsubscribeRef.current();
         unsubscribeRef.current = undefined;
     }
     setCart([]);
@@ -619,7 +590,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   const handleClientCreated = (newClientId: string) => {
     setIsClientModalOpen(false);
-    setClientQueryKey(prev => prev + 1); // Refetch clients
+    setClientQueryKey(prev => prev + 1);
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
@@ -628,8 +599,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
      setIsSubmitting(true);
     try {
       await runTransaction(db, async (transaction) => {
-        // Solo descontamos stock si es una venta directa (Pagado) o si la política de negocio lo requiere.
-        // En este caso, asumimos que al enviar a terminal YA reservamos el stock.
         
         const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
         for (const item of cart) {
@@ -729,13 +698,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (reservationId) {
             const reservationRef = doc(db, 'reservas', reservationId);
             transaction.update(reservationRef, { 
-                pago_estado: paymentStatus, // Actualizamos según si es Pagado o Pendiente
+                pago_estado: paymentStatus,
                 estado: 'Asiste'
             });
         }
       });
 
-      // Si el pago es directo (Efectivo, etc) y no terminal, finalizamos aquí.
       if (paymentStatus === 'Pagado') {
         await finalizeSaleProcess(data.cliente_id, data.local_id);
       }
@@ -780,7 +748,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         <Form {...form}>
             {step === 1 && (
                 <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
-                    {/* Item Selection & Client */}
                     <div className="col-span-2 flex flex-col gap-4">
                         <div className="flex-shrink-0">
                            {selectedClient ? (
@@ -871,7 +838,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             </ScrollArea>
                         </Tabs>
                     </div>
-                    {/* Cart */}
                     <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
                 </div>
             )}
@@ -879,7 +845,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             {step === 2 && (
                 <div className="h-full flex flex-col overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
-                        {/* Sale Details Form */}
                         <div className="space-y-4">
                             
                             {selectedClient ? (
@@ -1089,7 +1054,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </FormItem>
                             )} />
                         </div>
-                        {/* Order Summary */}
                         <Dialog>
                             <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
                             <DialogContent className="sm:max-w-2xl">

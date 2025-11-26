@@ -266,7 +266,7 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  * =================================================================
  */
 
-exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
+exports.getPointTerminals = onCall({cors: true, invoker: 'public'}, async ({ auth }) => {
   if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
@@ -288,7 +288,7 @@ exports.getPointTerminals = onCall({cors: true}, async ({ auth }) => {
 });
 
 
-exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
+exports.setTerminalPDVMode = onCall({cors: true, invoker: 'public'}, async ({ auth, data }) => {
   if (!auth) {
     throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
   }
@@ -315,7 +315,7 @@ exports.setTerminalPDVMode = onCall({cors: true}, async ({ auth, data }) => {
 });
 
 
-exports.createPointPayment = onCall({cors: true}, async ({ auth, data }) => {
+exports.createPointPayment = onCall({cors: true, invoker: 'public'}, async ({ auth, data }) => {
     if (!auth) {
       throw new HttpsError('unauthenticated', 'La función debe ser llamada por un usuario autenticado.');
     }

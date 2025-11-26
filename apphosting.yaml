@@ -58,6 +58,3 @@ env:
   # --- TWILIO CONFIG ---
   - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
-
-secretManagement:
-  grantAccess: true

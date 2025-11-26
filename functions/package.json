@@ -7,7 +7,8 @@
     "shell": "firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "deploy:fix": "firebase deploy --only functions && gcloud run services add-iam-policy-binding getpointterminals --region=us-central1 --project=agenda-1ae08 --member=allUsers --role=roles/run.invoker && gcloud run services add-iam-policy-binding setterminalpdvmode --region=us-central1 --project=agenda-1ae08 --member=allUsers --role=roles/run.invoker && gcloud run services add-iam-policy-binding createpointpayment --region=us-central1 --project=agenda-1ae08 --member=allUsers --role=roles/run.invoker"
   },
   "engines": {
     "node": "20"

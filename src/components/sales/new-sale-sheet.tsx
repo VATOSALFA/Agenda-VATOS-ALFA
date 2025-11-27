@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -722,7 +721,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       }
     }
   }
-
+  
   const clientOptions = useMemo(() => {
     return clients.map(client => ({
       value: client.id,
@@ -844,6 +843,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
 
             {step === 2 && (
+              <Dialog>
                 <div className="h-full flex flex-col overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                         <div className="space-y-4">
@@ -1055,81 +1055,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </FormItem>
                             )} />
                         </div>
-                        <Dialog>
-                            <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
-                            <DialogContent className="sm:max-w-2xl">
-                                <DialogHeader>
-                                <DialogTitle>Agregar Ítem a la Venta</DialogTitle>
-                                </DialogHeader>
-                                <div className="flex flex-col h-[60vh]">
-                                <div className="relative mb-4">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Buscar servicio o producto..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
-                                </div>
-                                <Tabs defaultValue="servicios" className="flex-grow flex flex-col overflow-hidden">
-                                    <TabsList>
-                                    <TabsTrigger value="servicios">Servicios</TabsTrigger>
-                                    <TabsTrigger value="productos">Productos</TabsTrigger>
-                                    </TabsList>
-                                    <ScrollArea className="flex-grow mt-4 pr-4">
-                                        <TabsContent value="servicios" className="mt-0">
-                                            <div className="space-y-2">
-                                                {servicesLoading ? (
-                                                    Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-16 w-full" />)
-                                                ) : (
-                                                    addItemFilteredServices.map((service: ServiceType) => (
-                                                        <div key={service.id} className="flex items-center justify-between p-2 rounded-md border">
-                                                            <div>
-                                                                <p className="font-semibold">{service.name}</p>
-                                                                <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                                            </div>
-                                                            <DialogClose asChild>
-                                                                <Button size="sm" onClick={() => addToCart(service, 'servicio')}>Agregar</Button>
-                                                            </DialogClose>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
-                                        </TabsContent>
-                                        <TabsContent value="productos" className="mt-0">
-                                            <div className="space-y-2">
-                                                {productsLoading ? (
-                                                    Array.from({ length: 3 }).map((_, idx) => <Skeleton key={idx} className="h-20 w-full" />)
-                                                ) : (
-                                                    addItemFilteredProducts.map((product: Product) => (
-                                                        <div key={product.id} className="flex items-center justify-between p-2 rounded-md border">
-                                                            <div>
-                                                                <p className="font-semibold">{product.nombre}</p>
-                                                                <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
-                                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
-                                                            </div>
-                                                            <DialogClose asChild>
-                                                              <Button size="sm" onClick={() => addToCart(product, 'producto')}>Agregar</Button>
-                                                            </DialogClose>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
-                                        </TabsContent>
-                                    </ScrollArea>
-                                </Tabs>
-                                </div>
-                                <DialogFooter>
-                                <DialogClose asChild>
-                                    <Button type="button" variant="secondary">Cerrar</Button>
-                                </DialogClose>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
+                        <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment}>
+                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment} onClick={form.handleSubmit(onSubmit as any)}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Finalizar Venta por ${total.toLocaleString('es-MX')}
                         </Button>
                     </SheetFooter>
                   </div>
+                </Dialog>
             )}
         </Form>
         

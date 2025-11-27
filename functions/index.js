@@ -354,10 +354,11 @@ exports.mercadoPagoWebhook = onRequest(
     try {
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id']; 
-        const dataIdFromQuery = request.query['data.id'];
+        // CORRECTED: Mercado pago sends `id`, not `data.id` for this type of webhook
+        const dataIdFromQuery = request.query.id;
 
         if (!xSignature || !dataIdFromQuery) {
-            console.warn("[vFinal] Missing headers/params.");
+            console.warn("[vFinal] Missing headers/params. Query:", JSON.stringify(request.query), "Headers:", JSON.stringify(request.headers));
             response.status(400).send("Bad Request.");
             return;
         }
@@ -393,15 +394,21 @@ exports.mercadoPagoWebhook = onRequest(
             try { notificationData = JSON.parse(notificationData); } catch (e) {}
         }
         
-        if (body.type === 'order' && body.action === 'order.processed') {
-             const externalReference = notificationData?.external_reference;
-             if (externalReference) {
+        if (body.type === 'payment' || body.action?.includes('payment')) {
+            const { accessToken } = getMercadoPagoConfig();
+            const paymentInfoResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataIdFromQuery}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const paymentInfo = await paymentInfoResponse.json();
+
+             const externalReference = paymentInfo?.external_reference;
+             if (externalReference && paymentInfo.status === 'approved') {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 const ventaDoc = await ventaRef.get();
                 
                 if (ventaDoc.exists) {
                     const ventaData = ventaDoc.data();
-                    const montoPagado = Number(notificationData?.total_amount || 0);
+                    const montoPagado = Number(paymentInfo?.transaction_amount || 0);
                     const montoOriginal = Number(ventaData.total || 0);
                     
                     let propina = 0;
@@ -411,8 +418,8 @@ exports.mercadoPagoWebhook = onRequest(
 
                     await ventaRef.update({
                         pago_estado: 'Pagado',
-                        mercado_pago_status: 'processed',
-                        mercado_pago_id: notificationData?.id,
+                        mercado_pago_status: 'approved',
+                        mercado_pago_id: paymentInfo.id,
                         monto_pagado_real: montoPagado,
                         propina: propina,
                     });

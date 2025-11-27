@@ -354,7 +354,7 @@ exports.mercadoPagoWebhook = onRequest(
     try {
         const xSignature = request.headers['x-signature'];
         const xRequestId = request.headers['x-request-id']; 
-        // CORRECTED: Mercado pago sends `id`, not `data.id` for this type of webhook
+        // CORRECTED: Mercado pago sends `id` for this type of webhook
         const dataIdFromQuery = request.query.id;
 
         if (!xSignature || !dataIdFromQuery) {
@@ -389,10 +389,6 @@ exports.mercadoPagoWebhook = onRequest(
         console.log("[vFinal] Signature OK.");
         
         const { body } = request;
-        let notificationData = body.data;
-        if (typeof notificationData === 'string') {
-            try { notificationData = JSON.parse(notificationData); } catch (e) {}
-        }
         
         if (body.type === 'payment' || body.action?.includes('payment')) {
             const { accessToken } = getMercadoPagoConfig();

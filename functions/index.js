@@ -342,7 +342,7 @@ exports.mercadoPagoWebhook = onRequest(
     secrets: [mpWebhookSecret]
   }, 
   async (request, response) => {
-    console.log("========== [v6] MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [vFinal] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
     const secret = mpWebhookSecret.value();
     if (!secret) {
@@ -350,7 +350,6 @@ exports.mercadoPagoWebhook = onRequest(
         response.status(500).send("Secret missing.");
         return;
     }
-    console.log("[v6] Secret found.");
 
     try {
         const xSignature = request.headers['x-signature'];
@@ -358,7 +357,7 @@ exports.mercadoPagoWebhook = onRequest(
         const dataIdFromQuery = request.query['data.id'];
 
         if (!xSignature || !dataIdFromQuery) {
-            console.warn("[v6] Missing headers/params.");
+            console.warn("[vFinal] Missing headers/params.");
             response.status(400).send("Bad Request.");
             return;
         }
@@ -381,12 +380,12 @@ exports.mercadoPagoWebhook = onRequest(
         const sha = hmac.digest('hex');
 
         if (sha !== v1) {
-            console.warn("[v6] Invalid signature.");
+            console.warn("[vFinal] Invalid signature.");
             response.status(403).send("Invalid signature.");
             return;
         }
         
-        console.log("[v6] Signature OK.");
+        console.log("[vFinal] Signature OK.");
         
         const { body } = request;
         let notificationData = body.data;
@@ -398,42 +397,35 @@ exports.mercadoPagoWebhook = onRequest(
              const externalReference = notificationData?.external_reference;
              if (externalReference) {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+                const ventaDoc = await ventaRef.get();
                 
-                // Usamos transacción para asegurar consistencia
-                await db.runTransaction(async (t) => {
-                    const ventaDoc = await t.get(ventaRef);
-                    if (!ventaDoc.exists) return;
-
+                if (ventaDoc.exists) {
                     const ventaData = ventaDoc.data();
-                    
-                    // --- LÓGICA DE PROPINA ---
-                    // 1. Obtenemos el total real pagado en la terminal (viene en el webhook)
                     const montoPagado = Number(notificationData?.total_amount || 0);
-                    // 2. Obtenemos el total que esperábamos cobrar originalmente
                     const montoOriginal = Number(ventaData.total || 0);
                     
                     let propina = 0;
-                    
-                    // 3. Si pagaron más de lo original, la diferencia es propina
                     if (montoPagado > montoOriginal) {
                         propina = parseFloat((montoPagado - montoOriginal).toFixed(2));
                     }
 
-                    t.update(ventaRef, {
+                    await ventaRef.update({
                         pago_estado: 'Pagado',
                         mercado_pago_status: 'processed',
                         mercado_pago_id: notificationData?.id,
-                        monto_pagado_real: montoPagado, // Guardamos lo que realmente cobró la terminal
-                        propina: propina                // Guardamos la propina calculada
+                        monto_pagado_real: montoPagado,
+                        propina: propina,
                     });
-                });
-                
-                console.log(`[v6] Venta ${externalReference} PAGADA.`);
+                    
+                    console.log(`[vFinal] Venta ${externalReference} PAGADA. Total: ${montoPagado}, Propina: ${propina}`);
+                } else {
+                    console.log(`[vFinal] Venta con external_reference ${externalReference} no encontrada.`);
+                }
             }
         }
     } catch (error) {
-        console.error("[v6] Error processing webhook:", error);
-        response.status(200).send("OK_WITH_ERROR");
+        console.error("[vFinal] Error processing webhook:", error);
+        response.status(200).send("OK_WITH_ERROR"); // Respond 200 to avoid retries
         return;
     }
     response.status(200).send("OK");

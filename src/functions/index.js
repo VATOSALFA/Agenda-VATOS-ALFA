@@ -219,7 +219,7 @@ exports.getPointTerminals = onCall(
   { 
     cors: true, 
     secrets: [mpAccessToken],
-    invoker: 'public' // <--- Mantiene la puerta abierta tras el deploy
+    invoker: 'public'
   }, 
   async (request) => {
     if (!request.auth) {
@@ -242,7 +242,7 @@ exports.setTerminalPDVMode = onCall(
   { 
     cors: true, 
     secrets: [mpAccessToken],
-    invoker: 'public' // <--- Mantiene la puerta abierta
+    invoker: 'public'
   }, 
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
@@ -270,15 +270,14 @@ exports.createPointPayment = onCall(
   { 
     cors: true, 
     secrets: [mpAccessToken],
-    invoker: 'public' // <--- Mantiene la puerta abierta
+    invoker: 'public'
   }, 
   async (request) => {
-    // Seguridad habilitada
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
     
-    const { amount, terminalId, referenceId } = request.data;
+    const { amount, terminalId, referenceId, payer } = request.data;
 
     if (!amount || !terminalId || !referenceId) {
         throw new HttpsError('invalid-argument', 'Faltan datos requeridos.');
@@ -286,24 +285,17 @@ exports.createPointPayment = onCall(
 
     try {
         const { accessToken } = getMercadoPagoConfig();
-
-        // API Específica de Point (Payment Intents)
         const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
 
         const paymentIntent = {
-            amount: Math.round(amount * 100), // Monto en centavos (ej: 1000 para $10.00)
-            
-            // Para ganar puntos de calidad:
+            amount: Math.round(amount * 100),
             notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
-
             additional_info: {
                 external_reference: referenceId,
-                print_on_terminal: true 
-            }
+                print_on_terminal: true, 
+            },
+            payer: payer ? { email: payer.email } : undefined,
         };
-
-        // NOTA: Si 'description' o 'payer' siguen fallando, NO los incluyas aquí.
-        // Esta API es estricta. Solo mandamos lo necesario.
 
         const response = await fetch(url, {
           method: 'POST',
@@ -334,7 +326,7 @@ exports.createPointPayment = onCall(
     }
 });
 
-// 4. WEBHOOK (CON CÁLCULO DE PROPINA)
+// 4. WEBHOOK (CORRECCIÓN FINAL)
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true, 
@@ -342,7 +334,7 @@ exports.mercadoPagoWebhook = onRequest(
     secrets: [mpWebhookSecret]
   }, 
   async (request, response) => {
-    console.log("========== [vFinal] MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [vFINAL] MERCADO PAGO WEBHOOK RECEIVED ==========");
     
     const secret = mpWebhookSecret.value();
     if (!secret) {
@@ -352,54 +344,52 @@ exports.mercadoPagoWebhook = onRequest(
     }
 
     try {
-        const xSignature = request.headers['x-signature'];
-        const xRequestId = request.headers['x-request-id']; 
-        // CORRECTED: Mercado pago sends `data.id` for this type of webhook
-        const dataIdFromQuery = request.query['data.id'];
+        // Correctly handle different notification types by checking 'topic'
+        const topic = request.query.topic || request.body.topic;
+        const dataId = request.query.id || request.body.id || (request.body.data ? request.body.data.id : null);
+        
+        console.log(`[vFINAL] Topic: ${topic}, ID: ${dataId}`);
 
-        if (!xSignature || !dataIdFromQuery) {
-            console.warn("[vFinal] Missing headers/params. Query:", JSON.stringify(request.query), "Headers:", JSON.stringify(request.headers));
-            response.status(400).send("Bad Request.");
-            return;
-        }
+        if (topic === 'payment' || request.body.type === 'payment') {
+            const xSignature = request.headers['x-signature'];
+            const xRequestId = request.headers['x-request-id'];
 
-        const parts = xSignature.split(',');
-        const tsPart = parts.find(p => p.startsWith('ts='));
-        const v1Part = parts.find(p => p.startsWith('v1='));
+            if (!xSignature || !dataId) {
+                console.warn("[vFINAL] Missing x-signature or id for payment topic.");
+                response.status(400).send("Bad Request.");
+                return;
+            }
 
-        if (!tsPart || !v1Part) {
-            response.status(400).send("Invalid signature format.");
-            return;
-        }
-        
-        const ts = tsPart.split('=')[1];
-        const v1 = v1Part.split('=')[1];
-        
-        // CORRECTED: The manifest uses `id` as the key, even though the query param is `data.id`
-        const manifest = `id:${dataIdFromQuery};request-id:${xRequestId};ts:${ts};`;
-        const hmac = crypto.createHmac('sha256', secret);
-        hmac.update(manifest);
-        const sha = hmac.digest('hex');
+            const parts = xSignature.split(',');
+            const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1];
+            const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1];
 
-        if (sha !== v1) {
-            console.warn("[vFinal] Invalid signature.");
-            response.status(403).send("Invalid signature.");
-            return;
-        }
-        
-        console.log("[vFinal] Signature OK.");
-        
-        const { body } = request;
-        
-        if (body.type === 'payment') {
+            if (!ts || !v1) {
+                response.status(400).send("Invalid signature format.");
+                return;
+            }
+
+            const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+            const hmac = crypto.createHmac('sha256', secret);
+            hmac.update(manifest);
+            const sha = hmac.digest('hex');
+
+            if (sha !== v1) {
+                console.warn("[vFINAL] Invalid signature.");
+                response.status(403).send("Invalid signature.");
+                return;
+            }
+
+            console.log("[vFINAL] Signature OK for payment.");
+            
             const { accessToken } = getMercadoPagoConfig();
-            const paymentInfoResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataIdFromQuery}`, {
+            const paymentInfoResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             const paymentInfo = await paymentInfoResponse.json();
 
-             const externalReference = paymentInfo?.external_reference;
-             if (externalReference && paymentInfo.status === 'approved') {
+            const externalReference = paymentInfo?.external_reference;
+            if (externalReference && paymentInfo.status === 'approved') {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 const ventaDoc = await ventaRef.get();
                 
@@ -421,14 +411,14 @@ exports.mercadoPagoWebhook = onRequest(
                         propina: propina,
                     });
                     
-                    console.log(`[vFinal] Venta ${externalReference} PAGADA. Total: ${montoPagado}, Propina: ${propina}`);
+                    console.log(`[vFINAL] Venta ${externalReference} PAGADA. Total: ${montoPagado}, Propina: ${propina}`);
                 } else {
-                    console.log(`[vFinal] Venta con external_reference ${externalReference} no encontrada.`);
+                    console.log(`[vFINAL] Venta con external_reference ${externalReference} no encontrada.`);
                 }
             }
         }
     } catch (error) {
-        console.error("[vFinal] Error processing webhook:", error);
+        console.error("[vFINAL] Error processing webhook:", error);
         response.status(200).send("OK_WITH_ERROR"); // Respond 200 to avoid retries
         return;
     }

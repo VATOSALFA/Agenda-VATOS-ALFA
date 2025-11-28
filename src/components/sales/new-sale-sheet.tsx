@@ -236,9 +236,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
   const [isWaitingForPayment, setIsWaitingForPayment] = useState(false);
   
   const [amountPaid, setAmountPaid] = useState<number>(0);
-  const [currentSaleId, setCurrentSaleId] = useState<string | null>(null);
-  const [cashboxSettings, setCashboxSettings] = useState<any>(null);
-  const [cashboxSettingsLoading, setCashboxSettingsLoading] = useState(true);
+  const saleIdRef = useRef<string | null>(null);
 
   const unsubscribeRef = useRef<() => void | undefined>(undefined);
 
@@ -258,22 +256,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     };
   }, []);
 
-  useEffect(() => {
-    const fetchSettings = async () => {
-      if (!db) return;
-      setCashboxSettingsLoading(true);
-      const settingsRef = doc(db, 'configuracion', 'caja');
-      const docSnap = await getDoc(settingsRef);
-      if (docSnap.exists()) {
-        setCashboxSettings(docSnap.data());
-      }
-      setCashboxSettingsLoading(false);
-    };
-    fetchSettings();
-  }, [db]);
-
-
-  const mainTerminalId = cashboxSettings?.mercadoPagoTerminalId;
+  const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', 'caja-settings', where('__name__', '==', 'caja'));
+  const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
 
   const sellers = useMemo(() => {
     const allSellers = new Map<string, { id: string; name: string }>();
@@ -505,18 +489,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     
     setIsSendingToTerminal(true);
     setIsWaitingForPayment(true);
-
-    const saleRef = doc(collection(db, 'ventas'));
-    setCurrentSaleId(saleRef.id);
+    
+    const tempSaleId = doc(collection(db, 'ventas')).id;
+    saleIdRef.current = tempSaleId;
 
     try {
-      await onSubmit(form.getValues(), saleRef.id, 'Pendiente');
-
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
         terminalId: selectedTerminalId,
-        referenceId: saleRef.id,
+        referenceId: tempSaleId,
+        payer: { email: selectedClient.correo, name: `${selectedClient.nombre} ${selectedClient.apellido}` }
       });
 
       if (result.data.success) {
@@ -524,19 +507,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         
         if (unsubscribeRef.current) unsubscribeRef.current();
 
-        const saleDocRef = doc(db, 'ventas', saleRef.id);
+        const saleDocRef = doc(db, 'ventas', tempSaleId);
         
-        const unsubscribe = onSnapshot(saleDocRef, (docSnapshot) => {
-            const data = docSnapshot.data();
-            
-            if (data && data.pago_estado === 'Pagado') {
-                setIsSendingToTerminal(false);
-                setIsWaitingForPayment(false);
-                
-                unsubscribe();
-                unsubscribeRef.current = undefined;
+        const unsubscribe = onSnapshot(saleDocRef, async (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                if (data && data.pago_estado === 'Pagado') {
+                    setIsSendingToTerminal(false);
+                    setIsWaitingForPayment(false);
+                    
+                    unsubscribe();
+                    unsubscribeRef.current = undefined;
 
-                finalizeSaleProcess(data.cliente_id, data.local_id);
+                    await finalizeSaleProcess(data.cliente_id, data.local_id);
+                }
             }
         });
         
@@ -549,11 +533,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
       setIsSendingToTerminal(false);
       setIsWaitingForPayment(false);
-      
-      if(currentSaleId && db) {
-          await deleteDoc(doc(db, 'ventas', currentSaleId));
-          setCurrentSaleId(null);
-      }
+      saleIdRef.current = null;
     }
   }
 
@@ -582,7 +562,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setAmountPaid(0);
     setIsSendingToTerminal(false);
     setIsWaitingForPayment(false);
-    setCurrentSaleId(null);
+    saleIdRef.current = null;
     if(initialData) {
         onOpenChange(false);
     }
@@ -594,7 +574,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     form.setValue('cliente_id', newClientId, { shouldValidate: true });
   }
 
-  async function onSubmit(data: SaleFormData, saleDocId?: string, paymentStatus: 'Pagado' | 'Pendiente' = 'Pagado') {
+  async function onSubmit(data: SaleFormData) {
      if (!db) return;
      setIsSubmitting(true);
     try {
@@ -634,7 +614,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             }
         }
         
-        const ventaRef = saleDocId ? doc(db, "ventas", saleDocId) : doc(collection(db, "ventas"));
+        const ventaRef = doc(collection(db, "ventas"));
         const itemsToSave = cart.map(item => {
             const itemSubtotal = (item.precio || 0) * item.cantidad;
             const itemDiscountValue = Number(item.discountValue) || 0;
@@ -672,7 +652,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             fecha_hora_venta: Timestamp.now(),
             creado_por_id: user?.uid,
             creado_por_nombre: user?.displayName || user?.email,
-            pago_estado: paymentStatus,
+            pago_estado: 'Pagado',
+            creado_en: Timestamp.now(),
         };
         
         if (data.metodo_pago === 'combinado') {
@@ -686,27 +667,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             saleDataToSave.reservationId = reservationId;
         }
 
-        if (saleDocId) {
-            transaction.set(ventaRef, saleDataToSave);
-        } else {
-             transaction.set(ventaRef, {
-                ...saleDataToSave,
-                creado_en: Timestamp.now(),
-            });
-        }
+        transaction.set(ventaRef, saleDataToSave);
         
         if (reservationId) {
             const reservationRef = doc(db, 'reservas', reservationId);
             transaction.update(reservationRef, { 
-                pago_estado: paymentStatus,
+                pago_estado: 'Pagado',
                 estado: 'Asiste'
             });
         }
       });
 
-      if (paymentStatus === 'Pagado') {
-        await finalizeSaleProcess(data.cliente_id, data.local_id);
-      }
+      await finalizeSaleProcess(data.cliente_id, data.local_id);
       
     } catch (error: any) {
       console.error('Error al registrar la venta: ', error);
@@ -716,9 +688,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         description: error.message || 'No se pudo registrar la venta. Por favor, intenta de nuevo.',
       });
     } finally {
-      if (paymentStatus === 'Pagado') {
-          setIsSubmitting(false);
-      }
+      setIsSubmitting(false);
     }
   }
   
@@ -1059,7 +1029,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment} onClick={form.handleSubmit(onSubmit as any)}>
+                        <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment} onClick={form.handleSubmit(onSubmit)}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Finalizar Venta por ${total.toLocaleString('es-MX')}
                         </Button>

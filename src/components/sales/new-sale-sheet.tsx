@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot, where } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -490,7 +490,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setIsSendingToTerminal(true);
     setIsWaitingForPayment(true);
     
-    const tempSaleId = doc(collection(db, 'ventas')).id;
+    // Generate a temporary ID client-side
+    const tempSaleId = doc(collection(db, 'temp')).id;
     saleIdRef.current = tempSaleId;
 
     try {
@@ -505,8 +506,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
       if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
         
+        // Listen for the sale document to be created by the webhook
         if (unsubscribeRef.current) unsubscribeRef.current();
-
+        
         const saleDocRef = doc(db, 'ventas', tempSaleId);
         
         const unsubscribe = onSnapshot(saleDocRef, async (docSnapshot) => {

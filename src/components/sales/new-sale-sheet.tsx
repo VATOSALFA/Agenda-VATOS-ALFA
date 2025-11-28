@@ -1065,7 +1065,61 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </Button>
                     </SheetFooter>
                   </div>
-                </Dialog>
+                <DialogContent className="sm:max-w-2xl">
+                   <DialogHeader>
+                    <DialogTitle>Agregar al carrito</DialogTitle>
+                    <div className="relative my-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Buscar servicio o producto..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
+                    </div>
+                   </DialogHeader>
+                    <Tabs defaultValue="servicios" className="h-[50vh] flex flex-col">
+                        <TabsList>
+                            <TabsTrigger value="servicios">Servicios</TabsTrigger>
+                            <TabsTrigger value="productos">Productos</TabsTrigger>
+                        </TabsList>
+                        <ScrollArea className="flex-grow mt-4">
+                             <TabsContent value="servicios">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                 {(servicesLoading) ? (
+                                    Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>)
+                                ) : (
+                                    addItemFilteredServices.map((service: ServiceType) => (
+                                        <DialogClose asChild key={service.id}>
+                                            <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
+                                                <CardContent className="p-3">
+                                                    <p className="font-semibold text-sm">{service.name}</p>
+                                                    <p className="text-xs text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                </CardContent>
+                                            </Card>
+                                        </DialogClose>
+                                    ))
+                                )}
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="productos">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {(productsLoading) ? (
+                                    Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>)
+                                ) : (
+                                    addItemFilteredProducts.map((product: Product) => (
+                                        <DialogClose asChild key={product.id}>
+                                            <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
+                                                <CardContent className="p-3">
+                                                    <p className="font-semibold text-sm">{product.nombre}</p>
+                                                    <p className="text-xs text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                    <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                                </CardContent>
+                                            </Card>
+                                        </DialogClose>
+                                    ))
+                                )}
+                                </div>
+                            </TabsContent>
+                        </ScrollArea>
+                    </Tabs>
+                </DialogContent>
+              </Dialog>
             )}
         </Form>
         

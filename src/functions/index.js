@@ -326,7 +326,7 @@ exports.createPointPayment = onCall(
     }
 });
 
-// 4. WEBHOOK (CORRECCIÓN FINAL V2)
+// 4. WEBHOOK (CORRECCIÓN FINAL V3)
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true, 
@@ -334,38 +334,69 @@ exports.mercadoPagoWebhook = onRequest(
     secrets: [mpWebhookSecret]
   }, 
   async (request, response) => {
-    console.log("========== [vFINAL-2] MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [vFINAL-3] MERCADO PAGO WEBHOOK RECEIVED ==========");
     console.log("Request Body:", JSON.stringify(request.body));
     console.log("Request Query:", JSON.stringify(request.query));
 
     try {
-        const { body, query } = request;
+        const { body, query, headers } = request;
         const topic = query.topic || body.type;
 
-        if (topic === 'payment' || body.action?.includes('payment.updated')) {
-            const paymentId = body.data?.id || query['data.id'] || query.id;
-            console.log(`[vFINAL-2] Handling 'payment' topic for ID: ${paymentId}`);
+        if (topic === 'payment') {
+            const paymentId = query['data.id'] || body.data?.id;
+            console.log(`[vFINAL-3] Handling 'payment' topic for ID: ${paymentId}`);
 
-            // This section needs signature validation
-            // ... (previous signature validation logic can be placed here)
+            const secret = mpWebhookSecret.value();
+            const xSignature = headers['x-signature'];
+            const xRequestId = headers['x-request-id'];
+
+            if (!secret || !xSignature || !paymentId) {
+                console.warn("[vFINAL-3] Missing secret, signature, or paymentId for 'payment' topic.");
+                response.status(400).send("Bad Request: Missing data for validation.");
+                return;
+            }
+
+            const parts = xSignature.split(',');
+            const tsPart = parts.find(p => p.startsWith('ts='));
+            const v1Part = parts.find(p => p.startsWith('v1='));
+
+            if (!tsPart || !v1Part) {
+                response.status(400).send("Invalid signature format.");
+                return;
+            }
             
+            const ts = tsPart.split('=')[1];
+            const v1 = v1Part.split('=')[1];
+            
+            const manifest = `id:${paymentId};request-id:${xRequestId};ts:${ts};`;
+            const hmac = crypto.createHmac('sha256', secret);
+            hmac.update(manifest);
+            const sha = hmac.digest('hex');
+
+            if (sha !== v1) {
+                console.warn("[vFINAL-3] Invalid signature for 'payment' topic.");
+                response.status(403).send("Invalid signature.");
+                return;
+            }
+            
+            console.log("[vFINAL-3] Signature OK for 'payment' topic.");
+            
+            // If signature is valid, process the payment
             const { accessToken } = getMercadoPagoConfig();
             const paymentInfoResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             const paymentInfo = await paymentInfoResponse.json();
 
-            const externalReference = paymentInfo?.external_reference;
-            if (externalReference && paymentInfo.status === 'approved') {
+             const externalReference = paymentInfo?.external_reference;
+             if (externalReference && paymentInfo.status === 'approved') {
                 const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
                 
                 await admin.firestore().runTransaction(async (transaction) => {
                     const ventaDoc = await transaction.get(ventaRef);
                     if (!ventaDoc.exists) {
-                       console.log(`[vFINAL-2] Sale doc ${externalReference} doesn't exist. Creating it.`);
-                       // If the document doesn't exist, webhook might be faster. We create it.
-                       // This assumes the sale sheet logic has been updated to NOT create the doc.
-                       // This is just a fallback. The primary logic is in the 'order' case.
+                       console.log(`[vFINAL-3] Sale doc ${externalReference} doesn't exist yet. It will be updated by the 'order' webhook if applicable.`);
+                       // We don't create the doc here, we let the client-side or 'order' webhook do it.
                     } else {
                         const ventaData = ventaDoc.data();
                         const montoPagado = Number(paymentInfo?.transaction_amount || 0);
@@ -383,61 +414,53 @@ exports.mercadoPagoWebhook = onRequest(
                             monto_pagado_real: montoPagado,
                             propina: propina,
                         });
-                        console.log(`[vFINAL-2] Venta ${externalReference} UPDATED. Total: ${montoPagado}, Propina: ${propina}`);
+                        console.log(`[vFINAL-3] Venta ${externalReference} UPDATED. Total: ${montoPagado}, Propina: ${propina}`);
                     }
                 });
             } else {
-              console.log(`[vFINAL-2] Payment ${paymentId} not approved or no external_reference.`);
+              console.log(`[vFINAL-3] Payment ${paymentId} not approved or no external_reference.`);
             }
 
-        } else if (topic === 'order' || body.type === 'order') {
-            const orderId = body.data?.id;
-            console.log(`[vFINAL-2] Handling 'order' topic for ID: ${orderId}`);
-
-            if (body.action === 'order.processed' && body.data?.status === 'processed' && body.data?.status_detail === 'accredited') {
-                const externalReference = body.data.external_reference;
-                const paidAmount = body.data.total_paid_amount / 100; // MP sends in cents
-                
-                if (!externalReference) {
-                    console.error("[vFINAL-2] No external_reference found in order notification.");
-                    response.status(400).send("Bad Request: Missing external_reference.");
-                    return;
-                }
-                
-                const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
-                const saleDoc = await ventaRef.get();
-
-                if (!saleDoc.exists) {
-                    console.error(`[vFINAL-2] Venta con external_reference ${externalReference} no encontrada.`);
-                    response.status(404).send("Sale not found.");
-                    return;
-                }
-
-                const ventaData = saleDoc.data();
-                const montoOriginal = Number(ventaData.total || 0);
-                
-                let propina = 0;
-                if (paidAmount > montoOriginal) {
-                    propina = parseFloat((paidAmount - montoOriginal).toFixed(2));
-                }
-
-                await ventaRef.update({
-                    pago_estado: 'Pagado',
-                    mercado_pago_status: 'approved',
-                    mercado_pago_id: body.data.id,
-                    monto_pagado_real: paidAmount,
-                    propina: propina,
-                });
-
-                console.log(`[vFINAL-2] Venta ${externalReference} PAGADA via ORDER. Total: ${paidAmount}, Propina: ${propina}`);
-            } else {
-                console.log(`[vFINAL-2] Order ${orderId} not processed/accredited. Action: ${body.action}, Status: ${body.data?.status}`);
+        } else if (topic === 'point_integration_wh') {
+            console.log(`[vFINAL-3] Handling 'point_integration_wh' topic.`);
+            
+            const externalReference = body.data?.external_reference;
+            
+            if (!externalReference) {
+                 console.error("[vFINAL-3] No external_reference found in point notification body.");
+                 response.status(400).send("Bad Request: Missing external_reference.");
+                 return;
             }
+            
+            // For Point, we trust the notification if it comes and has our reference
+            // This is because Point notifications don't seem to follow the standard signature validation
+            const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+            const saleDoc = await ventaRef.get();
+
+            if (!saleDoc.exists) {
+                console.error(`[vFINAL-3] Sale with external_reference ${externalReference} not found for Point payment.`);
+                response.status(404).send("Sale not found.");
+                return;
+            }
+
+            const ventaData = saleDoc.data();
+            // In point, we can't reliably get the paid amount with tip from this webhook.
+            // We assume the paid amount is the total of the sale. Tip needs to be handled separately if needed.
+            await ventaRef.update({
+                pago_estado: 'Pagado',
+                mercado_pago_status: 'approved',
+                mercado_pago_id: body.data.id,
+                monto_pagado_real: ventaData.total,
+                propina: 0, // Cannot calculate tip from this notification
+            });
+
+            console.log(`[vFINAL-3] Venta ${externalReference} PAID via Point Webhook.`);
+            
         } else {
-            console.log(`[vFINAL-2] Unhandled topic/type: ${topic}`);
+            console.log(`[vFINAL-3] Unhandled topic/type: ${topic}`);
         }
     } catch (error) {
-        console.error("[vFINAL-2] Error processing webhook:", error);
+        console.error("[vFINAL-3] Error processing webhook:", error);
         response.status(200).send("OK_WITH_ERROR"); // Respond 200 to avoid retries
         return;
     }

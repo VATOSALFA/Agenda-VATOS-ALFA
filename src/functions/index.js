@@ -19,7 +19,7 @@ const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
 // Configuración global
 setGlobalOptions({ region: "us-central1" });
 
-console.log('Functions starting up (Gen 2 - Final V8 Hybrid). Version: ' + new Date().toISOString());
+console.log('Functions starting up (Gen 2 - Final V11). Version: ' + new Date().toISOString());
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
@@ -214,13 +214,8 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  * =================================================================
  */
 
-// 1. OBTENER TERMINALES
 exports.getPointTerminals = onCall(
-  { 
-    cors: true, 
-    secrets: [mpAccessToken],
-    invoker: 'public' // Asegura que Google no cierre el acceso
-  }, 
+  { cors: true, secrets: [mpAccessToken], invoker: 'public' }, 
   async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
@@ -237,13 +232,8 @@ exports.getPointTerminals = onCall(
     }
 });
 
-// 2. CAMBIAR MODO PDV
 exports.setTerminalPDVMode = onCall(
-  { 
-    cors: true, 
-    secrets: [mpAccessToken],
-    invoker: 'public' // Asegura el acceso
-  }, 
+  { cors: true, secrets: [mpAccessToken], invoker: 'public' }, 
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     
@@ -253,10 +243,7 @@ exports.setTerminalPDVMode = onCall(
     try {
       const { client } = getMercadoPagoConfig();
       const point = new Point(client);
-      const result = await point.changeDeviceOperatingMode({
-        device_id: terminalId,
-        operating_mode: "PDV"
-      });
+      const result = await point.changeDeviceOperatingMode({ device_id: terminalId, operating_mode: "PDV" });
       return { success: true, data: result };
     } catch (error) {
       console.error(`Error setting PDV for ${terminalId}:`, error);
@@ -265,36 +252,25 @@ exports.setTerminalPDVMode = onCall(
     }
 });
 
-// 3. CREAR PAGO (API de Payment Intents sin 'description' para evitar errores)
 exports.createPointPayment = onCall(
-  { 
-    cors: true, 
-    secrets: [mpAccessToken],
-    invoker: 'public' // Asegura el acceso
-  }, 
+  { cors: true, secrets: [mpAccessToken], invoker: 'public' }, 
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
     
     const { amount, terminalId, referenceId } = request.data;
-
     if (!amount || !terminalId || !referenceId) {
         throw new HttpsError('invalid-argument', 'Faltan datos requeridos.');
     }
 
     try {
         const { accessToken } = getMercadoPagoConfig();
-
-        // API Específica de Point
         const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
 
         const paymentIntent = {
-            amount: Math.round(amount * 100), // Monto en centavos
-            
-            // Notification URL para ganar puntos de calidad
+            amount: Math.round(amount * 100),
             notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
-
             additional_info: {
                 external_reference: referenceId,
                 print_on_terminal: true 
@@ -330,7 +306,8 @@ exports.createPointPayment = onCall(
     }
 });
 
-// 4. WEBHOOK (V9 - FINAL CON SOPORTE PARA SIMULACIÓN)
+
+// 4. WEBHOOK (V11 - FINAL)
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true,
@@ -338,158 +315,161 @@ exports.mercadoPagoWebhook = onRequest(
     secrets: [mpWebhookSecret, mpAccessToken],
   },
   async (request, response) => {
-    console.log("========== [v9] MERCADO PAGO WEBHOOK RECEIVED ==========");
-
-    const secret = mpWebhookSecret.value();
-    if (!secret) {
-      console.error("FATAL: Secret missing.");
-      response.status(500).send("Secret missing.");
-      return;
-    }
+    console.log("========== [v11] MERCADO PAGO WEBHOOK RECEIVED ==========");
 
     try {
-      // 1. OBTENCIÓN DE DATOS (Más robusta para detectar variantes)
-      const topic = request.query.type || request.query.topic || request.body.type;
+      const secret = mpWebhookSecret.value();
+      if (!secret) {
+        console.error("FATAL: Secret missing.");
+        response.status(500).send("Secret missing.");
+        return;
+      }
       
-      // Buscamos el ID en todos los lugares posibles
-      const dataId = request.query['data.id'] || request.query.id || request.body.data?.id || request.body.id;
-
-      console.log(`[v9] Topic: ${topic}, ID: ${dataId}`);
-
-      // --- PASE VIP PARA SIMULACIÓN ---
-      // Si es el ID de prueba de Mercado Pago, respondemos OK y terminamos.
-      if (dataId === "123456") {
-          console.log("[v9] Test simulation detected (123456). Returning OK.");
-          response.status(200).send("OK");
-          return;
+      const { query, body } = request;
+      const topic = query.type || query.topic || body.type;
+      
+      let dataId;
+      if (query['data.id']) {
+        dataId = query['data.id'];
+      } else if (query.id) {
+        dataId = query.id;
+      } else if (body.data && body.data.id) {
+        dataId = body.data.id;
       }
-      // -------------------------------
 
+      console.log(`[v11] Topic: ${topic}, ID from request: ${dataId}`);
+      
       if (!dataId) {
-          // Si no hay ID, respondemos 200 para que MP no reintente eternamente, pero logueamos error
-          console.warn("[v9] No ID found in request.");
+        console.warn("[v11] No data ID found in request.", { query, body });
+        response.status(400).send("Bad Request: No ID found.");
+        return;
+      }
+
+      // Special case for MP simulations
+      if (dataId === "123456") {
+          console.log("[v11] Test simulation webhook received. Responding OK.");
           response.status(200).send("OK");
           return;
       }
 
-      // 2. VALIDACIÓN DE FIRMA (Híbrida)
-      let signatureValid = false;
+      // --- SIGNATURE VALIDATION ---
       const xSignature = request.headers['x-signature'];
       const xRequestId = request.headers['x-request-id'];
 
       if (xSignature && xRequestId) {
-          const parts = xSignature.split(',');
-          const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1];
-          const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1];
+        const parts = xSignature.split(',');
+        const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1];
+        const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1];
 
-          if (ts && v1) {
-              const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-              const hmac = crypto.createHmac('sha256', secret);
-              hmac.update(manifest);
-              const sha = hmac.digest('hex');
-              if (sha === v1) signatureValid = true;
-          }
-      }
+        if (ts && v1) {
+            const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+            const hmac = crypto.createHmac('sha256', secret);
+            hmac.update(manifest);
+            const sha = hmac.digest('hex');
 
-      if (!signatureValid) {
-          console.warn(`[v9] ⚠️ Signature validation failed/missing for ID: ${dataId}. Checking API directly.`);
-      }
-
-      // 3. CONSULTA A LA API (Fuente de la verdad)
-      const { accessToken } = getMercadoPagoConfig();
-      
-      // Consultamos el pago o la orden
-      let paymentInfo = null;
-      let externalReference = null;
-      let status = null;
-      let amount = 0;
-      let paymentIdReal = dataId;
-
-      // Intentamos consultar como Pago
-      const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-
-      if (paymentResponse.ok) {
-          paymentInfo = await paymentResponse.json();
-          externalReference = paymentInfo.external_reference;
-          status = paymentInfo.status;
-          amount = paymentInfo.transaction_amount;
+            if (sha !== v1) {
+                console.warn("[v11] Invalid signature.");
+                response.status(403).send("Invalid signature.");
+                return;
+            }
+            console.log("[v11] Signature OK.");
+        } else {
+            console.warn("[v11] Signature headers present but malformed.");
+        }
       } else {
-          // Si falló como pago, intentamos como Orden (Merchant Order) - Común en Point
-          const orderResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
+          console.warn("[v11] No signature headers present. Skipping validation (could be a simulation).");
+      }
+
+      // --- API VERIFICATION AND PROCESSING ---
+      const { accessToken } = getMercadoPagoConfig();
+      let paymentInfo = null;
+
+      if (topic === 'payment') {
+          const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
               headers: { 'Authorization': `Bearer ${accessToken}` }
           });
-          
+          if (paymentResponse.ok) {
+              paymentInfo = await paymentResponse.json();
+          }
+      } else if (topic === 'order' || topic === 'point_integration_wh') {
+          // For orders, we need to find the actual payment within the order.
+          const orderResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
           if (orderResponse.ok) {
-              const orderInfo = await orderResponse.json();
-              externalReference = orderInfo.external_reference;
-              status = orderInfo.status; // 'closed' suele significar pagado en ordenes
-              // Buscamos el pago aprobado dentro de la orden
-              const approvedPayment = orderInfo.payments?.find(p => p.status === 'approved');
-              if (approvedPayment) {
-                  amount = approvedPayment.transaction_amount;
-                  status = 'approved'; // Forzamos status aprobado si encontramos el pago
-                  paymentIdReal = approvedPayment.id;
+            const orderInfo = await orderResponse.json();
+            const successfulPayment = orderInfo.payments?.find(p => p.status === 'approved');
+            if (successfulPayment) {
+              // Re-fetch the full payment details to get all necessary info
+              const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${successfulPayment.id}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              });
+              if(paymentResponse.ok) {
+                  paymentInfo = await paymentResponse.json();
+                  // Manually inject external_reference from the order if the payment doesn't have it.
+                  if (!paymentInfo.external_reference && orderInfo.external_reference) {
+                      paymentInfo.external_reference = orderInfo.external_reference;
+                  }
               }
+            }
+          }
+      } else {
+         // Fallback for cases where topic is not clear, e.g., simulations
+          const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (paymentResponse.ok) {
+              paymentInfo = await paymentResponse.json();
           }
       }
 
-      console.log(`[v9] API Check Result: Status=${status}, Ref=${externalReference}`);
-
-      // 4. ACTUALIZACIÓN DE FIRESTORE
-      if (status === 'approved' && externalReference) {
-          const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
-          
-          await admin.firestore().runTransaction(async (t) => {
-              const ventaDoc = await t.get(ventaRef);
-              if (!ventaDoc.exists) return;
-
-              const ventaData = ventaDoc.data();
-              
-              // Idempotencia
-              if (ventaData.pago_estado === 'Pagado') return;
-
-              // Propina
-              const montoOriginal = Number(ventaData.total || 0);
-              const montoPagado = Number(amount || 0);
-              let propina = 0;
-              
-              if (montoPagado > montoOriginal) {
-                  propina = parseFloat((montoPagado - montoOriginal).toFixed(2));
-              }
-
-              t.update(ventaRef, {
-                  pago_estado: 'Pagado',
-                  mercado_pago_status: 'approved',
-                  mercado_pago_id: String(paymentIdReal),
-                  monto_pagado_real: montoPagado,
-                  propina: propina,
-                  fecha_pago: new Date()
-              });
-
-              // Actualizar Reserva
-              if (ventaData.reservationId) {
-                  const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
-                  const reservaDoc = await t.get(reservaRef);
-                  if (reservaDoc.exists) {
-                      t.update(reservaRef, { pago_estado: 'Pagado' });
-                  }
-              }
-          });
-          console.log(`[v9] SUCCESS: Venta ${externalReference} processed.`);
-      } else {
-          // Si no es aprobado o es irrelevante, respondemos OK para que MP deje de insistir
-          console.log("[v9] Payment not approved or unknown reference. Ignoring.");
+      if (!paymentInfo || !paymentInfo.external_reference || paymentInfo.status !== 'approved') {
+          console.log('[v11] Payment not found, not approved, or no external reference.');
+          response.status(200).send("OK (Ignored)");
+          return;
       }
 
-    } catch (error) {
-      console.error('[v9] Error processing webhook:', error);
-      // Respondemos 200 OK incluso en error lógico para evitar bucles de reintentos infinitos de MP
-      response.status(200).send('OK_WITH_ERROR'); 
-      return;
-    }
+      const externalReference = paymentInfo.external_reference;
+      
+      // TRANSACTION TO UPDATE FIRESTORE
+      await admin.firestore().runTransaction(async (t) => {
+          const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
+          const ventaDoc = await t.get(ventaRef);
+          
+          if (!ventaDoc.exists) {
+              console.error(`[v11] Sale document with ref ${externalReference} not found.`);
+              return;
+          }
 
-    response.status(200).send('OK');
+          const ventaData = ventaDoc.data();
+          if (ventaData.pago_estado === 'Pagado') return; // Idempotency
+
+          const montoPagado = Number(paymentInfo.transaction_amount || 0);
+          const montoOriginal = Number(ventaData.total || 0);
+          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
+
+          t.update(ventaRef, {
+              pago_estado: 'Pagado',
+              mercado_pago_status: 'approved',
+              mercado_pago_id: String(paymentInfo.id),
+              monto_pagado_real: montoPagado,
+              propina: propina,
+              fecha_pago: new Date()
+          });
+
+          if (ventaData.reservationId) {
+              const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
+              t.update(reservaRef, { pago_estado: 'Pagado' });
+          }
+      });
+      
+      console.log(`[v11] SUCCESS: Sale ${externalReference} processed.`);
+      response.status(200).send("OK");
+
+    } catch (error) {
+      console.error("[v11] Error processing webhook:", error);
+      response.status(200).send("OK_WITH_ERROR");
+    }
   }
 );
+    

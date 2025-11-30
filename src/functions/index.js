@@ -326,7 +326,7 @@ exports.createPointPayment = onCall(
     }
 });
 
-// 4. WEBHOOK (CORRECCIÓN FINAL V4)
+// 4. WEBHOOK (CORRECCIÓN FINAL V5)
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true,
@@ -334,94 +334,58 @@ exports.mercadoPagoWebhook = onRequest(
     secrets: [mpWebhookSecret],
   },
   async (request, response) => {
-    console.log("========== [vFINAL-4] MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [vFINAL-5] MERCADO PAGO WEBHOOK RECEIVED ==========");
     console.log('Request Query:', JSON.stringify(request.query));
     console.log('Request Body:', JSON.stringify(request.body));
-    console.log('Request Headers:', JSON.stringify(request.headers));
 
     try {
       const topic = request.query.type || request.body.type;
-      const paymentId = request.query['data.id'] || request.body.data?.id;
 
-      if (topic === 'payment' && paymentId) {
-        // --- Standard Payment Webhook with Signature ---
-        console.log(`[vFINAL-4] Handling 'payment' topic for ID: ${paymentId}`);
+      if (topic === 'payment') {
+        const paymentId = request.query['data.id'] || request.body.data?.id;
+        console.log(`[vFINAL-5] Handling 'payment' topic for ID: ${paymentId}`);
 
-        const secret = mpWebhookSecret.value();
-        if (!secret) {
-          throw new Error("Webhook secret is not configured.");
+        if (!paymentId) {
+            console.warn("[vFINAL-5] 'payment' topic missing data.id.");
+            response.status(400).send("Bad Request: Missing payment ID.");
+            return;
         }
         
-        const xSignature = request.headers['x-signature'];
-        const xRequestId = request.headers['x-request-id'];
-
-        if (!xSignature || !xRequestId) {
-          console.warn("[vFINAL-4] 'payment' topic missing x-signature or x-request-id headers.");
-          response.status(400).send("Bad Request: Missing signature headers.");
-          return;
-        }
-
-        const parts = xSignature.split(',');
-        const tsPart = parts.find(p => p.startsWith('ts='));
-        const v1Part = parts.find(p => p.startsWith('v1='));
-
-        if (!tsPart || !v1Part) {
-          response.status(400).send("Invalid signature format.");
-          return;
-        }
-        
-        const ts = tsPart.split('=')[1];
-        const v1 = v1Part.split('=')[1];
-        
-        const manifest = `id:${paymentId};request-id:${xRequestId};ts:${ts};`;
-        const hmac = crypto.createHmac('sha256', secret);
-        hmac.update(manifest);
-        const sha = hmac.digest('hex');
-
-        if (sha !== v1) {
-          console.warn("[vFINAL-4] Invalid signature for 'payment' topic.");
-          response.status(403).send("Invalid signature.");
-          return;
-        }
-
-        console.log("[vFINAL-4] Signature OK for 'payment' topic.");
         await processPayment(paymentId);
 
-      } else if (request.body.action === 'order.processed') {
-          // --- Point Payment Webhook (order) ---
+      } else if (topic === 'point_integration_wh') {
+          console.log(`[vFINAL-5] Handling 'point_integration_wh' topic.`);
           const orderId = request.body.data?.id;
-          console.log(`[vFINAL-4] Handling 'order.processed' action for Order ID: ${orderId}`);
-          
           if (!orderId) {
-              console.error("[vFINAL-4] No data.id found in 'order.processed' notification body.");
+              console.error("[vFINAL-5] No data.id found in 'point_integration_wh' notification body.");
               response.status(400).send("Bad Request: Missing order ID.");
               return;
           }
-
-          // For Point orders, we need to fetch the order to get the payment details
+          
           const { accessToken } = getMercadoPagoConfig();
           const orderInfoResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${orderId}`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
           });
           const orderInfo = await orderInfoResponse.json();
           
-          const paymentIdFromOrder = orderInfo.payments?.[0]?.id;
+          const successfulPayment = orderInfo.payments?.find(p => p.status === 'approved');
+          const paymentIdFromOrder = successfulPayment?.id;
 
-          if (paymentIdFromOrder && orderInfo.status === 'closed' && orderInfo.order_status === 'paid') {
-              console.log(`[vFINAL-4] Order ${orderId} is paid. Processing Payment ID: ${paymentIdFromOrder}`);
+          if (paymentIdFromOrder) {
+              console.log(`[vFINAL-5] Order ${orderId} is paid. Processing Payment ID: ${paymentIdFromOrder}`);
               await processPayment(paymentIdFromOrder, orderInfo.external_reference);
           } else {
-              console.log(`[vFINAL-4] Order ${orderId} not in a processable state.`);
+              console.log(`[vFINAL-5] Order ${orderId} not in a processable state or no approved payment found.`);
           }
           
       } else {
-        console.log(`[vFINAL-4] Unhandled topic/type: '${topic}' or action: '${request.body.action}'`);
+        console.log(`[vFINAL-5] Unhandled topic/type: '${topic}'`);
       }
 
       response.status(200).send('OK');
 
     } catch (error) {
-      console.error('[vFINAL-4] Error processing webhook:', error);
+      console.error('[vFINAL-5] Error processing webhook:', error);
       response.status(500).send('Internal Server Error');
     }
   }
@@ -443,7 +407,7 @@ async function processPayment(paymentId, externalRefFromOrder = null) {
       const ventaDoc = await ventaRef.get();
       
       if (!ventaDoc.exists) {
-          console.error(`[vFINAL-4] Sale document with external_reference ${externalReference} not found.`);
+          console.error(`[vFINAL-5] Sale document with external_reference ${externalReference} not found.`);
           return;
       }
 
@@ -464,8 +428,8 @@ async function processPayment(paymentId, externalRefFromOrder = null) {
           propina: propina,
       });
       
-      console.log(`[vFINAL-4] Venta ${externalReference} UPDATED to PAGADO. Total: ${montoPagado}, Propina: ${propina}`);
+      console.log(`[vFINAL-5] Venta ${externalReference} UPDATED to PAGADO. Total: ${montoPagado}, Propina: ${propina}`);
   } else {
-      console.log(`[vFINAL-4] Payment ${paymentId} not approved or no external_reference found.`);
+      console.log(`[vFINAL-5] Payment ${paymentId} not approved or no external_reference found.`);
   }
 }

@@ -31,13 +31,14 @@ import { useDebounce } from 'use-debounce';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
-const userSchema = (isEditMode: boolean) => z.object({
+const userSchema = (isEditMode: boolean, isGeneralAdmin: boolean) => z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
   apellido: z.string().min(1, 'El apellido es requerido.'),
   email: z.string().email('El email no es válido.'),
   password: z.string().optional(),
   celular: z.string().optional(),
-  role: z.string().min(1, 'El rol es requerido.'),
+  // Make role optional only if it's the general admin being edited
+  role: isEditMode && isGeneralAdmin ? z.string().optional() : z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
   avatarUrl: z.string().optional(),
 });
@@ -76,9 +77,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+  
+  const isEditingGeneralAdmin = isEditMode && user?.role === 'Administrador general';
 
   const form = useForm<UserFormData>({
-    resolver: zodResolver(userSchema(isEditMode)),
+    resolver: zodResolver(userSchema(isEditMode, isEditingGeneralAdmin)),
     defaultValues: { nombre: '', apellido: '', email: '', celular: '', role: '', password: '', avatarUrl: '' },
   });
 
@@ -151,7 +154,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const onSubmit = async (data: UserFormData) => {
     setIsSubmitting(true);
     try {
-        const selectedRoleData = roles.find(r => r.title === data.role);
+        const roleToSave = isEditingGeneralAdmin ? 'Administrador general' : data.role;
+        const selectedRoleData = roles.find(r => r.title === roleToSave);
         const permissionsForRole = selectedRoleData ? selectedRoleData.permissions : [];
         const fullName = `${data.nombre} ${data.apellido}`.trim();
 
@@ -159,7 +163,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             name: fullName,
             email: data.email,
             celular: data.celular,
-            role: data.role,
+            role: roleToSave,
             permissions: permissionsForRole,
             avatarUrl: data.avatarUrl,
         };
@@ -327,24 +331,27 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                         </AccordionContent>
                     </AccordionItem>
                  </Accordion>
-                <FormField
-                  control={form.control}
-                  name="role"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Rol</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                              {roles?.map(role => (
-                                  <SelectItem key={role.id} value={role.title}>{role.title}</SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                
+                {!isEditingGeneralAdmin && (
+                  <FormField
+                    control={form.control}
+                    name="role"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Rol</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                {roles?.filter(r => r.title !== 'Administrador general').map(role => (
+                                    <SelectItem key={role.id} value={role.title}>{role.title}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {selectedRoleName !== 'Administrador general' && (
                   <FormField
@@ -385,3 +392,4 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     </Dialog>
   );
 }
+

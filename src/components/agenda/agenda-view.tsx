@@ -20,7 +20,7 @@ import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, 
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -554,8 +554,7 @@ export default function AgendaView() {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   
   const getProfessionalAvatar = (profesional: Profesional): string | undefined => {
-    const userDoc = userMap.get(profesional.userId);
-    return userDoc?.avatarUrl;
+    return profesional.avatarUrl;
   };
 
   return (
@@ -867,4 +866,5 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
 

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -434,8 +435,11 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                <ImageUploader 
                                 folder="profesionales"
                                 currentImageUrl={field.value}
-                                onUpload={(url) => field.onChange(url)}
-                                onRemove={() => field.onChange('')}
+                                onUploadStateChange={setIsUploading}
+                                onUpload={(url) => {
+                                    form.setValue('avatarUrl', url, { shouldDirty: true });
+                                }}
+                                onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}
                                />
                             )}
                          />

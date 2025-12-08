@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState, useEffect } from "react";
@@ -17,11 +16,13 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { updatePassword } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase-client";
+import { ImageUploader } from "@/components/shared/image-uploader";
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "El nombre es requerido."),
   lastName: z.string().min(1, "El apellido es requerido."),
   email: z.string().email("Email inválido."),
+  avatarUrl: z.string().optional(),
   currentPassword: z.string().optional(),
   newPassword: z.string().optional(),
   confirmPassword: z.string().optional(),
@@ -52,6 +53,7 @@ export default function ProfilePage() {
     const { user } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     
     const form = useForm<ProfileFormData>({
         resolver: zodResolver(profileSchema),
@@ -59,6 +61,7 @@ export default function ProfilePage() {
             firstName: '',
             lastName: '',
             email: '',
+            avatarUrl: '',
             currentPassword: '',
             newPassword: '',
             confirmPassword: '',
@@ -72,6 +75,7 @@ export default function ProfilePage() {
                 firstName,
                 lastName: lastNameParts.join(' '),
                 email: user.email || '',
+                avatarUrl: user.avatarUrl || '',
             });
         }
     }, [user, form]);
@@ -92,6 +96,7 @@ export default function ProfilePage() {
             await updateDoc(userRef, {
                 name: fullName,
                 email: data.email,
+                avatarUrl: data.avatarUrl,
             });
             
             // If new password is provided, update it
@@ -131,22 +136,31 @@ export default function ProfilePage() {
     <div className="flex-1 space-y-6">
       <h2 className="text-3xl font-bold tracking-tight">Mi perfil</h2>
       
-      <Card className="bg-card/50">
-        <CardContent className="p-6 flex items-center gap-6">
-            <Avatar className="h-20 w-20">
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback>{user?.displayName?.[0]}</AvatarFallback>
-            </Avatar>
-            <div>
-                <h3 className="text-xl font-bold">{user?.displayName}</h3>
-                <p className="text-sm font-medium text-primary">{user?.role}</p>
-                <p className="text-sm text-muted-foreground mt-1">Este es tu perfil personal. Puedes actualizar tu información de contacto y tu contraseña.</p>
-            </div>
-        </CardContent>
-      </Card>
-      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Card className="bg-card/50">
+            <CardContent className="p-6 flex items-center gap-6">
+                <Controller
+                  name="avatarUrl"
+                  control={form.control}
+                  render={({ field }) => (
+                      <ImageUploader
+                          folder="profesionales"
+                          currentImageUrl={field.value}
+                          onUploadStateChange={setIsUploading}
+                          onUpload={(url) => field.onChange(url)}
+                          onRemove={() => field.onChange('')}
+                      />
+                  )}
+               />
+                <div>
+                    <h3 className="text-xl font-bold">{user?.displayName}</h3>
+                    <p className="text-sm font-medium text-primary">{user?.role}</p>
+                    <p className="text-sm text-muted-foreground mt-1">Este es tu perfil personal. Puedes actualizar tu información de contacto y tu contraseña.</p>
+                </div>
+            </CardContent>
+          </Card>
+      
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
@@ -232,8 +246,8 @@ export default function ProfilePage() {
                 </Card>
             </div>
              <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                <Button type="submit" disabled={isSubmitting || isUploading}>
+                    {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Guardar Cambios
                 </Button>
             </div>

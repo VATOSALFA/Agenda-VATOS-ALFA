@@ -18,10 +18,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, Sparkles } from 'lucide-react';
-import type { User, Local, Role } from '@/lib/types';
+import type { User, Local, Role, Profesional } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase-client';
-import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
@@ -75,6 +75,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const [isCheckingApellido, setIsCheckingApellido] = useState(false);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema(isEditMode)),
@@ -163,12 +164,18 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             avatarUrl: data.avatarUrl,
         };
         
-        // Handle local_id correctly
         dataToSave.local_id = data.local_id || null;
         
         if (isEditMode && user) {
             const userRef = doc(db, 'usuarios', user.id);
             await updateDoc(userRef, dataToSave);
+            
+            // Sync with professional profile if it exists
+            const professional = professionals.find(p => p.userId === user.id);
+            if (professional) {
+                const profRef = doc(db, 'profesionales', professional.id);
+                await updateDoc(profRef, { name: fullName, avatarUrl: data.avatarUrl, email: data.email });
+            }
 
             if(auth.currentUser && auth.currentUser.uid === user.id) {
                 await updateProfile(auth.currentUser, { displayName: fullName, photoURL: data.avatarUrl });
@@ -182,8 +189,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
              if (data.password.length < 6) {
                 throw new Error("La contraseña debe tener al menos 6 caracteres.");
             }
-            // Temporarily create user in Auth to get a UID, then sign out the admin and sign back in.
-            // This is a workaround for Firebase Auth client-side limitations.
             const currentUser = auth.currentUser;
             if (!currentUser) throw new Error("Admin not signed in");
             
@@ -195,14 +200,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
             await setDoc(userRef, dataToSave);
             
-            // Log out the newly created user and log back in the admin
             await auth.signOut();
-            // This is a simplified re-login. A robust solution would use a refresh token or a custom token system.
-            if(currentUser.email){
-              // This is a security risk in production. For this demo, we assume the admin's password is not available.
-              // We are just restoring the state. A full re-auth is needed.
-              console.warn("Admin user state was lost during new user creation. A full re-login is recommended.");
-            }
+            console.warn("Admin user state was lost during new user creation. A full re-login is recommended.");
 
             toast({ title: "Usuario creado con éxito" });
         }

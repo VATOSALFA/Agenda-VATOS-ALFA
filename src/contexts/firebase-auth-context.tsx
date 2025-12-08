@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -99,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 permissions: userPermissions,
                 uid: firebaseUser.uid,
                 local_id: customData.local_id,
-                avatarUrl: customData.avatarUrl,
+                avatarUrl: customData.avatarUrl || firebaseUser.photoURL, // Prioritize our DB avatarUrl
             });
 
         } catch (error) {

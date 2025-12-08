@@ -80,6 +80,7 @@
     "react-dom": "$react-dom",
     "eslint-config-next": {
       "eslint": "$eslint"
-    }
+    },
+    "eslint": "$eslint"
   }
 }

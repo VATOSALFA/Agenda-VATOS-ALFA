@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -44,21 +45,19 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange, isD
 
     return (
         <Collapsible defaultOpen={false}>
-            <CollapsibleTrigger className="w-full" disabled={isDisabled}>
-                <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted">
-                    <div className="flex items-center gap-2 font-semibold">
-                        <category.icon className="h-5 w-5 text-primary" />
-                        {category.title}
-                    </div>
-                     <Checkbox 
-                        checked={isAllSelected}
-                        onCheckedChange={handleMasterCheckboxChange}
-                        aria-label={`Seleccionar todo para ${category.title}`}
-                        onClick={(e) => e.stopPropagation()} 
-                        disabled={isDisabled}
-                     />
-                </div>
-            </CollapsibleTrigger>
+            <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted">
+                <CollapsibleTrigger className="flex items-center gap-2 font-semibold flex-grow text-left" disabled={isDisabled}>
+                    <category.icon className="h-5 w-5 text-primary" />
+                    {category.title}
+                </CollapsibleTrigger>
+                <Checkbox 
+                    checked={isAllSelected}
+                    onCheckedChange={handleMasterCheckboxChange}
+                    aria-label={`Seleccionar todo para ${category.title}`}
+                    onClick={(e) => e.stopPropagation()} 
+                    disabled={isDisabled}
+                />
+            </div>
             <CollapsibleContent className="p-4 border border-t-0 rounded-b-lg">
                 <div className="space-y-3">
                     {category.permissions?.map(p => (

@@ -19,7 +19,7 @@ const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
 // Configuración global
 setGlobalOptions({ region: "us-central1" });
 
-console.log('Functions starting up (Gen 2 - Final V7). Version: ' + new Date().toISOString());
+console.log('Functions starting up (Gen 2 - Final V13). Version: ' + new Date().toISOString());
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
@@ -210,16 +210,15 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
 
 /**
  * =================================================================
- * MERCADO PAGO FUNCTIONS (CORREGIDAS)
+ * MERCADO PAGO FUNCTIONS
  * =================================================================
  */
 
-// 1. OBTENER TERMINALES
 exports.getPointTerminals = onCall(
   { 
     cors: true, 
     secrets: [mpAccessToken],
-    invoker: 'public' // <--- Mantiene la puerta abierta tras el deploy
+    invoker: 'public'
   }, 
   async (request) => {
     if (!request.auth) {
@@ -237,12 +236,11 @@ exports.getPointTerminals = onCall(
     }
 });
 
-// 2. CAMBIAR MODO PDV
 exports.setTerminalPDVMode = onCall(
   { 
     cors: true, 
     secrets: [mpAccessToken],
-    invoker: 'public' // <--- Mantiene la puerta abierta
+    invoker: 'public'
   }, 
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
@@ -265,15 +263,13 @@ exports.setTerminalPDVMode = onCall(
     }
 });
 
-// 3. CREAR PAGO (CORREGIDO: API Payment Intents + Notification URL)
 exports.createPointPayment = onCall(
   { 
     cors: true, 
     secrets: [mpAccessToken],
-    invoker: 'public' // <--- Mantiene la puerta abierta
+    invoker: 'public'
   }, 
   async (request) => {
-    // Seguridad habilitada
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
@@ -286,24 +282,16 @@ exports.createPointPayment = onCall(
 
     try {
         const { accessToken } = getMercadoPagoConfig();
-
-        // API Específica de Point (Payment Intents)
         const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
 
         const paymentIntent = {
-            amount: Math.round(amount * 100), // Monto en centavos (ej: 1000 para $10.00)
-            
-            // Para ganar puntos de calidad:
+            amount: Math.round(amount * 100),
             notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
-
             additional_info: {
                 external_reference: referenceId,
                 print_on_terminal: true 
             }
         };
-
-        // NOTA: Si 'description' o 'payer' siguen fallando, NO los incluyas aquí.
-        // Esta API es estricta. Solo mandamos lo necesario.
 
         const response = await fetch(url, {
           method: 'POST',
@@ -334,7 +322,7 @@ exports.createPointPayment = onCall(
     }
 });
 
-// 4. WEBHOOK (V12 - SOLUCIÓN TOTAL SIMULACIÓN + POINT)
+// 4. WEBHOOK (V13 - Híbrido)
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true,
@@ -342,7 +330,7 @@ exports.mercadoPagoWebhook = onRequest(
     secrets: [mpWebhookSecret, mpAccessToken],
   },
   async (request, response) => {
-    console.log("========== [v12] MERCADO PAGO WEBHOOK RECEIVED ==========");
+    console.log("========== [v13] MERCADO PAGO WEBHOOK RECEIVED ==========");
 
     const secret = mpWebhookSecret.value();
     if (!secret) {
@@ -352,145 +340,112 @@ exports.mercadoPagoWebhook = onRequest(
     }
 
     try {
-      // 1. OBTENCIÓN DE DATOS ROBUSTA
       const { query, body } = request;
       const topic = query.type || query.topic || body.type || 'unknown';
-      
-      // Buscamos el ID donde sea que Mercado Pago lo esconda
       const dataId = query['data.id'] || query.id || body?.data?.id || body?.id;
 
-      console.log(`[v12] Topic: ${topic}, ID: ${dataId}`);
+      console.log(`[v13] Topic: ${topic}, ID: ${dataId}`);
 
-      // --- PASE VIP PARA SIMULACIÓN (ESTO ARREGLA EL ERROR 400) ---
       if (dataId == "123456" || dataId == 123456) {
-          console.log("[v12] 🟢 Test simulation detected (123456). Returning OK.");
+          console.log("[v13] Test simulation detected (123456). Returning OK.");
           response.status(200).send("OK");
           return;
       }
-      // -----------------------------------------------------------
 
       if (!dataId) {
-          console.warn("[v12] No ID found in request.");
-          response.status(200).send("OK"); // Respondemos OK para evitar reintentos infinitos
+          console.warn("[v13] No ID found in request.");
+          response.status(200).send("OK (Ignored - No ID)");
           return;
       }
 
-      // 2. VALIDACIÓN DE FIRMA (Híbrida)
-      let signatureValid = false;
       const xSignature = request.headers['x-signature'];
       const xRequestId = request.headers['x-request-id'];
-
+      let signatureValid = false;
       if (xSignature && xRequestId) {
-          const parts = xSignature.split(',');
-          const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1];
-          const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1];
-
-          if (ts && v1) {
-              const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-              const hmac = crypto.createHmac('sha256', secret);
-              hmac.update(manifest);
-              const sha = hmac.digest('hex');
-              if (sha === v1) signatureValid = true;
-          }
+        const ts = xSignature.split(',').find(p => p.startsWith('ts='))?.split('=')[1];
+        const v1 = xSignature.split(',').find(p => p.startsWith('v1='))?.split('=')[1];
+        if (ts && v1) {
+            const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+            const hmac = crypto.createHmac('sha256', secret);
+            hmac.update(manifest);
+            if (hmac.digest('hex') === v1) signatureValid = true;
+        }
       }
 
       if (!signatureValid) {
-          console.warn(`[v12] ⚠️ Signature validation failed for ID: ${dataId}. Checking API directly.`);
+        console.warn(`[v13] Signature validation failed for ID: ${dataId}. Checking API directly.`);
       }
 
-      // 3. CONSULTA A LA API (Fuente de la verdad)
       const { accessToken } = getMercadoPagoConfig();
-      
-      // Intentamos consultar como Pago
-      let paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
+      let paymentInfo = null;
+
+      // 1. Try fetching as a direct Payment
+      const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
       });
 
-      // Si falla como pago, intentamos como Orden (Merchant Order) - Común en Point
-      if (!paymentResponse.ok) {
-           console.log(`[v12] Payment ${dataId} not found, trying as Merchant Order...`);
-           const orderResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-           });
-           
-           if (orderResponse.ok) {
-               const orderInfo = await orderResponse.json();
-               // Extraemos el pago real de la orden
-               const approvedPayment = orderInfo.payments?.find(p => p.status === 'approved');
-               if (approvedPayment) {
-                   // Simulamos que la respuesta fue del pago directo
-                   paymentResponse = {
-                       ok: true,
-                       json: async () => ({
-                           id: approvedPayment.id,
-                           external_reference: orderInfo.external_reference,
-                           status: 'approved',
-                           transaction_amount: approvedPayment.transaction_amount
-                       })
-                   };
-               }
-           }
+      if (paymentResponse.ok) {
+          paymentInfo = await paymentResponse.json();
+      } else {
+          // 2. If it fails or it's not a payment, try fetching as a Merchant Order
+          console.log(`[v13] Payment ${dataId} not found or failed, trying as Merchant Order...`);
+          const orderResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
+             headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          
+          if (orderResponse.ok) {
+              const orderInfo = await orderResponse.json();
+              const approvedPayment = orderInfo.payments?.find(p => p.status === 'approved');
+              if (approvedPayment) {
+                  // Simulate the response structure of a direct payment call
+                  paymentInfo = {
+                      id: approvedPayment.id,
+                      external_reference: orderInfo.external_reference, // CRITICAL: Get ref from order
+                      status: 'approved',
+                      transaction_amount: approvedPayment.transaction_amount
+                  };
+              }
+          }
       }
 
-      if (!paymentResponse.ok) {
-          console.error(`[v12] Could not verify ID ${dataId} with API.`);
-          if (!signatureValid) {
-              response.status(403).send("Forbidden");
-              return;
-          }
-          response.status(200).send("OK_IGNORED");
+      if (!paymentInfo || paymentInfo.status !== 'approved' || !paymentInfo.external_reference) {
+          console.error(`[v13] Could not verify or process payment for ID ${dataId}.`);
+          response.status(200).send("OK (Ignored)");
           return;
       }
 
-      const paymentInfo = await paymentResponse.json();
-      const externalReference = paymentInfo.external_reference;
-      const status = paymentInfo.status;
-      const amount = paymentInfo.transaction_amount;
+      const { external_reference, status, transaction_amount } = paymentInfo;
+      console.log(`[v13] API Check: Status=${status}, Ref=${external_reference}`);
 
-      console.log(`[v12] API Check: Status=${status}, Ref=${externalReference}`);
+      const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
+      await admin.firestore().runTransaction(async (t) => {
+          const ventaDoc = await t.get(ventaRef);
+          if (!ventaDoc.exists || ventaDoc.data().pago_estado === 'Pagado') return;
 
-      // 4. ACTUALIZACIÓN DE FIRESTORE
-      if (status === 'approved' && externalReference) {
-          const ventaRef = admin.firestore().collection('ventas').doc(externalReference);
-          
-          await admin.firestore().runTransaction(async (t) => {
-              const ventaDoc = await t.get(ventaRef);
-              if (!ventaDoc.exists) return;
+          const ventaData = ventaDoc.data();
+          const montoOriginal = Number(ventaData.total || 0);
+          const montoPagado = Number(transaction_amount || 0);
+          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
 
-              const ventaData = ventaDoc.data();
-              
-              if (ventaData.pago_estado === 'Pagado') return;
-
-              const montoOriginal = Number(ventaData.total || 0);
-              const montoPagado = Number(amount || 0);
-              let propina = 0;
-              
-              if (montoPagado > montoOriginal) {
-                  propina = parseFloat((montoPagado - montoOriginal).toFixed(2));
-              }
-
-              t.update(ventaRef, {
-                  pago_estado: 'Pagado',
-                  mercado_pago_status: 'approved',
-                  mercado_pago_id: String(paymentInfo.id),
-                  monto_pagado_real: montoPagado,
-                  propina: propina,
-                  fecha_pago: new Date()
-              });
-
-              if (ventaData.reservationId) {
-                  const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
-                  const reservaDoc = await t.get(reservaRef);
-                  if (reservaDoc.exists) {
-                      t.update(reservaRef, { pago_estado: 'Pagado' });
-                  }
-              }
+          t.update(ventaRef, {
+              pago_estado: 'Pagado',
+              mercado_pago_status: status,
+              mercado_pago_id: String(paymentInfo.id),
+              monto_pagado_real: montoPagado,
+              propina: propina,
+              fecha_pago: new Date()
           });
-          console.log(`[v12] SUCCESS: Venta ${externalReference} processed.`);
-      }
+
+          if (ventaData.reservationId) {
+              const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
+              const reservaDoc = await t.get(reservaRef);
+              if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
+          }
+      });
+      console.log(`[v13] SUCCESS: Venta ${external_reference} processed.`);
 
     } catch (error) {
-      console.error('[v12] Error processing webhook:', error);
+      console.error('[v13] Error processing webhook:', error);
       response.status(200).send('OK_WITH_ERROR'); 
       return;
     }

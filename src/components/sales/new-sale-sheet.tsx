@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot, where } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot, where, setDoc } from 'firebase/firestore'; // <--- AGREGADO setDoc
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -484,32 +483,116 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         onSaleComplete?.();
   };
 
+  // --- LOGICA DE COBRO CON TERMINAL CORREGIDA ---
   const handleSendToTerminal = async () => {
     if (!db || !selectedTerminalId || total <= 0 || !selectedClient) return;
     
     setIsSendingToTerminal(true);
     setIsWaitingForPayment(true);
     
-    // Generate a temporary ID client-side
-    const tempSaleId = doc(collection(db, 'temp')).id;
+    // 1. Crear referencia con ID nuevo para ventas
+    const saleDocRef = doc(collection(db, 'ventas'));
+    const tempSaleId = saleDocRef.id;
     saleIdRef.current = tempSaleId;
 
     try {
+      // 2. Preparamos los datos de la venta para guardarla como "Pendiente"
+      //    Esto es crucial para que el webhook tenga qué actualizar.
+      
+      await runTransaction(db, async (transaction) => {
+        // A. Deducir Stock
+        const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
+        for (const item of cart) {
+          if (item.tipo === 'producto') {
+            const productRef = doc(db, 'productos', item.id);
+            productRefs.push({ ref: productRef, item });
+          }
+        }
+        
+        const productDocs = await Promise.all(
+          productRefs.map(p => transaction.get(p.ref))
+        );
+
+        for(const [index, productDoc] of productDocs.entries()) {
+            const { item, ref } = productRefs[index];
+            if (!productDoc.exists()) throw new Error(`Producto con ID ${item.id} no encontrado.`);
+            const productData = productDoc.data() as Product;
+            const currentStock = productData.stock;
+            const newStock = currentStock - item.cantidad;
+            if (newStock < 0) throw new Error(`Stock insuficiente para ${item.nombre}.`);
+            transaction.update(ref, { stock: newStock });
+        }
+
+        // B. Preparar items
+        const itemsToSave = cart.map(item => {
+            const itemSubtotal = (item.precio || 0) * item.cantidad;
+            const itemDiscountValue = Number(item.discountValue) || 0;
+            const itemDiscountType = item.discountType || 'fixed';
+            const itemDiscountAmount = itemDiscountType === 'percentage' 
+                ? (itemSubtotal * itemDiscountValue) / 100 
+                : itemDiscountValue;
+
+            return {
+                id: item.id,
+                nombre: item.nombre,
+                tipo: item.tipo,
+                barbero_id: item.barbero_id || null,
+                precio_unitario: item.precio || 0,
+                cantidad: item.cantidad,
+                subtotal: itemSubtotal,
+                descuento: {
+                    valor: itemDiscountValue,
+                    tipo: itemDiscountType,
+                    monto: itemDiscountAmount
+                }
+            };
+        });
+
+        const formData = form.getValues();
+
+        // C. Objeto de Venta
+        const saleDataToSave: any = {
+            ...formData,
+            cliente_id: selectedClient.id,
+            local_id: formData.local_id,
+            metodo_pago: 'tarjeta', // Forzamos tarjeta porque es terminal
+            items: itemsToSave,
+            subtotal: subtotal,
+            descuento: {
+                valor: totalDiscount,
+                tipo: 'fixed',
+                monto: totalDiscount
+            },
+            total,
+            fecha_hora_venta: Timestamp.now(),
+            creado_por_id: user?.uid,
+            creado_por_nombre: user?.displayName || user?.email,
+            pago_estado: 'Pendiente', // <--- IMPORTANTE: Nace como pendiente
+            creado_en: Timestamp.now(),
+        };
+
+        if (reservationId) {
+            saleDataToSave.reservationId = reservationId;
+        }
+
+        // D. Guardar Venta
+        transaction.set(saleDocRef, saleDataToSave);
+      });
+
+      // 3. Llamar a la Cloud Function con el ID del documento que ACABAMOS de crear
       const createPayment = httpsCallable(functions, 'createPointPayment');
       const result: any = await createPayment({
         amount: total,
         terminalId: selectedTerminalId,
-        referenceId: tempSaleId,
+        referenceId: tempSaleId, // Enviamos el ID del documento real
         payer: { email: selectedClient.correo, name: `${selectedClient.nombre} ${selectedClient.apellido}` }
       });
 
       if (result.data.success) {
         toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.'});
         
-        // Listen for the sale document to be created by the webhook
+        // 4. Escuchar cambios en ese documento
         if (unsubscribeRef.current) unsubscribeRef.current();
-        
-        const saleDocRef = doc(db, 'ventas', tempSaleId);
         
         const unsubscribe = onSnapshot(saleDocRef, async (docSnapshot) => {
             if (docSnapshot.exists()) {

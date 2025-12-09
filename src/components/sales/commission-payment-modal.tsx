@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -50,6 +49,7 @@ interface CommissionRowData {
     totalCommission: number;
     totalTips: number;
     saleItemIds: { saleId: string; itemIndex: number }[];
+    tipSaleIds: string[];
 }
 
 export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dateRange, localId }: CommissionPaymentModalProps) {
@@ -88,11 +88,11 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
         sales.forEach(sale => {
-            const saleTip = sale.propina || 0;
+            const saleTip = (sale as any).propina || 0;
             const professionalsInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
             
-            // Distribute tip among professionals in the sale
-            if (saleTip > 0 && professionalsInSale.length > 0) {
+            // Distribute tip among professionals in the sale, only if tip is not paid
+            if (saleTip > 0 && !(sale as any).tipPaid && professionalsInSale.length > 0) {
                 const tipPerProfessional = saleTip / professionalsInSale.length;
                 professionalsInSale.forEach(profId => {
                     const professional = professionalMap.get(profId);
@@ -105,9 +105,13 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                 totalCommission: 0,
                                 totalTips: 0,
                                 saleItemIds: [],
+                                tipSaleIds: [],
                             };
                         }
                         commissionsByProfessional[profId].totalTips += tipPerProfessional;
+                        if (!commissionsByProfessional[profId].tipSaleIds.includes(sale.id)) {
+                           commissionsByProfessional[profId].tipSaleIds.push(sale.id);
+                        }
                     }
                 });
             }
@@ -126,6 +130,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         totalCommission: 0,
                         totalTips: 0,
                         saleItemIds: [],
+                        tipSaleIds: [],
                     };
                 }
 
@@ -212,6 +217,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     salesToUpdate.forEach((updatedSale, saleId) => {
                         const saleRef = doc(db, 'ventas', saleId);
                         batch.update(saleRef, { items: updatedSale.items });
+                    });
+                    
+                    // Mark tips as paid
+                    comm.tipSaleIds.forEach(saleId => {
+                        const saleRef = doc(db, 'ventas', saleId);
+                        batch.update(saleRef, { tipPaid: true });
                     });
                 }
             }

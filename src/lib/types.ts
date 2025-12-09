@@ -209,6 +209,7 @@ export interface Sale {
     tarjeta: number;
   };
   professionalNames?: string; // transient
+  tipPaid?: boolean;
 }
 
 export interface SaleItem {

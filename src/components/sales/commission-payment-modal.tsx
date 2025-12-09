@@ -48,6 +48,7 @@ interface CommissionRowData {
     professionalName: string;
     totalSales: number;
     totalCommission: number;
+    totalTips: number;
     saleItemIds: { saleId: string; itemIndex: number }[];
 }
 
@@ -87,6 +88,30 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
         sales.forEach(sale => {
+            const saleTip = sale.propina || 0;
+            const professionalsInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
+            
+            // Distribute tip among professionals in the sale
+            if (saleTip > 0 && professionalsInSale.length > 0) {
+                const tipPerProfessional = saleTip / professionalsInSale.length;
+                professionalsInSale.forEach(profId => {
+                    const professional = professionalMap.get(profId);
+                    if (professional) {
+                        if (!commissionsByProfessional[profId]) {
+                            commissionsByProfessional[profId] = {
+                                professionalId: profId,
+                                professionalName: professional.name,
+                                totalSales: 0,
+                                totalCommission: 0,
+                                totalTips: 0,
+                                saleItemIds: [],
+                            };
+                        }
+                        commissionsByProfessional[profId].totalTips += tipPerProfessional;
+                    }
+                });
+            }
+
             sale.items?.forEach((item, itemIndex) => {
                 if (!item.barbero_id || item.commissionPaid) return;
 
@@ -99,6 +124,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         professionalName: professional.name,
                         totalSales: 0,
                         totalCommission: 0,
+                        totalTips: 0,
                         saleItemIds: [],
                     };
                 }
@@ -133,7 +159,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             });
         });
         
-        const commissionList = Object.values(commissionsByProfessional).filter(c => c.totalCommission > 0);
+        const commissionList = Object.values(commissionsByProfessional).filter(c => c.totalCommission > 0 || c.totalTips > 0);
         setCommissionData(commissionList);
         setSelectedProfessionals(commissionList.map(c => c.professionalId));
 
@@ -154,16 +180,17 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
 
             for(const comm of professionalsToPay) {
-                if (comm.totalCommission > 0) {
+                const totalPayment = comm.totalCommission + comm.totalTips;
+                if (totalPayment > 0) {
                     // Create expense record
                     const egresoRef = doc(collection(db, 'egresos'));
                     batch.set(egresoRef, {
                         fecha: now,
-                        monto: comm.totalCommission,
-                        concepto: 'Pago de Comisión',
+                        monto: totalPayment,
+                        concepto: 'Pago de Comisión y Propinas',
                         aQuien: comm.professionalId,
                         local_id: localId,
-                        comentarios: `Pago de comisión a ${comm.professionalName} el ${formattedDate}`,
+                        comentarios: `Pago a ${comm.professionalName} (Comisión: $${comm.totalCommission.toFixed(2)}, Propina: $${comm.totalTips.toFixed(2)}) el ${formattedDate}`,
                     });
 
                     // Mark items as paid
@@ -191,12 +218,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
             await batch.commit();
 
-            toast({ title: 'Comisiones pagadas', description: `Se han registrado ${professionalsToPay.length} egresos por comisiones.`});
+            toast({ title: 'Comisiones y propinas pagadas', description: `Se han registrado ${professionalsToPay.length} egresos.`});
             onFormSubmit();
             onOpenChange(false);
         } catch (error) {
-            console.error("Error al pagar comisiones:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron registrar los pagos de comisiones.'});
+            console.error("Error al pagar comisiones y propinas:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron registrar los pagos.'});
         } finally {
             setIsProcessing(false);
         }
@@ -212,27 +239,27 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setSelectedProfessionals(checked ? commissionData.map(c => c.professionalId) : []);
     }
 
-    const overallTotalCommission = useMemo(() => {
+    const overallTotalToPay = useMemo(() => {
         return commissionData
             .filter(c => selectedProfessionals.includes(c.professionalId))
-            .reduce((acc, curr) => acc + curr.totalCommission, 0);
+            .reduce((acc, curr) => acc + curr.totalCommission + curr.totalTips, 0);
     }, [commissionData, selectedProfessionals]);
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-4xl">
                 <DialogHeader>
-                    <DialogTitle>Pago de Comisiones del Día</DialogTitle>
+                    <DialogTitle>Pago de Comisiones y Propinas del Día</DialogTitle>
                     <DialogDescription>
-                        Calcula y registra el pago de comisiones para los profesionales para el día de hoy.
+                        Calcula y registra el pago para los profesionales para el día de hoy.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
                     <Alert>
                         <Info className="h-4 w-4" />
-                        <AlertTitle>Revisión de Comisiones</AlertTitle>
+                        <AlertTitle>Revisión de Pagos</AlertTitle>
                         <AlertDescription>
-                            El sistema ha calculado las comisiones pendientes de pago para hoy. Al presionar "Pagar Comisiones", se generará un egreso por cada profesional seleccionado.
+                            El sistema ha calculado las comisiones y propinas pendientes de pago para hoy. Al presionar "Pagar", se generará un egreso por el total para cada profesional seleccionado.
                         </AlertDescription>
                     </Alert>
                     
@@ -248,15 +275,16 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                             />
                                         </TableHead>
                                         <TableHead>Profesional</TableHead>
-                                        <TableHead className="text-right">Venta Total Atribuida</TableHead>
-                                        <TableHead className="text-right">Comisión a Pagar</TableHead>
+                                        <TableHead className="text-right">Comisión</TableHead>
+                                        <TableHead className="text-right">Propina</TableHead>
+                                        <TableHead className="text-right">Total a Pagar</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
-                                        <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                     ) : commissionData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={4} className="text-center h-24">No hay comisiones pendientes de pago para hoy.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={5} className="text-center h-24">No hay comisiones ni propinas pendientes para hoy.</TableCell></TableRow>
                                     ) : commissionData.map((row) => (
                                         <TableRow key={row.professionalId}>
                                             <TableCell>
@@ -266,15 +294,16 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                                 />
                                             </TableCell>
                                             <TableCell className="font-medium">{row.professionalName}</TableCell>
-                                            <TableCell className="text-right">${row.totalSales.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className="text-right font-semibold text-primary">${row.totalCommission.toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="text-right">${row.totalCommission.toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="text-right">${row.totalTips.toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="text-right font-semibold text-primary">${(row.totalCommission + row.totalTips).toLocaleString('es-MX')}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                                 <TableFooter>
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-right font-bold text-lg">Total a Pagar</TableCell>
-                                        <TableCell className="text-right font-bold text-lg text-primary">${overallTotalCommission.toLocaleString('es-MX')}</TableCell>
+                                        <TableCell colSpan={4} className="text-right font-bold text-lg">Total a Pagar Seleccionado</TableCell>
+                                        <TableCell className="text-right font-bold text-lg text-primary">${overallTotalToPay.toLocaleString('es-MX')}</TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>
@@ -285,7 +314,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
                     <Button onClick={handlePayCommissions} disabled={isLoading || isProcessing || selectedProfessionals.length === 0}>
                         {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Pagar Comisiones
+                        Pagar
                     </Button>
                 </DialogFooter>
             </DialogContent>

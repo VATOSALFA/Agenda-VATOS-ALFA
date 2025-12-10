@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -40,7 +39,8 @@ export function Combobox({ options, value, onChange, placeholder = "Select an op
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    /* 👇 AQUÍ ESTÁ EL ARREGLO: Agregamos modal={true} */
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"

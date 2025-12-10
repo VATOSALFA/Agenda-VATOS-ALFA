@@ -382,7 +382,11 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent className="w-96 p-4 space-y-4" align="start">
+                  <PopoverContent 
+                    className="w-96 p-4 space-y-4" 
+                    align="start"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                  >
                     <p className="font-semibold text-center">{field.value ? format(field.value, 'PPP', { locale: es }) : 'Selecciona una fecha'}</p>
                     <div className="grid grid-cols-3 gap-2">
                         <Input

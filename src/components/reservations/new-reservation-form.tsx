@@ -798,6 +798,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
+        </DialogHeader>
         <FormContent />
       </DialogContent>
     </Dialog>

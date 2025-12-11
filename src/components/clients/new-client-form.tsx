@@ -151,49 +151,39 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     fetchSettings();
   }, [db]);
   
-  // --- VERIFICACIÓN VISUAL DE DUPLICADOS (Corregida) ---
   const checkDuplicates = useCallback(async () => {
     if (isEditMode || !db) return;
 
     const phone = debouncedPhone?.replace(/\D/g, '');
     const email = debouncedEmail?.toLowerCase();
 
-    // Limpiamos errores si los campos están vacíos
-    if ((!phone || phone.length < 10) && (!email || email.length < 5)) {
-        if (!phone || phone.length < 10) setPhoneError(null);
-        if (!email || email.length < 5) setEmailError(null);
+    // Reset errors if fields are empty or too short
+    if (!phone || phone.length < 10) setPhoneError(null);
+    if (!email || email.length < 5) setEmailError(null);
+
+    const phoneQuery = clientSettings?.validatePhone && phone && phone.length >= 10
+        ? query(collection(db, 'clientes'), where('telefono', '==', phone))
+        : null;
+
+    const emailQuery = clientSettings?.validateEmail && email && email.length >= 5
+        ? query(collection(db, 'clientes'), where('correo', '==', email))
+        : null;
+
+    if (!phoneQuery && !emailQuery) {
+        setIsCheckingDuplicates(false);
         return;
     }
 
     setIsCheckingDuplicates(true);
-    // Limpiamos errores previos antes de buscar
-    if (phone && phone.length >= 10) setPhoneError(null);
-    if (email && email.length >= 5) setEmailError(null);
 
     try {
-        const queries = [];
-        // Verificación de Teléfono - SIEMPRE la hacemos si hay teléfono válido
-        if (clientSettings?.validatePhone && phone && phone.length >= 10) {
-            queries.push(getDocs(query(collection(db, 'clientes'), where('telefono', '==', phone))));
-        } else {
-            queries.push(Promise.resolve(null));
-        }
+        const [phoneResults, emailResults] = await Promise.all([
+            phoneQuery ? getDocs(phoneQuery) : Promise.resolve(null),
+            emailQuery ? getDocs(emailQuery) : Promise.resolve(null),
+        ]);
 
-        // Verificación de Correo - SIEMPRE la hacemos si hay correo válido
-        if (clientSettings?.validateEmail && email && email.length >= 5) {
-            queries.push(getDocs(query(collection(db, 'clientes'), where('correo', '==', email))));
-        } else {
-            queries.push(Promise.resolve(null));
-        }
-        
-        const [phoneResults, emailResults] = await Promise.all(queries);
-
-        if (phoneResults && !phoneResults.empty) {
-            setPhoneError('Este número ya está registrado.');
-        }
-        if (emailResults && !emailResults.empty) {
-            setEmailError('Este correo electrónico ya está registrado.');
-        }
+        if (phoneResults && !phoneResults.empty) setPhoneError('Este número ya está registrado.');
+        if (emailResults && !emailResults.empty) setEmailError('Este correo electrónico ya está registrado.');
 
     } catch (error) {
         console.error("Error checking duplicates:", error);
@@ -257,35 +247,31 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         return;
     };
     
-    // --- VERIFICACIÓN BLOQUEANTE FINAL (TELÉFONO) ---
-    if (!isEditMode && clientSettings?.validatePhone && data.telefono && data.telefono.length >= 10) {
+    // Final blocking check for duplicates on submit
+    if (!isEditMode) {
+      let hasError = false;
+      if (clientSettings?.validatePhone && data.telefono && data.telefono.length >= 10) {
         const cleanPhone = data.telefono.replace(/\D/g, '');
-        try {
-            const q = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-                setPhoneError('Este número ya está registrado.'); 
-                toast({ variant: 'destructive', title: 'Cliente Duplicado', description: `El número ${cleanPhone} ya pertenece a otro cliente.`});
-                setIsSubmitting(false);
-                return; // 🛑 DETENEMOS AQUÍ
-            }
-        } catch (e) { console.error("Error verificando duplicados al guardar", e); }
+        const q = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
+        if (!(await getDocs(q)).empty) {
+          setPhoneError('Este número ya está registrado.');
+          hasError = true;
+        }
+      }
+      if (clientSettings?.validateEmail && data.correo && data.correo.length > 5) {
+        const emailLower = data.correo.toLowerCase();
+        const q = query(collection(db, 'clientes'), where('correo', '==', emailLower));
+        if (!(await getDocs(q)).empty) {
+          setEmailError('Este correo electrónico ya está registrado.');
+          hasError = true;
+        }
+      }
+      if (hasError) {
+        setIsSubmitting(false);
+        return;
+      }
     }
 
-    // --- VERIFICACIÓN BLOQUEANTE FINAL (CORREO) ---
-    if (!isEditMode && clientSettings?.validateEmail && data.correo && data.correo.length > 5) {
-        const emailLower = data.correo.toLowerCase();
-        try {
-            const q = query(collection(db, 'clientes'), where('correo', '==', emailLower));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-                setEmailError('Este correo electrónico ya está registrado.'); 
-                toast({ variant: 'destructive', title: 'Correo Duplicado', description: `El correo ${emailLower} ya pertenece a otro cliente.`});
-                setIsSubmitting(false);
-                return; // 🛑 DETENEMOS AQUÍ
-            }
-        } catch (e) { console.error("Error verificando duplicados al guardar", e); }
-    }
 
     const dataToSave: Partial<Client> = {
         nombre: data.nombre,
@@ -315,16 +301,13 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         const fullData: any = { ...dataToSave, creado_en: Timestamp.now() };
 
         if (clientSettings?.autoClientNumber) {
-            const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
-            const lastClientSnap = await getDocs(q);
-            let nextClientNumber = 1;
-            if (!lastClientSnap.empty) {
-                const lastClient = lastClientSnap.docs[0].data();
-                if(lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
-                    nextClientNumber = Number(lastClient.numero_cliente) + 1;
-                }
-            }
-            fullData.numero_cliente = String(nextClientNumber);
+            const q = query(collection(db, 'clientes'), where('numero_cliente', '>=', ''));
+            const querySnapshot = await getDocs(q);
+            const maxNumber = querySnapshot.docs
+              .map(doc => Number(doc.data().numero_cliente))
+              .filter(num => !isNaN(num))
+              .reduce((max, num) => Math.max(max, num), 0);
+            fullData.numero_cliente = String(maxNumber + 1);
         }
 
         const newClientRef = doc(collection(db, 'clientes'));

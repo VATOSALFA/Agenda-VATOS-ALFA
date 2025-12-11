@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import {
@@ -93,6 +91,9 @@ export function ReservationDetailModal({
   }
 
   const handleCancelReservation = async (reservationId: string) => {
+    // 1. CERRAR PRIMERO EL MODAL DE CONFIRMACIÓN PARA EVITAR CONGELAMIENTO
+    setIsCancelModalOpen(false);
+
     if (!reservation.cliente_id || !db) {
          toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado o la base de datos no está disponible." });
          return;
@@ -115,8 +116,9 @@ export function ReservationDetailModal({
             description: "El estado de la reserva ha sido actualizado a 'Cancelado'.",
         });
 
+        // 2. CERRAR EL MODAL PRINCIPAL DESPUÉS DE LA TRANSACCIÓN
         onOpenChange(false);
-        onUpdateStatus(reservationId, 'Cancelado'); // Force refetch in parent
+        onUpdateStatus(reservationId, 'Cancelado'); 
         
     } catch (error) {
         console.error("Error canceling reservation: ", error);
@@ -125,6 +127,8 @@ export function ReservationDetailModal({
             title: "Error",
             description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
         });
+        // Si falla, volvemos a abrir el modal de confirmación por si quiere reintentar (opcional)
+        // setIsCancelModalOpen(true); 
     }
   };
 

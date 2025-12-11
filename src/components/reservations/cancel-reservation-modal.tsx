@@ -2,7 +2,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -14,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Trash2, Loader2 } from 'lucide-react';
 import type { Reservation } from '@/lib/types';
 import { Label } from '../ui/label';
 
@@ -31,24 +30,31 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
   
   const isConfirmationTextCorrect = confirmationText.toUpperCase() === 'CANCELAR';
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevenir que el clic cierre el modal padre
     if (!reservation || !isConfirmationTextCorrect) return;
     setIsDeleting(true);
     await onConfirm(reservation.id);
     setIsDeleting(false);
     setConfirmationText('');
-    onOpenChange(false);
+    // No llamamos onOpenChange(false) aquí porque el padre se encarga de cerrar todo el flujo en su lógica
   }
 
-  const handleClose = () => {
+  const handleClose = (e?: React.MouseEvent) => {
+    e?.stopPropagation(); // Prevenir propagación al cancelar también
     if (isDeleting) return;
     setConfirmationText('');
     onOpenChange(false);
   }
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={handleClose}>
-        <AlertDialogContent>
+    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
+        {/* 👇 AQUÍ ESTÁ LA SOLUCIÓN: Agregamos eventos para detener clics en cualquier parte del modal */}
+        <AlertDialogContent 
+            onClick={(e) => e.stopPropagation()} 
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+        >
             <AlertDialogHeader>
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 mb-4">
                   <Trash2 className="h-6 w-6 text-red-600" />
@@ -66,6 +72,10 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
                     onChange={(e) => setConfirmationText(e.target.value)}
                     placeholder='CANCELAR'
                     autoComplete="off"
+                    // 👇 Detenemos la propagación también en el input para máxima seguridad
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
                 />
             </div>
             <AlertDialogFooter>

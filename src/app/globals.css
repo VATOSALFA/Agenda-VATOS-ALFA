@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -34,8 +35,8 @@
  
     --radius: 0.5rem;
 
-    --chart-1: 227 40% 33%;
-    --chart-2: 220 20% 45%;
+    --chart-1: var(--primary);
+    --chart-2: var(--secondary);
     --chart-3: 220 20% 65%;
     --chart-4: 220 20% 85%;
     --chart-5: 220 60% 99%;

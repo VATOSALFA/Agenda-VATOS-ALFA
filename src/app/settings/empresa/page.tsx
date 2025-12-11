@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
+import { ColorPicker } from '@/components/settings/empresa/color-picker';
 
 interface EmpresaSettings {
     id?: string;
@@ -23,6 +23,10 @@ interface EmpresaSettings {
     website_slug: string;
     logo_url: string;
     receipt_logo_url?: string;
+    theme?: {
+        primaryColor?: string;
+        accentColor?: string;
+    }
 }
 
 export default function EmpresaPage() {
@@ -36,10 +40,17 @@ export default function EmpresaPage() {
     const form = useForm<EmpresaSettings>({
         defaultValues: settings
     });
-    
+
+    const [primaryColor, setPrimaryColor] = useState('#202A49');
+    const [accentColor, setAccentColor] = useState('#F59E0B');
+
     useEffect(() => {
         if (!loading && data.length > 0) {
             form.reset(data[0]);
+            if (data[0].theme) {
+                setPrimaryColor(data[0].theme.primaryColor || '#202A49');
+                setAccentColor(data[0].theme.accentColor || '#F59E0B');
+            }
         }
     }, [data, loading, form]);
 
@@ -72,8 +83,16 @@ export default function EmpresaPage() {
         }
         setIsSubmitting(true);
         try {
+            const dataToSave: EmpresaSettings = {
+                ...formData,
+                theme: {
+                    primaryColor,
+                    accentColor,
+                }
+            };
+
             const settingsRef = doc(db, 'empresa', settings.id);
-            await setDoc(settingsRef, formData, { merge: true });
+            await setDoc(settingsRef, dataToSave, { merge: true });
             toast({
                 title: '¡Guardado!',
                 description: 'La información de la empresa ha sido actualizada.',
@@ -171,7 +190,18 @@ export default function EmpresaPage() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <p className="text-muted-foreground text-center py-6">Opciones de personalización de color estarán disponibles aquí.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <ColorPicker 
+                        label="Color Primario"
+                        color={primaryColor}
+                        onChange={setPrimaryColor}
+                    />
+                     <ColorPicker 
+                        label="Color de Acento"
+                        color={accentColor}
+                        onChange={setAccentColor}
+                    />
+                </div>
             </CardContent>
         </Card>
 

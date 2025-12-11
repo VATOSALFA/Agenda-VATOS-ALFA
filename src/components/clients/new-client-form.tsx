@@ -1,10 +1,9 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, doc, updateDoc, Timestamp, getDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, Timestamp, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -17,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import {
   Form,
   FormControl,
@@ -27,14 +25,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { DialogFooter } from '@/components/ui/dialog';
-import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, CheckCircle, X, Home } from 'lucide-react';
+import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { errorEmitter } from '@/lib/error-emitter';
 import { FirestorePermissionError } from '@/lib/errors';
-
+import { Calendar } from '@/components/ui/calendar'; // Asegúrate de importar esto
 
 interface AgendaSettings {
     customerFields?: Record<string, { use: boolean; required: boolean }>;
@@ -63,12 +60,6 @@ interface NewClientFormProps {
   onFormSubmit: (clientId: string) => void;
   client?: Client | null;
 }
-
-const years = Array.from({ length: 100 }, (_, i) => getYear(new Date()) - i);
-const months = Array.from({ length: 12 }, (_, i) => ({
-  value: i,
-  label: format(new Date(2000, i, 1), 'LLLL', { locale: es }),
-}));
 
 const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOutput, onAccept: (text: string) => void }) => {
     if (!suggestion.hasCorrection) return null;
@@ -125,7 +116,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         if (docSnap.exists()) {
             setAgendaSettings(docSnap.data() as AgendaSettings);
         } else {
-            // Set default settings if none are found in DB
             setAgendaSettings({
                 customerFields: {
                     email: { use: true, required: false },
@@ -241,8 +231,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     } else {
         const fullData = { ...dataToSave, creado_en: Timestamp.now() };
         const newClientRef = doc(collection(db, 'clientes'));
-        
-        // Optimistically set the document, but catch permission errors.
         setDoc(newClientRef, fullData).then(() => {
             toast({ title: '¡Cliente Creado!', description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.` });
             onFormSubmit(newClientRef.id);
@@ -260,15 +248,21 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     }
   }
   
-  const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string | number) => {
-    const currentDate = form.getValues('fecha_nacimiento') || new Date();
+  // --- LÓGICA DE FECHA MEJORADA ---
+  const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string) => {
+    const val = parseInt(value, 10);
+    if (isNaN(val)) return;
+
+    // Si no hay fecha previa, iniciamos en el año 2000 como base neutral
+    const currentDate = form.getValues('fecha_nacimiento') || new Date(2000, 0, 1);
     let newDay = getDate(currentDate);
     let newMonth = getMonth(currentDate);
     let newYear = getYear(currentDate);
 
-    if (part === 'day') newDay = parseInt(value as string, 10);
-    if (part === 'month') newMonth = value as number;
-    if (part === 'year') newYear = value as number;
+    if (part === 'day') newDay = val;
+    // Restamos 1 al mes porque en JS los meses son 0-11, pero el usuario escribe 1-12
+    if (part === 'month') newMonth = Math.max(0, Math.min(11, val - 1)); 
+    if (part === 'year') newYear = val;
 
     const newDate = new Date(newYear, newMonth, newDay);
     if(isValid(newDate)) {
@@ -350,6 +344,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 )}
             />
           )}
+           
+           {/* --- SECCIÓN FECHA DE NACIMIENTO MODIFICADA --- */}
            {fieldSettings?.dob?.use && (
            <FormField
             control={form.control}
@@ -357,7 +353,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}</FormLabel>
-                <Popover>
+                {/* Agregamos modal={true} para que no se cierre al dar click */}
+                <Popover modal={true}>
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
@@ -386,42 +383,56 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                     className="w-96 p-4 space-y-4" 
                     align="start"
                   >
-                    <p className="font-semibold text-center">{field.value ? format(field.value, 'PPP', { locale: es }) : 'Selecciona una fecha'}</p>
-                    <div className="grid grid-cols-3 gap-2">
-                        <Input
-                            placeholder="Día"
-                            type="number"
-                            min="1"
-                            max="31"
-                            defaultValue={field.value ? getDate(field.value) : ''}
-                            onChange={(e) => handleDatePartChange('day', e.target.value)}
+                    <p className="font-semibold text-center mb-2 text-sm text-muted-foreground">
+                        Escribe la fecha o selecciona en el calendario
+                    </p>
+                    
+                    {/* Campos de texto para escritura rápida */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div>
+                            <span className="text-[10px] text-muted-foreground pl-1">Día</span>
+                            <Input
+                                placeholder="DD"
+                                type="number"
+                                min="1"
+                                max="31"
+                                value={field.value ? getDate(field.value) : ''}
+                                onChange={(e) => handleDatePartChange('day', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <span className="text-[10px] text-muted-foreground pl-1">Mes</span>
+                            <Input
+                                placeholder="MM"
+                                type="number"
+                                min="1"
+                                max="12"
+                                value={field.value ? getMonth(field.value) + 1 : ''}
+                                onChange={(e) => handleDatePartChange('month', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <span className="text-[10px] text-muted-foreground pl-1">Año</span>
+                            <Input
+                                placeholder="AAAA"
+                                type="number"
+                                min="1900"
+                                max={getYear(new Date())}
+                                value={field.value ? getYear(field.value) : ''}
+                                onChange={(e) => handleDatePartChange('year', e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="border-t pt-2">
+                        <Calendar 
+                            locale={es} 
+                            mode="single" 
+                            selected={field.value || undefined} 
+                            onSelect={field.onChange} 
+                            disabled={(date) => date > new Date()} 
+                            initialFocus 
                         />
-                         <Select
-                            onValueChange={(value) => handleDatePartChange('month', parseInt(value, 10))}
-                            defaultValue={field.value ? getMonth(field.value).toString() : undefined}
-                         >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Mes" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {months.map(month => (
-                                    <SelectItem key={month.value} value={month.value.toString()} className="capitalize">{month.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                         <Select
-                            onValueChange={(value) => handleDatePartChange('year', parseInt(value, 10))}
-                            defaultValue={field.value ? getYear(field.value).toString() : undefined}
-                         >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Año" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {years.map(year => (
-                                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -430,6 +441,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             )}
           />
           )}
+          
           {fieldSettings?.notes?.use && (
           <FormField
             control={form.control}

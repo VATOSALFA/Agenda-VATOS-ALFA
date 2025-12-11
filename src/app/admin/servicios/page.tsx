@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Filter, Circle, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Filter, Circle, Search, Pencil, Trash2, GripVertical, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { Service, ServiceCategory } from '@/lib/types';
 
 
@@ -51,8 +52,8 @@ const SortableServiceItem = ({ service, categoryName, onToggleActive, onEdit, on
   return (
     <TableRow ref={setNodeRef} style={style} className={isDragging ? 'bg-muted shadow-lg' : ''}>
       <TableCell className="w-12 text-center">
-        <div {...attributes} {...listeners} className="cursor-grab p-2">
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5.5 4.625C5.5 4.30924 5.75924 4.05 6.075 4.05H8.925C9.24076 4.05 9.5 4.30924 9.5 4.625V4.625C9.5 4.94076 9.24076 5.2 8.925 5.2H6.075C5.75924 5.2 5.5 4.94076 5.5 4.625V4.625ZM5.5 7.5C5.5 7.18424 5.75924 6.925 6.075 6.925H8.925C9.24076 6.925 9.5 7.18424 9.5 7.5V7.5C9.5 7.81576 9.24076 8.075 8.925 8.075H6.075C5.75924 8.075 5.5 7.81576 5.5 7.5V7.5ZM5.5 10.375C5.5 10.0592 5.75924 9.8 6.075 9.8H8.925C9.24076 9.8 9.5 10.0592 9.5 10.375V10.375C9.5 10.6908 9.24076 10.95 8.925 10.95H6.075C5.75924 10.95 5.5 10.6908 5.5 10.375V10.375Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+        <div {...attributes} {...listeners} className="cursor-grab p-2 text-muted-foreground hover:bg-accent rounded-md">
+            <GripVertical className="h-5 w-5" />
         </div>
       </TableCell>
       <TableCell className="font-medium">{service.name}</TableCell>
@@ -66,9 +67,26 @@ const SortableServiceItem = ({ service, categoryName, onToggleActive, onEdit, on
         </Badge>
       </TableCell>
       <TableCell className="text-right">
-        <Button variant="ghost" size="icon" onClick={() => onToggleActive(service)}><Pencil className="h-4 w-4" /></Button>
-        <Button variant="ghost" size="icon" onClick={() => onEdit(service)}><Pencil className="h-4 w-4" /></Button>
-        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => onDelete(service)}><Trash2 className="h-4 w-4" /></Button>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">Abrir menú</span>
+                    <ChevronDown className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => onEdit(service)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onToggleActive(service)}>
+                     <Circle className={`mr-2 h-4 w-4 ${!service.active ? 'text-green-500' : 'text-gray-400'}`} />
+                    {service.active ? 'Desactivar' : 'Activar'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onDelete(service)} className="text-destructive focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
       </TableCell>
     </TableRow>
   );

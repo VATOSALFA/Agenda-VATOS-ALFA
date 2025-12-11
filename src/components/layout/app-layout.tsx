@@ -6,6 +6,34 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import AppInitializer from "./app-initializer";
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+import type { Local } from "@/lib/types";
+import Image from "next/image";
+import Link from "next/link";
+
+
+interface EmpresaSettings {
+    receipt_logo_url?: string;
+}
+
+
+const FloatingLogo = () => {
+    const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
+    const logoUrl = empresaData?.[0]?.receipt_logo_url;
+
+    if (empresaLoading || !logoUrl) {
+        return null;
+    }
+
+    return (
+        <Link href="/settings/empresa" passHref>
+            <div className="fixed bottom-4 left-4 z-50 transition-transform hover:scale-110">
+                <Image src={logoUrl} alt="Logo de la empresa" width={50} height={50} className="rounded-full shadow-lg border-2 border-white" />
+            </div>
+        </Link>
+    )
+}
+
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -36,6 +64,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     <>
       <Header />
       <AppInitializer />
+      <FloatingLogo />
       <div className="pt-16 h-screen overflow-y-auto">
         {children}
       </div>

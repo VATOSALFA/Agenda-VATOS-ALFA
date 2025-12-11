@@ -487,7 +487,7 @@ export default function ClientsPage() {
                       ))
                     ) : paginatedClients.map((client) => (
                       <TableRow key={client.id}>
-                        <TableCell className="font-mono text-xs">{client.numero_cliente || 'N/A'}</TableCell>
+                        <TableCell>{client.numero_cliente || 'N/A'}</TableCell>
                         <TableCell className="font-medium">{client.nombre}</TableCell>
                         <TableCell>{client.apellido}</TableCell>
                         <TableCell>{client.correo}</TableCell>

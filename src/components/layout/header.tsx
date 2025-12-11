@@ -11,7 +11,6 @@ import {
   where,
   onSnapshot,
 } from 'firebase/firestore';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
 import {
   Calendar,
   Tag,
@@ -103,19 +102,10 @@ const adminNavLinks = [
     { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
-interface EmpresaSettings {
-    id?: string;
-    logo_url?: string;
-}
-
 export default function Header() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
-
-  // Conditionally fetch data only if user is logged in
-  const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa', user ? 'empresa-query' : null);
-  const logoUrl = empresaData?.[0]?.logo_url;
   
   const [unreadCount, setUnreadCount] = useState(0);
 

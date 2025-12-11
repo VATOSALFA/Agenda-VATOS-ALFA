@@ -250,7 +250,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         return;
     };
     
-    // Final blocking check for duplicates on submit
     if (!isEditMode) {
       let hasError = false;
       if (clientSettings?.validatePhone && data.telefono && data.telefono.length >= 10) {
@@ -304,7 +303,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         const fullData: any = { ...dataToSave, creado_en: Timestamp.now() };
 
         if (clientSettings?.autoClientNumber) {
-            // Corrected query to find the max number
             const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
             const querySnapshot = await getDocs(q);
             let lastClientNumber = 0;

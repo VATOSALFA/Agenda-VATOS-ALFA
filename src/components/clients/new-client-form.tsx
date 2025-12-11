@@ -205,23 +205,28 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     };
     
     // --- VALIDACIÓN DE DUPLICADOS ---
-    if (!isEditMode) { // Solo validar al crear, no al editar
+    if (!isEditMode) {
         const queries = [];
         if (clientSettings?.validateEmail && data.correo) {
-            queries.push(getDocs(query(collection(db, 'clientes'), where('correo', '==', data.correo))));
+            queries.push(query(collection(db, 'clientes'), where('correo', '==', data.correo.toLowerCase())));
         }
         if (clientSettings?.validatePhone && data.telefono) {
-            queries.push(getDocs(query(collection(db, 'clientes'), where('telefono', '==', data.telefono))));
+            queries.push(query(collection(db, 'clientes'), where('telefono', '==', data.telefono.replace(/\D/g, ''))));
         }
 
         if (queries.length > 0) {
-            const results = await Promise.all(queries);
-            if(results[0] && !results[0].empty) {
+            const results = await Promise.all(queries.map(q => getDocs(q)));
+            
+            const emailDuplicates = clientSettings?.validateEmail && data.correo ? !results[0].empty : false;
+            const phoneIndex = clientSettings?.validateEmail && data.correo ? 1 : 0;
+            const phoneDuplicates = clientSettings?.validatePhone && data.telefono ? results[phoneIndex] && !results[phoneIndex].empty : false;
+
+            if (emailDuplicates) {
                 toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Ya existe un cliente con este correo electrónico.'});
                 setIsSubmitting(false);
                 return;
             }
-            if(results[1] && !results[1].empty) {
+            if (phoneDuplicates) {
                 toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Ya existe un cliente con este número de teléfono.'});
                 setIsSubmitting(false);
                 return;

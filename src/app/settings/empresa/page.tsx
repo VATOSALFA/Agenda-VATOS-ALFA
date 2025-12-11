@@ -180,7 +180,7 @@ export default function EmpresaPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Logo de la empresa</CardTitle>
-                <CardDescription>Este logo aparecerá en el encabezado de la aplicación y el sitio de agendamiento.</CardDescription>
+                <CardDescription>Este logo aparecerá en el encabezado de la aplicación, el sitio de agendamiento y los comprobantes.</CardDescription>
             </CardHeader>
             <CardContent>
                <Controller
@@ -189,27 +189,6 @@ export default function EmpresaPage() {
                   render={({ field }) => (
                       <ImageUploader
                           folder="logos"
-                          currentImageUrl={field.value}
-                          onUpload={(url) => field.onChange(url)}
-                          onRemove={() => field.onChange('')}
-                      />
-                  )}
-               />
-            </CardContent>
-        </Card>
-        
-        <Card>
-            <CardHeader>
-                <CardTitle>Logo para Recibos</CardTitle>
-                <CardDescription>Este logo aparecerá en la parte superior de los recibos y comprobantes.</CardDescription>
-            </CardHeader>
-            <CardContent>
-               <Controller
-                  name="receipt_logo_url"
-                  control={form.control}
-                  render={({ field }) => (
-                      <ImageUploader
-                          folder="receipt_logos"
                           currentImageUrl={field.value}
                           onUpload={(url) => field.onChange(url)}
                           onRemove={() => field.onChange('')}

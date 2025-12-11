@@ -123,7 +123,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
           {/* Client Info and Actions */}
           <div className="md:col-span-1 space-y-6 bg-card/50 p-6 rounded-lg overflow-y-auto">
             <h3 className="text-xl font-bold text-primary">{client.nombre} {client.apellido}</h3>
-            <InfoRow icon={User} label="Número de cliente" value={client.numero_cliente || client.id} />
+            <InfoRow icon={User} label="Número de cliente" value={client.numero_cliente || 'N/A'} />
             <InfoRow icon={Phone} label="Teléfono" value={client.telefono} />
             <InfoRow icon={Mail} label="Correo Electrónico" value={client.correo} />
             <InfoRow icon={Cake} label="Fecha de Nacimiento" value={client.fecha_nacimiento ? formatDate(client.fecha_nacimiento) : null} />

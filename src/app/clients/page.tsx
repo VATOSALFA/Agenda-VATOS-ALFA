@@ -244,7 +244,8 @@ export default function ClientsPage() {
                 client.nombre,
                 client.apellido,
                 client.telefono,
-                client.correo
+                client.correo,
+                client.numero_cliente,
             ].join(' ').toLowerCase();
 
             return searchTerms.every(term => clientDataString.includes(term));
@@ -432,7 +433,7 @@ export default function ClientsPage() {
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      placeholder="Busca por nombre, apellido, identificación oficial, email y teléfono" 
+                      placeholder="Busca por nombre, apellido, email, teléfono o número de cliente" 
                       className="pl-10 h-10"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -462,6 +463,7 @@ export default function ClientsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Nº Cliente</TableHead>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Apellido</TableHead>
                       <TableHead>Correo</TableHead>
@@ -474,6 +476,7 @@ export default function ClientsPage() {
                     {isLoading ? (
                       Array.from({ length: itemsPerPage }).map((_, i) => (
                         <TableRow key={i}>
+                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-40" /></TableCell>
@@ -484,6 +487,7 @@ export default function ClientsPage() {
                       ))
                     ) : paginatedClients.map((client) => (
                       <TableRow key={client.id}>
+                        <TableCell className="font-mono text-xs">{client.numero_cliente || 'N/A'}</TableCell>
                         <TableCell className="font-medium">{client.nombre}</TableCell>
                         <TableCell>{client.apellido}</TableCell>
                         <TableCell>{client.correo}</TableCell>

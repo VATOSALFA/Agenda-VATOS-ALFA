@@ -158,7 +158,10 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     const email = debouncedEmail?.toLowerCase();
 
     // Reset errors if fields are empty or too short
+    setPhoneError(null);
     if (!phone || phone.length < 10) setPhoneError(null);
+    
+    setEmailError(null);
     if (!email || email.length < 5) setEmailError(null);
 
     const phoneQuery = clientSettings?.validatePhone && phone && phone.length >= 10
@@ -301,13 +304,17 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         const fullData: any = { ...dataToSave, creado_en: Timestamp.now() };
 
         if (clientSettings?.autoClientNumber) {
-            const q = query(collection(db, 'clientes'), where('numero_cliente', '>=', ''));
+            // Corrected query to find the max number
+            const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
             const querySnapshot = await getDocs(q);
-            const maxNumber = querySnapshot.docs
-              .map(doc => Number(doc.data().numero_cliente))
-              .filter(num => !isNaN(num))
-              .reduce((max, num) => Math.max(max, num), 0);
-            fullData.numero_cliente = String(maxNumber + 1);
+            let lastClientNumber = 0;
+            if (!querySnapshot.empty) {
+                const lastClient = querySnapshot.docs[0].data();
+                if (lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
+                    lastClientNumber = Number(lastClient.numero_cliente);
+                }
+            }
+            fullData.numero_cliente = String(lastClientNumber + 1);
         }
 
         const newClientRef = doc(collection(db, 'clientes'));

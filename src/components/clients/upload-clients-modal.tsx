@@ -1,12 +1,11 @@
 
-
 'use client';
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
+import { writeBatch, collection, doc, Timestamp, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import type { Client } from '@/lib/types';
 
@@ -32,6 +31,10 @@ interface UploadClientsModalProps {
 }
 
 type ParsedClient = Omit<Client, 'id' | 'creado_en'> & { creado_en?: any };
+
+interface ClientSettings {
+    autoClientNumber?: boolean;
+}
 
 export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: UploadClientsModalProps) {
   const [parsedData, setParsedData] = useState<ParsedClient[]>([]);
@@ -141,13 +144,35 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
     }
     setIsProcessing(true);
     try {
+        const settingsRef = doc(db, 'configuracion', 'clientes');
+        const settingsSnap = await getDocs(query(collection(db, 'configuracion'), where('__name__', '==', 'clientes')));
+        const clientSettings = settingsSnap.docs[0]?.data() as ClientSettings | undefined;
+        const autoNumberEnabled = clientSettings?.autoClientNumber ?? false;
+        
+        let lastClientNumber = 0;
+        if(autoNumberEnabled) {
+            const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
+            const lastClientSnap = await getDocs(q);
+            if (!lastClientSnap.empty) {
+                const lastClient = lastClientSnap.docs[0].data();
+                if (lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
+                    lastClientNumber = Number(lastClient.numero_cliente);
+                }
+            }
+        }
+        
         const batch = writeBatch(db);
-        parsedData.forEach(clientData => {
+        parsedData.forEach((clientData, index) => {
             const clientRef = doc(collection(db, 'clientes'));
-            const dataToSave = {
+            const dataToSave: Partial<Client> = {
               ...clientData,
               creado_en: clientData.creado_en || Timestamp.now(),
             };
+
+            if (autoNumberEnabled && !clientData.numero_cliente) {
+                dataToSave.numero_cliente = String(lastClientNumber + index + 1);
+            }
+
             batch.set(clientRef, dataToSave);
         });
         await batch.commit();

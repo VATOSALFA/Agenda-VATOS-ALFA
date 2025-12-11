@@ -4,11 +4,11 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, doc, updateDoc, Timestamp, getDoc, setDoc, query, where, getDocs } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, Timestamp, getDoc, setDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { format, parseISO, getYear, getMonth, getDate, isValid } from 'date-fns';
+import { format, parseISO, getYear, getMonth, getDate, isValid, getDaysInMonth } from 'date-fns';
 import type { Client } from '@/lib/types';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
 import { useDebounce } from 'use-debounce';
@@ -26,13 +26,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { DialogFooter } from '@/components/ui/dialog';
-import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, X, AlertCircle } from 'lucide-react';
+import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, AlertCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '../ui/skeleton';
 import { errorEmitter } from '@/lib/error-emitter';
 import { FirestorePermissionError } from '@/lib/errors';
-import { Calendar } from '@/components/ui/calendar'; 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ClientSettings {
     autoClientNumber?: boolean;
@@ -77,6 +77,14 @@ const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOu
 
 const OptionalLabel = () => <span className="text-xs text-muted-foreground ml-1">(opcional)</span>;
 
+// Generadores de listas para fechas
+const currentYear = getYear(new Date());
+const years = Array.from({ length: 100 }, (_, i) => currentYear - i); // Últimos 100 años
+const months = Array.from({ length: 12 }, (_, i) => ({
+  value: i,
+  label: format(new Date(2000, i, 1), 'MMMM', { locale: es }), // Nombres de meses en español
+}));
+const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProps) {
   const { toast } = useToast();
@@ -90,7 +98,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   const [isCheckingApellido, setIsCheckingApellido] = useState(false);
   
   const [clientSettings, setClientSettings] = useState<ClientSettings | null>(null);
-  const [agendaSettings, setAgendaSettings] = useState<any | null>(null); // Re-using any for agenda settings
+  const [agendaSettings, setAgendaSettings] = useState<any | null>(null); 
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
@@ -143,31 +151,36 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     fetchSettings();
   }, [db]);
   
+  // --- VERIFICACIÓN VISUAL DE DUPLICADOS (Corregida) ---
   const checkDuplicates = useCallback(async () => {
     if (isEditMode || !db) return;
 
     const phone = debouncedPhone?.replace(/\D/g, '');
     const email = debouncedEmail?.toLowerCase();
 
-    if ((!clientSettings?.validatePhone || !phone || phone.length < 10) && (!clientSettings?.validateEmail || !email)) {
-        setPhoneError(null);
-        setEmailError(null);
+    // Limpiamos errores si los campos están vacíos
+    if ((!phone || phone.length < 10) && (!email || email.length < 5)) {
+        if (!phone || phone.length < 10) setPhoneError(null);
+        if (!email || email.length < 5) setEmailError(null);
         return;
     }
 
     setIsCheckingDuplicates(true);
-    setPhoneError(null);
-    setEmailError(null);
+    // Limpiamos errores previos antes de buscar
+    if (phone && phone.length >= 10) setPhoneError(null);
+    if (email && email.length >= 5) setEmailError(null);
 
     try {
         const queries = [];
+        // Verificación de Teléfono - SIEMPRE la hacemos si hay teléfono válido
         if (clientSettings?.validatePhone && phone && phone.length >= 10) {
             queries.push(getDocs(query(collection(db, 'clientes'), where('telefono', '==', phone))));
         } else {
             queries.push(Promise.resolve(null));
         }
 
-        if (clientSettings?.validateEmail && email) {
+        // Verificación de Correo - SIEMPRE la hacemos si hay correo válido
+        if (clientSettings?.validateEmail && email && email.length >= 5) {
             queries.push(getDocs(query(collection(db, 'clientes'), where('correo', '==', email))));
         } else {
             queries.push(Promise.resolve(null));
@@ -176,7 +189,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         const [phoneResults, emailResults] = await Promise.all(queries);
 
         if (phoneResults && !phoneResults.empty) {
-            setPhoneError('Este número de teléfono ya está registrado.');
+            setPhoneError('Este número ya está registrado.');
         }
         if (emailResults && !emailResults.empty) {
             setEmailError('Este correo electrónico ya está registrado.');
@@ -187,7 +200,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     } finally {
         setIsCheckingDuplicates(false);
     }
-}, [db, isEditMode, debouncedPhone, debouncedEmail, clientSettings]);
+  }, [db, isEditMode, debouncedPhone, debouncedEmail, clientSettings]);
 
   useEffect(() => {
     checkDuplicates();
@@ -195,40 +208,20 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
 
   const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
     if (!text || text.trim().length <= 2) return;
-    
-    if (type === 'nombre') {
-      setIsCheckingNombre(true);
-      setNombreSuggestion(null);
-    } else {
-      setIsCheckingApellido(true);
-      setApellidoSuggestion(null);
-    }
-    
+    if (type === 'nombre') { setIsCheckingNombre(true); setNombreSuggestion(null); } 
+    else { setIsCheckingApellido(true); setApellidoSuggestion(null); }
     try {
         const result = await spellCheck(text);
         if (result.hasCorrection) {
             if (type === 'nombre') setNombreSuggestion(result);
             else setApellidoSuggestion(result);
         }
-    } catch (error) {
-        console.error("Spell check failed:", error);
-    } finally {
-        if (type === 'nombre') setIsCheckingNombre(false);
-        else setIsCheckingApellido(false);
-    }
+    } catch (error) { console.error("Spell check failed:", error); } 
+    finally { if (type === 'nombre') setIsCheckingNombre(false); else setIsCheckingApellido(false); }
   }, []);
   
-  useEffect(() => {
-    if (debouncedNombre) {
-      checkSpelling(debouncedNombre, 'nombre');
-    }
-  }, [debouncedNombre, checkSpelling]);
-  
-  useEffect(() => {
-    if (debouncedApellido) {
-      checkSpelling(debouncedApellido, 'apellido');
-    }
-  }, [debouncedApellido, checkSpelling]);
+  useEffect(() => { if (debouncedNombre) checkSpelling(debouncedNombre, 'nombre'); }, [debouncedNombre, checkSpelling]);
+  useEffect(() => { if (debouncedApellido) checkSpelling(debouncedApellido, 'apellido'); }, [debouncedApellido, checkSpelling]);
 
   useEffect(() => {
     if (isEditMode && client) {
@@ -264,10 +257,34 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         return;
     };
     
-    if(phoneError || emailError) {
-        toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Por favor, corrige los campos marcados antes de guardar.'});
-        setIsSubmitting(false);
-        return;
+    // --- VERIFICACIÓN BLOQUEANTE FINAL (TELÉFONO) ---
+    if (!isEditMode && clientSettings?.validatePhone && data.telefono && data.telefono.length >= 10) {
+        const cleanPhone = data.telefono.replace(/\D/g, '');
+        try {
+            const q = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                setPhoneError('Este número ya está registrado.'); 
+                toast({ variant: 'destructive', title: 'Cliente Duplicado', description: `El número ${cleanPhone} ya pertenece a otro cliente.`});
+                setIsSubmitting(false);
+                return; // 🛑 DETENEMOS AQUÍ
+            }
+        } catch (e) { console.error("Error verificando duplicados al guardar", e); }
+    }
+
+    // --- VERIFICACIÓN BLOQUEANTE FINAL (CORREO) ---
+    if (!isEditMode && clientSettings?.validateEmail && data.correo && data.correo.length > 5) {
+        const emailLower = data.correo.toLowerCase();
+        try {
+            const q = query(collection(db, 'clientes'), where('correo', '==', emailLower));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                setEmailError('Este correo electrónico ya está registrado.'); 
+                toast({ variant: 'destructive', title: 'Correo Duplicado', description: `El correo ${emailLower} ya pertenece a otro cliente.`});
+                setIsSubmitting(false);
+                return; // 🛑 DETENEMOS AQUÍ
+            }
+        } catch (e) { console.error("Error verificando duplicados al guardar", e); }
     }
 
     const dataToSave: Partial<Client> = {
@@ -278,7 +295,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         notas: data.notas,
         fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
     };
-
+    
     if (isEditMode && client) {
         const clientRef = doc(db, 'clientes', client.id);
         updateDoc(clientRef, dataToSave).then(() => {
@@ -292,12 +309,24 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 requestResourceData: dataToSave,
                 message: err.message,
             }));
-        }).finally(() => {
-            setIsSubmitting(false);
-        });
+        }).finally(() => { setIsSubmitting(false); });
 
     } else {
-        const fullData = { ...dataToSave, creado_en: Timestamp.now() };
+        const fullData: any = { ...dataToSave, creado_en: Timestamp.now() };
+
+        if (clientSettings?.autoClientNumber) {
+            const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
+            const lastClientSnap = await getDocs(q);
+            let nextClientNumber = 1;
+            if (!lastClientSnap.empty) {
+                const lastClient = lastClientSnap.docs[0].data();
+                if(lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
+                    nextClientNumber = Number(lastClient.numero_cliente) + 1;
+                }
+            }
+            fullData.numero_cliente = String(nextClientNumber);
+        }
+
         const newClientRef = doc(collection(db, 'clientes'));
         setDoc(newClientRef, fullData).then(() => {
             toast({ title: '¡Cliente Creado!', description: `${data.nombre} ${data.apellido} ha sido agregado a la base de datos.` });
@@ -310,24 +339,26 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                 requestResourceData: fullData,
                 message: err.message,
             }));
-        }).finally(() => {
-            setIsSubmitting(false);
-        });
+        }).finally(() => { setIsSubmitting(false); });
     }
   }
   
-  const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string) => {
+  // --- LÓGICA DE FECHA (Selectores Desplegables) ---
+  const handleDateSelectChange = (key: 'day' | 'month' | 'year', value: string) => {
     const val = parseInt(value, 10);
-    if (isNaN(val)) return;
-
     const currentDate = form.getValues('fecha_nacimiento') || new Date(2000, 0, 1);
+    
     let newDay = getDate(currentDate);
     let newMonth = getMonth(currentDate);
     let newYear = getYear(currentDate);
 
-    if (part === 'day') newDay = val;
-    if (part === 'month') newMonth = Math.max(0, Math.min(11, val - 1)); 
-    if (part === 'year') newYear = val;
+    if (key === 'day') newDay = val;
+    if (key === 'month') newMonth = val;
+    if (key === 'year') newYear = val;
+
+    // Ajustar si el día excede los días del nuevo mes
+    const daysInNewMonth = getDaysInMonth(new Date(newYear, newMonth));
+    if (newDay > daysInNewMonth) newDay = daysInNewMonth;
 
     const newDate = new Date(newYear, newMonth, newDay);
     if(isValid(newDate)) {
@@ -341,9 +372,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   if (isLoadingSettings) {
     return (
         <div className="space-y-4 px-1 py-6 max-h-[60vh]">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" />
         </div>
     )
   }
@@ -352,69 +381,63 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
+          {/* Nombre y Apellido */}
           <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="nombre"
-              render={({ field }) => (
+            <FormField control={form.control} name="nombre" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Nombre <span className="text-red-500 ml-1">*</span></FormLabel>
                   <FormControl><Input placeholder="Juan" {...field} /></FormControl>
-                   {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
-                   {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
-                  <FormMessage />
+                   <div className="min-h-[24px]">
+                       {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
+                       {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
+                       <FormMessage />
+                   </div>
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="apellido"
-              render={({ field }) => (
+            <FormField control={form.control} name="apellido" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido <span className="text-red-500 ml-1">*</span></FormLabel>
                   <FormControl><Input placeholder="Pérez" {...field} /></FormControl>
-                  {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
-                  {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
-                  <FormMessage />
+                  <div className="min-h-[24px]">
+                      {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando...</div>}
+                      {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
+                      <FormMessage />
+                  </div>
                 </FormItem>
               )}
             />
           </div>
+
+          {/* Teléfono */}
           {fieldSettings?.phone?.use && (
-            <FormField
-                control={form.control}
-                name="telefono"
-                render={({ field }) => (
+            <FormField control={form.control} name="telefono" render={({ field }) => (
                 <FormItem>
                     <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}</FormLabel>
-                    <FormControl>
-                    <Input placeholder="Ej: 1234567890 (10 dígitos)" {...field} />
-                    </FormControl>
-                    {isCheckingDuplicates && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando duplicados...</div>}
-                    {phoneError && <p className="text-sm font-medium text-destructive flex items-center gap-2 mt-1"><AlertCircle className="h-4 w-4" />{phoneError}</p>}
-                    <FormMessage />
+                    <FormControl><Input placeholder="Ej: 1234567890 (10 dígitos)" {...field} /></FormControl>
+                    <div className="min-h-[24px] mt-1">
+                        {isCheckingDuplicates ? (<div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando duplicados...</div>) : phoneError ? (<p className="text-sm font-medium text-destructive flex items-center gap-2"><AlertCircle className="h-4 w-4" />{phoneError}</p>) : (<FormMessage />)}
+                    </div>
                 </FormItem>
                 )}
             />
           )}
+
+          {/* Correo */}
           {fieldSettings?.email?.use && (
-            <FormField
-                control={form.control}
-                name="correo"
-                render={({ field }) => (
+            <FormField control={form.control} name="correo" render={({ field }) => (
                 <FormItem>
                     <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4" /> Correo Electrónico {fieldSettings.email.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.email.required && <OptionalLabel />}</FormLabel>
-                    <FormControl>
-                    <Input placeholder="juan.perez@email.com" {...field} />
-                    </FormControl>
-                    {isCheckingDuplicates && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando duplicados...</div>}
-                    {emailError && <p className="text-sm font-medium text-destructive flex items-center gap-2 mt-1"><AlertCircle className="h-4 w-4" />{emailError}</p>}
-                    <FormMessage />
+                    <FormControl><Input placeholder="juan.perez@email.com" {...field} /></FormControl>
+                    <div className="min-h-[24px] mt-1">
+                        {isCheckingDuplicates ? (<div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando duplicados...</div>) : emailError ? (<p className="text-sm font-medium text-destructive flex items-center gap-2"><AlertCircle className="h-4 w-4" />{emailError}</p>) : (<FormMessage />)}
+                    </div>
                 </FormItem>
                 )}
             />
           )}
            
+           {/* Fecha de Nacimiento (Selectores) */}
            {fieldSettings?.dob?.use && (
            <FormField
             control={form.control}
@@ -422,6 +445,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}</FormLabel>
+                
                 <Popover modal={true}>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -432,94 +456,72 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                           !field.value && "text-muted-foreground"
                         )}
                       >
-                        {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
+                        {field.value ? format(field.value, 'dd MMMM yyyy', { locale: es }) : <span>Selecciona una fecha</span>}
                         {field.value ? (
-                          <X
-                            className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              field.onChange(null);
-                            }}
-                          />
+                          <X className="ml-auto h-4 w-4 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); field.onChange(null); }} />
                         ) : (
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         )}
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent 
-                    className="w-96 p-4 space-y-4" 
-                    align="start"
-                  >
-                    <p className="font-semibold text-center mb-2 text-sm text-muted-foreground">
-                        Escribe la fecha o selecciona en el calendario
-                    </p>
-                    
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                        <div>
-                            <span className="text-[10px] text-muted-foreground pl-1">Día</span>
-                            <Input
-                                placeholder="DD"
-                                type="number"
-                                min="1"
-                                max="31"
-                                value={field.value ? getDate(field.value) : ''}
-                                onChange={(e) => handleDatePartChange('day', e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <span className="text-[10px] text-muted-foreground pl-1">Mes</span>
-                            <Input
-                                placeholder="MM"
-                                type="number"
-                                min="1"
-                                max="12"
-                                value={field.value ? getMonth(field.value) + 1 : ''}
-                                onChange={(e) => handleDatePartChange('month', e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <span className="text-[10px] text-muted-foreground pl-1">Año</span>
-                            <Input
-                                placeholder="AAAA"
-                                type="number"
-                                min="1900"
-                                max={getYear(new Date())}
-                                value={field.value ? getYear(field.value) : ''}
-                                onChange={(e) => handleDatePartChange('year', e.target.value)}
-                            />
-                        </div>
-                    </div>
+                  <PopoverContent className="w-auto p-4" align="start">
+                    <p className="font-semibold text-center mb-3 text-sm text-muted-foreground">Fecha de Nacimiento</p>
+                    <div className="flex gap-2">
+                        {/* DÍA */}
+                        <Select 
+                            onValueChange={(val) => handleDateSelectChange('day', val)} 
+                            value={field.value ? getDate(field.value).toString() : undefined}
+                        >
+                            <SelectTrigger className="w-[70px]">
+                                <SelectValue placeholder="Día" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px]">
+                                {days.map(d => <SelectItem key={d} value={d.toString()}>{d}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
 
-                    <div className="border-t pt-2">
-                        <Calendar 
-                            locale={es} 
-                            mode="single" 
-                            selected={field.value || undefined} 
-                            onSelect={field.onChange} 
-                            disabled={(date) => date > new Date()} 
-                            initialFocus 
-                        />
+                        {/* MES */}
+                        <Select 
+                            onValueChange={(val) => handleDateSelectChange('month', val)} 
+                            value={field.value ? getMonth(field.value).toString() : undefined}
+                        >
+                            <SelectTrigger className="w-[110px]">
+                                <SelectValue placeholder="Mes" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px]">
+                                {months.map(m => <SelectItem key={m.value} value={m.value.toString()} className="capitalize">{m.label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+
+                        {/* AÑO */}
+                        <Select 
+                            onValueChange={(val) => handleDateSelectChange('year', val)} 
+                            value={field.value ? getYear(field.value).toString() : undefined}
+                        >
+                            <SelectTrigger className="w-[80px]">
+                                <SelectValue placeholder="Año" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px]">
+                                {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
                   </PopoverContent>
                 </Popover>
-                <FormMessage />
+                <div className="min-h-[24px]"><FormMessage /></div>
               </FormItem>
             )}
           />
           )}
           
+          {/* Notas */}
           {fieldSettings?.notes?.use && (
-          <FormField
-            control={form.control}
-            name="notas"
-            render={({ field }) => (
+          <FormField control={form.control} name="notas" render={({ field }) => (
               <FormItem>
                 <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Notas {fieldSettings.notes.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.notes.required && <OptionalLabel />}</FormLabel>
-                <FormControl>
-                  <Textarea placeholder="Alergias, preferencias, etc." {...field} />
-                </FormControl>
-                <FormMessage />
+                <FormControl><Textarea placeholder="Alergias, preferencias, etc." {...field} /></FormControl>
+                <div className="min-h-[24px]"><FormMessage /></div>
               </FormItem>
             )}
           />

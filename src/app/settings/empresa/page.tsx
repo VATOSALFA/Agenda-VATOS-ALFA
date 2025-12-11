@@ -41,7 +41,7 @@ export default function EmpresaPage() {
     const { setThemeColors } = useTheme();
     
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
-    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
+    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
     
     const form = useForm<EmpresaSettings>({
         defaultValues: settings
@@ -154,7 +154,7 @@ export default function EmpresaPage() {
           <CardHeader>
             <CardTitle>Nombre de tu empresa</CardTitle>
             <CardDescription>
-              El nombre que aparecerá en todos los lugares de Agenda VATOS ALFA, incluido tu sitio web.
+              El nombre que aparecerá en todos los lugares de VATOS ALFA, incluido tu sitio web.
             </CardDescription>
           </CardHeader>
           <CardContent>

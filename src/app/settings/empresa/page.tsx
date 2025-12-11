@@ -26,6 +26,7 @@ interface EmpresaSettings {
     receipt_logo_url?: string;
     theme?: {
         primaryColor?: string;
+        secondaryColor?: string;
         accentColor?: string;
         backgroundColor?: string;
         foreground?: string;
@@ -47,6 +48,7 @@ export default function EmpresaPage() {
     });
 
     const [primaryColor, setPrimaryColor] = useState('#202A49');
+    const [secondaryColor, setSecondaryColor] = useState('#314177');
     const [accentColor, setAccentColor] = useState('#F59E0B');
     const [backgroundColor, setBackgroundColor] = useState('#F8F9FC');
     const [foregroundColor, setForegroundColor] = useState('#000000');
@@ -58,6 +60,7 @@ export default function EmpresaPage() {
             form.reset(currentSettings);
             if (currentSettings.theme) {
                 setPrimaryColor(currentSettings.theme.primaryColor || '#202A49');
+                setSecondaryColor(currentSettings.theme.secondaryColor || '#314177');
                 setAccentColor(currentSettings.theme.accentColor || '#F59E0B');
                 setBackgroundColor(currentSettings.theme.backgroundColor || '#F8F9FC');
                 setForegroundColor(currentSettings.theme.foreground || '#000000');
@@ -69,12 +72,13 @@ export default function EmpresaPage() {
     useEffect(() => {
         setThemeColors({
           primaryColor,
+          secondaryColor,
           accentColor,
           backgroundColor,
           foreground: foregroundColor,
           cardColor
         });
-    }, [primaryColor, accentColor, backgroundColor, foregroundColor, cardColor, setThemeColors]);
+    }, [primaryColor, secondaryColor, accentColor, backgroundColor, foregroundColor, cardColor, setThemeColors]);
 
 
     const websiteUrl = `https://${form.watch('website_slug') || 'vatosalfa--agenda-1ae08.us-central1.hosted.app'}`;
@@ -110,6 +114,7 @@ export default function EmpresaPage() {
                 ...formData,
                 theme: {
                     primaryColor,
+                    secondaryColor,
                     accentColor,
                     backgroundColor,
                     foreground: foregroundColor,
@@ -221,6 +226,11 @@ export default function EmpresaPage() {
                         label="Color Primario"
                         color={primaryColor}
                         onChange={setPrimaryColor}
+                    />
+                    <ColorPicker 
+                        label="Color Secundario"
+                        color={secondaryColor}
+                        onChange={setSecondaryColor}
                     />
                      <ColorPicker 
                         label="Color de Acento"

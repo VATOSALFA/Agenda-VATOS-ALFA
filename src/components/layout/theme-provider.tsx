@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase-client';
 
 interface ThemeColors {
     primaryColor: string;
+    secondaryColor: string;
     accentColor: string;
     backgroundColor: string;
     foreground: string;
@@ -60,6 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             const theme = empresaData[0].theme;
             const root = document.documentElement;
             if (theme.primaryColor) root.style.setProperty('--primary', hexToHsl(theme.primaryColor));
+            if (theme.secondaryColor) root.style.setProperty('--secondary', hexToHsl(theme.secondaryColor));
             if (theme.accentColor) root.style.setProperty('--accent', hexToHsl(theme.accentColor));
             if (theme.backgroundColor) root.style.setProperty('--background', hexToHsl(theme.backgroundColor));
             if (theme.foreground) root.style.setProperty('--foreground', hexToHsl(theme.foreground));
@@ -70,6 +72,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const setThemeColors = (colors: Partial<ThemeColors>) => {
         const root = document.documentElement;
         if (colors.primaryColor) root.style.setProperty('--primary', hexToHsl(colors.primaryColor));
+        if (colors.secondaryColor) root.style.setProperty('--secondary', hexToHsl(colors.secondaryColor));
         if (colors.accentColor) root.style.setProperty('--accent', hexToHsl(colors.accentColor));
         if (colors.backgroundColor) root.style.setProperty('--background', hexToHsl(colors.backgroundColor));
         if (colors.foreground) root.style.setProperty('--foreground', hexToHsl(colors.foreground));

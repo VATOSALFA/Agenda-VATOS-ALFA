@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -195,10 +196,10 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#202A49] border-b border-border/40 backdrop-blur-sm">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
           <Link href="/agenda" className="mr-6 flex items-center space-x-2">
-             <span className="font-bold text-lg text-white whitespace-nowrap">Agenda VATOS ALFA</span>
+             <span className="font-bold text-lg text-primary-foreground whitespace-nowrap">Agenda VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
             {mainNavLinks.map(({ href, label, permission }) => {
@@ -211,8 +212,8 @@ export default function Header() {
                         className={cn(
                             'px-3 py-2 rounded-md transition-colors',
                             isActive
-                            ? 'bg-white/10 text-white'
-                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                            ? 'bg-black/10 text-primary-foreground'
+                            : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                         )}
                         >
                         {label}
@@ -227,8 +228,8 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/sales')
-                      ? 'bg-white/10 text-white'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-black/10 text-primary-foreground'
+                      : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Ventas <ChevronDown className="w-4 h-4 ml-1" />
                   </Button>
@@ -254,8 +255,8 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/products')
-                      ? 'bg-white/10 text-white'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-black/10 text-primary-foreground'
+                      : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Productos <ChevronDown className="w-4 h-4 ml-1" />
                   </Button>
@@ -281,8 +282,8 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/reports')
-                      ? 'bg-white/10 text-white'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-black/10 text-primary-foreground'
+                      : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Reportes <ChevronDown className="w-4 h-4 ml-1" />
                   </Button>
@@ -308,8 +309,8 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/finanzas')
-                      ? 'bg-white/10 text-white'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-black/10 text-primary-foreground'
+                      : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Finanzas <ChevronDown className="w-4 h-4 ml-1" />
                   </Button>
@@ -338,8 +339,8 @@ export default function Header() {
                     <Button variant="ghost" className={cn(
                         'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                         pathname.startsWith('/admin')
-                        ? 'bg-white/10 text-white'
-                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        ? 'bg-black/10 text-primary-foreground'
+                        : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                     )}>
                         Administración <ChevronDown className="w-4 h-4 ml-1" />
                     </Button>
@@ -361,7 +362,7 @@ export default function Header() {
           <div className="ml-auto flex items-center space-x-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" className="bg-[#314177] hover:bg-[#40538a] text-white">
+                <Button size="sm" variant="secondary">
                   <Plus className="mr-2 h-4 w-4" /> Nuevo
                 </Button>
               </DropdownMenuTrigger>
@@ -383,7 +384,7 @@ export default function Header() {
             
             {canSee('ver_conversaciones') && (
                 <Link href="/conversations" passHref>
-                    <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white relative">
+                    <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground relative">
                         <MessagesSquare className="h-5 w-5" />
                         {unreadCount > 0 && (
                             <span className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
@@ -396,7 +397,7 @@ export default function Header() {
             
             {canSee('ver_administracion') && (
               <Link href="/settings/empresa" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-white/10 hover:text-white">
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground">
                   <Settings className="h-5 w-5" />
                 </Button>
               </Link>

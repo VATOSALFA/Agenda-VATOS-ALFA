@@ -40,7 +40,7 @@ interface EditComisionesModalProps {
 const getDefaultValues = (professional: Professional, services: Service[]) => {
     const values: { [key: string]: Commission } = {};
     services.forEach(service => {
-        values[service.name] = professional.comisionesPorServicio?.[service.id] || professional.defaultCommission || { value: 0, type: '%' };
+        values[service.id] = professional.comisionesPorServicio?.[service.id] || professional.defaultCommission || { value: 0, type: '%' };
     });
     return values;
 }
@@ -67,13 +67,8 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
     if (!db) return;
     setIsSubmitting(true);
     
-    // Remap data from service name to service ID
-    const comisionesPorServicio: { [key: string]: Commission } = {};
-    services.forEach(service => {
-      if (data[service.name]) {
-        comisionesPorServicio[service.id] = data[service.name];
-      }
-    });
+    // Data is already mapped by service ID, so we can use it directly
+    const comisionesPorServicio = data;
 
     try {
         const professionalRef = doc(db, 'profesionales', professional.id);
@@ -109,8 +104,8 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
       return;
     }
     services.forEach(service => {
-      setValue(`${service.name}.value`, masterValue, { shouldDirty: true });
-      setValue(`${service.name}.type`, masterType, { shouldDirty: true });
+      setValue(`${service.id}.value`, masterValue, { shouldDirty: true });
+      setValue(`${service.id}.type`, masterType, { shouldDirty: true });
     });
     toast({
       title: 'Valores aplicados',
@@ -157,14 +152,14 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
             <div className="max-h-[40vh] overflow-y-auto px-1 space-y-4">
               {services.map((service) => (
                 <div key={service.id} className="space-y-1">
-                  <Label htmlFor={`value-${service.name}`}>{service.name}</Label>
+                  <Label htmlFor={`value-${service.id}`}>{service.name}</Label>
                   <div className="flex items-center gap-2">
                     <Controller
-                      name={`${service.name}.value`}
+                      name={`${service.id}.value`}
                       control={control}
                       render={({ field }) => (
                         <Input
-                          id={`value-${service.name}`}
+                          id={`value-${service.id}`}
                           type="number"
                           className="flex-grow"
                           {...field}
@@ -173,7 +168,7 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
                       )}
                     />
                     <Controller
-                        name={`${service.name}.type`}
+                        name={`${service.id}.type`}
                         control={control}
                         render={({ field }) => (
                              <Select onValueChange={field.onChange} value={field.value}>

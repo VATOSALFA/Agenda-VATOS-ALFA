@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -20,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Form,
   FormControl,
@@ -30,7 +28,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquare } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquare, Tag, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -90,7 +88,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
   const { selectedLocalId } = useLocal();
   const { user } = useAuth();
   const isEditMode = !!egreso;
-  
+   
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
@@ -179,7 +177,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                 aQuienId: '',
                 comentarios: '',
                 concepto_otro: '',
-                local_id: selectedLocalId || (locales.length > 0 ? locales[0].id : ''),
+                local_id: selectedLocalId || (locales && locales.length > 0 ? locales[0].id : ''),
             });
         }
     }
@@ -230,7 +228,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
       setIsSubmitting(false);
     }
   }
-  
+   
   const esCostoFijo = conceptosCostoFijo.includes(conceptoSeleccionado);
 
   return (
@@ -239,34 +237,130 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>{isEditMode ? "Editar Egreso" : "Agregar Egreso Manual"}</DialogTitle>
+              <DialogTitle>{isEditMode ? "Editar Egreso" : "Registrar Salida de Dinero"}</DialogTitle>
               <DialogDescription>
-                Completa los detalles para registrar la salida de dinero de la caja.
+                Registra gastos, pagos a proveedores, nóminas o retiros de caja.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 px-1 py-6 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-5 px-1 py-6 max-h-[75vh] overflow-y-auto">
+                
+                {/* Fila 1: Monto y Fecha */}
+                <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="monto"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Monto</FormLabel>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
+                                <FormControl>
+                                    <Input type="number" className="pl-7 font-semibold text-lg" placeholder="0.00" {...field} value={field.value || ''} />
+                                </FormControl>
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="fecha"
+                        render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
+                            <Popover modal={true}>
+                            <PopoverTrigger asChild>
+                                <FormControl>
+                                <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                    {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona fecha</span>}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                                </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                            </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                </div>
+
+                {/* Fila 2: Local */}
                 <FormField
                     control={form.control}
-                    name="monto"
+                    name="local_id"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Monto</FormLabel>
-                        <FormControl><Input type="number" placeholder="0" {...field} value={field.value || ''} /></FormControl>
+                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Store className="mr-1 h-3 w-3" /> Local / Sucursal</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading || !isAdmin}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder="Selecciona el local" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {locales?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                         <FormMessage />
                     </FormItem>
                     )}
                 />
-                 <FormField
+
+                {/* Fila 3: Concepto */}
+                <FormField
+                    control={form.control}
+                    name="concepto"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Tag className="mr-1 h-3 w-3" /> Concepto</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!isAdmin}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona el motivo del egreso" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {conceptosDisponibles.map(c => (
+                                    <SelectItem key={c.id} value={c.label}>{c.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+
+                {/* Fila 3.5: Concepto Otro (Condicional) */}
+                {conceptoSeleccionado === 'Otro' && isAdmin && (
+                    <FormField
+                    control={form.control}
+                    name="concepto_otro"
+                    render={({ field }) => (
+                        <FormItem className="animate-in fade-in slide-in-from-top-2 duration-300">
+                        <FormControl>
+                            <Input placeholder="Especifique el concepto..." {...field} autoFocus />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                )}
+
+                {/* Fila 4: Destinatario */}
+                <FormField
                     control={form.control}
                     name="aQuienId"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> ¿A quién se le entrega?</FormLabel>
+                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><User className="mr-1 h-3 w-3" /> Destinatario / Receptor</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo || usersLoading}>
                         <FormControl>
                             <SelectTrigger>
-                            <SelectValue placeholder={esCostoFijo ? 'Costos fijos' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona...')} />
+                            <SelectValue placeholder={esCostoFijo ? 'N/A (Costo Fijo)' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega')} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -279,116 +373,31 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     </FormItem>
                     )}
                 />
-                <FormItem>
-                    <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Entrega</FormLabel>
-                    <FormControl>
-                        <Input readOnly value={user?.displayName || 'Usuario no identificado'} disabled className="bg-muted"/>
-                    </FormControl>
-                </FormItem>
+
+                {/* Fila 5: Comentarios */}
                 <FormField
                     control={form.control}
-                    name="fecha"
+                    name="comentarios"
                     render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                        <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
-                        <Popover>
-                        <PopoverTrigger asChild>
-                            <FormControl>
-                            <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                            </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                        </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-               <FormField
-                control={form.control}
-                name="concepto"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel className="flex items-center"><Edit className="mr-2 h-4 w-4" />Concepto</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        className="grid grid-cols-2 gap-2"
-                        disabled={!isAdmin}
-                      >
-                        {conceptosDisponibles.map(c => (
-                            <FormItem key={c.id} className="flex items-center space-x-3 space-y-0">
-                                <FormControl>
-                                    <RadioGroupItem value={c.label} />
-                                </FormControl>
-                                <FormLabel className="font-normal">
-                                    {c.label}
-                                </FormLabel>
-                            </FormItem>
-                        ))}
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-             {conceptoSeleccionado === 'Otro' && isAdmin && (
-                 <FormField
-                    control={form.control}
-                    name="concepto_otro"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input placeholder="Escribe el concepto aquí..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-             )}
-               <FormField
-                  control={form.control}
-                  name="local_id"
-                  render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Local</FormLabel>
-                       <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading || !isAdmin}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar local..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {locales.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
+                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><MessageSquare className="mr-1 h-3 w-3" /> Comentarios</FormLabel>
+                        <FormControl><Textarea className="resize-none" rows={2} placeholder="Detalles opcionales..." {...field} /></FormControl>
+                        <FormMessage />
                     </FormItem>
-                  )}
+                    )}
                 />
-               <FormField
-                control={form.control}
-                name="comentarios"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Comentarios (opcional)</FormLabel>
-                    <FormControl><Textarea placeholder="Añade detalles adicionales..." {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
+                {/* Entrega (Solo lectura) */}
+                <div className="text-xs text-muted-foreground text-right pt-2 border-t mt-4">
+                    Registrado por: <span className="font-semibold">{user?.displayName || 'Usuario Actual'}</span>
+                </div>
             </div>
+
             <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isEditMode ? 'Guardar Cambios' : 'Guardar Egreso'}
+                    Guardar Egreso
                 </Button>
             </DialogFooter>
           </form>

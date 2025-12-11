@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { Loader2 } from "lucide-react";
 import { ColorPicker } from '@/components/settings/empresa/color-picker';
+import { useTheme } from "@/components/layout/theme-provider";
 
 interface EmpresaSettings {
     id?: string;
@@ -26,6 +27,9 @@ interface EmpresaSettings {
     theme?: {
         primaryColor?: string;
         accentColor?: string;
+        backgroundColor?: string;
+        foreground?: string;
+        cardColor?: string;
     }
 }
 
@@ -33,6 +37,7 @@ export default function EmpresaPage() {
     const { toast } = useToast();
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { setThemeColors } = useTheme();
     
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
     const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA Barber Shop', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
@@ -43,16 +48,34 @@ export default function EmpresaPage() {
 
     const [primaryColor, setPrimaryColor] = useState('#202A49');
     const [accentColor, setAccentColor] = useState('#F59E0B');
+    const [backgroundColor, setBackgroundColor] = useState('#F8F9FC');
+    const [foregroundColor, setForegroundColor] = useState('#000000');
+    const [cardColor, setCardColor] = useState('#FFFFFF');
 
     useEffect(() => {
         if (!loading && data.length > 0) {
-            form.reset(data[0]);
-            if (data[0].theme) {
-                setPrimaryColor(data[0].theme.primaryColor || '#202A49');
-                setAccentColor(data[0].theme.accentColor || '#F59E0B');
+            const currentSettings = data[0];
+            form.reset(currentSettings);
+            if (currentSettings.theme) {
+                setPrimaryColor(currentSettings.theme.primaryColor || '#202A49');
+                setAccentColor(currentSettings.theme.accentColor || '#F59E0B');
+                setBackgroundColor(currentSettings.theme.backgroundColor || '#F8F9FC');
+                setForegroundColor(currentSettings.theme.foreground || '#000000');
+                setCardColor(currentSettings.theme.cardColor || '#FFFFFF');
             }
         }
     }, [data, loading, form]);
+    
+    useEffect(() => {
+        setThemeColors({
+          primaryColor,
+          accentColor,
+          backgroundColor,
+          foreground: foregroundColor,
+          cardColor
+        });
+    }, [primaryColor, accentColor, backgroundColor, foregroundColor, cardColor, setThemeColors]);
+
 
     const websiteUrl = `https://${form.watch('website_slug') || 'vatosalfa--agenda-1ae08.us-central1.hosted.app'}`;
 
@@ -88,6 +111,9 @@ export default function EmpresaPage() {
                 theme: {
                     primaryColor,
                     accentColor,
+                    backgroundColor,
+                    foreground: foregroundColor,
+                    cardColor,
                 }
             };
 
@@ -200,6 +226,21 @@ export default function EmpresaPage() {
                         label="Color de Acento"
                         color={accentColor}
                         onChange={setAccentColor}
+                    />
+                     <ColorPicker 
+                        label="Color de Fondo"
+                        color={backgroundColor}
+                        onChange={setBackgroundColor}
+                    />
+                     <ColorPicker 
+                        label="Color de Texto"
+                        color={foregroundColor}
+                        onChange={setForegroundColor}
+                    />
+                    <ColorPicker 
+                        label="Color de Tarjetas"
+                        color={cardColor}
+                        onChange={setCardColor}
                     />
                 </div>
             </CardContent>

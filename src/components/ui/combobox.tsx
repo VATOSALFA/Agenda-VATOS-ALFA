@@ -38,7 +38,6 @@ export function Combobox({ options, value, onChange, placeholder = "Select an op
   }
 
   return (
-    /* 👇 AQUÍ ESTÁ EL ARREGLO: Agregamos modal={true} */
     <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button

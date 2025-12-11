@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -25,7 +26,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { DialogFooter } from '@/components/ui/dialog';
-import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, X } from 'lucide-react';
+import { User, Mail, Phone, Calendar as CalendarIcon, MessageSquare, Loader2, Sparkles, X, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '../ui/skeleton';
@@ -91,11 +92,16 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   const [clientSettings, setClientSettings] = useState<ClientSettings | null>(null);
   const [agendaSettings, setAgendaSettings] = useState<any | null>(null); // Re-using any for agenda settings
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const clientSchema = useMemo(() => createClientSchema(agendaSettings || undefined), [agendaSettings]);
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
+    mode: 'onBlur',
     defaultValues: {
       nombre: '',
       apellido: '',
@@ -107,10 +113,14 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   
   const nombreValue = form.watch('nombre');
   const apellidoValue = form.watch('apellido');
+  const phoneValue = form.watch('telefono');
+  const emailValue = form.watch('correo');
   
   const [debouncedNombre] = useDebounce(nombreValue, 750);
   const [debouncedApellido] = useDebounce(apellidoValue, 750);
-  
+  const [debouncedPhone] = useDebounce(phoneValue, 500);
+  const [debouncedEmail] = useDebounce(emailValue, 500);
+
   useEffect(() => {
     const fetchSettings = async () => {
         if(!db) return;
@@ -132,6 +142,56 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     };
     fetchSettings();
   }, [db]);
+  
+  const checkDuplicates = useCallback(async () => {
+    if (isEditMode || !db) return;
+
+    const phone = debouncedPhone?.replace(/\D/g, '');
+    const email = debouncedEmail?.toLowerCase();
+
+    if ((!clientSettings?.validatePhone || !phone || phone.length < 10) && (!clientSettings?.validateEmail || !email)) {
+        setPhoneError(null);
+        setEmailError(null);
+        return;
+    }
+
+    setIsCheckingDuplicates(true);
+    setPhoneError(null);
+    setEmailError(null);
+
+    try {
+        const queries = [];
+        if (clientSettings?.validatePhone && phone && phone.length >= 10) {
+            queries.push(getDocs(query(collection(db, 'clientes'), where('telefono', '==', phone))));
+        } else {
+            queries.push(Promise.resolve(null));
+        }
+
+        if (clientSettings?.validateEmail && email) {
+            queries.push(getDocs(query(collection(db, 'clientes'), where('correo', '==', email))));
+        } else {
+            queries.push(Promise.resolve(null));
+        }
+        
+        const [phoneResults, emailResults] = await Promise.all(queries);
+
+        if (phoneResults && !phoneResults.empty) {
+            setPhoneError('Este número de teléfono ya está registrado.');
+        }
+        if (emailResults && !emailResults.empty) {
+            setEmailError('Este correo electrónico ya está registrado.');
+        }
+
+    } catch (error) {
+        console.error("Error checking duplicates:", error);
+    } finally {
+        setIsCheckingDuplicates(false);
+    }
+}, [db, isEditMode, debouncedPhone, debouncedEmail, clientSettings]);
+
+  useEffect(() => {
+    checkDuplicates();
+  }, [checkDuplicates]);
 
   const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
     if (!text || text.trim().length <= 2) return;
@@ -204,36 +264,11 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         return;
     };
     
-    // --- VALIDACIÓN DE DUPLICADOS ---
-    if (!isEditMode) {
-        const queries = [];
-        if (clientSettings?.validateEmail && data.correo) {
-            queries.push(query(collection(db, 'clientes'), where('correo', '==', data.correo.toLowerCase())));
-        }
-        if (clientSettings?.validatePhone && data.telefono) {
-            queries.push(query(collection(db, 'clientes'), where('telefono', '==', data.telefono.replace(/\D/g, ''))));
-        }
-
-        if (queries.length > 0) {
-            const results = await Promise.all(queries.map(q => getDocs(q)));
-            
-            const emailDuplicates = clientSettings?.validateEmail && data.correo ? !results[0].empty : false;
-            const phoneIndex = clientSettings?.validateEmail && data.correo ? 1 : 0;
-            const phoneDuplicates = clientSettings?.validatePhone && data.telefono ? results[phoneIndex] && !results[phoneIndex].empty : false;
-
-            if (emailDuplicates) {
-                toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Ya existe un cliente con este correo electrónico.'});
-                setIsSubmitting(false);
-                return;
-            }
-            if (phoneDuplicates) {
-                toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Ya existe un cliente con este número de teléfono.'});
-                setIsSubmitting(false);
-                return;
-            }
-        }
+    if(phoneError || emailError) {
+        toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Por favor, corrige los campos marcados antes de guardar.'});
+        setIsSubmitting(false);
+        return;
     }
-    // --- FIN VALIDACIÓN ---
 
     const dataToSave: Partial<Client> = {
         nombre: data.nombre,
@@ -301,6 +336,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   };
 
   const fieldSettings = agendaSettings?.customerFields;
+  const isSaveDisabled = isSubmitting || isCheckingDuplicates || !!phoneError || !!emailError || !form.formState.isValid;
 
   if (isLoadingSettings) {
     return (
@@ -354,6 +390,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                     <FormControl>
                     <Input placeholder="Ej: 1234567890 (10 dígitos)" {...field} />
                     </FormControl>
+                    {isCheckingDuplicates && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando duplicados...</div>}
+                    {phoneError && <p className="text-sm font-medium text-destructive flex items-center gap-2 mt-1"><AlertCircle className="h-4 w-4" />{phoneError}</p>}
                     <FormMessage />
                 </FormItem>
                 )}
@@ -369,6 +407,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                     <FormControl>
                     <Input placeholder="juan.perez@email.com" {...field} />
                     </FormControl>
+                    {isCheckingDuplicates && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Verificando duplicados...</div>}
+                    {emailError && <p className="text-sm font-medium text-destructive flex items-center gap-2 mt-1"><AlertCircle className="h-4 w-4" />{emailError}</p>}
                     <FormMessage />
                 </FormItem>
                 )}
@@ -487,7 +527,7 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         </div>
 
         <DialogFooter>
-          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+          <Button type="submit" disabled={isSaveDisabled} className="w-full sm:w-auto">
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Cliente')}
           </Button>
         </DialogFooter>

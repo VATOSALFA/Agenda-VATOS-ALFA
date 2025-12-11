@@ -112,8 +112,11 @@ export default function Header() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
-  const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
+
+  // Conditionally fetch data only if user is logged in
+  const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa', user ? 'empresa-query' : null);
   const logoUrl = empresaData?.[0]?.logo_url;
+  
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isAuthPage = pathname === '/';

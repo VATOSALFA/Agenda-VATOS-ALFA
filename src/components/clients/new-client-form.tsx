@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, doc, updateDoc, Timestamp, getDoc, setDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, Timestamp, getDoc, setDoc, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -31,13 +31,16 @@ import { es } from 'date-fns/locale';
 import { Skeleton } from '../ui/skeleton';
 import { errorEmitter } from '@/lib/error-emitter';
 import { FirestorePermissionError } from '@/lib/errors';
-import { Calendar } from '@/components/ui/calendar'; // Asegúrate de importar esto
+import { Calendar } from '@/components/ui/calendar'; 
 
-interface AgendaSettings {
+interface ClientSettings {
+    autoClientNumber?: boolean;
+    validateEmail?: boolean;
+    validatePhone?: boolean;
     customerFields?: Record<string, { use: boolean; required: boolean }>;
 }
 
-const createClientSchema = (settings?: AgendaSettings) => {
+const createClientSchema = (settings?: ClientSettings) => {
     const fieldSettings = settings?.customerFields || {};
     
     return z.object({
@@ -85,7 +88,8 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
   const [isCheckingNombre, setIsCheckingNombre] = useState(false);
   const [isCheckingApellido, setIsCheckingApellido] = useState(false);
   
-  const [agendaSettings, setAgendaSettings] = useState<AgendaSettings | null>(null);
+  const [clientSettings, setClientSettings] = useState<ClientSettings | null>(null);
+  const [agendaSettings, setAgendaSettings] = useState<any | null>(null); // Re-using any for agenda settings
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   const clientSchema = useMemo(() => createClientSchema(agendaSettings || undefined), [agendaSettings]);
@@ -111,20 +115,18 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     const fetchSettings = async () => {
         if(!db) return;
         setIsLoadingSettings(true);
-        const settingsRef = doc(db, 'configuracion', 'agenda');
-        const docSnap = await getDoc(settingsRef);
-        if (docSnap.exists()) {
-            setAgendaSettings(docSnap.data() as AgendaSettings);
-        } else {
-            setAgendaSettings({
-                customerFields: {
-                    email: { use: true, required: false },
-                    phone: { use: true, required: true },
-                    dob: { use: true, required: false },
-                    address: { use: true, required: false },
-                    notes: { use: true, required: false },
-                }
-            });
+        const clientSettingsRef = doc(db, 'configuracion', 'clientes');
+        const agendaSettingsRef = doc(db, 'configuracion', 'agenda');
+        const [clientDocSnap, agendaDocSnap] = await Promise.all([
+          getDoc(clientSettingsRef),
+          getDoc(agendaSettingsRef)
+        ]);
+
+        if (clientDocSnap.exists()) {
+            setClientSettings(clientDocSnap.data() as ClientSettings);
+        }
+        if (agendaDocSnap.exists()) {
+            setAgendaSettings(agendaDocSnap.data() as any);
         }
         setIsLoadingSettings(false);
     };
@@ -202,6 +204,32 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
         return;
     };
     
+    // --- VALIDACIÓN DE DUPLICADOS ---
+    if (!isEditMode) { // Solo validar al crear, no al editar
+        const queries = [];
+        if (clientSettings?.validateEmail && data.correo) {
+            queries.push(getDocs(query(collection(db, 'clientes'), where('correo', '==', data.correo))));
+        }
+        if (clientSettings?.validatePhone && data.telefono) {
+            queries.push(getDocs(query(collection(db, 'clientes'), where('telefono', '==', data.telefono))));
+        }
+
+        if (queries.length > 0) {
+            const results = await Promise.all(queries);
+            if(results[0] && !results[0].empty) {
+                toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Ya existe un cliente con este correo electrónico.'});
+                setIsSubmitting(false);
+                return;
+            }
+            if(results[1] && !results[1].empty) {
+                toast({ variant: 'destructive', title: 'Cliente Duplicado', description: 'Ya existe un cliente con este número de teléfono.'});
+                setIsSubmitting(false);
+                return;
+            }
+        }
+    }
+    // --- FIN VALIDACIÓN ---
+
     const dataToSave: Partial<Client> = {
         nombre: data.nombre,
         apellido: data.apellido,
@@ -248,19 +276,16 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
     }
   }
   
-  // --- LÓGICA DE FECHA MEJORADA ---
   const handleDatePartChange = (part: 'day' | 'month' | 'year', value: string) => {
     const val = parseInt(value, 10);
     if (isNaN(val)) return;
 
-    // Si no hay fecha previa, iniciamos en el año 2000 como base neutral
     const currentDate = form.getValues('fecha_nacimiento') || new Date(2000, 0, 1);
     let newDay = getDate(currentDate);
     let newMonth = getMonth(currentDate);
     let newYear = getYear(currentDate);
 
     if (part === 'day') newDay = val;
-    // Restamos 1 al mes porque en JS los meses son 0-11, pero el usuario escribe 1-12
     if (part === 'month') newMonth = Math.max(0, Math.min(11, val - 1)); 
     if (part === 'year') newYear = val;
 
@@ -345,7 +370,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             />
           )}
            
-           {/* --- SECCIÓN FECHA DE NACIMIENTO MODIFICADA --- */}
            {fieldSettings?.dob?.use && (
            <FormField
             control={form.control}
@@ -353,7 +377,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}</FormLabel>
-                {/* Agregamos modal={true} para que no se cierre al dar click */}
                 <Popover modal={true}>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -387,7 +410,6 @@ export function NewClientForm({ onFormSubmit, client = null }: NewClientFormProp
                         Escribe la fecha o selecciona en el calendario
                     </p>
                     
-                    {/* Campos de texto para escritura rápida */}
                     <div className="grid grid-cols-3 gap-2 mb-4">
                         <div>
                             <span className="text-[10px] text-muted-foreground pl-1">Día</span>

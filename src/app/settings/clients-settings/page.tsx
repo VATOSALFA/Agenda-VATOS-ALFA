@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -8,14 +7,24 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { useAuth } from '@/contexts/firebase-auth-context';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+interface ClientSettings {
+    autoClientNumber: boolean;
+    validateEmail: boolean;
+    validatePhone: boolean;
+}
 
 export default function ClientsSettingsPage() {
     const { toast } = useToast();
+    const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const form = useForm({
+    const form = useForm<ClientSettings>({
         defaultValues: {
             autoClientNumber: true,
             validateEmail: true,
@@ -23,16 +32,40 @@ export default function ClientsSettingsPage() {
         }
     });
 
-    const onSubmit = (data: unknown) => {
+    useEffect(() => {
+        const fetchSettings = async () => {
+            if (!db) return;
+            setIsLoading(true);
+            const docRef = doc(db, 'configuracion', 'clientes');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                form.reset(docSnap.data() as ClientSettings);
+            }
+            setIsLoading(false);
+        };
+        fetchSettings();
+    }, [db, form]);
+
+    const onSubmit = async (data: ClientSettings) => {
+        if (!db) return;
         setIsSubmitting(true);
-        console.log("Client settings saved:", data);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            const docRef = doc(db, 'configuracion', 'clientes');
+            await setDoc(docRef, data, { merge: true });
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en la configuración de clientes han sido guardados."
-            })
-        }, 1500);
+            });
+        } catch (error) {
+            console.error("Error saving client settings:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error al guardar',
+                description: 'No se pudo guardar la configuración.'
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
   return (
@@ -64,6 +97,7 @@ export default function ClientsSettingsPage() {
                                     id="auto-client-number"
                                     checked={field.value}
                                     onCheckedChange={field.onChange}
+                                    disabled={isLoading}
                                 />
                             )}
                         />
@@ -97,6 +131,7 @@ export default function ClientsSettingsPage() {
                                             <Switch
                                                 checked={field.value}
                                                 onCheckedChange={field.onChange}
+                                                disabled={isLoading}
                                             />
                                         )}
                                     />
@@ -112,6 +147,7 @@ export default function ClientsSettingsPage() {
                                             <Switch
                                                 checked={field.value}
                                                 onCheckedChange={field.onChange}
+                                                disabled={isLoading}
                                             />
                                         )}
                                     />
@@ -123,8 +159,8 @@ export default function ClientsSettingsPage() {
             </Card>
             
             <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                <Button type="submit" disabled={isSubmitting || isLoading}>
+                    {(isSubmitting || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Guardar Cambios
                 </Button>
             </div>

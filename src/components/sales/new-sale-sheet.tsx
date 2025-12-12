@@ -649,9 +649,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     setIsSendingToTerminal(false);
     setIsWaitingForPayment(false);
     saleIdRef.current = null;
-    if(initialData) {
-        onOpenChange(false);
-    }
+    onOpenChange(false);
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -832,13 +830,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                                             </Button>
                                             </div>
-                                             <Combobox
-                                                options={clientOptions}
+                                             <ClientCombobox
+                                                clients={clients}
+                                                loading={clientsLoading}
                                                 value={field.value}
                                                 onChange={field.onChange}
-                                                placeholder="Busca o selecciona un cliente..."
-                                                loading={clientsLoading}
-                                            />
+                                             />
                                             <FormMessage />
                                     </FormItem>
                                 )}/>

@@ -48,7 +48,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             let userRole: string;
             let userPermissions: string[] = [];
 
-            // 1. Check 'usuarios' collection first
             const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
             const userDoc = await getDoc(userDocRef);
 
@@ -56,26 +55,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 customData = userDoc.data();
                 userRole = customData.role || 'Staff (Sin edición)';
             } else {
-                // 2. Fallback to 'profesionales' collection
                 console.warn(`User not found in 'usuarios' for UID: ${firebaseUser.uid}. Checking 'profesionales'...`);
                 const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
                 const profDoc = await getDoc(profDocRef);
                 if (profDoc.exists()) {
                     customData = profDoc.data();
-                    userRole = 'Staff (Sin edición)'; // Professionals default to a restricted role
+                    userRole = 'Staff (Sin edición)'; 
                 } else {
-                    // 3. Fallback for super admin or unprovisioned user
                     console.warn(`User document for UID ${firebaseUser.uid} not found. Defaulting to Admin.`);
                     customData = { name: firebaseUser.displayName, email: firebaseUser.email };
                     userRole = 'Administrador general';
                 }
             }
 
-            // Determine permissions based on role
             if (userRole === 'Administrador general') {
                 userPermissions = allPermissions.map(p => p.key);
             } else {
-                // Fetch permissions for the role from Firestore
                 const roleId = userRole.toLowerCase().replace(/ /g, '_');
                 const roleDocRef = doc(db, 'roles', roleId);
                 const roleDoc = await getDoc(roleDocRef);
@@ -83,7 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (roleDoc.exists()) {
                     userPermissions = roleDoc.data().permissions || [];
                 } else {
-                    // Fallback to initialRoles if not found in DB
                     const initialRole = initialRoles.find(r => r.title === userRole);
                     userPermissions = initialRole ? initialRole.permissions : [];
                     console.warn(`Role '${userRole}' not found in Firestore. Using default permissions.`);
@@ -98,12 +92,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 permissions: userPermissions,
                 uid: firebaseUser.uid,
                 local_id: customData.local_id,
-                avatarUrl: customData.avatarUrl || firebaseUser.photoURL, // Prioritize our DB avatarUrl
+                avatarUrl: customData.avatarUrl || firebaseUser.photoURL,
             });
 
         } catch (error) {
             console.error("Error fetching user data from Firestore:", error);
-             // Critical error, default to super-admin to avoid locking out.
             setUser({ 
               ...firebaseUser, 
               role: 'Administrador general', 
@@ -121,17 +114,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const isPublicPage = pathname.startsWith('/book');
-  const isAuthPage = pathname === '/'; // The root is now the login page
+  const isAuthPage = pathname === '/';
 
   useEffect(() => {
     if (loading) return;
     
-    // If there is a user and they are on the login page, redirect to the main app page
     if (user && isAuthPage) {
         router.replace('/agenda');
     }
     
-    // If there is no user and they are on a protected page, redirect to login
     if (!user && !isAuthPage && !isPublicPage) {
         router.replace('/');
     }
@@ -167,10 +158,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       </div>
     );
   }
+
+  // This is the gatekeeper. Only render children if they are public pages,
+  // the auth page itself, or if the user is finally authenticated.
+  const shouldRenderChildren = isPublicPage || isAuthPage || (user && !loading);
   
   return (
     <AuthContext.Provider value={value as AuthContextType}>
-      {children}
+      {shouldRenderChildren ? children : (
+         <div className="flex justify-center items-center h-screen bg-muted/40">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+         </div>
+      )}
     </AuthContext.Provider>
   );
 };

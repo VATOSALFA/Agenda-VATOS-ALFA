@@ -2,7 +2,6 @@
 
 import Header from "@/components/layout/header";
 import { useAuth } from "@/contexts/firebase-auth-context";
-import { Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import AppInitializer from "./app-initializer";
 
@@ -17,14 +16,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
     // Pages that should not have the main app header
     const isPublicPage = pathname.startsWith('/book');
     const isAuthPage = pathname === '/';
-
-    if (loading && !isAuthPage && !isPublicPage) {
-        return (
-            <div className="flex justify-center items-center h-screen bg-muted/40">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            </div>
-        );
-    }
 
     // Unauthenticated or public view
     if (!user || isAuthPage || isPublicPage) {

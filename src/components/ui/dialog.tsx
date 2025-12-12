@@ -34,13 +34,10 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
   
-  // 👇 AQUÍ ESTÁ LA MAGIA: EL LIMPIADOR AUTOMÁTICO
-  // Este efecto se asegura de que cuando el modal desaparezca,
-  // la pantalla SIEMPRE se desbloquee.
+  // 👇 AQUÍ ESTÁ EL ARREGLO MÁGICO (Limpiador Automático)
+  // Se asegura de desbloquear la pantalla cada vez que un modal se cierra.
   React.useEffect(() => {
     return () => {
-      // Pequeño timeout para permitir que la animación de cierre termine
-      // antes de forzar el desbloqueo.
       setTimeout(() => {
         document.body.style.pointerEvents = "";
         document.body.style.overflow = "";

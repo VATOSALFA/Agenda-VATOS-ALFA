@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -140,6 +140,26 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
     )
 }
 
+const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
+    const clientOptions = useMemo(() => {
+        return clients.map(client => ({
+            value: client.id,
+            label: `${client.nombre} ${client.apellido}`,
+        }));
+    }, [clients]);
+
+    return (
+        <Combobox
+            options={clientOptions}
+            value={value}
+            onChange={onChange}
+            placeholder="Busca o selecciona un cliente..."
+            loading={loading}
+        />
+    );
+});
+ClientCombobox.displayName = 'ClientCombobox';
+
 const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers, addItemSearchTerm, setAddItemSearchTerm, addItemFilteredServices, addItemFilteredProducts, servicesLoading, productsLoading, addToCart }: any) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
       <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
@@ -216,26 +236,6 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
       )}
     </div>
 );
-
-const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
-    const clientOptions = useMemo(() => {
-        return clients.map(client => ({
-            value: client.id,
-            label: `${client.nombre} ${client.apellido}`,
-        }));
-    }, [clients]);
-
-    return (
-        <Combobox
-            options={clientOptions}
-            value={value}
-            onChange={onChange}
-            placeholder="Busca o selecciona un cliente..."
-            loading={loading}
-        />
-    );
-});
-ClientCombobox.displayName = 'ClientCombobox';
 
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
@@ -803,7 +803,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if(!open) resetFlow();
         onOpenChange(open);
     }}>
-      <SheetContent className="w-full sm:max-w-4xl flex flex-col p-0" hideCloseButton={true}>
+      <SheetContent className="w-full sm:max-w-4xl flex flex-col p-0">
         <SheetHeader className="p-6 border-b">
           <SheetTitle>Registrar Nueva Venta</SheetTitle>
           <SheetDescription>
@@ -1220,5 +1220,3 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </>
   );
 }
-
-    

@@ -793,7 +793,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if(!open) resetFlow();
         onOpenChange(open);
     }}>
-      <SheetContent className="w-full sm:max-w-4xl flex flex-col p-0">
+      <SheetContent className="w-full sm:max-w-4xl flex flex-col p-0" hideCloseButton={true}>
         <SheetHeader className="p-6 border-b">
           <SheetTitle>Registrar Nueva Venta</SheetTitle>
           <SheetDescription>
@@ -1180,10 +1180,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         </Form>
         
         {step === 1 && (
-            <SheetFooter className="p-6 bg-background border-t">
+            <SheetFooter className="p-6 bg-background border-t flex justify-between">
                  <Button
                     type="button"
-                    className="w-full text-lg py-6 bg-primary hover:bg-primary/90 text-white"
+                    variant="outline"
+                    onClick={resetFlow}
+                >
+                    Cancelar
+                </Button>
+                 <Button
+                    type="button"
                     onClick={handleNextStep}
                     disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
                 >

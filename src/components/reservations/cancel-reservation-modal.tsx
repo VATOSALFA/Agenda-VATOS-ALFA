@@ -49,10 +49,11 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-        {/* 👇 AQUÍ ESTÁ LA SOLUCIÓN: Agregamos eventos para detener clics en cualquier parte del modal */}
         <AlertDialogContent 
             onClick={(e) => e.stopPropagation()} 
             onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
         >
             <AlertDialogHeader>
@@ -72,10 +73,6 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
                     onChange={(e) => setConfirmationText(e.target.value)}
                     placeholder='CANCELAR'
                     autoComplete="off"
-                    // 👇 Detenemos la propagación también en el input para máxima seguridad
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onFocus={(e) => e.stopPropagation()}
                 />
             </div>
             <AlertDialogFooter>

@@ -1,19 +1,18 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read access ONLY to the 'main' document in the 'empresa' collection.
-    // This is for public configuration like logos and theme colors.
-    // Write access is still protected.
-    match /empresa/main {
-      allow get: if true;
-      allow list, write: if request.auth != null;
+
+    // 1. REGLA DE EXCEPCIÓN (PÚBLICA)
+    // Permite que cualquiera (incluso sin login) lea los datos de la empresa (Logo, Nombre).
+    match /empresa/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
 
-    // Secure all other collections and documents.
-    // Full read/write access is only granted to authenticated users.
-    match /{document=**} {
+    // 2. REGLA GENERAL (PRIVADA)
+    // Para todo lo demás (clientes, ventas, etc.), se requiere estar logueado.
+    match /{path=**}/documents/{document} {
       allow read, write: if request.auth != null;
     }
   }

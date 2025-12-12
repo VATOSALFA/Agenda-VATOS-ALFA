@@ -53,12 +53,10 @@ function hexToHsl(hex: string): string {
 
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const { user } = useAuth();
-    // Only fetch if there is a user
-    const { data: empresaData, loading } = useFirestoreQuery<any>('empresa', user ? 'empresa_query' : null);
+    const { data: empresaData, loading } = useFirestoreQuery<any>('empresa', 'main');
     
     useEffect(() => {
-        if (!loading && user && empresaData.length > 0 && empresaData[0].theme) {
+        if (!loading && empresaData.length > 0 && empresaData[0].theme) {
             const theme = empresaData[0].theme;
             const root = document.documentElement;
             if (theme.primaryColor) root.style.setProperty('--primary', hexToHsl(theme.primaryColor));
@@ -68,7 +66,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             if (theme.foreground) root.style.setProperty('--foreground', hexToHsl(theme.foreground));
             if (theme.cardColor) root.style.setProperty('--card', hexToHsl(theme.cardColor));
         }
-    }, [empresaData, loading, user]);
+    }, [empresaData, loading]);
 
     const setThemeColors = (colors: Partial<ThemeColors>) => {
         const root = document.documentElement;

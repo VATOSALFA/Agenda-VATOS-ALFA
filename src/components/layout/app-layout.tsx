@@ -55,6 +55,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         );
     }
 
+    // Unauthenticated or public view
     if (!user || isAuthPage || isPublicPage) {
         return <>{children}</>;
     }
@@ -65,9 +66,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <Header />
       <AppInitializer />
       <FloatingLogo />
-      <div className="pt-16 h-screen overflow-y-auto">
+      <main className="pt-16 h-screen overflow-y-auto">
         {children}
-      </div>
+      </main>
     </>
   )
 }

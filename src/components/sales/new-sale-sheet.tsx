@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -160,15 +159,11 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 });
 ClientCombobox.displayName = 'ClientCombobox';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers, addItemSearchTerm, setAddItemSearchTerm, addItemFilteredServices, addItemFilteredProducts, servicesLoading, productsLoading, addToCart }: any) => (
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }: any) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
       <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
         <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
-        {step === 2 && (
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
-          </DialogTrigger>
-        )}
+        <Button variant="outline" size="sm" onClick={onOpenAddItem}><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
       </div>
       
       <ScrollArea className="flex-grow">
@@ -237,15 +232,88 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
     </div>
 );
 
+const AddItemDialog = ({ open, onOpenChange, services, products, servicesLoading, productsLoading, addToCart }: any) => {
+    const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
+    
+    const addItemFilteredServices = useMemo(() => {
+        if (!services) return [];
+        return services.filter((s: ServiceType) => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+    }, [addItemSearchTerm, services]);
+
+    const addItemFilteredProducts = useMemo(() => {
+        if (!products) return [];
+        return products.filter((p: Product) => p?.nombre?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+    }, [addItemSearchTerm, products]);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                <DialogTitle>Agregar al carrito</DialogTitle>
+                <div className="relative my-4">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Buscar servicio o producto..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
+                </div>
+                </DialogHeader>
+                <Tabs defaultValue="servicios" className="h-[50vh] flex flex-col">
+                    <TabsList>
+                        <TabsTrigger value="servicios">Servicios</TabsTrigger>
+                        <TabsTrigger value="productos">Productos</TabsTrigger>
+                    </TabsList>
+                    <ScrollArea className="flex-grow mt-4">
+                        <TabsContent value="servicios">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {servicesLoading ? (
+                                Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>)
+                            ) : (
+                                addItemFilteredServices.map((service: ServiceType) => (
+                                    <DialogClose asChild key={service.id}>
+                                        <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
+                                            <CardContent className="p-3">
+                                                <p className="font-semibold text-sm">{service.name}</p>
+                                                <p className="text-xs text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                            </CardContent>
+                                        </Card>
+                                    </DialogClose>
+                                ))
+                            )}
+                            </div>
+                        </TabsContent>
+                        <TabsContent value="productos">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {(productsLoading) ? (
+                                Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>)
+                            ) : (
+                                addItemFilteredProducts.map((product: Product) => (
+                                    <DialogClose asChild key={product.id}>
+                                        <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
+                                            <CardContent className="p-3">
+                                                <p className="font-semibold text-sm">{product.nombre}</p>
+                                                <p className="text-xs text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
+                                            </CardContent>
+                                        </Card>
+                                    </DialogClose>
+                                ))
+                            )}
+                            </div>
+                        </TabsContent>
+                    </ScrollArea>
+                </Tabs>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
   const { user, db } = useAuth();
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
   const [clientQueryKey, setClientQueryKey] = useState(0);
   const [reservationId, setReservationId] = useState<string | undefined>(undefined);
   const { selectedLocalId } = useLocal();
@@ -358,15 +426,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     return products.filter(p => p?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, products]);
   
-  const addItemFilteredServices = useMemo(() => {
-    if (!services) return [];
-    return services.filter(s => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
-  }, [addItemSearchTerm, services]);
-
-  const addItemFilteredProducts = useMemo(() => {
-    if (!products) return [];
-    return products.filter(p => p?.nombre?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
-  }, [addItemSearchTerm, products]);
 
 
   const addToCart = (item: Product | ServiceType, tipo: 'producto' | 'servicio') => {
@@ -799,10 +858,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
   return (
     <>
-    <Sheet open={isOpen} onOpenChange={(open) => {
-        if(!open) resetFlow();
-        onOpenChange(open);
-    }}>
+    <Sheet open={isOpen} onOpenChange={(open) => { if(!open) resetFlow(); onOpenChange(open); }}>
       <SheetContent className="w-full sm:max-w-4xl flex flex-col p-0">
         <SheetHeader className="p-6 border-b">
           <SheetTitle>Registrar Nueva Venta</SheetTitle>
@@ -903,12 +959,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             </ScrollArea>
                         </Tabs>
                     </div>
-                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
+                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers}/>
                 </div>
             )}
 
             {step === 2 && (
-              <Dialog>
                 <div className="h-full flex flex-col overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
                         <div className="space-y-4">
@@ -1119,7 +1174,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </FormItem>
                             )} />
                         </div>
-                        <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} step={step} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} addItemSearchTerm={addItemSearchTerm} setAddItemSearchTerm={setAddItemSearchTerm} addItemFilteredServices={addItemFilteredServices} addItemFilteredProducts={addItemFilteredProducts} servicesLoading={servicesLoading} productsLoading={productsLoading} addToCart={addToCart}/>
+                        <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers}/>
                     </div>
                     <SheetFooter className="p-6 bg-background border-t mt-auto">
                         <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
@@ -1129,79 +1184,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         </Button>
                     </SheetFooter>
                   </div>
-                <DialogContent className="sm:max-w-2xl">
-                   <DialogHeader>
-                    <DialogTitle>Agregar al carrito</DialogTitle>
-                    <div className="relative my-4">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar servicio o producto..." className="pl-10" value={addItemSearchTerm} onChange={e => setAddItemSearchTerm(e.target.value)} />
-                    </div>
-                   </DialogHeader>
-                    <Tabs defaultValue="servicios" className="h-[50vh] flex flex-col">
-                        <TabsList>
-                            <TabsTrigger value="servicios">Servicios</TabsTrigger>
-                            <TabsTrigger value="productos">Productos</TabsTrigger>
-                        </TabsList>
-                        <ScrollArea className="flex-grow mt-4">
-                             <TabsContent value="servicios">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                 {(servicesLoading) ? (
-                                    Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>)
-                                ) : (
-                                    addItemFilteredServices.map((service: ServiceType) => (
-                                        <DialogClose asChild key={service.id}>
-                                            <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
-                                                <CardContent className="p-3">
-                                                    <p className="font-semibold text-sm">{service.name}</p>
-                                                    <p className="text-xs text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                                </CardContent>
-                                            </Card>
-                                        </DialogClose>
-                                    ))
-                                )}
-                                </div>
-                            </TabsContent>
-                            <TabsContent value="productos">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {(productsLoading) ? (
-                                    Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>)
-                                ) : (
-                                    addItemFilteredProducts.map((product: Product) => (
-                                        <DialogClose asChild key={product.id}>
-                                            <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
-                                                <CardContent className="p-3">
-                                                    <p className="font-semibold text-sm">{product.nombre}</p>
-                                                    <p className="text-xs text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
-                                                    <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
-                                                </CardContent>
-                                            </Card>
-                                        </DialogClose>
-                                    ))
-                                )}
-                                </div>
-                            </TabsContent>
-                        </ScrollArea>
-                    </Tabs>
-                </DialogContent>
-              </Dialog>
             )}
         </Form>
         
         <SheetFooter className="p-6 bg-background border-t flex justify-between">
-             <Button
+            <Button
                 type="button"
                 variant="outline"
                 onClick={resetFlow}
             >
                 Cancelar
             </Button>
-             <Button
-                type="button"
-                onClick={handleNextStep}
-                disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
-            >
-                Continuar
-            </Button>
+            {step === 1 && (
+                <Button
+                    type="button"
+                    onClick={handleNextStep}
+                    disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
+                >
+                    Continuar
+                </Button>
+            )}
         </SheetFooter>
       </SheetContent>
     </Sheet>
@@ -1217,6 +1219,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             <NewClientForm onFormSubmit={handleClientCreated} />
         </DialogContent>
     </Dialog>
+    <AddItemDialog
+        open={isAddItemDialogOpen}
+        onOpenChange={setIsAddItemDialogOpen}
+        services={services}
+        products={products}
+        servicesLoading={servicesLoading}
+        productsLoading={productsLoading}
+        addToCart={addToCart}
+    />
     </>
   );
 }
+
+    

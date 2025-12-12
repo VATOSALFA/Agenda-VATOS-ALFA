@@ -34,12 +34,14 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
   
-  // 👇 AQUÍ ESTÁ EL ARREGLO MÁGICO (Limpiador Automático)
-  // Se asegura de desbloquear la pantalla cada vez que un modal se cierra.
+  // Efecto para garantizar la limpieza de estilos del body al desmontar el componente.
   React.useEffect(() => {
     return () => {
+      // Usamos un pequeño timeout para asegurar que la limpieza ocurra
+      // después de que cualquier otra lógica de cierre haya terminado.
       setTimeout(() => {
         document.body.style.pointerEvents = "";
+        // También es buena idea restaurar el overflow por si acaso.
         document.body.style.overflow = "";
       }, 50); 
     };

@@ -9,6 +9,8 @@ import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AppLayout from '@/components/layout/app-layout'; // Importar AppLayout
+import { LocalProvider } from './local-context';
+import { FirebaseErrorListener } from '@/components/firebase/FirebaseErrorListener';
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -161,19 +163,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  // Si no hay usuario y no es página pública, solo renderiza los hijos (la página de login).
-  if (!user && !isPublicPage) {
+  // If there's a user, wrap the children with the full app layout and providers.
+  if (user && !isPublicPage && !isAuthPage) {
     return (
-        <AuthContext.Provider value={value as AuthContextType}>
-            {children}
-        </AuthContext.Provider>
+      <AuthContext.Provider value={value as AuthContextType}>
+        <LocalProvider>
+            <AppLayout>{children}</AppLayout>
+            <FirebaseErrorListener />
+        </LocalProvider>
+      </AuthContext.Provider>
     );
   }
 
-  // Si hay usuario (o es página pública), envuelve los hijos con el layout principal.
+  // For public pages or login page, render children without the main app layout.
   return (
     <AuthContext.Provider value={value as AuthContextType}>
-      {isPublicPage || isAuthPage ? children : <AppLayout>{children}</AppLayout>}
+        {children}
+        <FirebaseErrorListener />
     </AuthContext.Provider>
   );
 };

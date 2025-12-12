@@ -11,13 +11,21 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { useRouter } from "next/navigation";
+import { Checkbox } from "@/components/ui/checkbox";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebase-client";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [rememberMe, setRememberMe] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
+    const [resetEmail, setResetEmail] = useState('');
+    const [resetMessage, setResetMessage] = useState('');
+
     const { toast } = useToast();
     const { user, loading, signInAndSetup } = useAuth();
     const router = useRouter();
@@ -50,7 +58,7 @@ export default function LoginPage() {
         }
 
         try {
-            await signInAndSetup(email, password);
+            await signInAndSetup(email, password, rememberMe);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
             router.push('/agenda');
         } catch (err: unknown) {
@@ -76,6 +84,28 @@ export default function LoginPage() {
         }
     };
     
+    const handlePasswordReset = async () => {
+        if (!resetEmail) {
+            setResetMessage('Por favor, ingresa tu correo electrónico.');
+            return;
+        }
+        setIsResettingPassword(true);
+        setResetMessage('');
+        try {
+            await sendPasswordResetEmail(auth, resetEmail);
+            setResetMessage('Se ha enviado un correo para restablecer tu contraseña. Revisa tu bandeja de entrada.');
+        } catch (error: any) {
+            console.error("Password reset error:", error);
+            if (error.code === 'auth/user-not-found') {
+                setResetMessage('No se encontró ninguna cuenta con ese correo electrónico.');
+            } else {
+                setResetMessage('Ocurrió un error. Por favor, inténtalo de nuevo.');
+            }
+        } finally {
+            setIsResettingPassword(false);
+        }
+    }
+    
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">
             <div className="flex items-center gap-3 mb-6">
@@ -97,6 +127,12 @@ export default function LoginPage() {
                             <AlertDescription>
                                 {error}
                             </AlertDescription>
+                        </Alert>
+                    )}
+                    {isResettingPassword === false && resetMessage && (
+                        <Alert className="mb-4">
+                             <AlertTitle>{resetMessage.includes('enviado') ? 'Correo Enviado' : 'Aviso'}</AlertTitle>
+                             <AlertDescription>{resetMessage}</AlertDescription>
                         </Alert>
                     )}
                     <form onSubmit={handleLogin} className="space-y-4">
@@ -132,6 +168,13 @@ export default function LoginPage() {
                                 </Button>
                             </div>
                         </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox id="remember-me" checked={rememberMe} onCheckedChange={(checked) => setRememberMe(!!checked)} />
+                                <Label htmlFor="remember-me" className="text-sm font-normal">Recordarme</Label>
+                            </div>
+                            <Button type="button" variant="link" className="px-0 h-auto text-sm" onClick={() => setIsResettingPassword(true)}>¿Olvidaste tu contraseña?</Button>
+                        </div>
                         <Button type="submit" className="w-full" disabled={isLoading}>
                             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Iniciar Sesión
@@ -139,6 +182,45 @@ export default function LoginPage() {
                     </form>
                 </CardContent>
             </Card>
+             {isResettingPassword && (
+                <Card className="w-full max-w-sm mt-4">
+                    <CardHeader className="text-center">
+                        <CardTitle>Restablecer Contraseña</CardTitle>
+                        <CardDescription>
+                            Ingresa tu correo para enviarte un enlace de restablecimiento.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {resetMessage && (
+                            <Alert className="mb-4" variant={resetMessage.includes('encontró') ? 'destructive' : 'default'}>
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>{resetMessage.includes('encontró') ? 'Error' : 'Aviso'}</AlertTitle>
+                                <AlertDescription>{resetMessage}</AlertDescription>
+                            </Alert>
+                        )}
+                        <div className="space-y-2">
+                            <Label htmlFor="reset-email">Correo Electrónico</Label>
+                            <Input
+                                id="reset-email"
+                                type="email"
+                                placeholder="tu@email.com"
+                                required
+                                value={resetEmail}
+                                onChange={(e) => setResetEmail(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                            <Button variant="outline" className="w-full" onClick={() => { setIsResettingPassword(false); setResetMessage(''); }}>
+                                Volver a Iniciar Sesión
+                            </Button>
+                            <Button className="w-full" onClick={handlePasswordReset}>
+                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Enviar
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser, updateProfile } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 import { db, auth, storage } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions, initialRoles } from '@/lib/permissions';
@@ -19,7 +19,7 @@ interface AuthContextType {
   loading: boolean;
   db: typeof db;
   storage: typeof storage;
-  signInAndSetup: (email: string, pass: string) => Promise<FirebaseUser>;
+  signInAndSetup: (email: string, pass: string, rememberMe?: boolean) => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
 }
 
@@ -144,7 +144,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     router.push('/');
   };
 
-  const signInAndSetup = async (email: string, pass: string) => {
+  const signInAndSetup = async (email: string, pass: string, rememberMe: boolean = false) => {
+    const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+    await setPersistence(auth, persistence);
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     return userCredential.user;
   };

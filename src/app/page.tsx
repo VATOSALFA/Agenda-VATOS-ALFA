@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
-import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Loader2, AlertCircle, Eye, EyeOff, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
@@ -79,7 +78,10 @@ export default function LoginPage() {
     
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">Agenda VATOS ALFA</h1>
+            <div className="flex items-center gap-3 mb-6">
+                <Calendar className="h-8 w-8 text-primary" />
+                <h1 className="text-3xl font-bold text-slate-800">VATOS ALFA</h1>
+            </div>
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>

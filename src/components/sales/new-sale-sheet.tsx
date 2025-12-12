@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot, where, setDoc } from 'firebase/firestore'; // <--- AGREGADO setDoc
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot, where, setDoc, query } from 'firebase/firestore'; // <--- AGREGADO setDoc
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -217,6 +217,25 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, step, updateQuan
     </div>
 );
 
+const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
+    const clientOptions = useMemo(() => {
+        return clients.map(client => ({
+            value: client.id,
+            label: `${client.nombre} ${client.apellido}`,
+        }));
+    }, [clients]);
+
+    return (
+        <Combobox
+            options={clientOptions}
+            value={value}
+            onChange={onChange}
+            placeholder="Busca o selecciona un cliente..."
+            loading={loading}
+        />
+    );
+});
+ClientCombobox.displayName = 'ClientCombobox';
 
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
   const { toast } = useToast();
@@ -776,13 +795,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }
   }
   
-  const clientOptions = useMemo(() => {
-    return clients.map(client => ({
-      value: client.id,
-      label: `${client.nombre} ${client.apellido}`,
-    }));
-  }, [clients]);
-  
   const isLocalAdmin = user?.role !== 'Administrador general';
 
   return (
@@ -933,13 +945,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                                             </Button>
                                             </div>
-                                             <Combobox
-                                                options={clientOptions}
+                                             <ClientCombobox
+                                                clients={clients}
+                                                loading={clientsLoading}
                                                 value={field.value}
                                                 onChange={field.onChange}
-                                                placeholder="Busca o selecciona un cliente..."
-                                                loading={clientsLoading}
-                                            />
+                                             />
                                             <FormMessage />
                                     </FormItem>
                                 )}/>
@@ -1176,24 +1187,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             )}
         </Form>
         
-        {step === 1 && (
-            <SheetFooter className="p-6 bg-background border-t flex justify-between">
-                 <Button
-                    type="button"
-                    variant="outline"
-                    onClick={resetFlow}
-                >
-                    Cancelar
-                </Button>
-                 <Button
-                    type="button"
-                    onClick={handleNextStep}
-                    disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
-                >
-                    Continuar
-                </Button>
-            </SheetFooter>
-        )}
+        <SheetFooter className="p-6 bg-background border-t flex justify-between">
+             <Button
+                type="button"
+                variant="outline"
+                onClick={resetFlow}
+            >
+                Cancelar
+            </Button>
+             <Button
+                type="button"
+                onClick={handleNextStep}
+                disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
+            >
+                Continuar
+            </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
 
@@ -1211,3 +1220,5 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     </>
   );
 }
+
+    

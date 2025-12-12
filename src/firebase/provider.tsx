@@ -1,7 +1,7 @@
 
 'use client';
 
-import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import React, { createContext, useContext, ReactNode, useEffect, useState } from "react";
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, Firestore, connectFirestoreEmulator } from "firebase/firestore";

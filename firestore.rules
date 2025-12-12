@@ -2,13 +2,16 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Make the 'empresa' collection publicy readable
+    // Allow public read access ONLY to the 'main' document in the 'empresa' collection.
+    // This is for public configuration like logos and theme colors.
+    // Write access is still protected.
     match /empresa/{empresaId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // Secure all other collections
+    // Secure all other collections and documents.
+    // Full read/write access is only granted to authenticated users.
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

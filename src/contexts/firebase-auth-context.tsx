@@ -1,8 +1,9 @@
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
-import { db, auth, storage } from '@/firebase';
+import { db, auth, storage } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
@@ -159,8 +160,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  // This is the gatekeeper. Only render children if they are public pages,
-  // the auth page itself, or if the user is finally authenticated.
   const shouldRenderChildren = isPublicPage || isAuthPage || (user && !loading);
   
   return (

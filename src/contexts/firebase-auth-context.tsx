@@ -8,6 +8,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import AppLayout from '@/components/layout/app-layout'; // Importar AppLayout
 
 export interface CustomUser extends FirebaseUser {
     role?: string;
@@ -152,7 +153,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
   
-  if (loading && !isAuthPage && !isPublicPage) {
+  if (loading) {
      return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -160,15 +161,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  const shouldRenderChildren = isPublicPage || isAuthPage || (user && !loading);
-  
+  // Si no hay usuario y no es página pública, solo renderiza los hijos (la página de login).
+  if (!user && !isPublicPage) {
+    return (
+        <AuthContext.Provider value={value as AuthContextType}>
+            {children}
+        </AuthContext.Provider>
+    );
+  }
+
+  // Si hay usuario (o es página pública), envuelve los hijos con el layout principal.
   return (
     <AuthContext.Provider value={value as AuthContextType}>
-      {shouldRenderChildren ? children : (
-         <div className="flex justify-center items-center h-screen bg-muted/40">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-         </div>
-      )}
+      {isPublicPage || isAuthPage ? children : <AppLayout>{children}</AppLayout>}
     </AuthContext.Provider>
   );
 };

@@ -23,9 +23,8 @@ export default function RootLayout({
           <LocalProvider>
             <ThemeProvider>
               <MercadoPagoProvider>
-                  <AppLayout>
-                    {children}
-                  </AppLayout>
+                  {/* AppLayout ahora es manejado por AuthProvider */}
+                  {children}
                   <Toaster />
                   <FirebaseErrorListener />
               </MercadoPagoProvider>

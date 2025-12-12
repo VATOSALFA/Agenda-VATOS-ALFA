@@ -1,8 +1,6 @@
 'use client';
 
 import Header from "@/components/layout/header";
-import { useAuth } from "@/contexts/firebase-auth-context";
-import { usePathname } from "next/navigation";
 import AppInitializer from "./app-initializer";
 
 interface AppLayoutProps {
@@ -10,19 +8,7 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children }: AppLayoutProps) {
-    const { user, loading } = useAuth();
-    const pathname = usePathname();
-    
-    // Pages that should not have the main app header
-    const isPublicPage = pathname.startsWith('/book');
-    const isAuthPage = pathname === '/';
-
-    // Unauthenticated or public view
-    if (!user || isAuthPage || isPublicPage) {
-        return <>{children}</>;
-    }
-  
-  // This is the main layout for the authenticated app
+  // Este layout ahora envuelve el contenido de las páginas autenticadas
   return (
     <>
       <Header />

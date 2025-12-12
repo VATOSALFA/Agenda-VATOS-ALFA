@@ -155,7 +155,7 @@ export default function AgendaView() {
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa');
+  const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa', 'main-doc-query', where('__name__', '==', 'main'));
   const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios', queryKey);
   const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
@@ -866,5 +866,6 @@ export default function AgendaView() {
     </TooltipProvider>
   );
 }
+
 
 

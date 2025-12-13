@@ -18,16 +18,16 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body>
-        <AuthProvider>
-          <LocalProvider>
-            <ThemeProvider>
+        <LocalProvider>
+          <ThemeProvider>
+            <AuthProvider>
               <MercadoPagoProvider>
-                  {children}
-                  <Toaster />
+                {children}
+                <Toaster />
               </MercadoPagoProvider>
-            </ThemeProvider>
-          </LocalProvider>
-        </AuthProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </LocalProvider>
       </body>
     </html>
   );

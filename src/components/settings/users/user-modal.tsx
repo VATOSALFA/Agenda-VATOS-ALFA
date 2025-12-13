@@ -37,7 +37,7 @@ const userSchema = (isEditMode: boolean, isGeneralAdmin: boolean) => z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
   apellido: z.string().min(1, 'El apellido es requerido.'),
   email: z.string().email('El email no es válido.'),
-  password: z.string().optional(),
+  password: isEditMode ? z.string().optional() : z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.'),
   celular: z.string().optional(),
   // Make role optional only if it's the general admin being edited
   role: isEditMode && isGeneralAdmin ? z.string().optional() : z.string().min(1, 'El rol es requerido.'),
@@ -275,7 +275,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     name="nombre"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombres</FormLabel>
+                        <FormLabel>Nombres <span className="text-destructive">*</span></FormLabel>
                         <FormControl><Input {...field} /></FormControl>
                         {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
                         {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
@@ -288,7 +288,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     name="apellido"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Apellidos</FormLabel>
+                        <FormLabel>Apellidos <span className="text-destructive">*</span></FormLabel>
                         <FormControl><Input {...field} /></FormControl>
                         {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
                         {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
@@ -302,12 +302,26 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel>Email <span className="text-destructive">*</span></FormLabel>
                       <FormControl><Input type="email" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {!isEditMode && (
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contraseña <span className="text-destructive">*</span></FormLabel>
+                        <FormControl><Input type="password" {...field} placeholder="Mínimo 6 caracteres" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <Accordion type="single" collapsible className="w-full">
                   <AccordionItem value="optional-fields">
                     <AccordionTrigger className="text-sm font-semibold">Datos Opcionales</AccordionTrigger>
@@ -325,24 +339,24 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       />
                     </AccordionContent>
                   </AccordionItem>
-                  <AccordionItem value="password-fields">
-                    <AccordionTrigger className="text-sm font-semibold">Cambiar Contraseña</AccordionTrigger>
-                    <AccordionContent className="pt-4 space-y-4">
-                      {!isEditMode && (
+                  {isEditMode && (
+                    <AccordionItem value="password-fields">
+                      <AccordionTrigger className="text-sm font-semibold">Cambiar Contraseña</AccordionTrigger>
+                      <AccordionContent className="pt-4 space-y-4">
                         <FormField
                           control={form.control}
                           name="password"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Contraseña</FormLabel>
-                              <FormControl><Input type="password" {...field} placeholder="Debe tener al menos 6 caracteres" /></FormControl>
+                              <FormLabel>Nueva Contraseña</FormLabel>
+                              <FormControl><Input type="password" {...field} placeholder="Dejar en blanco para mantener la actual" /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
                 </Accordion>
 
                 {!isEditingGeneralAdmin && (
@@ -351,7 +365,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     name="role"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Rol</FormLabel>
+                        <FormLabel>Rol <span className="text-destructive">*</span></FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar un rol" /></SelectTrigger></FormControl>
                           <SelectContent>
@@ -394,7 +408,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             </div>
             <DialogFooter className="border-t pt-6">
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting || isUploading}>
+              <Button type="submit" disabled={isSubmitting || isUploading || !form.formState.isValid}>
                 {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar
               </Button>

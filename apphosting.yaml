@@ -1,0 +1,60 @@
+
+run:
+  build:
+    - npm ci
+    - npm run build
+  start:
+    - next start
+
+backend:
+  id: functions
+  env:
+    - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+      secret: FIREBASE_SERVICE_ACCOUNT_KEY
+    - variable: TWILIO_ACCOUNT_SID
+      secret: TWILIO_ACCOUNT_SID
+    - variable: TWILIO_AUTH_TOKEN
+      secret: TWILIO_AUTH_TOKEN
+    - variable: MERCADO_PAGO_ACCESS_TOKEN
+      secret: MERCADO_PAGO_ACCESS_TOKEN
+    - variable: MERCADO_PAGO_WEBHOOK_SECRET
+      secret: MERCADO_PAGO_WEBHOOK_SECRET
+  secretManagement:
+    grantAccess: true
+
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 512
+
+headers:
+  - source: /api/mercado-pago-webhook
+    function: functions
+
+env:
+  # Variables de entorno para el frontend (Next.js)
+  # --- FIREBASE PROJECT CONFIG ---
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: NEXT_PUBLIC_FIREBASE_API_KEY
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    secret: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    secret: NEXT_PUBLIC_FIREBASE_APP_ID
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    secret: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+  # --- MERCADO PAGO CONFIG ---
+  - variable: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
+    secret: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
+  # --- GEMINI CONFIG ---
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+  # --- TWILIO CONFIG ---
+  - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
+    secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER

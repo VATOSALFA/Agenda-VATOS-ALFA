@@ -1,0 +1,28 @@
+{
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "deploy:fix": "firebase deploy --only functions && gcloud run services add-iam-policy-binding getpointterminals --region=us-central1 --project=agenda-1ae08 --member=allUsers --role=roles/run.invoker && gcloud run services add-iam-policy-binding setterminalpdvmode --region=us-central1 --project=agenda-1ae08 --member=allUsers --role=roles/run.invoker && gcloud run services add-iam-policy-binding createpointpayment --region=us-central1 --project=agenda-1ae08 --member=allUsers --role=roles/run.invoker"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.3.0",
+    "firebase-functions": "^5.0.1",
+    "mercadopago": "^2.0.10",
+    "node-fetch": "^2.7.0",
+    "twilio": "^5.10.7",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}

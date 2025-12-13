@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             userRole = 'Staff (Sin edición)';
           } else {
             // 3. STRICT MODE: User authenticated but NOT AUTHORIZED
-            console.error(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
+            console.warn(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
             throw new Error("ACCESS_DENIED");
           }
         }
@@ -129,9 +129,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const customUser = await validateUserPermissions(firebaseUser);
           setUser(customUser);
         } catch (error: any) {
-          console.error("Error fetching user data from Firestore:", error);
           if (error.message === "ACCESS_DENIED") {
+            console.warn("Access denied for user:", firebaseUser.email);
             await firebaseSignOut(auth);
+          } else {
+            console.error("Error fetching user data from Firestore:", error);
           }
           setUser(null);
         }

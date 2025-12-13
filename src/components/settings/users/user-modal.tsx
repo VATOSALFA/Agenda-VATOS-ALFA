@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
 import type { User, Local, Role, Profesional } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase-client';
@@ -76,6 +76,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const [apellidoSuggestion, setApellidoSuggestion] = useState<SpellCheckOutput | null>(null);
   const [isCheckingNombre, setIsCheckingNombre] = useState(false);
   const [isCheckingApellido, setIsCheckingApellido] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
@@ -316,7 +317,20 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Contraseña <span className="text-destructive">*</span></FormLabel>
-                        <FormControl><Input type="password" {...field} placeholder="Mínimo 6 caracteres" /></FormControl>
+                        <FormControl>
+                          <div className="relative">
+                            <Input type={showPassword ? "text" : "password"} {...field} placeholder="Mínimo 6 caracteres" />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowPassword(!showPassword)}
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                            </Button>
+                          </div>
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -349,7 +363,20 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Nueva Contraseña</FormLabel>
-                              <FormControl><Input type="password" {...field} placeholder="Dejar en blanco para mantener la actual" /></FormControl>
+                              <FormControl>
+                                <div className="relative">
+                                  <Input type={showPassword ? "text" : "password"} {...field} placeholder="Dejar en blanco para mantener la actual" />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                  >
+                                    {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                                  </Button>
+                                </div>
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}

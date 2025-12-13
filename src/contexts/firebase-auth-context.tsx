@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth, storage } from '@/lib/firebase-client';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -52,27 +52,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           let userRole: string = 'Staff (Sin edición)'; // Default role if not found, but NOT Admin
           let userPermissions: string[] = [];
 
-          // 1. Check 'usuarios' collection
+          // 1. Check 'usuarios' collection by UID
           const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+          let userDoc = await getDoc(userDocRef);
 
           if (userDoc.exists()) {
             customData = userDoc.data();
             userRole = customData.role || 'Staff (Sin edición)';
           } else {
-            // 2. Check 'profesionales' collection
-            const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
-            const profDoc = await getDoc(profDocRef);
+            // 1.5. Fallback: Check 'usuarios' by EMAIL (if they were manual created/invited)
+            const usersRef = collection(db, 'usuarios');
+            const q = query(usersRef, where('email', '==', firebaseUser.email));
+            const querySnapshot = await getDocs(q);
 
-            if (profDoc.exists()) {
-              customData = profDoc.data();
-              userRole = 'Staff (Sin edición)';
+            if (!querySnapshot.empty) {
+              userDoc = querySnapshot.docs[0];
+              customData = userDoc.data();
+              userRole = customData.role || 'Staff (Sin edición)';
+              // Optional: Here we could update the doc to include the new UID for future logins
             } else {
-              // 3. User authenticated but has no data records
-              console.warn(`User document for UID ${firebaseUser.uid} not found.`);
-              // DO NOT GRANT ADMIN HERE. 
-              customData = { name: firebaseUser.displayName, email: firebaseUser.email };
-              // Keep default safe role
+              // 2. Check 'profesionales' collection by UID
+              const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
+              const profDoc = await getDoc(profDocRef);
+
+              if (profDoc.exists()) {
+                customData = profDoc.data();
+                userRole = 'Staff (Sin edición)';
+              } else {
+                // 2.5 Fallback: Check 'profesionales' by email
+                const prosRef = collection(db, 'profesionales');
+                const qPro = query(prosRef, where('email', '==', firebaseUser.email));
+                const querySnapshotPro = await getDocs(qPro);
+
+                if (!querySnapshotPro.empty) {
+                  customData = querySnapshotPro.docs[0].data();
+                  userRole = 'Staff (Sin edición)';
+                } else {
+                  // 3. STRICT MODE: User authenticated but NOT AUTHORIZED
+                  console.error(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
+                  await firebaseSignOut(auth);
+                  // Throwing error to be caught below
+                  throw new Error("ACCESS_DENIED");
+                }
+              }
             }
           }
 
@@ -103,11 +125,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             avatarUrl: customData.avatarUrl || firebaseUser.photoURL,
           });
 
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching user data from Firestore:", error);
-          // In case of error, ensuring we don't grant Admin either
           setUser(null);
-          // Or maybe a limited user, but null forces re-login or error state
+          // If the error was our explicit ACCESS_DENIED, we want the UI to know, but this is inside onAuthStateChanged.
+          // The best way is to ensure User is null, so the UI won't redirect to /agenda.
+          // If we want to show a toast, we'd need a way to bubble this up, but onAuthStateChanged is a listener.
+          // For now, logging out (done above) and handling null user is the safe path.
+          if (error.message === "ACCESS_DENIED") {
+            // Optionally trigger a custom event or set a global error state if possible. 
+            // For simplicity, the user will just remain on the login page (or be redirected there).
+          }
         }
       } else {
         setUser(null);

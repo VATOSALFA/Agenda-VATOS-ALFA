@@ -76,8 +76,10 @@ export default function LoginPage() {
                     default:
                         setError("Ocurrió un error inesperado. Por favor, inténtalo de nuevo.");
                 }
+            } else if (err instanceof Error && err.message.includes("ACCESS_DENIED")) {
+                setError("Tu cuenta de Google está autenticada, pero tu correo no está registrado en el sistema. Contacta al administrador.");
             } else {
-                setError("Ocurrió un error inesperado. Por favor, inténtalo de nuevo.");
+                setError("Ocurrió un error. Verifica tus credenciales o si tu cuenta tiene acceso.");
             }
         } finally {
             setIsLoading(false);
@@ -188,9 +190,13 @@ export default function LoginPage() {
                                         toast({ title: "¡Bienvenido!", description: "Has iniciado sesión con Google correctamente." });
                                         router.push('/agenda');
                                     }
-                                } catch (error) {
+                                } catch (error: any) {
                                     console.error("Error Google Auth:", error);
-                                    setError("Error al iniciar sesión con Google.");
+                                    if (error.message?.includes("ACCESS_DENIED") || error.code === 'auth/user-not-found') {
+                                        setError("Acceso denegado: Tu correo no está registrado como usuario en el sistema.");
+                                    } else {
+                                        setError("Error al iniciar sesión con Google. Inténtalo de nuevo.");
+                                    }
                                 } finally {
                                     setIsLoading(false);
                                 }

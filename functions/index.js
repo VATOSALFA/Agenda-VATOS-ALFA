@@ -2,7 +2,7 @@
  * Importamos las funciones de la VersiÃ³n 2 (Gen 2)
  */
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore"); // Para detectar nuevas citas
+const { onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore"); // Para detectar nuevas citas y eliminaciones
 const { onSchedule } = require("firebase-functions/v2/scheduler");        // Para cron jobs (recordatorios, cumpleaÃ±os)
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
@@ -529,3 +529,22 @@ exports.mercadoPagoWebhook = onRequest({ cors: true, invoker: 'public', secrets:
     } catch (error) { response.status(200).send('OK_WITH_ERROR'); return; }
     response.status(200).send('OK');
 });
+/**
+ * =================================================================
+ * AUTOMATIZACIÓN 5: SINCRONIZACIÓN DE ELIMINACIÓN DE USUARIO
+ * =================================================================
+ */
+exports.onUserDeleted = onDocumentDeleted("usuarios/{userId}", async (event) => {
+    const userId = event.params.userId;
+    try {
+        await admin.auth().deleteUser(userId);
+        console.log(\[Auth] Usuario \ eliminado de Firebase Authentication.\);
+    } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+            console.log(\[Auth] Usuario \ ya no existía en Auth.\);
+        } else {
+            console.error(\[Auth] Error al eliminar usuario \ de Auth:\, error);
+        }
+    }
+});
+

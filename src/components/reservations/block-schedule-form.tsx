@@ -56,9 +56,9 @@ interface BlockScheduleFormProps {
   onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
   initialData?: {
-      barbero_id: string;
-      fecha: Date;
-      hora_inicio: string;
+    barbero_id: string;
+    fecha: Date;
+    hora_inicio: string;
   }
 }
 
@@ -76,7 +76,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       motivo: '',
     },
   });
-  
+
   const selectedBarberId = form.watch('barbero_id');
   const selectedDate = form.watch('fecha');
 
@@ -90,17 +90,17 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         local_id: selectedLocalId || '',
       });
     } else {
-        form.reset({
-            fecha: new Date(),
-            motivo: '',
-            local_id: selectedLocalId || '',
-        });
+      form.reset({
+        fecha: new Date(),
+        motivo: '',
+        local_id: selectedLocalId || '',
+      });
     }
   }, [initialData, form, isOpen, selectedLocalId]);
 
   const timeSlots = useMemo(() => {
     if (!selectedBarberId || !selectedDate || !professionals) return [];
-    
+
     const professional = professionals.find(p => p.id === selectedBarberId);
     if (!professional || !professional.schedule) return [];
 
@@ -108,14 +108,14 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, ""); // remove accents
-      
+
     const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
-    
+
     if (!schedule || !schedule.enabled) return [];
 
     const [startHour, startMinute] = schedule.start.split(':').map(Number);
     const [endHour, endMinute] = schedule.end.split(':').map(Number);
-    
+
     const slots = [];
     let currentTime = set(selectedDate, { hours: startHour, minutes: startMinute, seconds: 0, milliseconds: 0 });
     const endTime = set(selectedDate, { hours: endHour, minutes: endMinute, seconds: 0, milliseconds: 0 });
@@ -129,14 +129,14 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
 
 
   async function onSubmit(data: BlockFormData) {
-    if(!db) {
-        toast({variant: 'destructive', title: 'Error de base de datos'});
-        return;
+    if (!db) {
+      toast({ variant: 'destructive', title: 'Error de base de datos' });
+      return;
     }
     setIsSubmitting(true);
     try {
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
-      
+
       const conflictQuery = query(
         collection(db, 'reservas'),
         where('barbero_id', '==', data.barbero_id),
@@ -155,7 +155,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         setIsSubmitting(false);
         return;
       }
-      
+
       await addDoc(collection(db, 'bloqueos_horario'), {
         barbero_id: data.barbero_id,
         motivo: data.motivo,
@@ -165,13 +165,13 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
         creado_en: Timestamp.now(),
         local_id: data.local_id,
       });
-      
+
       toast({
         title: 'Horario bloqueado con éxito',
         duration: 2000,
       });
       onFormSubmit();
-      onOpenChange(false);
+      handleOpenChange(false);
 
     } catch (error) {
       console.error('Error al guardar el bloqueo:', error);
@@ -185,9 +185,21 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
     }
   }
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      // Safety hack: Force unlock body after animation to prevent freezing
+      setTimeout(() => {
+        document.body.style.removeProperty('pointer-events');
+        document.body.style.removeProperty('overflow');
+        document.body.removeAttribute('data-scroll-locked');
+      }, 500);
+    }
+    onOpenChange(open);
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <DialogHeader>
@@ -222,7 +234,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="motivo"
@@ -323,7 +335,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
               <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar Bloqueo

@@ -435,7 +435,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
             </div>
             <DialogFooter className="border-t pt-6">
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting || isUploading || !form.formState.isValid}>
+              <Button type="submit" disabled={isSubmitting || isUploading}>
                 {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar
               </Button>

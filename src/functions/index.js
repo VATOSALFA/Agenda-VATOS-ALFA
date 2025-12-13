@@ -2,6 +2,7 @@
  * Importamos las funciones de la Versión 2 (Gen 2)
  */
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
 
@@ -10,11 +11,14 @@ const crypto = require("crypto");
 const { Buffer } = require("buffer");
 const { v4: uuidv4 } = require("uuid");
 const fetch = require("node-fetch");
+const { Resend } = require("resend");
 const { MercadoPagoConfig, Point } = require("mercadopago");
+const twilio = require("twilio");
 
 // --- DEFINICIÓN DE SECRETOS ---
 const mpAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
 const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
+const resendApiKey = defineSecret("RESEND_API_KEY");
 
 // Configuración global
 setGlobalOptions({ region: "us-central1" });
@@ -57,16 +61,16 @@ async function transferMediaToStorage(mediaUrl, from, mediaType) {
   const imageBuffer = await response.buffer();
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) throw new Error("Bucket not configured.");
-  
+
   const bucket = admin.storage().bucket(bucketName);
   const extension = mediaType.split("/")[1] || "jpeg";
-  const fileName = `whatsapp_media/${from.replace(/\D/g,"")}-${uuidv4()}.${extension}`;
+  const fileName = `whatsapp_media/${from.replace(/\D/g, "")}-${uuidv4()}.${extension}`;
   const file = bucket.file(fileName);
 
   await file.save(imageBuffer, {
     metadata: { contentType: mediaType, cacheControl: "public, max-age=31536000" },
   });
-  
+
   await file.makePublic();
   return `https://storage.googleapis.com/${bucketName}/${fileName}`;
 }
@@ -77,7 +81,7 @@ async function handleAutomatedReply(db, from, body) {
   const isCancellation = normalizedBody.includes("cancelar");
 
   if (!isConfirmation && !isCancellation) return false;
-  
+
   const phoneOnly = from.replace(/\D/g, "").slice(-10);
   const clientsRef = db.collection("clientes");
   const clientQuery = await clientsRef.where("telefono", "==", phoneOnly).limit(1).get();
@@ -87,37 +91,37 @@ async function handleAutomatedReply(db, from, body) {
     return false;
   }
   const clientId = clientQuery.docs[0].id;
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().split('T')[0];
 
   const reservationsRef = db.collection("reservas");
   const reservationQuery = await reservationsRef
-      .where("cliente_id", "==", clientId)
-      .where("fecha", ">=", todayStr)
-      .orderBy("fecha")
-      .orderBy("hora_inicio")
-      .limit(1)
-      .get();
-  
+    .where("cliente_id", "==", clientId)
+    .where("fecha", ">=", todayStr)
+    .orderBy("fecha")
+    .orderBy("hora_inicio")
+    .limit(1)
+    .get();
+
   if (reservationQuery.empty) return false;
 
   const reservationDoc = reservationQuery.docs[0];
   const reservation = reservationDoc.data();
-  
+
   if (["Asiste", "Cancelado", "No asiste"].includes(reservation.estado)) return false;
 
   if (isConfirmation) {
-      await reservationDoc.ref.update({ estado: "Confirmado" });
-      console.log(`Reservation ${reservationDoc.id} confirmed for client ${clientId}.`);
+    await reservationDoc.ref.update({ estado: "Confirmado" });
+    console.log(`Reservation ${reservationDoc.id} confirmed for client ${clientId}.`);
   } else if (isCancellation) {
-      await db.runTransaction(async (transaction) => {
-          const clientRef = db.collection("clientes").doc(clientId);
-          transaction.update(reservationDoc.ref, { estado: "Cancelado" });
-          transaction.update(clientRef, { citas_canceladas: admin.firestore.FieldValue.increment(1) });
-      });
-      console.log(`Reservation ${reservationDoc.id} cancelled for client ${clientId}.`);
+    await db.runTransaction(async (transaction) => {
+      const clientRef = db.collection("clientes").doc(clientId);
+      transaction.update(reservationDoc.ref, { estado: "Cancelado" });
+      transaction.update(clientRef, { citas_canceladas: admin.firestore.FieldValue.increment(1) });
+    });
+    console.log(`Reservation ${reservationDoc.id} cancelled for client ${clientId}.`);
   }
   return true;
 }
@@ -127,7 +131,7 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
 
   if (body) {
     const wasHandled = await handleAutomatedReply(db, from, body);
-    if (wasHandled) return; 
+    if (wasHandled) return;
   }
 
   const conversationId = from;
@@ -189,22 +193,22 @@ async function saveMessage(from, body, mediaUrl, mediaType) {
   });
 }
 
-exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
-    try {
-      const {From, Body, MediaUrl0, MediaContentType0} = request.body;
-      if (!From) {
-        response.status(200).send("<Response/>");
-        return;
-      }
-      await saveMessage(From, Body, MediaUrl0, MediaContentType0);
-      response.set("Content-Type", "text/xml");
+exports.twilioWebhook = onRequest({ cors: true }, async (request, response) => {
+  try {
+    const { From, Body, MediaUrl0, MediaContentType0 } = request.body;
+    if (!From) {
       response.status(200).send("<Response/>");
-    } catch (error) {
-      console.error("[FATAL] Unhandled error in twilioWebhook function:", error);
-      response.set("Content-Type", "text/xml");
-      response.status(200).send("<Response/>");
+      return;
     }
+    await saveMessage(From, Body, MediaUrl0, MediaContentType0);
+    response.set("Content-Type", "text/xml");
+    response.status(200).send("<Response/>");
+  } catch (error) {
+    console.error("[FATAL] Unhandled error in twilioWebhook function:", error);
+    response.set("Content-Type", "text/xml");
+    response.status(200).send("<Response/>");
   }
+}
 );
 
 
@@ -215,36 +219,36 @@ exports.twilioWebhook = onRequest({cors: true}, async (request, response) => {
  */
 
 exports.getPointTerminals = onCall(
-  { 
-    cors: true, 
+  {
+    cors: true,
     secrets: [mpAccessToken],
     invoker: 'public'
-  }, 
+  },
   async (request) => {
     if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
     try {
-        const { client } = getMercadoPagoConfig();
-        const point = new Point(client); 
-        const devices = await point.getDevices({}); 
-        return { success: true, devices: devices.devices || [] };
-    } catch(error) {
-        console.error("Error fetching terminals: ", error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago.");
+      const { client } = getMercadoPagoConfig();
+      const point = new Point(client);
+      const devices = await point.getDevices({});
+      return { success: true, devices: devices.devices || [] };
+    } catch (error) {
+      console.error("Error fetching terminals: ", error);
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError('internal', error.message || "No se pudo comunicar con Mercado Pago.");
     }
-});
+  });
 
 exports.setTerminalPDVMode = onCall(
-  { 
-    cors: true, 
+  {
+    cors: true,
     secrets: [mpAccessToken],
     invoker: 'public'
-  }, 
+  },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-    
+
     const { terminalId } = request.data;
     if (!terminalId) throw new HttpsError('invalid-argument', 'Falta terminalId.');
 
@@ -261,66 +265,66 @@ exports.setTerminalPDVMode = onCall(
       if (error instanceof HttpsError) throw error;
       throw new HttpsError('internal', error.message || `No se pudo activar el modo PDV.`);
     }
-});
+  });
 
 exports.createPointPayment = onCall(
-  { 
-    cors: true, 
+  {
+    cors: true,
     secrets: [mpAccessToken],
     invoker: 'public'
-  }, 
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
-    
+
     const { amount, terminalId, referenceId } = request.data;
 
     if (!amount || !terminalId || !referenceId) {
-        throw new HttpsError('invalid-argument', 'Faltan datos requeridos.');
+      throw new HttpsError('invalid-argument', 'Faltan datos requeridos.');
     }
 
     try {
-        const { accessToken } = getMercadoPagoConfig();
-        const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
+      const { accessToken } = getMercadoPagoConfig();
+      const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
 
-        const paymentIntent = {
-            amount: Math.round(amount * 100),
-            notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
-            additional_info: {
-                external_reference: referenceId,
-                print_on_terminal: true 
-            }
-        };
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-            'X-Idempotency-Key': uuidv4()
-          },
-          body: JSON.stringify(paymentIntent),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.error("MP Error:", result);
-          if (response.status === 409) {
-             throw new HttpsError('aborted', 'La terminal está ocupada. Cancela la operación en el dispositivo.');
-          }
-          throw new HttpsError('internal', result.message || 'Error al enviar la orden.');
+      const paymentIntent = {
+        amount: Math.round(amount * 100),
+        notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
+        additional_info: {
+          external_reference: referenceId,
+          print_on_terminal: true
         }
+      };
 
-        return { success: true, data: { id: result.id } };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'X-Idempotency-Key': uuidv4()
+        },
+        body: JSON.stringify(paymentIntent),
+      });
 
-    } catch(error) {
-        console.error("Error creating payment:", error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', error.message || "No se pudo crear el pago.");
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("MP Error:", result);
+        if (response.status === 409) {
+          throw new HttpsError('aborted', 'La terminal está ocupada. Cancela la operación en el dispositivo.');
+        }
+        throw new HttpsError('internal', result.message || 'Error al enviar la orden.');
+      }
+
+      return { success: true, data: { id: result.id } };
+
+    } catch (error) {
+      console.error("Error creating payment:", error);
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError('internal', error.message || "No se pudo crear el pago.");
     }
-});
+  });
 
 exports.mercadoPagoWebhook = onRequest(
   {
@@ -344,58 +348,58 @@ exports.mercadoPagoWebhook = onRequest(
       const dataId = query['data.id'] || query.id || body?.data?.id || body?.id;
 
       if (!dataId) {
-          console.warn("[vFinal] Missing headers/params.", { query, body });
-          response.status(400).send("Bad Request: ID missing.");
-          return;
+        console.warn("[vFinal] Missing headers/params.", { query, body });
+        response.status(400).send("Bad Request: ID missing.");
+        return;
       }
-      
+
       console.log(`[vFinal] Topic: ${topic}, ID: ${dataId}`);
 
       if (dataId == "123456" || dataId == 123456) {
-          console.log("[vFinal] Test simulation detected (123456). Returning OK.");
-          response.status(200).send("OK");
-          return;
+        console.log("[vFinal] Test simulation detected (123456). Returning OK.");
+        response.status(200).send("OK");
+        return;
       }
-      
+
       const { accessToken } = getMercadoPagoConfig();
       let paymentInfo = null;
 
       // 1. Try fetching as a direct Payment
       const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
+        headers: { 'Authorization': `Bearer ${accessToken}` }
       });
 
       if (paymentResponse.ok) {
-          paymentInfo = await paymentResponse.json();
+        paymentInfo = await paymentResponse.json();
       } else {
-          // 2. If it fails, try fetching as a Merchant Order
-          console.log(`[vFinal] Payment ${dataId} not found or failed, trying as Merchant Order...`);
-          const orderResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
-             headers: { 'Authorization': `Bearer ${accessToken}` }
-          });
-          
-          if (orderResponse.ok) {
-              const orderInfo = await orderResponse.json();
-              const approvedPayment = orderInfo.payments?.find(p => p.status === 'approved');
-              if (approvedPayment) {
-                  // Simulate the response structure of a direct payment call
-                  paymentInfo = {
-                      id: approvedPayment.id,
-                      external_reference: orderInfo.external_reference,
-                      status: 'approved',
-                      transaction_amount: approvedPayment.transaction_amount
-                  };
-              }
+        // 2. If it fails, try fetching as a Merchant Order
+        console.log(`[vFinal] Payment ${dataId} not found or failed, trying as Merchant Order...`);
+        const orderResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (orderResponse.ok) {
+          const orderInfo = await orderResponse.json();
+          const approvedPayment = orderInfo.payments?.find(p => p.status === 'approved');
+          if (approvedPayment) {
+            // Simulate the response structure of a direct payment call
+            paymentInfo = {
+              id: approvedPayment.id,
+              external_reference: orderInfo.external_reference,
+              status: 'approved',
+              transaction_amount: approvedPayment.transaction_amount
+            };
           }
+        }
       }
 
       // Prioritize the external reference from the webhook body if available
       const external_reference = body?.data?.external_reference || paymentInfo?.external_reference;
 
       if (!paymentInfo || paymentInfo.status !== 'approved' || !external_reference) {
-          console.error(`[vFinal] Could not verify or process payment for ID ${dataId}.`);
-          response.status(200).send("OK (Ignored)");
-          return;
+        console.error(`[vFinal] Could not verify or process payment for ID ${dataId}.`);
+        response.status(200).send("OK (Ignored)");
+        return;
       }
 
       const { status, transaction_amount } = paymentInfo;
@@ -403,37 +407,232 @@ exports.mercadoPagoWebhook = onRequest(
 
       const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
       await admin.firestore().runTransaction(async (t) => {
-          const ventaDoc = await t.get(ventaRef);
-          if (!ventaDoc.exists || ventaDoc.data().pago_estado === 'Pagado') return;
+        const ventaDoc = await t.get(ventaRef);
+        if (!ventaDoc.exists || ventaDoc.data().pago_estado === 'Pagado') return;
 
-          const ventaData = ventaDoc.data();
-          const montoOriginal = Number(ventaData.total || 0);
-          const montoPagado = Number(transaction_amount || 0);
-          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
+        const ventaData = ventaDoc.data();
+        const montoOriginal = Number(ventaData.total || 0);
+        const montoPagado = Number(transaction_amount || 0);
+        const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
 
-          t.update(ventaRef, {
-              pago_estado: 'Pagado',
-              mercado_pago_status: status,
-              mercado_pago_id: String(paymentInfo.id),
-              monto_pagado_real: montoPagado,
-              propina: propina,
-              fecha_pago: new Date()
-          });
+        t.update(ventaRef, {
+          pago_estado: 'Pagado',
+          mercado_pago_status: status,
+          mercado_pago_id: String(paymentInfo.id),
+          monto_pagado_real: montoPagado,
+          propina: propina,
+          fecha_pago: new Date()
+        });
 
-          if (ventaData.reservationId) {
-              const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
-              const reservaDoc = await t.get(reservaRef);
-              if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
-          }
+        if (ventaData.reservationId) {
+          const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
+          const reservaDoc = await t.get(reservaRef);
+          if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
+        }
       });
       console.log(`[vFinal] SUCCESS: Venta ${external_reference} processed.`);
 
     } catch (error) {
       console.error('[vFinal] Error processing webhook:', error);
-      response.status(200).send('OK_WITH_ERROR'); 
+      response.status(200).send('OK_WITH_ERROR');
       return;
     }
 
     response.status(200).send('OK');
   }
 );
+
+/**
+ * =================================================================
+ * CRON ENGINE: AUTOMATED MESSAGES
+ * =================================================================
+ * Runs every hour to check for:
+ * 1. Birthdays
+ * 2. Appointment Reminders
+ * 3. Google Reviews
+ */
+exports.checkAutomatedMessages = onSchedule({
+  schedule: "every 1 hours",
+  secrets: [mpAccessToken, resendApiKey] // Added Resend secret availability
+}, async (event) => {
+  console.log("Cron Engine Started: Checking automated messages...");
+  const db = admin.firestore();
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  // -- 0. Load Configuration --
+  const reminderSettingsDoc = await db.collection('configuracion').doc('recordatorios').get();
+  const reminderSettings = reminderSettingsDoc.exists ? reminderSettingsDoc.data() : {};
+  const notifications = reminderSettings.notifications || {};
+
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumberRaw = process.env.NEXT_PUBLIC_TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !fromNumberRaw) {
+    console.error("Cron Error: Twilio credentials missing.");
+    return;
+  }
+  const client = twilio(accountSid, authToken);
+  const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
+
+  /* 
+   * Initializing Resend for future email usage
+   * const resend = new Resend(resendApiKey.value()); 
+   */
+
+  const sendTemplate = async (to, templateName, variables) => {
+    // Helper to find template by name (assuming name matches key in collection query or map)
+    // For now, hardcoded logic or fetching templates could be added.
+    // Simpler: Just rely on Content API if we have the SID.
+    // We need the SID from 'whatsapp_templates' collection.
+    const templatesSnap = await db.collection('whatsapp_templates').where('name', '==', templateName).limit(1).get();
+    if (templatesSnap.empty) {
+      console.log(`Template '${templateName}' not found.`);
+      return false;
+    }
+    const template = templatesSnap.docs[0].data();
+    const contentSid = template.contentSid;
+
+    try {
+      const toNumber = `whatsapp:+521${to.replace(/\D/g, '')}`; // Mexico default
+      await client.messages.create({
+        from: fromNumber,
+        to: toNumber,
+        contentSid: contentSid,
+        contentVariables: JSON.stringify(variables)
+      });
+      return true;
+    } catch (e) {
+      console.error(`Failed to send ${templateName} to ${to}:`, e);
+      return false;
+    }
+  };
+
+  // -- 1. Birthdays --
+  // Only run birthday check once a day, e.g., if hour is 10 AM
+  if (now.getHours() === 10 && notifications.birthday_notification?.enabled) {
+    console.log("Checking birthdays...");
+    const clientsSnap = await db.collection('clientes').where('fecha_nacimiento', '!=', null).get();
+    for (const doc of clientsSnap.docs) {
+      const data = doc.data();
+      let dob = null;
+      if (data.fecha_nacimiento && typeof data.fecha_nacimiento.toDate === 'function') {
+        dob = data.fecha_nacimiento.toDate();
+      } else if (typeof data.fecha_nacimiento === 'string') {
+        dob = new Date(data.fecha_nacimiento);
+      }
+
+      if (dob && dob.getDate() === now.getDate() && dob.getMonth() === now.getMonth()) {
+        // Happy Birthday!
+        console.log(`It's ${data.nombre}'s birthday!`);
+        await sendTemplate(data.telefono, 'Feliz Cumpleaños', { '1': data.nombre });
+      }
+    }
+  }
+
+  // -- 2. Appointment Reminders --
+  if (notifications.appointment_reminder?.enabled) {
+    // Logic depends on 'day_before' or 'same_day' + hours
+    const timing = notifications.appointment_reminder.timing;
+    let targetStart = new Date();
+    let targetEnd = new Date();
+
+    // This is a simplified check. For robust 'hours before', we need to check current hour + X.
+    // Let's implement 'Day Before' as: running at 6 PM to check tomorrow? 
+    // Or running hourly to check appointments in exactly X hours.
+    // Assuming 'day_before' means 24 hours before.
+
+    // Strategy: Look for appointments starting between [now + X hours, now + X hours + 1 hour window]
+    // This requires precise math.
+
+    if (timing?.type === 'day_before') {
+      // Check for appointments tomorrow at this same hour (roughly 24h from now)
+      targetStart.setDate(targetStart.getDate() + 1);
+    } else if (timing?.hours_before) {
+      targetStart.setHours(targetStart.getHours() + timing.hours_before);
+    }
+
+    // Create 1 hour window
+    targetEnd = new Date(targetStart);
+    targetEnd.setHours(targetEnd.getHours() + 1);
+
+    const startStr = targetStart.toISOString(); // Firestore string comparison works for ISO dates
+    // Warning: 'fecha' field is YYYY-MM-DD. 'hora_inicio' is HH:MM.
+    // We need to query based on fecha and hora_inicio.
+
+    const targetDateStr = targetStart.toISOString().split('T')[0];
+    const targetHourStr = targetStart.toTimeString().slice(0, 5); // HH:MM
+
+    // Query reservations for the target date
+    const resSettings = notifications.appointment_reminder;
+
+    const resSnap = await db.collection('reservas')
+      .where('fecha', '==', targetDateStr)
+      .get();
+
+    for (const doc of resSnap.docs) {
+      const res = doc.data();
+      if (res.estado === 'Confirmado' || res.estado === 'Pendiente') { // Only remind active ones
+        // Check time
+        // res.hora_inicio is '14:30'. We checked 'targetHourStr' which is based on execution time.
+        // We want to send reminder closely matched.
+        // If we run hourly, we check if res.hora_inicio starts with current hour + offset.
+
+        const resHour = parseInt(res.hora_inicio.split(':')[0], 10);
+        const targetHour = targetStart.getHours();
+
+        if (resHour === targetHour) {
+          // Get Client
+          const clientDoc = await db.collection('clientes').doc(res.cliente_id).get();
+          if (clientDoc.exists) {
+            const clientData = clientDoc.data();
+            // Check if already sent? (Optional: Add flag to reservation)
+            if (!res.reminderSent) {
+              console.log(`Sending reminder to ${clientData.nombre} for ${res.fecha} ${res.hora_inicio}`);
+              const sent = await sendTemplate(clientData.telefono, 'Recordatorio Cita', {
+                '1': clientData.nombre,
+                '2': res.servicio || 'Servicio',
+                '3': `${res.fecha} a las ${res.hora_inicio}`
+              });
+              if (sent) {
+                await doc.ref.update({ reminderSent: true });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // -- 3. Google Reviews --
+  // Run once a day at 12:00 PM
+  if (now.getHours() === 12 && notifications.google_review?.enabled) {
+    // Check reservations from YESTERDAY
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const resSnap = await db.collection('reservas')
+      .where('fecha', '==', yesterdayStr)
+      .where('estado', '==', 'Asiste') // Completed appointments
+      .get();
+
+    for (const doc of resSnap.docs) {
+      const res = doc.data();
+      const clientRef = db.collection('clientes').doc(res.cliente_id);
+      const clientDoc = await clientRef.get();
+
+      if (clientDoc.exists) {
+        const clientData = clientDoc.data();
+        if (!clientData.reviewRequestSent) {
+          console.log(`Asking ${clientData.nombre} for review...`);
+          const sent = await sendTemplate(clientData.telefono, 'Solicitud Reseña', { '1': clientData.nombre });
+          if (sent) {
+            await clientRef.update({ reviewRequestSent: true });
+          }
+        }
+      }
+    }
+  }
+});

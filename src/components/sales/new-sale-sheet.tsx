@@ -1236,14 +1236,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             </Sheet>
 
             <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-lg" hideCloseButton>
                     <DialogHeader>
                         <DialogTitle>Crear Nuevo Cliente</DialogTitle>
                         <DialogDescription>
                             Completa la información para registrar un nuevo cliente en el sistema.
                         </DialogDescription>
                     </DialogHeader>
-                    <NewClientForm onFormSubmit={handleClientCreated} />
+                    <NewClientForm onFormSubmit={handleClientCreated} onCancel={() => setIsClientModalOpen(false)} />
                 </DialogContent>
             </Dialog>
             <AddItemDialog

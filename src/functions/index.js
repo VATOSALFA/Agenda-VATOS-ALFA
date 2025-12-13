@@ -290,7 +290,7 @@ exports.createPointPayment = onCall(
 
       const paymentIntent = {
         amount: Math.round(amount * 100),
-        notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
+        notification_url: "https://agenda-1ae08.web.app/api/mercado-pago-webhook",
         additional_info: {
           external_reference: referenceId,
           print_on_terminal: true
@@ -325,6 +325,90 @@ exports.createPointPayment = onCall(
       throw new HttpsError('internal', error.message || "No se pudo crear el pago.");
     }
   });
+
+exports.createStore = onCall(
+  {
+    cors: true,
+    secrets: [mpAccessToken],
+    invoker: 'public'
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    const { name, business_hours } = request.data;
+    if (!name) throw new HttpsError('invalid-argument', 'Falta nombre de sucursal.');
+
+    try {
+      const { accessToken } = getMercadoPagoConfig();
+      const userRes = await fetch('https://api.mercadopago.com/users/me', { headers: { Authorization: `Bearer ${accessToken}` } });
+      const userData = await userRes.json();
+      const userId = userData.id;
+
+      const response = await fetch(`https://api.mercadopago.com/users/${userId}/stores`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          name: name,
+          business_hours: business_hours || {
+            monday: [{ open: "08:00", close: "20:00" }],
+            tuesday: [{ open: "08:00", close: "20:00" }],
+            wednesday: [{ open: "08:00", close: "20:00" }],
+            thursday: [{ open: "08:00", close: "20:00" }],
+            friday: [{ open: "08:00", close: "20:00" }],
+          },
+          location: {
+            street_number: "123", street_name: "Calle Falsa", city_name: "Ciudad", state_name: "Estado",
+            latitude: 19.432608, longitude: -99.133209 // Default placeholders to satisfy API
+          }
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Error creating store');
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error creating store:", error);
+      throw new HttpsError('internal', error.message);
+    }
+  }
+);
+
+exports.createPos = onCall(
+  {
+    cors: true,
+    secrets: [mpAccessToken],
+    invoker: 'public'
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    const { name, store_id, external_store_id, fixed_amount } = request.data;
+    if (!name || (!store_id && !external_store_id)) throw new HttpsError('invalid-argument', 'Falta nombre o store_id.');
+
+    try {
+      const { accessToken } = getMercadoPagoConfig();
+      const response = await fetch(`https://api.mercadopago.com/pos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          name: name,
+          fixed_amount: fixed_amount || true,
+          store_id: store_id ? Number(store_id) : undefined,
+          external_store_id: external_store_id
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Error creating POS');
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error creating POS:", error);
+      throw new HttpsError('internal', error.message);
+    }
+  }
+);
 
 exports.mercadoPagoWebhook = onRequest(
   {

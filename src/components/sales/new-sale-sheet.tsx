@@ -398,12 +398,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     useEffect(() => {
         if (isOpen && initialData?.local_id) {
             form.setValue('local_id', initialData.local_id);
+        } else if (isOpen && user?.local_id) {
+            // Priority 2: User's assigned local (e.g. cashier's branch)
+            form.setValue('local_id', user.local_id);
         } else if (isOpen && selectedLocalId) {
+            // Priority 3: Context selected local
             form.setValue('local_id', selectedLocalId);
         } else if (isOpen && !localesLoading && locales.length > 0) {
+            // Priority 4: First available local
             form.setValue('local_id', locales[0].id);
         }
-    }, [isOpen, locales, localesLoading, form, selectedLocalId, initialData]);
+    }, [isOpen, locales, localesLoading, form, selectedLocalId, initialData, user]);
 
     useEffect(() => {
         if (mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -738,8 +743,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [isOpen, initialData, resetComponentsState]);
 
+    const cancelPendingSale = useCallback(async () => {
+        if (saleIdRef.current && db && isWaitingForPayment) {
+            console.log("Cancelling pending sale due to modal close:", saleIdRef.current);
+            try {
+                const docRef = doc(db, 'ventas', saleIdRef.current);
+                // Mark as Cancelled so it doesn't show as a valid sale
+                await updateDoc(docRef, {
+                    pago_estado: 'Cancelado',
+                    notas: 'Operación cancelada por el usuario antes de completar el pago.'
+                });
+            } catch (e) {
+                console.error("Error cancelling pending sale:", e);
+            }
+        }
+    }, [db, isWaitingForPayment]);
+
     const handleOpenChange = (open: boolean) => {
         if (!open) {
+            cancelPendingSale();
             // Safety hack: Force unlock body after animation to prevent freezing
             setTimeout(() => {
                 document.body.style.removeProperty('pointer-events');

@@ -1,5 +1,7 @@
 'use client';
 
+import Image from "next/image";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -110,9 +112,16 @@ export default function LoginPage() {
 
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">
-            <div className="flex items-center gap-3 mb-6">
-                <Calendar className="h-8 w-8 text-primary" />
-                <h1 className="text-3xl font-bold text-slate-800">VATOS ALFA</h1>
+            <div className="flex flex-col items-center mb-8 animate-in fade-in zoom-in duration-700 slide-in-from-bottom-4">
+                <Image
+                    src="/logo-vatos-alfa.png"
+                    alt="Vatos Alfa Logo"
+                    width={100}
+                    height={100}
+                    className="mb-4 drop-shadow-md"
+                    priority
+                />
+                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">VATOS ALFA</h1>
             </div>
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">

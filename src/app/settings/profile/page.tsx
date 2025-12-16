@@ -13,7 +13,7 @@ import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/contexts/firebase-auth-context";
-import { updatePassword } from "firebase/auth";
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase-client";
 import { ImageUploader } from "@/components/shared/image-uploader";
@@ -101,11 +101,17 @@ export default function ProfilePage() {
 
             // If new password is provided, update it
             if (data.newPassword && data.currentPassword) {
-                // Re-authentication is usually needed here for security.
-                // For simplicity in this context, we will try to update directly.
-                // In a real app, you would re-authenticate the user first.
+                if (!user.email) throw new Error("User email is missing");
+
+                // 1. Create a credential with the current email and the OLD password provided
+                const credential = EmailAuthProvider.credential(user.email, data.currentPassword);
+
+                // 2. Re-authenticate (Verify old password + Refresh session)
+                await reauthenticateWithCredential(user, credential);
+
+                // 3. Update to the NEW password
                 await updatePassword(user, data.newPassword);
-                toast({ title: 'Contraseña actualizada' });
+                toast({ title: 'Contraseña actualizada correctamente' });
             }
 
             toast({

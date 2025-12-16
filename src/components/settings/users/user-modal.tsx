@@ -24,7 +24,7 @@ import { db, auth } from '@/lib/firebase-client';
 import { collection, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { createUserWithEmailAndPassword, updateProfile, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
@@ -37,7 +37,7 @@ const userSchema = (isEditMode: boolean, isGeneralAdmin: boolean) => z.object({
   nombre: z.string().min(1, 'El nombre es requerido.'),
   apellido: z.string().min(1, 'El apellido es requerido.'),
   email: z.string().email('El email no es válido.'),
-  password: isEditMode ? z.string().optional() : z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.'),
+  password: z.string().optional(),
   celular: z.string().optional(),
   // Make role optional only if it's the general admin being edited
   role: isEditMode && isGeneralAdmin ? z.string().optional() : z.string().min(1, 'El rol es requerido.'),
@@ -190,31 +190,38 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
         toast({ title: "Cambios realizados con éxito" });
       } else {
-        if (!data.password) {
-          throw new Error("La contraseña es requerida para nuevos usuarios.");
-        }
-        if (data.password.length < 6) {
-          throw new Error("La contraseña debe tener al menos 6 caracteres.");
-        }
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error("Admin not signed in");
+
+        // Generate a random temporary password
+        const tempPassword = crypto.randomUUID ? crypto.randomUUID().slice(0, 12) + "Aa1!" : Math.random().toString(36).slice(-10) + "Aa1!";
 
         // USE SECONDARY APP TO AVOID LOGGING OUT ADMIN
         const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
         const secondaryAuth = getAuth(secondaryApp);
 
         try {
-          const tempUserCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password);
+          // 1. Create user with temp password
+          const tempUserCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPassword);
           const newFirebaseUser = tempUserCredential.user;
 
-          // Update profile on the new user object (which belongs to secondaryAuth)
+          // 2. Update profile
           await updateProfile(newFirebaseUser, { displayName: fullName, photoURL: data.avatarUrl || null });
 
-          // Write to Firestore using the MAIN db instance (which has Admin privileges)
+          // 3. Write to Firestore using MAIN db
           const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
           await setDoc(userRef, dataToSave);
 
-          toast({ title: "Usuario creado con éxito" });
+          // 4. Send Password Reset Email (Invitation) using MAIN auth to ensure domain/settings correctness
+          // Actually, standard practice is sending to the email.
+          // Note: sendPasswordResetEmail usually works on the instance that owns the user, but for invitation
+          // we are just triggering an email to that address.
+          await sendPasswordResetEmail(secondaryAuth, data.email);
+
+          toast({
+            title: "Usuario invitado con éxito",
+            description: `Se ha enviado un correo a ${data.email} para que establezca su contraseña.`
+          });
 
           // Clean up secondary session
           await secondaryAuth.signOut();
@@ -311,30 +318,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                 />
 
                 {!isEditMode && (
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contraseña <span className="text-destructive">*</span></FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input type={showPassword ? "text" : "password"} {...field} placeholder="Mínimo 6 caracteres" />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
-                              onClick={() => setShowPassword(!showPassword)}
-                            >
-                              {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-1">
+                      <Sparkles className="h-4 w-4" /> Invitación por correo
+                    </h4>
+                    <p className="text-sm text-blue-700">
+                      No necesitas establecer una contraseña. El usuario recibirá un correo electrónico en <strong>{form.watch('email') || 'su dirección'}</strong> con un enlace seguro para crear su propia contraseña.
+                    </p>
+                  </div>
                 )}
                 <Accordion type="single" collapsible className="w-full">
                   <AccordionItem value="optional-fields">

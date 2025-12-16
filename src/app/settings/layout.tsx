@@ -1,6 +1,8 @@
 
-
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { useAuth } from "@/contexts/firebase-auth-context";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 interface SettingsLayoutProps {
   children: React.ReactNode;
@@ -25,14 +27,31 @@ const sidebarNavItems = [
 
 
 export default function SettingsLayout({ children }: SettingsLayoutProps) {
+  const { user, loading } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const isGeneralAdmin = user?.role === 'Administrador general';
+
+  useEffect(() => {
+    if (!loading && user && !isGeneralAdmin) {
+      if (pathname !== '/settings/profile') {
+        router.replace('/settings/profile');
+      }
+    }
+  }, [user, loading, isGeneralAdmin, pathname, router]);
+
+  if (loading) return null;
+
   return (
     <div className="flex flex-col md:flex-row h-full">
-      <aside className="w-full md:w-1/5 md:border-r p-4 md:p-6">
-        <h2 className="mb-4 text-lg font-semibold tracking-tight">
-          CONFIGURACIÓN
-        </h2>
-        <SidebarNav items={sidebarNavItems} />
-      </aside>
+      {isGeneralAdmin && (
+        <aside className="w-full md:w-1/5 md:border-r p-4 md:p-6">
+          <h2 className="mb-4 text-lg font-semibold tracking-tight">
+            CONFIGURACIÓN
+          </h2>
+          <SidebarNav items={sidebarNavItems} />
+        </aside>
+      )}
       <main className="flex-1 p-4 md:p-8 pt-6 overflow-y-auto">
         {children}
       </main>

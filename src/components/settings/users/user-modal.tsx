@@ -20,7 +20,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
 import type { User, Local, Role, Profesional } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { db, auth } from '@/lib/firebase-client';
+import { db, auth, functions, httpsCallable } from '@/lib/firebase-client';
 import { collection, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -186,6 +186,17 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
         if (auth.currentUser && auth.currentUser.uid === user.id) {
           await updateProfile(auth.currentUser, { displayName: fullName, photoURL: data.avatarUrl });
+        }
+
+        if (data.password) {
+          try {
+            const updateUserPasswordFn = httpsCallable(functions, 'updateUserPassword');
+            await updateUserPasswordFn({ uid: user.id, password: data.password });
+            toast({ title: "Contraseña actualizada" });
+          } catch (error) {
+            console.error("Failed to update password:", error);
+            throw new Error("Error al actualizar la contraseña del usuario.");
+          }
         }
 
         toast({ title: "Cambios realizados con éxito" });

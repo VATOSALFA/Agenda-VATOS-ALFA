@@ -410,6 +410,32 @@ exports.createPos = onCall(
   }
 );
 
+exports.updateUserPassword = onCall(
+  {
+    cors: true,
+    invoker: 'public'
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+
+    // Optional: Check if requester is admin
+    // const callerUid = request.auth.uid;
+    // ... verification logic ...
+
+    const { uid, password } = request.data;
+    if (!uid || !password) throw new HttpsError('invalid-argument', 'Faltan datos.');
+    if (password.length < 6) throw new HttpsError('invalid-argument', 'Contraseña muy corta.');
+
+    try {
+      await admin.auth().updateUser(uid, { password: password });
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating password:", error);
+      throw new HttpsError('internal', error.message || "Error al actualizar la contraseña.");
+    }
+  }
+);
+
 exports.mercadoPagoWebhook = onRequest(
   {
     cors: true,

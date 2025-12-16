@@ -161,9 +161,14 @@ export default function AgendaView() {
   const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
   useEffect(() => {
-    // Let the auth context set the localId if needed.
-    // If user is general admin and no local is selected, select the first one.
-    if (!user?.local_id && !selectedLocalId && locales.length > 0) {
+    // If user has a specific local assigned (e.g. receptionist), enforce it.
+    if (user?.local_id) {
+      if (selectedLocalId !== user.local_id) {
+        setSelectedLocalId(user.local_id);
+      }
+    }
+    // If user is general admin (no specific local) and no local is selected, select the first one.
+    else if (!selectedLocalId && locales.length > 0) {
       setSelectedLocalId(locales[0].id);
     }
   }, [locales, selectedLocalId, setSelectedLocalId, user]);
@@ -635,9 +640,9 @@ export default function AgendaView() {
               />
             </div>
           )}
-          <div className="mt-auto p-4 flex justify-center h-[280px]">
+          <div className="mt-8 p-4 flex justify-center">
             {empresaLoading ? (
-              <Skeleton className="h-full w-full" />
+              <Skeleton className="h-[200px] w-full" />
             ) : logoUrl ? (
               <Image src={logoUrl} alt="Logo de la empresa" width={250} height={200} className="object-contain" />
             ) : null}

@@ -1,3 +1,4 @@
+"use client";
 
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useAuth } from "@/contexts/firebase-auth-context";

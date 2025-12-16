@@ -76,6 +76,22 @@ service cloud.firestore {
 
     // 7. Communications
     match /conversations/{document=**} { allow read, write: if isAuthenticated(); }
+    match /whatsapp_configuraciones/{document=**} { allow read, write: if isAuthenticated(); }
+
+    // 8. Other Business Data (Spanish naming conventions found in code)
+    match /terminales/{document=**} { allow read, write: if isAuthenticated(); }
+    match /codigos_autorizacion/{document=**} { allow read, write: if isAuthenticated(); }
+    match /egresos/{document=**} { allow read, write: if isAuthenticated(); }
+    match /ingresos_manuales/{document=**} { allow read, write: if isAuthenticated(); }
+    match /cortes_caja/{document=**} { allow read, write: if isAuthenticated(); }
+    
+    // Product Catalog (Spanish)
+    match /categorias_productos/{document=**} { allow read, write: if isAuthenticated(); }
+    match /formatos_productos/{document=**} { allow read, write: if isAuthenticated(); }
+    match /marcas_productos/{document=**} { allow read, write: if isAuthenticated(); }
+    
+    // Payments (Generic catch-all if needed, though usually covered by sales/caja)
+    match /pagos/{document=**} { allow read, write: if isAuthenticated(); }
 
     // DENY ALL OTHERS BY DEFAULT
     // No catch-all rule here.

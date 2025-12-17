@@ -62,10 +62,10 @@ const mainNavLinks = [
 ];
 
 const salesNavLinks = [
-    { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard, permission: 'ver_ventas_facturadas' },
-    { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign, permission: 'ver_reporte_comisiones' },
-    { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote, permission: 'ver_caja' },
-    { href: '/sales/tips', label: 'Propinas', icon: Gift, permission: 'ver_propinas' },
+  { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard, permission: 'ver_ventas_facturadas' },
+  { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign, permission: 'ver_reporte_comisiones' },
+  { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote, permission: 'ver_caja' },
+  { href: '/sales/tips', label: 'Propinas', icon: Gift, permission: 'ver_propinas' },
 ]
 
 const productsNavLinks = [
@@ -97,16 +97,16 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-    { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
-    { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
-    { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
+  { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
+  { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
+  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
 ];
 
 export default function Header() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
-  
+
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isAuthPage = pathname === '/';
@@ -121,7 +121,7 @@ export default function Header() {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       let totalUnread = 0;
       querySnapshot.forEach(doc => {
-          totalUnread += doc.data().unreadCount;
+        totalUnread += doc.data().unreadCount;
       });
       setUnreadCount(totalUnread);
     });
@@ -143,17 +143,17 @@ export default function Header() {
   const handleLogout = async () => {
     if (!signOut) return;
     try {
-        await signOut();
-        toast({
-            title: "Sesión cerrada",
-            description: "Has cerrado sesión correctamente.",
-        });
+      await signOut();
+      toast({
+        title: "Sesión cerrada",
+        description: "Has cerrado sesión correctamente.",
+      });
     } catch (error) {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "No se pudo cerrar la sesión. Inténtalo de nuevo.",
-        });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo cerrar la sesión. Inténtalo de nuevo.",
+      });
     }
   }
 
@@ -165,24 +165,24 @@ export default function Header() {
     }
     return name.substring(0, 2).toUpperCase();
   }
-  
+
   const canSee = (permission: string) => {
     if (!user || !user.permissions) return false;
     // Admin always has all permissions
     if (user.role === 'Administrador general') return true;
     return user.permissions.includes(permission);
   }
-  
-  const canSeeAny = (permissions: (string|undefined)[]) => {
-      if (!user || !user.permissions) return false;
-      if (user.role === 'Administrador general') return true;
-      return permissions.some(p => p && user.permissions!.includes(p));
+
+  const canSeeAny = (permissions: (string | undefined)[]) => {
+    if (!user || !user.permissions) return false;
+    if (user.role === 'Administrador general') return true;
+    return permissions.some(p => p && user.permissions!.includes(p));
   }
 
   const dispatchCustomEvent = (eventName: string) => {
     document.dispatchEvent(new CustomEvent(eventName));
   }
-  
+
   if (!user || isAuthPage) {
     return null;
   }
@@ -192,29 +192,29 @@ export default function Header() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
           <Link href="/agenda" className="mr-6 flex items-center space-x-3">
-             <span className="font-bold text-lg text-primary-foreground whitespace-nowrap">VATOS ALFA</span>
+            <span className="font-bold text-lg text-primary-foreground whitespace-nowrap">VATOS ALFA</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
             {mainNavLinks.map(({ href, label, permission }) => {
-                const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
-                return (
-                    canSee(permission) && (
-                        <Link
-                        key={href}
-                        href={href}
-                        className={cn(
-                            'px-3 py-2 rounded-md transition-colors',
-                            isActive
-                            ? 'bg-black/10 text-primary-foreground'
-                            : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
-                        )}
-                        >
-                        {label}
-                        </Link>
-                    )
+              const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
+              return (
+                canSee(permission) && (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'px-3 py-2 rounded-md transition-colors',
+                      isActive
+                        ? 'bg-black/10 text-primary-foreground'
+                        : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
+                    )}
+                  >
+                    {label}
+                  </Link>
                 )
+              )
             })}
-            
+
             {canSeeAny(salesNavLinks.map(l => l.permission)) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -228,16 +228,16 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-                    {salesNavLinks.map(({href, label, icon: Icon, permission}) => (
-                        canSee(permission!) && (
-                          <DropdownMenuItem key={href} asChild>
-                              <Link href={href!}>
-                                  <Icon className="mr-2 h-4 w-4" />
-                                  <span>{label}</span>
-                              </Link>
-                          </DropdownMenuItem>
-                        )
-                    ))}
+                  {salesNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                    canSee(permission!) && (
+                      <DropdownMenuItem key={href} asChild>
+                        <Link href={href!}>
+                          <Icon className="mr-2 h-4 w-4" />
+                          <span>{label}</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -255,16 +255,16 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-                    {productsNavLinks.map(({href, label, icon: Icon, permission}) => (
-                        canSee(permission!) && (
-                          <DropdownMenuItem key={href} asChild>
-                              <Link href={href!}>
-                                  <Icon className="mr-2 h-4 w-4" />
-                                  <span>{label}</span>
-                              </Link>
-                          </DropdownMenuItem>
-                        )
-                    ))}
+                  {productsNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                    canSee(permission!) && (
+                      <DropdownMenuItem key={href} asChild>
+                        <Link href={href!}>
+                          <Icon className="mr-2 h-4 w-4" />
+                          <span>{label}</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -282,7 +282,7 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-                  {reportsNavLinks.map(({href, label, icon: Icon, permission}) => (
+                  {reportsNavLinks.map(({ href, label, icon: Icon, permission }) => (
                     canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
                         <Link href={href!}>
@@ -310,45 +310,45 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
                   {finanzasNavLinks.map((item, index) => (
-                      item.isSeparator ? (
-                          <DropdownMenuSeparator key={`sep-${index}`} />
-                      ) : (
-                        canSee(item.permission!) && (
-                          <DropdownMenuItem key={item.href} asChild>
-                              <Link href={item.href!}>
-                                  <span>{item.label}</span>
-                              </Link>
-                          </DropdownMenuItem>
-                        )
+                    item.isSeparator ? (
+                      <DropdownMenuSeparator key={`sep-${index}`} />
+                    ) : (
+                      canSee(item.permission!) && (
+                        <DropdownMenuItem key={item.href} asChild>
+                          <Link href={item.href!}>
+                            <span>{item.label}</span>
+                          </Link>
+                        </DropdownMenuItem>
                       )
+                    )
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
             {canSee('ver_administracion') && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className={cn(
-                        'px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                        pathname.startsWith('/admin')
-                        ? 'bg-black/10 text-primary-foreground'
-                        : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
-                    )}>
-                        Administración <ChevronDown className="w-4 h-4 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="start">
-                      {adminNavLinks.map(({href, label, icon: Icon, permission}) => (
-                          <DropdownMenuItem key={href} asChild>
-                              <Link href={href!}>
-                                  <Icon className="mr-2 h-4 w-4" />
-                                  <span>{label}</span>
-                              </Link>
-                          </DropdownMenuItem>
-                      ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={cn(
+                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    pathname.startsWith('/admin')
+                      ? 'bg-black/10 text-primary-foreground'
+                      : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
+                  )}>
+                    Administración <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="start">
+                  {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                    <DropdownMenuItem key={href} asChild>
+                      <Link href={href!}>
+                        <Icon className="mr-2 h-4 w-4" />
+                        <span>{label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
           </nav>
@@ -374,21 +374,21 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            
+
             {canSee('ver_conversaciones') && (
-                <Link href="/conversations" passHref>
-                    <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground relative">
-                        <MessagesSquare className="h-5 w-5" />
-                        {unreadCount > 0 && (
-                            <span className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
-                                {unreadCount}
-                            </span>
-                        )}
-                    </Button>
-                </Link>
-             )}
-            
-            {canSee('ver_administracion') && (
+              <Link href="/conversations" passHref>
+                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground relative">
+                  <MessagesSquare className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+            )}
+
+            {user?.role === 'Administrador general' && (
               <Link href="/settings/empresa" passHref>
                 <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground">
                   <Settings className="h-5 w-5" />
@@ -416,12 +416,12 @@ export default function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                        <Link href="/settings/profile">
-                            <User className="mr-2 h-4 w-4" />
-                            <span>Mi Perfil</span>
-                        </Link>
-                    </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/profile">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Mi Perfil</span>
+                    </Link>
+                  </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={handleLogout}>

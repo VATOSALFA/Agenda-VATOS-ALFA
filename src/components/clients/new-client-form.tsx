@@ -48,8 +48,12 @@ const createClientSchema = (settings?: ClientSettings) => {
     nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
     apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
     telefono: fieldSettings.phone?.required
-      ? z.string().min(10, 'El teléfono debe tener al menos 10 dígitos.').transform(val => val.replace(/\D/g, ''))
-      : z.string().optional().transform(val => val ? val.replace(/\D/g, '') : ''),
+      ? z.string()
+        .transform(val => val.replace(/\D/g, ''))
+        .refine(val => val.length === 10, { message: 'El teléfono debe tener exactamente 10 dígitos.' })
+      : z.string().optional()
+        .transform(val => val ? val.replace(/\D/g, '') : '')
+        .refine(val => !val || val.length === 10, { message: 'El teléfono debe tener exactamente 10 dígitos.' }),
     correo: fieldSettings.email?.required
       ? z.string().email('El correo electrónico no es válido.')
       : z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
@@ -403,7 +407,17 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
             <FormField control={form.control} name="telefono" render={({ field }) => (
               <FormItem>
                 <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}</FormLabel>
-                <FormControl><Input placeholder="Ej: 1234567890 (10 dígitos)" {...field} /></FormControl>
+                <FormControl>
+                  <Input
+                    placeholder="Ej: 1234567890 (10 dígitos)"
+                    {...field}
+                    maxLength={10}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      field.onChange(val);
+                    }}
+                  />
+                </FormControl>
                 <div className="min-h-[24px] mt-1">
                   {isCheckingDuplicates ? (<div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando duplicados...</div>) : phoneError ? (<p className="text-sm font-medium text-destructive flex items-center gap-2"><AlertCircle className="h-4 w-4" />{phoneError}</p>) : (<FormMessage />)}
                 </div>

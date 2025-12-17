@@ -35,156 +35,161 @@ export interface Local {
 
 
 export interface Profesional {
-    id: string;
-    userId: string;
-    name: string;
-    email: string;
-    avatarUrl: string;
-    dataAiHint?: string;
-    active: boolean;
-    acceptsOnline: boolean;
-    biography: string;
-    services: string[];
-    schedule?: Schedule;
-    order: number;
-    local_id: string; // Added local_id to associate professional with a local
-    defaultCommission?: Commission;
-    comisionesPorServicio?: { [key: string]: Commission };
-    comisionesPorProducto?: { [key: string]: Commission };
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  dataAiHint?: string;
+  active: boolean;
+  acceptsOnline: boolean;
+  biography: string;
+  services: string[];
+  schedule?: Schedule;
+  order: number;
+  local_id: string; // Added local_id to associate professional with a local
+  defaultCommission?: Commission;
+  comisionesPorServicio?: { [key: string]: Commission };
+  comisionesPorProducto?: { [key: string]: Commission };
 }
 
 export interface Reservation {
-    id: string;
-    items: SaleItem[];
-    cliente_id: string;
-    servicio: string; // Concatenated services for simple display
-    barbero_id: string;
-    hora_inicio: string;
-    hora_fin: string;
-    fecha: string;
-    estado: string;
-    pago_estado?: string;
-    customer?: Client; // Updated from string to Client object
-    professionalNames?: string; // transient property
-    type?: 'appointment' | 'block';
-    start?: number; // transient
-    duration?: number; // transient
-    precio?: number;
-    notas?: string;
-    nota_interna?: string;
-    creado_en: Timestamp; // Firestore Timestamp
-    canal_reserva?: string;
-    local_id?: string; // Added local_id to reservations
-    notifications?: {
-      whatsapp_notification: boolean;
-      whatsapp_reminder: boolean;
-    };
+  id: string;
+  items: SaleItem[];
+  cliente_id: string;
+  servicio: string; // Concatenated services for simple display
+  barbero_id: string;
+  hora_inicio: string;
+  hora_fin: string;
+  fecha: string;
+  estado: string;
+  pago_estado?: string;
+  customer?: Client; // Updated from string to Client object
+  professionalNames?: string; // transient property
+  type?: 'appointment' | 'block';
+  start?: number; // transient
+  duration?: number; // transient
+  precio?: number;
+  notas?: string;
+  nota_interna?: string;
+  creado_en: Timestamp; // Firestore Timestamp
+  canal_reserva?: string;
+  local_id?: string; // Added local_id to reservations
+  notifications?: {
+    whatsapp_notification: boolean;
+    whatsapp_reminder: boolean;
+  };
 }
 
 export interface TimeBlock {
-    id: string;
-    barbero_id: string;
-    motivo: string;
-    fecha: string;
-    hora_inicio: string;
-    hora_fin: string;
-    type?: 'block';
-    customer?: { nombre: string }; // For unified rendering
-    start?: number; // transient
-    duration?: number; // transient
-    color?: string; // transient
-    local_id?: string;
+  id: string;
+  barbero_id: string;
+  motivo: string;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  type?: 'block';
+  customer?: { nombre: string }; // For unified rendering
+  start?: number; // transient
+  duration?: number; // transient
+  color?: string; // transient
+  local_id?: string;
 }
 
 export interface Schedule {
-    lunes: ScheduleDay;
-    martes: ScheduleDay;
-    miercoles: ScheduleDay;
-    jueves: ScheduleDay;
-    viernes: ScheduleDay;
-    sabado: ScheduleDay;
-    domingo: ScheduleDay;
-    [key: string]: ScheduleDay;
+  lunes: ScheduleDay;
+  martes: ScheduleDay;
+  miercoles: ScheduleDay;
+  jueves: ScheduleDay;
+  viernes: ScheduleDay;
+  sabado: ScheduleDay;
+  domingo: ScheduleDay;
+  [key: string]: ScheduleDay;
 }
 
 export interface ScheduleDay {
-    enabled: boolean;
-    start: string;
-    end: string;
+  enabled: boolean;
+  start: string;
+  end: string;
 }
 
 export interface Commission {
-    value: number;
-    type: '%' | '$';
+  value: number;
+  type: '%' | '$';
 }
 
 export interface Product {
-    id: string;
-    nombre: string;
-    barcode?: string;
-    brand_id: string;
-    category_id: string;
-    presentation_id: string;
-    public_price: number;
-    stock: number;
-    purchase_cost?: number;
-    internal_price?: number;
-    commission?: Commission;
-    comisionesPorProfesional?: { [key: string]: Commission };
-    includes_vat?: boolean;
-    description?: string;
-    stock_alarm_threshold?: number;
-    notification_email?: string;
-    created_at?: Timestamp;
-    updated_at?: Timestamp;
-    active: boolean;
-    order: number;
-    images?: string[];
+  id: string;
+  nombre: string;
+  barcode?: string;
+  brand_id: string;
+  category_id: string;
+  presentation_id: string;
+  public_price: number;
+  stock: number;
+  purchase_cost?: number;
+  internal_price?: number;
+  commission?: Commission;
+  comisionesPorProfesional?: { [key: string]: Commission };
+  includes_vat?: boolean;
+  description?: string;
+  stock_alarm_threshold?: number;
+  notification_email?: string;
+  created_at?: Timestamp;
+  updated_at?: Timestamp;
+  active: boolean;
+  order: number;
+  images?: string[];
 }
 
 export interface ProductCategory {
-    id: string;
-    name: string;
-    order: number;
+  id: string;
+  name: string;
+  order: number;
 }
 
-export interface ServiceCategory extends ProductCategory {}
+export interface ServiceCategory extends ProductCategory { }
 
 
 export interface ProductBrand {
-    id: string;
-    name: string;
-    order: number;
+  id: string;
+  name: string;
+  order: number;
 }
 
 export interface ProductPresentation {
-    id: string;
-    name: string;
-    order: number;
+  id: string;
+  name: string;
+  order: number;
 }
 
 export interface Service {
-    id: string;
-    name: string;
-    duration: number;
-    price: number;
-    category: string;
-    active: boolean;
-    order: number;
-    defaultCommission?: Commission;
-    comisionesPorProfesional?: { [profesionalId: string]: Commission };
+  id: string;
+  name: string;
+  duration: number;
+  price: number;
+  category: string;
+  active: boolean;
+  order: number;
+  defaultCommission?: Commission;
+  comisionesPorProfesional?: { [profesionalId: string]: Commission };
+  include_vat?: boolean;
+  images?: string[];
+  professionals?: string[];
+  payment_type?: string;
+  description?: string; // Optional description if needed
 }
 
 export interface CartItem {
-    id: string;
-    nombre: string;
-    precio: number;
-    cantidad: number;
-    tipo: 'producto' | 'servicio';
-    barbero_id?: string;
-    presentation_id?: string;
-    discountValue?: string | number;
-    discountType?: 'fixed' | 'percentage';
+  id: string;
+  nombre: string;
+  precio: number;
+  cantidad: number;
+  tipo: 'producto' | 'servicio';
+  barbero_id?: string;
+  presentation_id?: string;
+  discountValue?: string | number;
+  discountType?: 'fixed' | 'percentage';
 }
 
 export interface Sale {
@@ -252,16 +257,16 @@ export interface IngresoManual {
 }
 
 export interface StockMovement {
-    id: string;
-    date: any;
-    local_id: string;
-    product_id: string;
-    presentation_id: string;
-    from: number;
-    to: number;
-    cause: string;
-    staff_id: string;
-    comment: string;
+  id: string;
+  date: any;
+  local_id: string;
+  product_id: string;
+  presentation_id: string;
+  from: number;
+  to: number;
+  cause: string;
+  staff_id: string;
+  comment: string;
 }
 
 export interface User {
@@ -293,18 +298,18 @@ export interface AuthCode {
 }
 
 export interface CashClosing {
-    id: string;
-    fecha_corte: Timestamp;
-    persona_entrega_id: string;
-    persona_entrega_nombre: string;
-    persona_recibe: string;
-    fondo_base: number;
-    monto_entregado: number;
-    total_calculado: number;
-    total_sistema: number;
-    diferencia: number;
-    comentarios?: string;
-    detalle_conteo: Record<string, number>;
+  id: string;
+  fecha_corte: Timestamp;
+  persona_entrega_id: string;
+  persona_entrega_nombre: string;
+  persona_recibe: string;
+  fondo_base: number;
+  monto_entregado: number;
+  total_calculado: number;
+  total_sistema: number;
+  diferencia: number;
+  comentarios?: string;
+  detalle_conteo: Record<string, number>;
 }
 
 export interface Template {

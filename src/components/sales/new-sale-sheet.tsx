@@ -72,6 +72,7 @@ interface ReminderSettings {
 
 
 interface CartItem {
+    uniqueId: string; // Added for unique identification in cart
     id: string;
     nombre: string;
     precio: number;
@@ -124,7 +125,7 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
     }, [item.discountValue]);
 
     const handleBlur = () => {
-        onDiscountChange(item.id, internalValue, item.discountType || 'fixed');
+        onDiscountChange(item.uniqueId, internalValue, item.discountType || 'fixed');
     };
 
     return (
@@ -171,17 +172,17 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, onOpenAddItem, u
                 {cart.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-8">El carrito está vacío.</p>
                 ) : cart.map((item: CartItem) => (
-                    <div key={item.id} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
+                    <div key={item.uniqueId} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
                         <div className="flex-grow pr-2">
                             <p className="font-medium capitalize">{item.nombre}</p>
                             <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-MX') || '0'}</p>
                             <div className="flex items-center gap-2 mt-2">
-                                <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
+                                <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.uniqueId, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
                                 <span className="w-5 text-center font-bold">{item.cantidad}</span>
-                                <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.id, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
+                                <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.uniqueId, item.cantidad + 1)}><Plus className="h-3 w-3" /></Button>
                             </div>
                             <div className="mt-2">
-                                <Select onValueChange={(value) => updateItemProfessional(item.id, value)} value={item.barbero_id}>
+                                <Select onValueChange={(value) => updateItemProfessional(item.uniqueId, value)} value={item.barbero_id}>
                                     <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Seleccionar vendedor" />
                                     </SelectTrigger>
@@ -192,7 +193,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, onOpenAddItem, u
                             </div>
                             <div className="flex items-center gap-2 mt-2">
                                 <DiscountInput item={item} onDiscountChange={updateItemDiscount} />
-                                <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.id, String(item.discountValue || '0'), value)}>
+                                <Select value={item.discountType || 'fixed'} onValueChange={(value: 'fixed' | 'percentage') => updateItemDiscount(item.uniqueId, String(item.discountValue || '0'), value)}>
                                     <SelectTrigger className="w-[60px] h-8 text-xs">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -205,7 +206,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, onOpenAddItem, u
                         </div>
                         <div className="text-right flex-shrink-0">
                             <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</p>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.id)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.uniqueId)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
@@ -396,19 +397,31 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, [selectedClientId, clients]);
 
     useEffect(() => {
-        if (isOpen && initialData?.local_id) {
-            form.setValue('local_id', initialData.local_id);
-        } else if (isOpen && user?.local_id) {
-            // Priority 2: User's assigned local (e.g. cashier's branch)
-            form.setValue('local_id', user.local_id);
-        } else if (isOpen && selectedLocalId) {
-            // Priority 3: Context selected local
-            form.setValue('local_id', selectedLocalId);
-        } else if (isOpen && !localesLoading && locales.length > 0) {
-            // Priority 4: First available local
-            form.setValue('local_id', locales[0].id);
+        if (!isOpen) return;
+
+        // Force check for the best local ID available
+        const currentLocalId = form.getValues('local_id');
+
+        let targetId = '';
+
+        // 1. Initial Data
+        if (initialData?.local_id) {
+            targetId = initialData.local_id;
         }
-    }, [isOpen, locales, localesLoading, form, selectedLocalId, initialData, user]);
+        // 2. User's Assigned Local (Primary Source for Manual Sales)
+        else if (user?.local_id && user.local_id !== 'todos') {
+            targetId = user.local_id;
+        }
+        // 3. Fallback: First available local
+        else if (locales.length > 0) {
+            targetId = locales[0].id;
+        }
+
+        // Set value if we found a target and it needs updating
+        if (targetId && targetId !== currentLocalId) {
+            form.setValue('local_id', targetId);
+        }
+    }, [isOpen, initialData, user, locales, form]);
 
     useEffect(() => {
         if (mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -435,44 +448,46 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const addToCart = (item: Product | ServiceType, tipo: 'producto' | 'servicio') => {
         setCart(prev => {
-            const existingItem = prev.find(ci => ci.id === item.id);
-            if (existingItem) {
-                return prev.map(ci =>
-                    ci.id === item.id ? { ...ci, cantidad: ci.cantidad + 1 } : ci
-                );
-            }
-
+            // ALWAYS add as a new item to allow different professionals per service instance
             const itemPrice = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
             const itemName = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
             const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
 
-            return [...prev, { id: item.id, nombre: itemName, precio: itemPrice || 0, cantidad: 1, tipo, presentation_id }];
+            return [...prev, {
+                uniqueId: crypto.randomUUID(),
+                id: item.id,
+                nombre: itemName,
+                precio: itemPrice || 0,
+                cantidad: 1,
+                tipo,
+                presentation_id
+            }];
         });
     };
 
-    const removeFromCart = (itemId: string) => {
-        setCart(prev => prev.filter(item => item.id !== itemId));
+    const removeFromCart = (uniqueId: string) => {
+        setCart(prev => prev.filter(item => item.uniqueId !== uniqueId));
     };
 
-    const updateQuantity = (itemId: string, newQuantity: number) => {
+    const updateQuantity = (uniqueId: string, newQuantity: number) => {
         if (newQuantity < 1) {
-            removeFromCart(itemId);
+            removeFromCart(uniqueId);
             return;
         }
         setCart(prev =>
-            prev.map(item => (item.id === itemId ? { ...item, cantidad: newQuantity } : item))
+            prev.map(item => (item.uniqueId === uniqueId ? { ...item, cantidad: newQuantity } : item))
         );
     };
 
-    const updateItemProfessional = (itemId: string, barberoId: string) => {
+    const updateItemProfessional = (uniqueId: string, barberoId: string) => {
         setCart(prev =>
-            prev.map(item => (item.id === itemId ? { ...item, barbero_id: barberoId } : item))
+            prev.map(item => (item.uniqueId === uniqueId ? { ...item, barbero_id: barberoId } : item))
         );
     };
 
-    const updateItemDiscount = (itemId: string, value: string, type: 'fixed' | 'percentage') => {
+    const updateItemDiscount = (uniqueId: string, value: string, type: 'fixed' | 'percentage') => {
         setCart(prev => prev.map(item => {
-            if (item.id === itemId) {
+            if (item.uniqueId === uniqueId) {
                 return { ...item, discountValue: value, discountType: type };
             }
             return item;
@@ -514,6 +529,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
                 const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
                 return {
+                    uniqueId: crypto.randomUUID(),
                     id: item.id,
                     nombre: nombre,
                     precio: precio || 0,
@@ -583,26 +599,44 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             //    Esto es crucial para que el webhook tenga qué actualizar.
 
             await runTransaction(db, async (transaction) => {
-                // A. Deducir Stock
-                const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
+                // A. Consolidar cantidades por producto (para evitar lecturas/escrituras conflictivas en la misma transacción)
+                const productQuantities = new Map<string, number>();
+                const productRefsMap = new Map<string, DocumentReference>();
+                const itemsMap = new Map<string, CartItem>(); // Para info de error
+
                 for (const item of cart) {
                     if (item.tipo === 'producto') {
-                        const productRef = doc(db, 'productos', item.id);
-                        productRefs.push({ ref: productRef, item });
+                        const currentQty = productQuantities.get(item.id) || 0;
+                        productQuantities.set(item.id, currentQty + item.cantidad);
+
+                        if (!productRefsMap.has(item.id)) {
+                            productRefsMap.set(item.id, doc(db, 'productos', item.id));
+                            itemsMap.set(item.id, item);
+                        }
                     }
                 }
 
+                // Obtener todos los documentos necesarios de una vez
+                const uniqueProductIds = Array.from(productQuantities.keys());
                 const productDocs = await Promise.all(
-                    productRefs.map(p => transaction.get(p.ref))
+                    uniqueProductIds.map(id => transaction.get(productRefsMap.get(id)!))
                 );
 
+                // Verificar stock y encolar actualizaciones
                 for (const [index, productDoc] of productDocs.entries()) {
-                    const { item, ref } = productRefs[index];
-                    if (!productDoc.exists()) throw new Error(`Producto con ID ${item.id} no encontrado.`);
+                    const productId = uniqueProductIds[index];
+                    const qtyNeeded = productQuantities.get(productId)!;
+                    const itemInfo = itemsMap.get(productId)!;
+                    const ref = productRefsMap.get(productId)!;
+
+                    if (!productDoc.exists()) throw new Error(`Producto con ID ${itemInfo.id} no encontrado.`);
+
                     const productData = productDoc.data() as Product;
                     const currentStock = productData.stock;
-                    const newStock = currentStock - item.cantidad;
-                    if (newStock < 0) throw new Error(`Stock insuficiente para ${item.nombre}.`);
+                    const newStock = currentStock - qtyNeeded;
+
+                    if (newStock < 0) throw new Error(`Stock insuficiente para ${itemInfo.nombre}. Requerido: ${qtyNeeded}, Disponible: ${currentStock}`);
+
                     transaction.update(ref, { stock: newStock });
                 }
 
@@ -707,13 +741,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const handleNextStep = () => {
         if (cart.length === 0) {
-            toast({ variant: 'destructive', title: 'Carrito vacío', description: 'Debes agregar al menos un ítem para continuar.' });
+            toast({ variant: 'destructive', title: 'Error', description: 'El carrito está vacío.' });
             return;
         }
-        if (cart.some(item => !item.barbero_id)) {
-            toast({ variant: 'destructive', title: 'Vendedor no asignado', description: 'Por favor, asigna un vendedor a cada ítem del carrito.' });
+        if (!selectedClientId) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Debes seleccionar un cliente.' });
             return;
         }
+
+        // Nueva Validacion: Verificar que todos los items tengan vendedor
+        const missingSeller = cart.some(item => !item.barbero_id);
+        if (missingSeller) {
+            toast({
+                variant: 'destructive',
+                title: 'Faltan datos',
+                description: 'Por favor, asigna un vendedor a todos los productos/servicios del carrito antes de continuar.'
+            });
+            return;
+        }
+
         setStep(2);
     };
 
@@ -788,28 +834,44 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         try {
             await runTransaction(db, async (transaction) => {
 
-                const productRefs: { ref: DocumentReference, item: CartItem }[] = [];
+                // Consolidar cantidades por producto para el stock
+                const productQuantities = new Map<string, number>();
+                const productRefsMap = new Map<string, DocumentReference>();
+                const itemsMap = new Map<string, CartItem>();
+
                 for (const item of cart) {
                     if (item.tipo === 'producto') {
-                        const productRef = doc(db, 'productos', item.id);
-                        productRefs.push({ ref: productRef, item });
+                        const currentQty = productQuantities.get(item.id) || 0;
+                        productQuantities.set(item.id, currentQty + item.cantidad);
+
+                        if (!productRefsMap.has(item.id)) {
+                            productRefsMap.set(item.id, doc(db, 'productos', item.id));
+                            itemsMap.set(item.id, item);
+                        }
                     }
                 }
 
+                const uniqueProductIds = Array.from(productQuantities.keys());
                 const productDocs = await Promise.all(
-                    productRefs.map(p => transaction.get(p.ref))
+                    uniqueProductIds.map(id => transaction.get(productRefsMap.get(id)!))
                 );
 
                 for (const [index, productDoc] of productDocs.entries()) {
-                    const { item, ref } = productRefs[index];
+                    const productId = uniqueProductIds[index];
+                    const qtyNeeded = productQuantities.get(productId)!;
+                    const itemInfo = itemsMap.get(productId)!;
+                    const ref = productRefsMap.get(productId)!;
+
                     if (!productDoc.exists()) {
-                        throw new Error(`Producto con ID ${item.id} no encontrado.`);
+                        throw new Error(`Producto con ID ${productId} no encontrado.`);
                     }
+
                     const productData = productDoc.data() as Product;
                     const currentStock = productData.stock;
-                    const newStock = currentStock - item.cantidad;
+                    const newStock = currentStock - qtyNeeded;
+
                     if (newStock < 0) {
-                        throw new Error(`Stock insuficiente para ${item.nombre}.`);
+                        throw new Error(`Stock insuficiente para ${itemInfo.nombre}. Requerido: ${qtyNeeded}, Disponible: ${currentStock}`);
                     }
                     transaction.update(ref, { stock: newStock });
 
@@ -958,6 +1020,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )} />
                                         )}
                                     </div>
+
                                     <div className="relative mb-4 flex-shrink-0">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input placeholder="Buscar servicio o producto..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -1066,7 +1129,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Local</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isLocalAdmin}>
+                                                    <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
                                                         <FormControl>
                                                             <SelectTrigger>
                                                                 <SelectValue placeholder="Selecciona un local" />
@@ -1227,7 +1290,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment} onClick={form.handleSubmit(onSubmit)}>
+                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment || cart.some(item => !item.barbero_id)} onClick={(e) => {
+                                        if (cart.some(item => !item.barbero_id)) {
+                                            e.preventDefault();
+                                            toast({
+                                                variant: 'destructive',
+                                                title: 'Faltan datos',
+                                                description: 'Asigna un vendedor a todos los items del carrito para finalizar.'
+                                            });
+                                            return;
+                                        }
+
+                                        const localId = form.getValues('local_id');
+                                        if (!localId) {
+                                            e.preventDefault();
+                                            toast({
+                                                variant: 'destructive',
+                                                title: 'Local no seleccionado',
+                                                description: 'Por favor selecciona un local antes de finalizar la venta.'
+                                            });
+                                            return;
+                                        }
+
+                                        form.handleSubmit(onSubmit)(e);
+                                    }}>
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         Finalizar Venta por ${total.toLocaleString('es-MX')}
                                     </Button>

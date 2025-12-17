@@ -188,7 +188,10 @@ export default function ClientsPage() {
 
   const isLoading = clientsLoading || localesLoading || salesLoading;
 
-  const canViewPhone = useMemo(() => user?.permissions?.includes('ver_numero_telefono'), [user]);
+  const canViewPhone = useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return user?.permissions?.includes('ver_numero_telefono');
+  }, [user]);
 
   useEffect(() => {
     if (user?.local_id) {

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { Loader2, AlertCircle, Eye, EyeOff, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CustomLoader } from "@/components/ui/custom-loader";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FirebaseError } from "firebase/app";
 import { useAuth } from "@/contexts/firebase-auth-context";
@@ -43,7 +44,7 @@ export default function LoginPage() {
     if (loading || user) {
         return (
             <div className="flex justify-center items-center h-screen bg-muted/40">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <CustomLoader size={80} />
             </div>
         );
     }

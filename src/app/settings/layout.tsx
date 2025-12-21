@@ -4,6 +4,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { CustomLoader } from "@/components/ui/custom-loader";
 
 interface SettingsLayoutProps {
   children: React.ReactNode;
@@ -41,7 +42,13 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
     }
   }, [user, loading, isGeneralAdmin, pathname, router]);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <CustomLoader size={60} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-full">

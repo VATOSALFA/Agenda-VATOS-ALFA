@@ -8,6 +8,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { CustomLoader } from "@/components/ui/custom-loader";
 import AppLayout from '@/components/layout/app-layout';
 import { FirebaseErrorListener } from '@/components/firebase/FirebaseErrorListener';
 
@@ -205,7 +206,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <CustomLoader size={80} />
       </div>
     );
   }

@@ -28,7 +28,7 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     match /locales/{document=**} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated();
     }
 
@@ -40,10 +40,10 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
-    // 3. Professionals (Staff)
+    // 3. Professionals (Staff) - MODIFICADO PARA ACCESO PÚBLICO
     match /profesionales/{profId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); 
+      allow read: if true;  // <--- ¡Esto es la clave! Cualquiera puede ver la lista
+      allow write: if isAuthenticated(); // Solo el dueño puede editar/borrar
     }
 
     // 4. Roles & Permissions
@@ -53,10 +53,15 @@ service cloud.firestore {
     }
 
     // 5. Services & Products (Catalog)
-    match /servicios/{document=**} { allow read, write: if isAuthenticated(); }
+    match /servicios/{document=**} { 
+      allow read: if true; // <--- Público para que vean el menú de precios
+      allow write: if isAuthenticated(); 
+    }
+    
+    // Lo demás de productos lo dejamos protegido
     match /categorias_servicios/{document=**} { allow read, write: if isAuthenticated(); }
     match /products/{document=**} { allow read, write: if isAuthenticated(); }
-    match /productos/{document=**} { allow read, write: if isAuthenticated(); } // Added for Spanish collection name
+    match /productos/{document=**} { allow read, write: if isAuthenticated(); } 
     match /brands/{document=**} { allow read, write: if isAuthenticated(); }
     match /presentations/{document=**} { allow read, write: if isAuthenticated(); }
     match /categories/{document=**} { allow read, write: if isAuthenticated(); }

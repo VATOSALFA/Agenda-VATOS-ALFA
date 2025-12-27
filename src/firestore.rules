@@ -3,16 +3,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1. REGLA DE EXCEPCIÓN (PÚBLICA)
-    // Permite que cualquiera (incluso sin login) lea los datos de la empresa (Logo, Nombre).
+    // Colecciones Públicas (Lectura libre, Escritura protegida)
     match /empresa/{document=**} {
       allow read: if true;
       allow write: if request.auth != null;
     }
+    
+    match /servicios/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
 
-    // 2. REGLA GENERAL (PRIVADA)
-    // Para todo lo demás (clientes, ventas, terminales, etc.), se requiere estar logueado.
-    match /{path=**}/documents/{document} {
+    match /barberos/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /profesionales/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /locales/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Regla General: Todo lo demás requiere autenticación
+    match /{document=**} {
       allow read, write: if request.auth != null;
     }
   }

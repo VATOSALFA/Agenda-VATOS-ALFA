@@ -147,8 +147,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const isPublicPage = pathname.startsWith('/book');
-  const isAuthPage = pathname === '/';
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar');
+  const isAuthPage = pathname === '/login';
 
   // Handling redirects in a separate effect to avoid updates during render
   useEffect(() => {
@@ -159,7 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (!user && !isAuthPage && !isPublicPage) {
-      router.replace('/');
+      router.replace('/login');
     }
 
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
@@ -167,7 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
-    router.push('/');
+    router.push('/login');
   };
 
   const signInAndSetup = async (email: string, pass: string, rememberMe: boolean = false) => {

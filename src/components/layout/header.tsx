@@ -109,7 +109,8 @@ export default function Header() {
 
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const isAuthPage = pathname === '/';
+  const isAuthPage = pathname === '/login';
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar');
 
   useEffect(() => {
     if (!db || !user) return;
@@ -183,7 +184,7 @@ export default function Header() {
     document.dispatchEvent(new CustomEvent(eventName));
   }
 
-  if (!user || isAuthPage) {
+  if (!user || isAuthPage || isPublicPage) {
     return null;
   }
 

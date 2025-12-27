@@ -58,8 +58,9 @@ export function useFirestoreQuery<T>(
     try {
       // Standard query handling
 
-      // DEFENSA ZOMBIE: Si no hay usuario y la colección NO es pública ('empresa'), detenemos la consulta.
-      if (!user && collectionName !== 'empresa') {
+      // DEFENSA ZOMBIE: Si no hay usuario y la colección NO es pública, detenemos la consulta.
+      const publicCollections = ['empresa', 'servicios', 'profesionales', 'locales'];
+      if (!user && !publicCollections.includes(collectionName)) {
         if (loading) setLoading(false);
         setData([]);
         return;

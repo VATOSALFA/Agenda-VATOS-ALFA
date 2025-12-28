@@ -1,8 +1,15 @@
 'use server';
 
+import { getDb } from '@/lib/firebase-server';
+import { addMinutes, format, set, parse, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { FieldValue } from 'firebase-admin/firestore';
 
-// ...
+interface GetAvailabilityParams {
+    date: string; // YYYY-MM-DD
+    professionalId: string;
+    durationMinutes: number;
+}
 
 export async function getAvailableSlots({ date, professionalId, durationMinutes }: GetAvailabilityParams) {
     try {
@@ -23,13 +30,10 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         const profData = profDoc.data();
         if (!profData) return { error: 'No data for professional' };
 
-        // Use Spanish locale for day name to match DB keys (lunes, martes...)
         const dayName = format(parse(date, 'yyyy-MM-dd', new Date()), 'eeee', { locale: es }).toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
 
         const scheduleDay = profData.schedule?.[dayName];
-
-        // ... rest of the logic ...
 
         if (!scheduleDay || !scheduleDay.enabled) {
             return { slots: [] }; // Day is closed
@@ -40,8 +44,6 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         // 2. Get Busy Slots (Reservations)
         const reservationsSnapshot = await db.collection('reservas')
             .where('fecha', '==', date)
-            // .where('estado', '!=', 'Cancelado') // Admin SDK might not support != with other filters easily without composite index?
-            // Actually Firestore supports != now but let's be safe and filter in memory if needed
             .get();
 
         const busyIntervals: { start: number, end: number }[] = [];
@@ -89,13 +91,25 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         let current = startObj;
 
         // Slot interval (e.g., every 30 mins)
-        // Should probably align with duration or standard 30 min blocks?
-        // Let's us 30 mins for now as standard grid
         const GRID_INTERVAL = 30;
+
+        // Helper to check against current time if it's today
+        const queryDate = parse(date, 'yyyy-MM-dd', new Date());
+        const isQueryDateToday = isToday(queryDate);
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
         while (addMinutes(current, durationMinutes) <= endObj) {
             const slotStart = current.getHours() * 60 + current.getMinutes();
             const slotEnd = slotStart + durationMinutes;
+
+            // Check if slot is in the past (if today)
+            // Buffer: User can't book a slot that has already started or is within the next 20 mins?
+            // Let's just say "strict past" for now, or maybe a 15 min buffer.
+            if (isQueryDateToday && slotStart < currentMinutes) {
+                current = addMinutes(current, GRID_INTERVAL);
+                continue;
+            }
 
             // Check if overlaps with any busy interval
             const isBusy = busyIntervals.some(busy => {
@@ -117,6 +131,8 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
     }
 }
 
+// ... (previous code)
+
 export async function createPublicReservation(data: any) {
     try {
         let db;
@@ -130,8 +146,8 @@ export async function createPublicReservation(data: any) {
         if (!db) return { error: 'Database connection failed' };
 
         // Basic validation
-        if (!data.client?.phone || !data.serviceId || !data.professionalId || !data.date || !data.time) {
-            return { error: 'Faltan datos requeridos' };
+        if (!data.client?.phone || !data.serviceIds?.length || !data.professionalId || !data.date || !data.time) {
+            return { error: 'Faltan datos requeridos (Servicios, Profesional, Fecha u Hora)' };
         }
 
         // 1. Check/Create Client
@@ -155,16 +171,32 @@ export async function createPublicReservation(data: any) {
             clientId = newClientRef.id;
         }
 
-        // 2. Fetch Service Details for Price/Duration
-        const serviceDoc = await db.collection('servicios').doc(data.serviceId).get();
-        if (!serviceDoc.exists) return { error: 'Servicio no encontrado' };
-        const serviceData = serviceDoc.data();
+        // 2. Fetch Services Details
+        const servicesRefs = data.serviceIds.map((id: string) => db.collection('servicios').doc(id));
+        const servicesDocs = await db.getAll(...servicesRefs);
+
+        const validServices = servicesDocs.filter((doc) => doc.exists).map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        if (validServices.length === 0) return { error: 'Servicios no encontrados' };
+
+        const totalDuration = validServices.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+        const totalPrice = validServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
+        const serviceNames = validServices.map((s: any) => s.name).join(', ');
+
+        const items = validServices.map((s: any) => ({
+            id: s.id,
+            nombre: s.name,
+            servicio: s.name,
+            precio: s.price,
+            duracion: s.duration,
+            barbero_id: data.professionalId
+        }));
 
         // 3. Create Reservation
         // Calculate End Time
         const [h, m] = data.time.split(':').map(Number);
         const startTime = set(parse(data.date, 'yyyy-MM-dd', new Date()), { hours: h, minutes: m });
-        const endTime = addMinutes(startTime, serviceData?.duration || 30);
+        const endTime = addMinutes(startTime, totalDuration);
 
         const reservationData = {
             cliente_id: clientId,
@@ -173,18 +205,12 @@ export async function createPublicReservation(data: any) {
             hora_inicio: data.time,
             hora_fin: format(endTime, 'HH:mm'),
             estado: 'Pendiente', // Starts as pending
-            servicio: serviceData?.name, // Legacy field
-            local_id: data.locationId || 'default', // Fallback
-            items: [{
-                id: data.serviceId,
-                nombre: serviceData?.name,
-                servicio: serviceData?.name,
-                precio: serviceData?.price,
-                duracion: serviceData?.duration,
-                barbero_id: data.professionalId
-            }],
-            total: serviceData?.price,
+            servicio: serviceNames, // Legacy field: concatenated names
+            local_id: data.locationId || 'default',
+            items: items,
+            total: totalPrice,
             origen: 'web_publica',
+            canal_reserva: 'web_publica',
             createdAt: FieldValue.serverTimestamp()
         };
 

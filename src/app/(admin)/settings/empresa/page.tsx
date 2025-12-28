@@ -39,10 +39,10 @@ export default function EmpresaPage() {
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { setThemeColors } = useTheme();
-    
+
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
-    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: ''};
-    
+    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: '' };
+
     const form = useForm<EmpresaSettings>({
         defaultValues: settings
     });
@@ -68,15 +68,15 @@ export default function EmpresaPage() {
             }
         }
     }, [data, loading, form]);
-    
+
     useEffect(() => {
         setThemeColors({
-          primaryColor,
-          secondaryColor,
-          accentColor,
-          backgroundColor,
-          foreground: foregroundColor,
-          cardColor
+            primaryColor,
+            secondaryColor,
+            accentColor,
+            backgroundColor,
+            foreground: foregroundColor,
+            cardColor
         });
     }, [primaryColor, secondaryColor, accentColor, backgroundColor, foregroundColor, cardColor, setThemeColors]);
 
@@ -86,14 +86,14 @@ export default function EmpresaPage() {
     const copyToClipboard = () => {
         navigator.clipboard.writeText(websiteUrl);
         toast({
-          title: '¡Copiado!',
-          description: 'El enlace a tu sitio web ha sido copiado al portapapeles.',
+            title: '¡Copiado!',
+            description: 'El enlace a tu sitio web ha sido copiado al portapapeles.',
         });
     }
 
     const onSubmit = async (formData: EmpresaSettings) => {
         if (!db) {
-             toast({
+            toast({
                 variant: "destructive",
                 title: "Error de base de datos",
                 description: "No se pudo conectar con la base de datos.",
@@ -140,129 +140,140 @@ export default function EmpresaPage() {
         }
     }
 
-  return (
-    <div className="flex-1 space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Empresa</h2>
-        <p className="text-muted-foreground">
-          Configura el nombre de tu empresa, descripción y dirección de tu sitio web de agendamiento.
-        </p>
-      </div>
+    return (
+        <div className="flex-1 space-y-6">
+            <div>
+                <h2 className="text-3xl font-bold tracking-tight">Empresa</h2>
+                <p className="text-muted-foreground">
+                    Configura el nombre de tu empresa, descripción y dirección de tu sitio web de agendamiento.
+                </p>
+            </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nombre de tu empresa</CardTitle>
-            <CardDescription>
-              El nombre que aparecerá en todos los lugares de VATOS ALFA, incluido tu sitio web.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Input {...form.register('name')} />
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Descripción</CardTitle>
-            <CardDescription>
-              Cuéntale a tus clientes sobre tu empresa, sobre los servicios que ofreces o tu propuesta de valor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea 
-                rows={6}
-                {...form.register('description')}
-            />
-          </CardContent>
-        </Card>
-        
-        <Card>
-            <CardHeader>
-                <CardTitle>Logo de la empresa</CardTitle>
-                <CardDescription>Este logo aparecerá en el encabezado de la aplicación, el sitio de agendamiento y los comprobantes.</CardDescription>
-            </CardHeader>
-            <CardContent>
-               <Controller
-                  name="logo_url"
-                  control={form.control}
-                  render={({ field }) => (
-                      <ImageUploader
-                          folder="logos"
-                          currentImageUrl={field.value}
-                          onUpload={(url) => field.onChange(url)}
-                          onRemove={() => field.onChange('')}
-                      />
-                  )}
-               />
-            </CardContent>
-        </Card>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Nombre de tu empresa</CardTitle>
+                        <CardDescription>
+                            El nombre que aparecerá en todos los lugares de VATOS ALFA, incluido tu sitio web.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Input {...form.register('name')} />
+                    </CardContent>
+                </Card>
 
-        <Card>
-            <CardHeader>
-                <CardTitle>Dirección de tu sitio web de agendamiento</CardTitle>
-                <CardDescription>
-                    Destaca tu marca personalizando la dirección de tu sitio web. Una dirección única también mejora la visibilidad de tu sitio en Google.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                 <div className="flex items-center space-x-2">
-                    <Input {...form.register('website_slug')} />
-                    <Button type="button" variant="outline" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Descripción</CardTitle>
+                        <CardDescription>
+                            Cuéntale a tus clientes sobre tu empresa, sobre los servicios que ofreces o tu propuesta de valor.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-2">
+                            <Textarea
+                                rows={6}
+                                maxLength={500}
+                                {...form.register('description')}
+                                onChange={(e) => {
+                                    form.setValue('description', e.target.value.slice(0, 500));
+                                }}
+                            />
+                            <div className="flex justify-end">
+                                <span className={`text-xs ${form.watch('description')?.length >= 500 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                    {form.watch('description')?.length || 0}/500 caracteres
+                                </span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Logo de la empresa</CardTitle>
+                        <CardDescription>Este logo aparecerá en el encabezado de la aplicación, el sitio de agendamiento y los comprobantes.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Controller
+                            name="logo_url"
+                            control={form.control}
+                            render={({ field }) => (
+                                <ImageUploader
+                                    folder="logos"
+                                    currentImageUrl={field.value}
+                                    onUpload={(url) => field.onChange(url)}
+                                    onRemove={() => field.onChange('')}
+                                />
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Dirección de tu sitio web de agendamiento</CardTitle>
+                        <CardDescription>
+                            Destaca tu marca personalizando la dirección de tu sitio web. Una dirección única también mejora la visibilidad de tu sitio en Google.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center space-x-2">
+                            <Input {...form.register('website_slug')} />
+                            <Button type="button" variant="outline" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Personalización</CardTitle>
+                        <CardDescription>
+                            Configura los colores de tu sitio web, LinkPro y de los emails que recibirán tus clientes.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <ColorPicker
+                                label="Color Primario"
+                                color={primaryColor}
+                                onChange={setPrimaryColor}
+                            />
+                            <ColorPicker
+                                label="Color Secundario"
+                                color={secondaryColor}
+                                onChange={setSecondaryColor}
+                            />
+                            <ColorPicker
+                                label="Color de Acento"
+                                color={accentColor}
+                                onChange={setAccentColor}
+                            />
+                            <ColorPicker
+                                label="Color de Fondo"
+                                color={backgroundColor}
+                                onChange={setBackgroundColor}
+                            />
+                            <ColorPicker
+                                label="Color de Texto"
+                                color={foregroundColor}
+                                onChange={setForegroundColor}
+                            />
+                            <ColorPicker
+                                label="Color de Tarjetas"
+                                color={cardColor}
+                                onChange={setCardColor}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Guardar Cambios
+                    </Button>
                 </div>
-            </CardContent>
-        </Card>
-        
-        <Card>
-            <CardHeader>
-                <CardTitle>Personalización</CardTitle>
-                <CardDescription>
-                Configura los colores de tu sitio web, LinkPro y de los emails que recibirán tus clientes.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <ColorPicker 
-                        label="Color Primario"
-                        color={primaryColor}
-                        onChange={setPrimaryColor}
-                    />
-                    <ColorPicker 
-                        label="Color Secundario"
-                        color={secondaryColor}
-                        onChange={setSecondaryColor}
-                    />
-                     <ColorPicker 
-                        label="Color de Acento"
-                        color={accentColor}
-                        onChange={setAccentColor}
-                    />
-                     <ColorPicker 
-                        label="Color de Fondo"
-                        color={backgroundColor}
-                        onChange={setBackgroundColor}
-                    />
-                     <ColorPicker 
-                        label="Color de Texto"
-                        color={foregroundColor}
-                        onChange={setForegroundColor}
-                    />
-                    <ColorPicker 
-                        label="Color de Tarjetas"
-                        color={cardColor}
-                        onChange={setCardColor}
-                    />
-                </div>
-            </CardContent>
-        </Card>
-
-        <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-            <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                Guardar Cambios
-            </Button>
+            </form>
         </div>
-      </form>
-    </div>
-  );
+    );
 }

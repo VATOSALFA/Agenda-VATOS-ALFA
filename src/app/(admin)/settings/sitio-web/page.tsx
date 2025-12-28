@@ -16,11 +16,11 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 const customerFields = [
-  { id: 'email', label: 'Email' },
-  { id: 'phone', label: 'Teléfono' },
-  { id: 'dob', label: 'Fecha de Nacimiento' },
-  { id: 'address', label: 'Dirección' },
-  { id: 'notes', label: 'Notas del Cliente' },
+    { id: 'email', label: 'Email' },
+    { id: 'phone', label: 'Teléfono' },
+    { id: 'dob', label: 'Fecha de Nacimiento' },
+    { id: 'address', label: 'Dirección' },
+    { id: 'notes', label: 'Notas del Cliente' },
 ];
 
 export default function SitioWebPage() {
@@ -41,8 +41,8 @@ export default function SitioWebPage() {
             maxEdits: 2,
             privacyPolicyEnabled: false,
             privacyPolicyUrl: '',
-            minReservationTime: '2 horas antes',
-            maxFutureTime: '30 días',
+            minReservationTime: 2,
+            maxFutureTime: 30,
             professionalPreference: 'client_choice',
             reviewSystemEnabled: true,
             showReviews: 'all',
@@ -65,137 +65,164 @@ export default function SitioWebPage() {
         }, 1500);
     }
 
-  return (
-    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Sitio Web</h2>
-        <p className="text-muted-foreground">
-          Configura todo lo relacionado a tu sitio web de reservas.
-        </p>
-      </div>
-
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="onlineReservations" className="font-semibold">Reservas en línea</Label>
-              <Switch id="onlineReservations" defaultChecked={form.getValues('onlineReservations')} />
+    return (
+        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+            <div>
+                <h2 className="text-3xl font-bold tracking-tight">Sitio Web</h2>
+                <p className="text-muted-foreground">
+                    Configura todo lo relacionado a tu sitio web de reservas.
+                </p>
             </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="marketVisibility" className="font-semibold">Aparecer en Agenda VATOS ALFA Market</Label>
-              <Switch id="marketVisibility" defaultChecked={form.getValues('marketVisibility')} />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Accordion type="multiple" defaultValue={["item-1"]} className="w-full space-y-4">
-            <AccordionItem value="item-1" className="border rounded-lg bg-card">
-                <AccordionTrigger className="p-6">Reservas en el sitio web</AccordionTrigger>
-                <AccordionContent className="p-6 pt-0 space-y-4">
-                    <div className="space-y-2">
-                        <Label>Muestra tus horas según</Label>
-                        <Select defaultValue={form.getValues('showHoursBy')}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="professional">Profesional</SelectItem><SelectItem value="service">Servicio</SelectItem></SelectContent></Select>
-                    </div>
-                    <div className="flex items-center justify-between"><Label htmlFor="exclusiveForCreatedClients">Reservas exclusivas para clientes creados en Agenda VATOS ALFA</Label><Switch id="exclusiveForCreatedClients" /></div>
-                    <div className="flex items-center justify-between"><Label htmlFor="allowClientNotes">Permitir notas del cliente</Label><Switch id="allowClientNotes" defaultChecked /></div>
-                    <div className="space-y-2">
-                        <Label>Notas predefinidas</Label>
-                        <Textarea placeholder="Ej: Por favor, llega 5 minutos antes de tu cita." />
-                    </div>
-                </AccordionContent>
-            </AccordionItem>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
+                <Card>
+                    <CardContent className="p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="onlineReservations" className="font-semibold">Reservas en línea</Label>
+                            <Switch id="onlineReservations" defaultChecked={form.getValues('onlineReservations')} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="marketVisibility" className="font-semibold">Aparecer en Agenda VATOS ALFA Market</Label>
+                            <Switch id="marketVisibility" defaultChecked={form.getValues('marketVisibility')} />
+                        </div>
+                    </CardContent>
+                </Card>
 
-            <AccordionItem value="item-2" className="border rounded-lg bg-card">
-                <AccordionTrigger className="p-6">Edición y cancelación de reservas en línea</AccordionTrigger>
-                <AccordionContent className="p-6 pt-0 space-y-4">
-                     <div className="flex items-center justify-between"><Label htmlFor="cancellableReservations">Reservas cancelables</Label><Switch id="cancellableReservations" defaultChecked /></div>
-                     <div className="flex items-center justify-between"><Label htmlFor="editableReservations">Reservas editables</Label><Switch id="editableReservations" defaultChecked /></div>
-                     <div className="space-y-2">
-                        <Label>Política de edición de reservas</Label>
-                        <Textarea defaultValue={form.getValues('editPolicy')} />
-                    </div>
-                     <div className="space-y-2">
-                        <Label>Ediciones máximas</Label>
-                        <Input type="number" defaultValue={form.getValues('maxEdits')} />
-                    </div>
-                </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="item-3" className="border rounded-lg bg-card">
-                <AccordionTrigger className="p-6">Reservas y privacidad</AccordionTrigger>
-                <AccordionContent className="p-6 pt-0 space-y-4">
-                     <div className="flex items-center justify-between"><Label htmlFor="privacyPolicyEnabled">Políticas de Reserva y Privacidad</Label><Switch id="privacyPolicyEnabled" /></div>
-                     <div className="space-y-2">
-                        <Label>Escribe la URL aquí</Label>
-                        <Input placeholder="https://miempresa.com/politicas" />
-                    </div>
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
+                <Accordion type="multiple" defaultValue={["item-1"]} className="w-full space-y-4">
+                    <AccordionItem value="item-1" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Reservas en el sitio web</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-4">
+                            <div className="space-y-2">
+                                <Label>Muestra tus horas según</Label>
+                                <Select defaultValue={form.getValues('showHoursBy')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="professional">Profesional</SelectItem><SelectItem value="service">Servicio</SelectItem></SelectContent></Select>
+                            </div>
+                            <div className="flex items-center justify-between"><Label htmlFor="exclusiveForCreatedClients">Reservas exclusivas para clientes creados en Agenda VATOS ALFA</Label><Switch id="exclusiveForCreatedClients" /></div>
+                            <div className="flex items-center justify-between"><Label htmlFor="allowClientNotes">Permitir notas del cliente</Label><Switch id="allowClientNotes" defaultChecked /></div>
+                            <div className="space-y-2">
+                                <Label>Notas predefinidas</Label>
+                                <Textarea placeholder="Ej: Por favor, llega 5 minutos antes de tu cita." />
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
 
-        <Card>
-            <CardHeader><CardTitle>Configuración de Tiempos y Preferencias</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label>Tiempo mínimo de reserva</Label>
-                    <Input defaultValue={form.getValues('minReservationTime')} />
+                    <AccordionItem value="item-2" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Edición y cancelación de reservas en línea</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-4">
+                            <div className="flex items-center justify-between"><Label htmlFor="cancellableReservations">Reservas cancelables</Label><Switch id="cancellableReservations" defaultChecked /></div>
+                            <div className="flex items-center justify-between"><Label htmlFor="editableReservations">Reservas editables</Label><Switch id="editableReservations" defaultChecked /></div>
+                            <div className="space-y-2">
+                                <Label>Política de edición de reservas</Label>
+                                <Textarea defaultValue={form.getValues('editPolicy')} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Ediciones máximas</Label>
+                                <Input type="number" defaultValue={form.getValues('maxEdits')} />
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="item-3" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Reservas y privacidad</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-4">
+                            <div className="flex items-center justify-between"><Label htmlFor="privacyPolicyEnabled">Políticas de Reserva y Privacidad</Label><Switch id="privacyPolicyEnabled" /></div>
+                            <div className="space-y-2">
+                                <Label>Escribe la URL aquí</Label>
+                                <Input placeholder="https://miempresa.com/politicas" />
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+
+                <Card>
+                    <CardHeader><CardTitle>Configuración de Tiempos y Preferencias</CardTitle></CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                            <Label>Tiempo mínimo de reserva</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Horas mínimas requeridas para que un cliente reserve. No se podrá reservar con menos anticipación.
+                            </p>
+                            <div className="flex w-full items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    {...form.register('minReservationTime')}
+                                    className="flex-1"
+                                />
+                                <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
+                                    Horas
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Tiempo máximo futuro</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Tiempo máximo que una persona puede reservar a futuro. No se permiten citas para más de 365 días a futuro.
+                            </p>
+                            <div className="flex w-full items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={365}
+                                    {...form.register('maxFutureTime')}
+                                    className="flex-1"
+                                />
+                                <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
+                                    Días
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Preferencia de profesionales</Label>
+                            <Select defaultValue={form.getValues('professionalPreference')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="client_choice">El cliente elige</SelectItem><SelectItem value="random">Aleatorio</SelectItem></SelectContent></Select>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Accordion type="multiple" className="w-full space-y-4">
+                    <AccordionItem value="item-4" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Sistema de reseñas</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-4">
+                            <div className="flex items-center justify-between"><Label htmlFor="reviewSystemEnabled">Sistema de reseñas automáticas</Label><Switch id="reviewSystemEnabled" defaultChecked /></div>
+                            <div className="space-y-2">
+                                <Label>Mostrar el puntaje total y comentarios de las reseñas</Label>
+                                <Select defaultValue={form.getValues('showReviews')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mostrar todo</SelectItem><SelectItem value="score_only">Solo puntaje</SelectItem><SelectItem value="none">No mostrar</SelectItem></SelectContent></Select>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="item-5" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Configuración de campos adicionales</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Datos del cliente</TableHead>
+                                        <TableHead className="text-center">Usar al agendar online</TableHead>
+                                        <TableHead className="text-center">Obligatorio al agendar online</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {customerFields.map(field => (
+                                        <TableRow key={field.id}>
+                                            <TableCell className="font-medium">{field.label}</TableCell>
+                                            <TableCell className="text-center"><Switch defaultChecked={form.getValues(`customerFields.${field.id}.use`)} /></TableCell>
+                                            <TableCell className="text-center"><Switch defaultChecked={form.getValues(`customerFields.${field.id}.required`)} /></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+
+                <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Guardar Cambios
+                    </Button>
                 </div>
-                <div className="space-y-2">
-                    <Label>Tiempo máximo futuro</Label>
-                    <Input defaultValue={form.getValues('maxFutureTime')} />
-                </div>
-                <div className="space-y-2">
-                    <Label>Preferencia de profesionales</Label>
-                    <Select defaultValue={form.getValues('professionalPreference')}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="client_choice">El cliente elige</SelectItem><SelectItem value="random">Aleatorio</SelectItem></SelectContent></Select>
-                </div>
-            </CardContent>
-        </Card>
-        
-        <Accordion type="multiple" className="w-full space-y-4">
-            <AccordionItem value="item-4" className="border rounded-lg bg-card">
-                <AccordionTrigger className="p-6">Sistema de reseñas</AccordionTrigger>
-                <AccordionContent className="p-6 pt-0 space-y-4">
-                    <div className="flex items-center justify-between"><Label htmlFor="reviewSystemEnabled">Sistema de reseñas automáticas</Label><Switch id="reviewSystemEnabled" defaultChecked /></div>
-                    <div className="space-y-2">
-                        <Label>Mostrar el puntaje total y comentarios de las reseñas</Label>
-                        <Select defaultValue={form.getValues('showReviews')}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Mostrar todo</SelectItem><SelectItem value="score_only">Solo puntaje</SelectItem><SelectItem value="none">No mostrar</SelectItem></SelectContent></Select>
-                    </div>
-                </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="item-5" className="border rounded-lg bg-card">
-                <AccordionTrigger className="p-6">Configuración de campos adicionales</AccordionTrigger>
-                <AccordionContent className="p-6 pt-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Datos del cliente</TableHead>
-                                <TableHead className="text-center">Usar al agendar online</TableHead>
-                                <TableHead className="text-center">Obligatorio al agendar online</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {customerFields.map(field => (
-                                <TableRow key={field.id}>
-                                    <TableCell className="font-medium">{field.label}</TableCell>
-                                    <TableCell className="text-center"><Switch defaultChecked={form.getValues(`customerFields.${field.id}.use`)} /></TableCell>
-                                    <TableCell className="text-center"><Switch defaultChecked={form.getValues(`customerFields.${field.id}.required`)} /></TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
-        
-        <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-            <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                Guardar Cambios
-            </Button>
+
+            </form>
         </div>
-
-      </form>
-    </div>
-  );
+    );
 }

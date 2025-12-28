@@ -9,29 +9,93 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { CustomLoader } from '@/components/ui/custom-loader';
-import { format, addDays, isBefore, startOfToday } from 'date-fns';
+import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Calendar as CalendarIcon, Phone } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2 } from 'lucide-react';
 import { getAvailableSlots, createPublicReservation } from '@/lib/actions/booking';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils'; // Assuming this exists
+import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// --- TYPES ---
+type BookingMode = 'combined' | 'separate';
+
+interface CartItem {
+    uniqueId: string;
+    serviceId: string;
+    service: any;
+}
+
+interface AppointmentConfig {
+    date: Date;
+    time: string;
+    professionalId: string;
+    professional: any; // Full object
+}
+
+// --- CONSTANTS ---
+const COMMON_NAMES: Record<string, string> = {
+    'jose': 'José', 'maria': 'María', 'jesus': 'Jesús', 'angel': 'Ángel',
+    'monica': 'Mónica', 'sofia': 'Sofía', 'raul': 'Raúl', 'hector': 'Héctor',
+    'cesar': 'César', 'oscar': 'Óscar', 'martin': 'Martín', 'adrian': 'Adrián',
+    'julian': 'Julián', 'ruben': 'Rubén', 'joaquin': 'Joaquín', 'andres': 'Andrés',
+    'fernando': 'Fernando', 'ramon': 'Ramón', 'aaron': 'Aarón', 'victor': 'Víctor',
+    'agustin': 'Agustín', 'benjamin': 'Benjamín', 'elias': 'Elías', 'gabriel': 'Gabriel',
+    'ivan': 'Iván', 'nicolas': 'Nicolás', 'sebastian': 'Sebastián', 'tomas': 'Tomás',
+    'simon': 'Simón', 'matias': 'Matías', 'franco': 'Franco', 'rene': 'René',
+    'josefa': 'Josefa', 'guadalupe': 'Guadalupe'
+};
+
+const correctName = (value: string) => {
+    return value.replace(/\b\w+/g, (word) => {
+        const lower = word.toLowerCase();
+        return COMMON_NAMES[lower] || (word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+    });
+};
+
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export default function BookingPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { toast } = useToast();
 
-    // Steps: 0=Service, 1=Professional, 2=Date/Time, 3=Details, 4=Success
-    const [step, setStep] = useState(0);
+    // Data
+    const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
+    const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
+    const { data: locales } = useFirestoreQuery<any>('locales');
 
-    // Selections
-    const [selectedServiceId, setSelectedServiceId] = useState<string | null>(searchParams.get('serviceId'));
-    const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(searchParams.get('professionalId'));
-    const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-    const [selectedTime, setSelectedTime] = useState<string | null>(null);
-    const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+    // State: Cart
+    const [cart, setCart] = useState<CartItem[]>([]);
+
+    // State: Booking Flow
+    const [step, setStep] = useState(0);
+    // 0: Services
+    // 1: Mode Select (if >1 item)
+    // 2: Dashboard/Config (Separate) OR Config (Combined)
+    // 3: Details
+    // 4: Success
+
+    const [bookingMode, setBookingMode] = useState<BookingMode>('combined');
+
+    // Configuration State
+    // For 'separate': Key is uniqueId
+    // For 'combined': Key is 'combined'
+    const [configs, setConfigs] = useState<Record<string, AppointmentConfig>>({});
+
+    // Sub-Step State (for configuring an item)
+    // 0: Date -> 1: Time -> 2: Pro
+    const [configStep, setConfigStep] = useState(0);
+    const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
+
+    // Temporary selections for the active configuration flow
+    const [tempDate, setTempDate] = useState<Date | undefined>(undefined);
+    const [tempTime, setTempTime] = useState<string | null>(null);
+    const [tempAvailableSlots, setTempAvailableSlots] = useState<string[]>([]);
+    const [tempSlotMap, setTempSlotMap] = useState<Record<string, string[]>>({}); // Time -> Pro IDs
     const [loadingSlots, setLoadingSlots] = useState(false);
+    const [noCapablePros, setNoCapablePros] = useState(false);
 
     // Client Details
     const [clientDetails, setClientDetails] = useState({
@@ -42,252 +106,594 @@ export default function BookingPage() {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Data Fetching
-    const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
-    const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
-    const { data: locales } = useFirestoreQuery<any>('locales'); // To get default local
-
-    // Derived Data
-    const selectedService = useMemo(() => services.find(s => s.id === selectedServiceId), [services, selectedServiceId]);
-    const selectedProfessional = useMemo(() => professionals.find(p => p.id === selectedProfessionalId), [professionals, selectedProfessionalId]);
-
-    // Initial Step Logic
+    // --- INITIALIZATION ---
     useEffect(() => {
-        if (searchParams.get('serviceId')) {
-            if (searchParams.get('professionalId')) {
-                setStep(2); // Skip to Date
-            } else {
-                setStep(1); // Skip to Professional
+        if (cart.length > 0 || services.length === 0) return;
+
+        const servicesParam = searchParams.get('services');
+        const legacyServiceId = searchParams.get('serviceId');
+
+        // Priority 1: List of services (from Landing Page Cart)
+        if (servicesParam) {
+            const ids = servicesParam.split(',');
+            const newCart: CartItem[] = [];
+            ids.forEach(id => {
+                const svc = services.find(s => s.id === id);
+                if (svc) newCart.push({ uniqueId: generateId(), serviceId: svc.id, service: svc });
+            });
+
+            if (newCart.length > 0) {
+                setCart(newCart);
+
+                // SKIP Step 0 since we come from a "Cart" page
+                if (newCart.length > 1) {
+                    setStep(1); // Mode Select
+                } else {
+                    // Single item: Auto-start combined flow (functionally same as single)
+                    setBookingMode('combined');
+                    // We need to trigger the startConfiguration logic. 
+                    // Since specific item ID doesn't matter for combined, use 'combined'
+                    setActiveConfigId('combined');
+                    setTempDate(undefined);
+                    setConfigStep(0);
+                    setStep(2);
+                }
+                return;
             }
         }
-    }, [searchParams]);
 
-    // Fetch Slots when Date/Prof changes
-    useEffect(() => {
-        if (selectedDate && selectedProfessionalId && selectedService) {
-            setLoadingSlots(true);
-            setAvailableSlots([]);
-            const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            getAvailableSlots({
-                date: dateStr,
-                professionalId: selectedProfessionalId,
-                durationMinutes: selectedService.duration || 30
-            }).then(result => {
-                if (result.slots) {
-                    setAvailableSlots(result.slots);
-                } else if (result.error) {
-                    console.error(result.error);
-                    toast({ variant: 'destructive', title: 'Error al cargar horarios', description: 'Intenta con otra fecha.' });
-                }
-                setLoadingSlots(false);
-            });
+        // Priority 2: Single Service (Legacy Deep Link)
+        if (legacyServiceId) {
+            const legacySvc = services.find(s => s.id === legacyServiceId);
+            if (legacySvc) {
+                setCart([{ uniqueId: generateId(), serviceId: legacySvc.id, service: legacySvc }]);
+            }
         }
-    }, [selectedDate, selectedProfessionalId, selectedService]);
+    }, [searchParams, services]);
 
-    const handleNext = () => {
-        if (step === 0 && !selectedServiceId) return;
-        if (step === 1 && !selectedProfessionalId) return;
-        if (step === 2 && (!selectedDate || !selectedTime)) return;
-        setStep(prev => prev + 1);
+    // --- COMPUTED ---
+    const activeServiceIds = useMemo(() => cart.map(c => c.serviceId), [cart]);
+    const totalPrice = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.price || 0), 0), [cart]);
+    const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
+
+    // --- CART ACTIONS ---
+    const addToCart = (service: any) => {
+        setCart(prev => [...prev, { uniqueId: generateId(), serviceId: service.id, service }]);
     };
 
-    const handleBack = () => {
-        setStep(prev => prev - 1);
+    const removeFromCart = (serviceId: string) => {
+        setCart(prev => {
+            const idx = prev.findIndex(item => item.serviceId === serviceId);
+            if (idx === -1) return prev;
+            const newCart = [...prev];
+            newCart.splice(idx, 1);
+            return newCart;
+        });
     };
+
+    const getCount = (serviceId: string) => cart.filter(x => x.serviceId === serviceId).length;
+
+    // --- FLOW ACTIONS ---
+    const handleServicesConfirmed = () => {
+        if (cart.length === 0) return;
+        if (cart.length > 1) {
+            setStep(1); // Mode Select
+        } else {
+            setBookingMode('combined');
+            startConfiguration('combined');
+        }
+    };
+
+    const handleModeSelection = (mode: BookingMode) => {
+        setBookingMode(mode);
+        setConfigs({});
+        if (mode === 'combined') {
+            startConfiguration('combined');
+        } else {
+            setStep(2); // Go to Dashboard
+        }
+    };
+
+    // Start configuring a specific item (or the combined bundle)
+    const startConfiguration = (id: string) => {
+        setActiveConfigId(id);
+        // Reset sub-flow
+        setTempDate(undefined);
+        setTempTime(null);
+        setTempAvailableSlots([]);
+        setTempSlotMap({});
+        setConfigStep(0); // Start at Date
+        setStep(2); // Ensure we are in config view
+    };
+
+    // --- SCHEDULING LOGIC ---
+
+    // Fetch slots based on selected date
+    useEffect(() => {
+        if (activeConfigId && tempDate) {
+            const fetchSlots = async () => {
+                setLoadingSlots(true);
+                setTempAvailableSlots([]);
+                setTempSlotMap({});
+
+                const dateStr = format(tempDate, 'yyyy-MM-dd');
+
+                // Determine duration
+                let duration = 0;
+                let requiredServiceIds: string[] = [];
+
+                if (activeConfigId === 'combined') {
+                    duration = totalDuration;
+                    requiredServiceIds = activeServiceIds;
+                } else {
+                    const item = cart.find(c => c.uniqueId === activeConfigId);
+                    if (item) {
+                        duration = item.service.duration;
+                        requiredServiceIds = [item.serviceId];
+                    }
+                }
+
+                if (duration === 0) { setLoadingSlots(false); return; }
+
+                // Filter Pros who can do THESE services
+                const capablePros = professionals.filter(p =>
+                    p.active && requiredServiceIds.every(sId => (p.services || []).includes(sId))
+                );
+
+                if (capablePros.length === 0) {
+                    setNoCapablePros(true);
+                    setLoadingSlots(false);
+                    return;
+                } else {
+                    setNoCapablePros(false);
+                }
+
+                // Fetch availability for all capable pros safely
+                const promises = capablePros.map((p: any) =>
+                    getAvailableSlots({ date: dateStr, professionalId: p.id, durationMinutes: duration || 30 })
+                        .catch(err => {
+                            console.error(`Error fetching slots for pro ${p.name}:`, err);
+                            return { slots: [] };
+                        })
+                );
+
+                try {
+                    const results = await Promise.all(promises);
+                    const newMap: Record<string, string[]> = {};
+
+                    results.forEach((res: any, index) => {
+                        if (res && res.slots && Array.isArray(res.slots)) {
+                            res.slots.forEach((time: string) => {
+                                if (!newMap[time]) newMap[time] = [];
+                                newMap[time].push(capablePros[index].id);
+                            });
+                        }
+                    });
+
+                    setTempAvailableSlots(Object.keys(newMap).sort());
+                    setTempSlotMap(newMap);
+                } catch (e) {
+                    console.error("Critical error fetching slots:", e);
+                    toast({ variant: 'destructive', title: 'Error', description: 'Error al cargar horarios disponibles.' });
+                } finally {
+                    setLoadingSlots(false);
+                }
+            };
+
+            fetchSlots();
+        }
+    }, [tempDate, activeConfigId]);
+
+    const handleTimeSelected = (time: string) => {
+        setTempTime(time);
+        setConfigStep(2); // Go to Pro selection
+    };
+
+    const handleProSelected = (proId: string) => {
+        if (!activeConfigId || !tempDate || !tempTime) return;
+
+        const pro = professionals.find(p => p.id === proId);
+        const config: AppointmentConfig = {
+            date: tempDate,
+            time: tempTime,
+            professionalId: proId,
+            professional: pro
+        };
+
+        setConfigs(prev => ({ ...prev, [activeConfigId]: config }));
+        setActiveConfigId(null); // Exit sub-flow
+
+        if (bookingMode === 'combined') {
+            setStep(3); // Go directly to details
+        }
+        // If separate, we stay on Step 2 (Dashboard) to configure others
+    };
+
+    const isDashboardComplete = useMemo(() => {
+        if (bookingMode === 'combined') return !!configs['combined'];
+        return cart.every(item => !!configs[item.uniqueId]);
+    }, [cart, configs, bookingMode]);
+
 
     const confirmBooking = async () => {
-        if (!selectedService || !selectedProfessional || !selectedDate || !selectedTime) return;
-
         setIsSubmitting(true);
-        const result = await createPublicReservation({
-            client: clientDetails,
-            serviceId: selectedService.id,
-            professionalId: selectedProfessional.id,
-            date: format(selectedDate, 'yyyy-MM-dd'),
-            time: selectedTime,
-            locationId: selectedProfessional.local_id || locales?.[0]?.id
-        });
+        const results = [];
+        let errorCount = 0;
 
-        if (result.success) {
-            setStep(4);
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: result.error || 'No se pudo crear la reserva.' });
+        try {
+            if (bookingMode === 'combined') {
+                const cfg = configs['combined'];
+                if (!cfg) throw new Error("Config missing");
+
+                // One reservation with multiple items
+                const res = await createPublicReservation({
+                    client: clientDetails,
+                    serviceIds: cart.map(c => c.serviceId),
+                    professionalId: cfg.professionalId,
+                    date: format(cfg.date, 'yyyy-MM-dd'),
+                    time: cfg.time,
+                    locationId: cfg.professional.local_id || locales?.[0]?.id || 'default'
+                });
+                if (!res.success) errorCount++;
+
+            } else {
+                // Separate reservations
+                for (const item of cart) {
+                    const cfg = configs[item.uniqueId];
+                    if (!cfg) continue;
+
+                    const res = await createPublicReservation({
+                        client: clientDetails,
+                        serviceIds: [item.serviceId], // Single service array
+                        professionalId: cfg.professionalId,
+                        date: format(cfg.date, 'yyyy-MM-dd'),
+                        time: cfg.time,
+                        locationId: cfg.professional.local_id || locales?.[0]?.id || 'default'
+                    });
+                    if (!res.success) errorCount++;
+                }
+            }
+
+            if (errorCount === 0) {
+                setStep(4);
+            } else {
+                toast({ variant: 'destructive', title: 'Error', description: 'Hubo un problema al crear algunas reservas.' });
+            }
+        } catch (e: any) {
+            console.error(e);
+            toast({ variant: 'destructive', title: 'Error', description: e.message });
+        } finally {
+            setIsSubmitting(false);
         }
-        setIsSubmitting(false);
     };
 
-    if (loadingServices || loadingProfessionals) {
-        return <div className="h-screen flex items-center justify-center"><CustomLoader size={50} /></div>;
-    }
+    // Helper to update birthday parts
+    const updateBirthday = (part: 'day' | 'month' | 'year', value: string) => {
+        const current = clientDetails.birthday ? parse(clientDetails.birthday, 'yyyy-MM-dd', new Date()) : new Date(2000, 0, 1);
+        let newDate = current;
+        if (part === 'day') newDate = set(current, { date: parseInt(value) });
+        if (part === 'month') newDate = set(current, { month: parseInt(value) - 1 });
+        if (part === 'year') newDate = set(current, { year: parseInt(value) });
+        if (isBefore(newDate, new Date())) {
+            setClientDetails({ ...clientDetails, birthday: format(newDate, 'yyyy-MM-dd') });
+        }
+    };
 
-    // Helper for currency
+    // Derived birthday parts
+    const birthDateObj = clientDetails.birthday ? parse(clientDetails.birthday, 'yyyy-MM-dd', new Date()) : null;
+    const bDay = birthDateObj ? birthDateObj.getDate().toString() : '';
+    const bMonth = birthDateObj ? (birthDateObj.getMonth() + 1).toString() : '';
+    const bYear = birthDateObj ? birthDateObj.getFullYear().toString() : '';
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 100 }, (_, i) => (currentYear - i).toString());
+    const months = [
+        { val: '1', label: 'Enero' }, { val: '2', label: 'Febrero' }, { val: '3', label: 'Marzo' }, { val: '4', label: 'Abril' },
+        { val: '5', label: 'Mayo' }, { val: '6', label: 'Junio' }, { val: '7', label: 'Julio' }, { val: '8', label: 'Agosto' },
+        { val: '9', label: 'Septiembre' }, { val: '10', label: 'Octubre' }, { val: '11', label: 'Noviembre' }, { val: '12', label: 'Diciembre' }
+    ];
+    const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString());
+
+
+    // Render Helpers
     const formatPrice = (price: any) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
+
+    if (loadingServices || loadingProfessionals) return <div className="h-screen flex items-center justify-center"><CustomLoader size={50} /></div>;
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center">
+            <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px] flex flex-col">
 
-            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px] flex flex-col">
-                {/* Header Progress */}
+                {/* HEADERS */}
                 <div className="bg-primary p-6 text-primary-foreground">
                     <h1 className="text-2xl font-bold mb-2">Reservar Cita</h1>
                     <div className="flex items-center gap-2 text-sm opacity-90 overflow-x-auto whitespace-nowrap">
-                        <span className={step >= 0 ? 'font-bold' : ''}>1. Servicio</span>
+                        <span className={step >= 0 ? 'font-bold' : ''}>1. Servicios</span>
                         <ChevronRight className="h-4 w-4" />
-                        <span className={step >= 1 ? 'font-bold' : ''}>2. Profesional</span>
+                        <span className={step >= 2 ? 'font-bold' : ''}>2. Agenda</span>
                         <ChevronRight className="h-4 w-4" />
-                        <span className={step >= 2 ? 'font-bold' : ''}>3. Horario</span>
-                        <ChevronRight className="h-4 w-4" />
-                        <span className={step >= 3 ? 'font-bold' : ''}>4. Datos</span>
+                        <span className={step >= 3 ? 'font-bold' : ''}>3. Datos</span>
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 relative">
+                <div className="flex-1 p-6 relative flex flex-col">
                     <AnimatePresence mode="wait">
-                        {/* STEP 0: SERVICE */}
+
+                        {/* STEP 0: SERVICE SELECTION (CART) */}
                         {step === 0 && (
-                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                                <h2 className="text-xl font-semibold mb-4">Selecciona un servicio</h2>
-                                <div className="grid grid-cols-1 gap-3">
-                                    {services.filter((s: any) => s.active).map((service: any) => (
-                                        <div
-                                            key={service.id}
-                                            className={cn(
-                                                "flex items-center justify-between p-4 rounded-lg border-2 cursor-pointer transition-all hover:border-primary/50",
-                                                selectedServiceId === service.id ? "border-primary bg-primary/5" : "border-transparent bg-slate-50"
-                                            )}
-                                            onClick={() => { setSelectedServiceId(service.id); setTimeout(() => setStep(1), 200); }}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="bg-white p-2 rounded-full shadow-sm">
-                                                    <Scissors className="h-5 w-5 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold">{service.name}</h3>
-                                                    <p className="text-sm text-muted-foreground">{service.duration} min</p>
-                                                </div>
-                                            </div>
-                                            <div className="font-bold text-lg">{formatPrice(service.price)}</div>
-                                        </div>
-                                    ))}
+                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 flex flex-col h-full">
+                                <h2 className="text-xl font-semibold mb-2">Selecciona tus servicios</h2>
+                                <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[400px] mb-16 px-1">
+                                    {services.filter((s: any) => s.active).map((service: any) => {
+                                        const count = getCount(service.id);
+                                        return (
+                                            <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
+                                                <CardContent className="p-4 flex items-center justify-between">
+                                                    <div className="flex-1">
+                                                        <h3 className="font-bold text-base">{service.name}</h3>
+                                                        <div className="flex gap-2 text-sm text-muted-foreground">
+                                                            <span>{formatPrice(service.price)}</span>
+                                                            <span>•</span>
+                                                            <span>{service.duration} min</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        {count > 0 && (
+                                                            <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromCart(service.id)}>
+                                                                    {count === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                                                                </Button>
+                                                                <span className="font-bold w-4 text-center">{count}</span>
+                                                            </div>
+                                                        )}
+                                                        <Button
+                                                            variant={count > 0 ? "default" : "outline"}
+                                                            size="icon"
+                                                            className="h-10 w-10 rounded-lg"
+                                                            onClick={() => addToCart(service)}
+                                                        >
+                                                            <Plus className="h-5 w-5" />
+                                                        </Button>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                                <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t flex justify-between items-center shadow-lg transform translate-y-0">
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{cart.length} servicios</p>
+                                        <p className="font-bold text-lg">{formatPrice(totalPrice)}</p>
+                                    </div>
+                                    <Button onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg">
+                                        Continuar ({cart.length}) <ChevronRight className="ml-2 h-4 w-4" />
+                                    </Button>
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* STEP 1: PROFESSIONAL */}
+                        {/* STEP 1: MODE SELECTION */}
                         {step === 1 && (
-                            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                                <div className="flex items-center mb-4">
-                                    <Button variant="ghost" size="icon" onClick={handleBack} className="-ml-2 mr-2"><ChevronLeft /></Button>
-                                    <h2 className="text-xl font-semibold">Selecciona un barbero</h2>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {professionals.filter((p: any) => p.active).map((prof: any) => (
-                                        <div
-                                            key={prof.id}
-                                            className={cn(
-                                                "flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer transition-all hover:border-primary/50",
-                                                selectedProfessionalId === prof.id ? "border-primary bg-primary/5" : "border-transparent bg-slate-50"
-                                            )}
-                                            onClick={() => { setSelectedProfessionalId(prof.id); setTimeout(() => setStep(2), 200); }}
-                                        >
-                                            <div className="h-20 w-20 rounded-full bg-muted overflow-hidden mb-3 border-2 border-white shadow-sm">
-                                                {prof.avatarUrl ? (
-                                                    <img src={prof.avatarUrl} alt={prof.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <User className="w-full h-full p-4 text-muted-foreground" />
-                                                )}
-                                            </div>
-                                            <h3 className="font-bold text-center">{prof.name}</h3>
-                                            <p className="text-xs text-muted-foreground text-center">Disponible</p>
+                            <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                                <Button variant="ghost" onClick={() => setStep(0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</Button>
+                                <h2 className="text-xl font-bold text-center mb-6">¿Cómo quieres agendar?</h2>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div
+                                        className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
+                                        onClick={() => handleModeSelection('combined')}
+                                    >
+                                        <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                                            <Layers className="h-8 w-8" />
                                         </div>
-                                    ))}
+                                        <div>
+                                            <h3 className="font-bold text-lg">Uno tras otro</h3>
+                                            <p className="text-sm text-muted-foreground mt-2">
+                                                Para una sola persona. Todos los servicios se realizan seguidos en una sola cita.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
+                                        onClick={() => handleModeSelection('separate')}
+                                    >
+                                        <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
+                                            <CalendarDays className="h-8 w-8" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-lg">Por separado</h3>
+                                            <p className="text-sm text-muted-foreground mt-2">
+                                                Para varias personas o diferentes horarios. Configura cada servicio individualmente.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* STEP 2: DATE & TIME */}
-                        {step === 2 && (
-                            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                                <div className="flex items-center mb-2">
-                                    <Button variant="ghost" size="icon" onClick={handleBack} className="-ml-2 mr-2"><ChevronLeft /></Button>
-                                    <h2 className="text-xl font-semibold">Elige fecha y hora</h2>
+                        {/* STEP 2: CONFIGURATION (DASHBOARD OR SUB-FLOW) */}
+                        {step === 2 && !activeConfigId && bookingMode === 'separate' && (
+                            <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                                <Button variant="ghost" onClick={() => setStep(cart.length > 1 ? 1 : 0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</Button>
+                                <h2 className="text-xl font-semibold mb-4">Configura tus citas</h2>
+                                <p className="text-sm text-muted-foreground mb-4">Selecciona cada servicio para asignar fecha, hora y profesional.</p>
+
+                                <div className="space-y-3">
+                                    {cart.map((item, idx) => {
+                                        const cfg = configs[item.uniqueId];
+                                        return (
+                                            <Card
+                                                key={item.uniqueId}
+                                                className={cn("cursor-pointer border hover:border-primary transition-all", cfg ? "bg-slate-50 border-green-200" : "border-dashed")}
+                                                onClick={() => startConfiguration(item.uniqueId)}
+                                            >
+                                                <CardContent className="p-4 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="font-bold flex items-center gap-2">
+                                                            <span className="bg-slate-200 text-slate-700 text-xs w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</span>
+                                                            {item.service.name}
+                                                        </div>
+                                                        {cfg ? (
+                                                            <div className="text-sm text-green-700 mt-1 flex flex-col sm:flex-row sm:gap-3">
+                                                                <span className="capitalize">{format(cfg.date, 'EEE d, MMM', { locale: es })} - {cfg.time}</span>
+                                                                <span className="font-medium flex items-center gap-1"><User className="h-3 w-3" /> {cfg.professional.name}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-sm text-amber-600 font-medium mt-1 block">Pendiente de agendar</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="ml-2">
+                                                        {cfg ? <Edit2 className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
                                 </div>
 
-                                <div className="flex flex-col md:flex-row gap-8">
-                                    <div className="flex justify-center">
+                                <div className="mt-8 flex justify-end">
+                                    <Button onClick={() => setStep(3)} disabled={!isDashboardComplete} size="lg" className="w-full sm:w-auto">
+                                        Siguiente <ChevronRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* SUB-FLOW: DATE / TIME / PRO */}
+                        {step === 2 && activeConfigId && (
+                            <motion.div key="subflow" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full flex flex-col">
+                                <div className="flex items-center mb-4">
+                                    <Button variant="ghost" size="icon" onClick={() => {
+                                        if (configStep > 0) setConfigStep(prev => prev - 1);
+                                        else setActiveConfigId(null);
+                                    }} className="-ml-2 mr-2"><ChevronLeft /></Button>
+                                    <h2 className="text-xl font-semibold">
+                                        {activeConfigId === 'combined' ? 'Elige fecha y hora' : cart.find(c => c.uniqueId === activeConfigId)?.service.name}
+                                    </h2>
+                                </div>
+
+                                {/* SCENARIO 1: PICK DATE */}
+                                {configStep === 0 && (
+                                    <div className="flex flex-col items-center">
                                         <Calendar
                                             mode="single"
-                                            selected={selectedDate}
-                                            onSelect={(d) => { setSelectedDate(d); setSelectedTime(null); }}
+                                            selected={tempDate}
+                                            onSelect={(d) => {
+                                                setTempDate(d);
+                                                if (d) setConfigStep(1);
+                                            }}
                                             disabled={(date) => isBefore(date, startOfToday())}
-                                            className="rounded-md border p-4 bg-white shadow-sm"
+                                            className="rounded-md border p-4 bg-white shadow-sm mb-4"
                                             locale={es}
                                             initialFocus
                                         />
+                                        <p className="text-sm text-muted-foreground">Selecciona un día para ver horarios.</p>
                                     </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-medium mb-3 flex items-center gap-2"><Clock className="h-4 w-4" /> Horarios disponibles</h3>
-                                        {!selectedDate ? (
-                                            <p className="text-muted-foreground text-sm">Selecciona un día en el calendario.</p>
-                                        ) : loadingSlots ? (
-                                            <div className="flex py-10 justify-center"><CustomLoader size={30} /></div>
-                                        ) : availableSlots.length === 0 ? (
-                                            <div className="text-center p-4 border rounded-md border-dashed text-muted-foreground bg-slate-50">
-                                                No hay buena disponibilidad para este día. Intenta otro.
+                                )}
+
+                                {/* SCENARIO 2: PICK TIME */}
+                                {configStep === 1 && (
+                                    <div className="flex flex-col h-full">
+                                        <h3 className="font-medium mb-4 capitalize text-center border-b pb-2">
+                                            {tempDate ? format(tempDate, 'EEEE d, MMMM', { locale: es }) : ''}
+                                        </h3>
+
+                                        {loadingSlots ? (
+                                            <div className="flex-1 flex justify-center py-10"><CustomLoader size={30} /></div>
+                                        ) : noCapablePros ? (
+                                            <div className="text-center p-8 border border-dashed rounded-lg bg-yellow-50 border-yellow-200">
+                                                <Users className="h-10 w-10 text-yellow-500 mx-auto mb-2" />
+                                                <p className="text-yellow-800 font-medium mb-1">Combinación no disponible</p>
+                                                <p className="text-sm text-muted-foreground mb-4">Ningún profesional disponible realiza todos estos servicios.</p>
+                                                <div className="flex flex-col gap-2">
+                                                    <Button variant="outline" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
+                                                    {bookingMode === 'combined' && (
+                                                        <p className="text-xs text-muted-foreground mt-2">Intenta la opción <span className="font-bold">"Por separado"</span> para asignar diferentes profesionales.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : tempAvailableSlots.length === 0 ? (
+                                            <div className="text-center p-8 border border-dashed rounded-lg bg-slate-50">
+                                                <p className="text-muted-foreground">No hay horarios disponibles para esta fecha.</p>
+                                                <Button variant="link" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                                {availableSlots.map(time => (
-                                                    <Button
-                                                        key={time}
-                                                        variant={selectedTime === time ? "default" : "outline"}
-                                                        className="w-full"
-                                                        onClick={() => setSelectedTime(time)}
-                                                    >
+                                            <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[300px] p-1">
+                                                {tempAvailableSlots.map(time => (
+                                                    <Button key={time} variant="outline" onClick={() => handleTimeSelected(time)}>
                                                         {time}
                                                     </Button>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                )}
 
-                                <div className="pt-4 flex justify-end">
-                                    <Button onClick={handleNext} disabled={!selectedDate || !selectedTime} className="w-full md:w-auto">
-                                        Continuar <ChevronRight className="ml-2 h-4 w-4" />
-                                    </Button>
-                                </div>
+                                {/* SCENARIO 3: PICK PRO */}
+                                {configStep === 2 && (
+                                    <div className="space-y-4">
+                                        <div className="text-center mb-4">
+                                            <p className="text-lg font-bold">{tempTime}</p>
+                                            <p className="text-sm text-muted-foreground">¿Con quién te gustaría?</p>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* FILTER PROS available at this time */}
+                                            {tempSlotMap[tempTime || '']?.map(proId => {
+                                                const pro = professionals.find(p => p.id === proId);
+                                                if (!pro) return null;
+                                                return (
+                                                    <div
+                                                        key={pro.id}
+                                                        className="flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all"
+                                                        onClick={() => handleProSelected(pro.id)}
+                                                    >
+                                                        <div className="h-16 w-16 rounded-full bg-muted overflow-hidden mb-2 border">
+                                                            {pro.avatarUrl ? (
+                                                                <img src={pro.avatarUrl} alt={pro.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <User className="w-full h-full p-3 text-muted-foreground" />
+                                                            )}
+                                                        </div>
+                                                        <h3 className="font-bold text-sm text-center">{pro.name}</h3>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </motion.div>
                         )}
 
-                        {/* STEP 3: DETAILS */}
+
+                        {/* STEP 3: DETAILS & CONFIRMATION */}
                         {step === 3 && (
-                            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                            <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                                 <div className="flex items-center mb-2">
-                                    <Button variant="ghost" size="icon" onClick={handleBack} className="-ml-2 mr-2"><ChevronLeft /></Button>
-                                    <h2 className="text-xl font-semibold">Tus Datos</h2>
+                                    <Button variant="ghost" size="icon" onClick={() => setStep(bookingMode === 'separate' ? 2 : 2)} className="-ml-2 mr-2"><ChevronLeft /></Button>
+                                    <h2 className="text-xl font-semibold">Confirma tus datos</h2>
                                 </div>
 
-                                <Card className="bg-slate-50/50">
-                                    <CardContent className="p-4 space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Servicio:</span>
-                                            <span className="font-medium">{selectedService?.name}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Profesional:</span>
-                                            <span className="font-medium">{selectedProfessional?.name}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Fecha:</span>
-                                            <span className="font-medium capitalize">{selectedDate ? format(selectedDate, 'EEEE d, MMMM', { locale: es }) : ''} - {selectedTime}</span>
-                                        </div>
-                                        <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
-                                            <span>Total:</span>
-                                            <span>{formatPrice(selectedService?.price)}</span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
+                                    <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Resumen</h3>
+                                    {cart.map((item) => {
+                                        const cfg = configs[bookingMode === 'combined' ? 'combined' : item.uniqueId];
+                                        if (!cfg) return null;
+                                        return (
+                                            <div key={item.uniqueId} className="flex justify-between text-sm py-1 border-b last:border-0 border-slate-200">
+                                                <div>
+                                                    <span className="font-medium block">{item.service.name}</span>
+                                                    <span className="text-muted-foreground text-xs">{format(cfg.date, 'dd/MM', { locale: es })} {cfg.time} • {cfg.professional.name}</span>
+                                                </div>
+                                                <span className="font-bold">{formatPrice(item.service.price)}</span>
+                                            </div>
+                                        )
+                                    })}
+                                    <div className="flex justify-between text-lg font-bold border-t border-slate-300 pt-2">
+                                        <span>Total</span>
+                                        <span>{formatPrice(totalPrice)}</span>
+                                    </div>
+                                </div>
 
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
@@ -297,7 +703,7 @@ export default function BookingPage() {
                                                 id="name"
                                                 placeholder="Juan"
                                                 value={clientDetails.name}
-                                                onChange={(e) => setClientDetails({ ...clientDetails, name: e.target.value })}
+                                                onChange={(e) => setClientDetails({ ...clientDetails, name: correctName(e.target.value) })}
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -306,28 +712,48 @@ export default function BookingPage() {
                                                 id="lastname"
                                                 placeholder="Pérez"
                                                 value={clientDetails.lastName}
-                                                onChange={(e) => setClientDetails({ ...clientDetails, lastName: e.target.value })}
+                                                onChange={(e) => setClientDetails({ ...clientDetails, lastName: correctName(e.target.value) })}
                                             />
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="phone">Celular</Label>
+                                        <Label htmlFor="phone">Celular (10 dígitos)</Label>
                                         <Input
                                             id="phone"
                                             type="tel"
-                                            placeholder="55 1234 5678"
+                                            placeholder="5512345678"
                                             value={clientDetails.phone}
-                                            onChange={(e) => setClientDetails({ ...clientDetails, phone: e.target.value })}
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setClientDetails({ ...clientDetails, phone: val });
+                                            }}
+                                            className={clientDetails.phone.length > 0 && clientDetails.phone.length < 10 ? "border-red-500" : ""}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="birthday">Cumpleaños (Opcional)</Label>
-                                        <Input
-                                            id="birthday"
-                                            type="date"
-                                            value={clientDetails.birthday}
-                                            onChange={(e) => setClientDetails({ ...clientDetails, birthday: e.target.value })}
-                                        />
+                                        <Label>Cumpleaños (¡Podrías recibir un regalo! 🎁)</Label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <Select value={bDay} onValueChange={(v) => updateBirthday('day', v)}>
+                                                <SelectTrigger><SelectValue placeholder="Día" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+
+                                            <Select value={bMonth} onValueChange={(v) => updateBirthday('month', v)}>
+                                                <SelectTrigger><SelectValue placeholder="Mes" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {months.map(m => <SelectItem key={m.val} value={m.val}>{m.label}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+
+                                            <Select value={bYear} onValueChange={(v) => updateBirthday('year', v)}>
+                                                <SelectTrigger><SelectValue placeholder="Año" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -335,9 +761,9 @@ export default function BookingPage() {
                                     className="w-full mt-4"
                                     size="lg"
                                     onClick={confirmBooking}
-                                    disabled={!clientDetails.name || !clientDetails.lastName || !clientDetails.phone || isSubmitting}
+                                    disabled={!clientDetails.name || !clientDetails.lastName || clientDetails.phone.length !== 10 || isSubmitting}
                                 >
-                                    {isSubmitting ? <CustomLoader size={20} color="white" /> : 'Confirmar Reserva'}
+                                    {isSubmitting ? <CustomLoader size={20} /> : 'Confirmar Reserva'}
                                 </Button>
                             </motion.div>
                         )}
@@ -350,12 +776,8 @@ export default function BookingPage() {
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">¡Reserva Confirmada!</h2>
                                 <p className="text-muted-foreground max-w-sm">
-                                    Gracias <strong>{clientDetails.name}</strong>, tu cita ha sido agendada con éxito. Te esperamos.
+                                    Gracias <strong>{clientDetails.name}</strong>, tus citas han sido agendadas con éxito.
                                 </p>
-                                <div className="p-4 bg-muted/30 rounded-lg w-full max-w-sm border text-sm">
-                                    <p><strong>{selectedService?.name}</strong> con <strong>{selectedProfessional?.name}</strong></p>
-                                    <p className="capitalize mt-1">{selectedDate ? format(selectedDate, 'EEEE d, MMMM', { locale: es }) : ''} a las {selectedTime}</p>
-                                </div>
                                 <Button className="mt-8" onClick={() => router.push('/')}>
                                     Volver al Inicio
                                 </Button>

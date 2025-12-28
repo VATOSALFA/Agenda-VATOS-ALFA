@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -813,12 +813,23 @@ export default function AgendaView() {
                                     <DollarSign className="h-4 w-4 text-black font-bold" />
                                   </div>
                                 )}
+                                <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && event.pago_estado === 'Pagado') ? "right-7" : "right-1")}>
+                                  {event.type === 'appointment' && event.canal_reserva === 'web_publica' && (
+                                    <>
+                                      <Globe className="w-3 h-3 text-primary" />
+                                      <Lock className="w-3 h-3 text-muted-foreground" />
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </TooltipTrigger>
                             {event.type === 'appointment' ? (
                               <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                 <div className="space-y-2">
-                                  <p className="font-bold text-base text-foreground">{(event.customer?.nombre || 'Cliente Eliminado')}</p>
+                                  <div className="flex justify-between items-start">
+                                    <p className="font-bold text-base text-foreground">{(event.customer?.nombre || 'Cliente Eliminado')}</p>
+                                    {event.canal_reserva === 'web_publica' && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
+                                  </div>
                                   <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : event.servicio}</p>
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Clock className="w-4 h-4" />

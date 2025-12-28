@@ -45,9 +45,9 @@ export const createPreference = async ({
                 external_reference,
                 payer,
                 back_urls: {
-                    success: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/mercadopago/success`,
-                    failure: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/mercadopago/failure`,
-                    pending: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/mercadopago/pending`,
+                    success: `${process.env.NEXT_PUBLIC_APP_URL || 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app'}/api/mercadopago/success`,
+                    failure: `${process.env.NEXT_PUBLIC_APP_URL || 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app'}/api/mercadopago/failure`,
+                    pending: `${process.env.NEXT_PUBLIC_APP_URL || 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app'}/api/mercadopago/pending`,
                 },
                 auto_return: 'approved',
             },

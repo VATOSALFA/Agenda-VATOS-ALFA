@@ -8,7 +8,9 @@ export async function POST(req: NextRequest) {
         const { reservationId, items, payer } = body;
 
         // Initialize Mercado Pago
-        const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN || '' });
+        // Prioritize the var defined in apphosting.yaml
+        const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+        const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);
 
         // Determine base URL (Production vs Local)

@@ -291,7 +291,7 @@ exports.createPointPayment = onCall(
 
       const paymentIntent = {
         amount: Math.round(amount * 100),
-        notification_url: "https://agenda-1ae08.web.app/api/mercado-pago-webhook",
+        notification_url: "https://vatosalfa.com/api/mercado-pago-webhook",
         additional_info: {
           external_reference: referenceId,
           print_on_terminal: true

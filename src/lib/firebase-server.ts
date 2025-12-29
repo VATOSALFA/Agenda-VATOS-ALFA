@@ -11,26 +11,26 @@ const initializeFirebaseAdmin = () => {
     return admin.app();
   }
 
-  // Las variables de entorno solo están disponibles en el entorno de ejecución, no durante la construcción.
+  // Las variables de entorno solo están disponibles en el entorno de ejecución.
   const serviceAccountKeyString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
-  if (!serviceAccountKeyString) {
-    console.warn('FIREBASE_SERVICE_ACCOUNT_KEY no está disponible. La inicialización del Admin SDK se omitirá.');
-    return null;
-  }
-
   try {
-    const serviceAccount = JSON.parse(serviceAccountKeyString);
-    
-    console.log("Inicializando Firebase Admin SDK...");
-    firebaseAdminApp = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
+    if (serviceAccountKeyString) {
+      console.log("Inicializando Firebase Admin SDK con CLAVE proporcionada...");
+      const serviceAccount = JSON.parse(serviceAccountKeyString);
+      firebaseAdminApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else {
+      console.log("Inicializando Firebase Admin SDK con Credenciales por Defecto (ADC)...");
+      // En entornos de Google Cloud (App Hosting, Functions, Run), esto usa la cuenta de servicio por defecto automáticamente.
+      firebaseAdminApp = admin.initializeApp();
+    }
+
     console.log("Firebase Admin SDK inicializado con éxito.");
     return firebaseAdminApp;
   } catch (e: any) {
-    console.error("Error al parsear FIREBASE_SERVICE_ACCOUNT_KEY o al inicializar Firebase Admin:", e.message);
-    // Lanza el error para que la función que lo llama sepa que falló.
+    console.error("Error al inicializar Firebase Admin:", e.message);
     throw new Error("No se pudo inicializar Firebase Admin SDK: " + e.message);
   }
 };

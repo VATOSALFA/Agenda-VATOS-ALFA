@@ -1,11 +1,9 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { admin } from '@/lib/firebase-server'; // Ensure this exports admin properly
+import { getDb } from '@/lib/firebase-server';
 import { MercadoPagoConfig } from 'mercadopago';
 
 // Reusing the same access token logic as the Preference route
 const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
-const client = new MercadoPagoConfig({ accessToken });
 
 export async function POST(req: NextRequest) {
     console.log("========== [Next.js] MERCADO PAGO WEBHOOK RECEIVED ==========");
@@ -72,14 +70,14 @@ export async function POST(req: NextRequest) {
         console.log(`[Next.js] API Check: Status=${status}, Ref=${external_reference}`);
 
         // Update Firestore
-        const db = admin.firestore();
+        const db = getDb();
 
-        await db.runTransaction(async (t) => {
+        await db.runTransaction(async (t: any) => {
             // Check Reservation
             const reservaRef = db.collection('reservas').doc(external_reference);
             const reservaDoc = await t.get(reservaRef);
 
-            if (reservaDoc.exists()) {
+            if (reservaDoc.exists) {
                 t.update(reservaRef, {
                     pago_estado: 'Pagado',
                     estado_pago: 'Pagado',
@@ -94,7 +92,7 @@ export async function POST(req: NextRequest) {
             const ventaRef = db.collection('ventas').doc(external_reference);
             const ventaDoc = await t.get(ventaRef);
 
-            if (ventaDoc.exists()) {
+            if (ventaDoc.exists) {
                 if (ventaDoc.data()?.pago_estado === 'Pagado') return;
 
                 const ventaData = ventaDoc.data();
@@ -115,7 +113,7 @@ export async function POST(req: NextRequest) {
                 if (ventaData?.reservationId) {
                     const linkedResRef = db.collection('reservas').doc(ventaData.reservationId);
                     const linkedResDoc = await t.get(linkedResRef);
-                    if (linkedResDoc.exists()) t.update(linkedResRef, { pago_estado: 'Pagado' });
+                    if (linkedResDoc.exists) t.update(linkedResRef, { pago_estado: 'Pagado' });
                 }
                 console.log(`[Next.js] Venta ${external_reference} updated.`);
             } else {

@@ -721,10 +721,30 @@ export default function AgendaView() {
                 let barberStartHour = startHour;
                 let barberEndHour = endHour;
                 if (isWorking) {
-                  const [startH] = daySchedule.start.split(':').map(Number);
-                  const [endH] = daySchedule.end.split(':').map(Number);
-                  barberStartHour = startH;
-                  barberEndHour = endH;
+                  const [startH, startM] = daySchedule.start.split(':').map(Number);
+                  const [endH, endM] = daySchedule.end.split(':').map(Number);
+                  barberStartHour = startH + (startM / 60);
+                  barberEndHour = endH + (endM / 60);
+                }
+
+                const pixelsPerMinute = ROW_HEIGHT / slotDurationMinutes;
+
+                // Calculate Pre-Shift Block
+                let preShiftHeight = 0;
+                if (isWorking && barberStartHour > startHour) {
+                  const diffMinutes = (barberStartHour - startHour) * 60;
+                  preShiftHeight = diffMinutes * pixelsPerMinute;
+                }
+
+                // Calculate Post-Shift Block
+                let postShiftTop = 0;
+                let postShiftHeight = 0;
+                if (isWorking && barberEndHour < endHour) {
+                  const minutesFromStart = (barberEndHour - startHour) * 60;
+                  postShiftTop = minutesFromStart * pixelsPerMinute;
+
+                  const diffMinutes = (endHour - barberEndHour) * 60;
+                  postShiftHeight = diffMinutes * pixelsPerMinute;
                 }
 
                 return (
@@ -749,6 +769,23 @@ export default function AgendaView() {
                           top={0}
                           height={(timeSlots.length || 24) * ROW_HEIGHT}
                           text="Día no laboral"
+                        />
+                      )}
+
+                      {/* Working Day Limits (Before Start / After End) */}
+                      {isWorking && preShiftHeight > 0 && (
+                        <NonWorkBlock
+                          top={0}
+                          height={preShiftHeight}
+                          text="No disponible"
+                        />
+                      )}
+
+                      {isWorking && postShiftHeight > 0 && (
+                        <NonWorkBlock
+                          top={postShiftTop}
+                          height={postShiftHeight}
+                          text="No disponible"
                         />
                       )}
 

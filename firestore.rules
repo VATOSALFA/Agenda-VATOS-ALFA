@@ -23,6 +23,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated(); 
     }
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     match /configuracion/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();

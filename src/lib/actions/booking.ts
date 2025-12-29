@@ -103,10 +103,25 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             const slotStart = current.getHours() * 60 + current.getMinutes();
             const slotEnd = slotStart + durationMinutes;
 
-            // Check if slot is in the past (if today)
-            // Buffer: User can't book a slot that has already started or is within the next 20 mins?
-            // Let's just say "strict past" for now, or maybe a 15 min buffer.
-            if (isQueryDateToday && slotStart < currentMinutes) {
+            // Check if slot is in the past or within minimum reservation time buffer
+            let minReservationBuffer = 0;
+            try {
+                // Fetch settings using Admin SDK
+                const db = await getDb();
+                const settingsSnap = await db.collection('settings').doc('website').get();
+                if (settingsSnap.exists) { // Admin SDK uses .exists property, not method? Or method? Usually .exists as boolean in some versions, or property. Admin SDK v10+ it is .exists getter.
+                    // Actually in nodejs admin sdk, it is `snapshot.exists` (boolean property).
+                    const data = settingsSnap.data();
+                    if (data) {
+                        minReservationBuffer = (Number(data.minReservationTime) || 0) * 60;
+                    }
+                }
+            } catch (e) {
+                minReservationBuffer = 60;
+                console.error("Error fetching reservation settings:", e);
+            }
+
+            if (isQueryDateToday && slotStart < (currentMinutes + minReservationBuffer)) {
                 current = addMinutes(current, GRID_INTERVAL);
                 continue;
             }

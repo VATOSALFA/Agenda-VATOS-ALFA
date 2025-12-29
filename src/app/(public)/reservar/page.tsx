@@ -65,6 +65,37 @@ export default function BookingPage() {
     const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
     const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
     const { data: locales } = useFirestoreQuery<any>('locales');
+    const { data: settingsData } = useFirestoreQuery<any>('settings');
+    const { data: empresaData } = useFirestoreQuery<any>('empresa');
+
+    // Derived Settings
+    const websiteSettings = useMemo(() => {
+        const found = settingsData.find((d: any) => d.id === 'website') || {};
+        console.log("Website Settings Loaded:", found);
+        return found;
+    }, [settingsData]);
+
+    const getFieldConfig = (fieldId: string) => {
+        // Special override for Notes based on global toggle
+        if (fieldId === 'notes' && websiteSettings.allowClientNotes === false) {
+            return { use: false, required: false };
+        }
+
+        // Defaults if no settings
+        if (!websiteSettings.customerFields) {
+            console.log("No customerFields found in settings, using defaults for", fieldId);
+            // Default: Phone required, others optional/hidden?
+            // "Confirm tus datos" shows Phone/Birthday.
+            if (fieldId === 'phone') return { use: true, required: true };
+            if (fieldId === 'dob') return { use: true, required: false };
+            return { use: false, required: false };
+        }
+        const config = websiteSettings.customerFields[fieldId] || { use: false, required: false };
+        if (fieldId === 'email') console.log("Email config:", config);
+        return config;
+    }
+
+
 
     // State: Cart
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -96,12 +127,16 @@ export default function BookingPage() {
     const [tempSlotMap, setTempSlotMap] = useState<Record<string, string[]>>({}); // Time -> Pro IDs
     const [loadingSlots, setLoadingSlots] = useState(false);
     const [noCapablePros, setNoCapablePros] = useState(false);
+    const [preSelectedProId, setPreSelectedProId] = useState<string | null>(null);
 
     // Client Details
     const [clientDetails, setClientDetails] = useState({
         name: '',
         lastName: '',
         phone: '',
+        email: '',
+        address: '',
+        notes: '',
         birthday: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -112,6 +147,9 @@ export default function BookingPage() {
 
         const servicesParam = searchParams.get('services');
         const legacyServiceId = searchParams.get('serviceId');
+        const proIdParam = searchParams.get('professionalId');
+
+        if (proIdParam) setPreSelectedProId(proIdParam);
 
         // Priority 1: List of services (from Landing Page Cart)
         if (servicesParam) {
@@ -126,7 +164,13 @@ export default function BookingPage() {
                 setCart(newCart);
 
                 // SKIP Step 0 since we come from a "Cart" page
-                if (newCart.length > 1) {
+                if (proIdParam) {
+                    setBookingMode('combined');
+                    setActiveConfigId('combined');
+                    setTempDate(undefined);
+                    setConfigStep(0);
+                    setStep(2);
+                } else if (newCart.length > 1) {
                     setStep(1); // Mode Select
                 } else {
                     // Single item: Auto-start combined flow (functionally same as single)
@@ -153,7 +197,16 @@ export default function BookingPage() {
 
     // --- COMPUTED ---
     const activeServiceIds = useMemo(() => cart.map(c => c.serviceId), [cart]);
-    const totalPrice = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.price || 0), 0), [cart]);
+    const { totalPrice, upfrontTotal } = useMemo(() => {
+        const total = cart.reduce((acc, item) => acc + Number(item.service.price || 0), 0);
+        const upfront = cart.reduce((sum, item) => {
+            const pType = item.service.payment_type || 'no-payment';
+            if (pType === 'online-deposit') return sum + (Number(item.service.price || 0) * 0.5);
+            if (pType === 'full-payment') return sum + Number(item.service.price || 0);
+            return sum;
+        }, 0);
+        return { totalPrice: total, upfrontTotal: upfront };
+    }, [cart]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
 
     // --- CART ACTIONS ---
@@ -176,6 +229,13 @@ export default function BookingPage() {
     // --- FLOW ACTIONS ---
     const handleServicesConfirmed = () => {
         if (cart.length === 0) return;
+
+        if (preSelectedProId) {
+            setBookingMode('combined');
+            startConfiguration('combined');
+            return;
+        }
+
         if (cart.length > 1) {
             setStep(1); // Mode Select
         } else {
@@ -237,7 +297,9 @@ export default function BookingPage() {
 
                 // Filter Pros who can do THESE services
                 const capablePros = professionals.filter(p =>
-                    p.active && requiredServiceIds.every(sId => (p.services || []).includes(sId))
+                    p.active &&
+                    (!preSelectedProId || p.id === preSelectedProId) &&
+                    requiredServiceIds.every(sId => (p.services || []).includes(sId))
                 );
 
                 if (capablePros.length === 0) {
@@ -286,16 +348,21 @@ export default function BookingPage() {
 
     const handleTimeSelected = (time: string) => {
         setTempTime(time);
-        setConfigStep(2); // Go to Pro selection
+        if (preSelectedProId) {
+            handleProSelected(preSelectedProId, time);
+        } else {
+            setConfigStep(2); // Go to Pro selection
+        }
     };
 
-    const handleProSelected = (proId: string) => {
-        if (!activeConfigId || !tempDate || !tempTime) return;
+    const handleProSelected = (proId: string, overrideTime?: string) => {
+        const timeToUse = overrideTime || tempTime;
+        if (!activeConfigId || !tempDate || !timeToUse) return;
 
         const pro = professionals.find(p => p.id === proId);
         const config: AppointmentConfig = {
             date: tempDate,
-            time: tempTime,
+            time: timeToUse,
             professionalId: proId,
             professional: pro
         };
@@ -332,7 +399,10 @@ export default function BookingPage() {
                     professionalId: cfg.professionalId,
                     date: format(cfg.date, 'yyyy-MM-dd'),
                     time: cfg.time,
-                    locationId: cfg.professional.local_id || locales?.[0]?.id || 'default'
+                    locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
+                    paymentStatus: upfrontTotal > 0 ? 'pending_payment' : 'pending',
+                    amountDue: upfrontTotal,
+                    totalAmount: totalPrice
                 });
                 if (!res.success) errorCount++;
 
@@ -342,13 +412,19 @@ export default function BookingPage() {
                     const cfg = configs[item.uniqueId];
                     if (!cfg) continue;
 
+                    const pType = item.service.payment_type || 'no-payment';
+                    const itemUpfront = (pType === 'online-deposit' ? Number(item.service.price || 0) * 0.5 : (pType === 'full-payment' ? Number(item.service.price || 0) : 0));
+
                     const res = await createPublicReservation({
                         client: clientDetails,
                         serviceIds: [item.serviceId], // Single service array
                         professionalId: cfg.professionalId,
                         date: format(cfg.date, 'yyyy-MM-dd'),
                         time: cfg.time,
-                        locationId: cfg.professional.local_id || locales?.[0]?.id || 'default'
+                        locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
+                        paymentStatus: itemUpfront > 0 ? 'pending_payment' : 'pending',
+                        amountDue: itemUpfront,
+                        totalAmount: Number(item.service.price || 0)
                     });
                     if (!res.success) errorCount++;
                 }
@@ -399,6 +475,33 @@ export default function BookingPage() {
 
     if (loadingServices || loadingProfessionals) return <div className="h-screen flex items-center justify-center"><CustomLoader size={50} /></div>;
 
+    if (websiteSettings.onlineReservations === false) {
+        return (
+            <div className="flex flex-col h-screen w-full items-center justify-center bg-background px-4 text-center">
+                <div className="max-w-md space-y-6">
+                    <div className="flex justify-center mb-6">
+                        {/* Optional Logo */}
+                        {empresaData?.[0]?.logo_url && (
+                            <img src={empresaData[0].logo_url} alt="Logo" className="h-20 w-auto object-contain" />
+                        )}
+                    </div>
+                    <h1 className="text-3xl font-bold tracking-tight">Reservas no disponibles</h1>
+                    <p className="text-muted-foreground">
+                        En este momento no estamos aceptando reservas en línea. Por favor, contáctanos directamente o intenta más tarde.
+                    </p>
+                    {empresaData?.[0]?.phone && (
+                        <Button className="mt-4" onClick={() => window.location.href = `tel:${empresaData[0].phone}`}>
+                            Llamar al {empresaData[0].phone}
+                        </Button>
+                    )}
+                    <Button variant="outline" className="mt-2" onClick={() => router.push('/')}>
+                        Volver al inicio
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center">
             <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px] flex flex-col">
@@ -421,6 +524,9 @@ export default function BookingPage() {
                         {/* STEP 0: SERVICE SELECTION (CART) */}
                         {step === 0 && (
                             <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 flex flex-col h-full">
+                                <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
+                                    <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
+                                </Button>
                                 <h2 className="text-xl font-semibold mb-2">Selecciona tus servicios</h2>
                                 <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[400px] mb-16 px-1">
                                     {services.filter((s: any) => s.active).map((service: any) => {
@@ -564,8 +670,24 @@ export default function BookingPage() {
                             <motion.div key="subflow" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full flex flex-col">
                                 <div className="flex items-center mb-4">
                                     <Button variant="ghost" size="icon" onClick={() => {
-                                        if (configStep > 0) setConfigStep(prev => prev - 1);
-                                        else setActiveConfigId(null);
+                                        if (configStep > 0) {
+                                            setConfigStep(prev => prev - 1);
+                                        } else {
+                                            // Backing out of Date selection
+                                            if (preSelectedProId) {
+                                                router.push('/');
+                                            } else if (bookingMode === 'combined') {
+                                                if (cart.length > 1) {
+                                                    setActiveConfigId(null);
+                                                    setStep(1);
+                                                } else {
+                                                    setActiveConfigId(null);
+                                                    setStep(0);
+                                                }
+                                            } else {
+                                                setActiveConfigId(null);
+                                            }
+                                        }
                                     }} className="-ml-2 mr-2"><ChevronLeft /></Button>
                                     <h2 className="text-xl font-semibold">
                                         {activeConfigId === 'combined' ? 'Elige fecha y hora' : cart.find(c => c.uniqueId === activeConfigId)?.service.name}
@@ -638,6 +760,30 @@ export default function BookingPage() {
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4">
+                                            {/* OPTION: ANY PRO */}
+                                            <div
+                                                className="flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer border-dashed border-slate-300 hover:border-primary/50 hover:bg-slate-50 transition-all"
+                                                onClick={() => {
+                                                    const availableParams = tempSlotMap[tempTime || ''];
+                                                    if (availableParams && availableParams.length > 0) {
+                                                        // Auto-select the first one
+                                                        handleProSelected(availableParams[0]);
+                                                    }
+                                                }}
+                                            >
+                                                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-2 border overflow-hidden">
+                                                    {empresaData?.[0]?.icon_url ? (
+                                                        <img src={empresaData[0].icon_url} alt="Icon" className="w-full h-full object-cover" />
+                                                    ) : empresaData?.[0]?.logo_url ? (
+                                                        <img src={empresaData[0].logo_url} alt="Logo" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <Users className="h-8 w-8 text-slate-500" />
+                                                    )}
+                                                </div>
+                                                <h3 className="font-bold text-sm text-center">Primero disponible</h3>
+                                                <p className="text-xs text-muted-foreground text-center">Asignación automática</p>
+                                            </div>
+
                                             {/* FILTER PROS available at this time */}
                                             {tempSlotMap[tempTime || '']?.map(proId => {
                                                 const pro = professionals.find(p => p.id === proId);
@@ -689,16 +835,30 @@ export default function BookingPage() {
                                             </div>
                                         )
                                     })}
-                                    <div className="flex justify-between text-lg font-bold border-t border-slate-300 pt-2">
-                                        <span>Total</span>
-                                        <span>{formatPrice(totalPrice)}</span>
+                                    <div className="border-t border-slate-300 pt-2 space-y-1">
+                                        <div className="flex justify-between text-lg font-bold">
+                                            <span>Total</span>
+                                            <span>{formatPrice(totalPrice)}</span>
+                                        </div>
+                                        {upfrontTotal > 0 && (
+                                            <>
+                                                <div className="flex justify-between text-base font-semibold text-blue-600">
+                                                    <span>Pagar ahora en línea</span>
+                                                    <span>{formatPrice(upfrontTotal)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm text-muted-foreground">
+                                                    <span>Pendiente en local</span>
+                                                    <span>{formatPrice(totalPrice - upfrontTotal)}</span>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="name">Nombre</Label>
+                                            <Label htmlFor="name">Nombre <span className="text-red-500">*</span></Label>
                                             <Input
                                                 id="name"
                                                 placeholder="Juan"
@@ -707,7 +867,7 @@ export default function BookingPage() {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="lastname">Apellido</Label>
+                                            <Label htmlFor="lastname">Apellido <span className="text-red-500">*</span></Label>
                                             <Input
                                                 id="lastname"
                                                 placeholder="Pérez"
@@ -716,55 +876,117 @@ export default function BookingPage() {
                                             />
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="phone">Celular (10 dígitos)</Label>
-                                        <Input
-                                            id="phone"
-                                            type="tel"
-                                            placeholder="5512345678"
-                                            value={clientDetails.phone}
-                                            onChange={(e) => {
-                                                const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                setClientDetails({ ...clientDetails, phone: val });
-                                            }}
-                                            className={clientDetails.phone.length > 0 && clientDetails.phone.length < 10 ? "border-red-500" : ""}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Cumpleaños (¡Podrías recibir un regalo! 🎁)</Label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <Select value={bDay} onValueChange={(v) => updateBirthday('day', v)}>
-                                                <SelectTrigger><SelectValue placeholder="Día" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
 
-                                            <Select value={bMonth} onValueChange={(v) => updateBirthday('month', v)}>
-                                                <SelectTrigger><SelectValue placeholder="Mes" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {months.map(m => <SelectItem key={m.val} value={m.val}>{m.label}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-
-                                            <Select value={bYear} onValueChange={(v) => updateBirthday('year', v)}>
-                                                <SelectTrigger><SelectValue placeholder="Año" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
+                                    {/* Email (Optional/Required) */}
+                                    {getFieldConfig('email').use && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="email">Email {getFieldConfig('email').required && <span className="text-red-500">*</span>}</Label>
+                                            <Input
+                                                id="email"
+                                                type="email"
+                                                placeholder="tu@email.com"
+                                                value={clientDetails.email}
+                                                onChange={(e) => setClientDetails({ ...clientDetails, email: e.target.value })}
+                                            />
                                         </div>
-                                    </div>
+                                    )}
+
+                                    {/* Celular */}
+                                    {getFieldConfig('phone').use && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="phone">Celular (10 dígitos) {getFieldConfig('phone').required && <span className="text-red-500">*</span>}</Label>
+                                            <Input
+                                                id="phone"
+                                                type="tel"
+                                                placeholder="5512345678"
+                                                value={clientDetails.phone}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setClientDetails({ ...clientDetails, phone: val });
+                                                }}
+                                                className={clientDetails.phone.length > 0 && clientDetails.phone.length < 10 ? "border-red-500" : ""}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Dirección */}
+                                    {getFieldConfig('address').use && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="address">Dirección {getFieldConfig('address').required && <span className="text-red-500">*</span>}</Label>
+                                            <Input
+                                                id="address"
+                                                placeholder="Calle 123, Colonia..."
+                                                value={clientDetails.address}
+                                                onChange={(e) => setClientDetails({ ...clientDetails, address: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Notas */}
+                                    {getFieldConfig('notes').use && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="notes">Notas {getFieldConfig('notes').required && <span className="text-red-500">*</span>}</Label>
+                                            <Input
+                                                id="notes"
+                                                placeholder="Alergias, preferencias..."
+                                                value={clientDetails.notes}
+                                                onChange={(e) => setClientDetails({ ...clientDetails, notes: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Cumpleaños */}
+                                    {getFieldConfig('dob').use && (
+                                        <div className="space-y-2">
+                                            <Label>Cumpleaños (¡Podrías recibir un regalo! 🎁) {getFieldConfig('dob').required && <span className="text-red-500">*</span>}</Label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <Select value={bDay} onValueChange={(v) => updateBirthday('day', v)}>
+                                                    <SelectTrigger><SelectValue placeholder="Día" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Select value={bMonth} onValueChange={(v) => updateBirthday('month', v)}>
+                                                    <SelectTrigger><SelectValue placeholder="Mes" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {months.map(m => <SelectItem key={m.val} value={m.val}>{m.label}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Select value={bYear} onValueChange={(v) => updateBirthday('year', v)}>
+                                                    <SelectTrigger><SelectValue placeholder="Año" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <Button
                                     className="w-full mt-4"
                                     size="lg"
                                     onClick={confirmBooking}
-                                    disabled={!clientDetails.name || !clientDetails.lastName || clientDetails.phone.length !== 10 || isSubmitting}
+                                    disabled={
+                                        !clientDetails.name ||
+                                        !clientDetails.lastName ||
+                                        isSubmitting ||
+                                        (getFieldConfig('phone').use && getFieldConfig('phone').required && clientDetails.phone.length !== 10) ||
+                                        (getFieldConfig('email').use && getFieldConfig('email').required && !clientDetails.email) ||
+                                        (getFieldConfig('address').use && getFieldConfig('address').required && !clientDetails.address) ||
+                                        (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes) ||
+                                        (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday)
+                                    }
                                 >
-                                    {isSubmitting ? <CustomLoader size={20} /> : 'Confirmar Reserva'}
+                                    {isSubmitting ? <CustomLoader size={20} /> : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
                                 </Button>
+                                {upfrontTotal > 0 && (
+                                    <p className="text-xs text-center text-muted-foreground mt-2">
+                                        Tu pago será procesado de forma segura por Mercado Pago.
+                                    </p>
+                                )}
                             </motion.div>
                         )}
 
@@ -778,6 +1000,11 @@ export default function BookingPage() {
                                 <p className="text-muted-foreground max-w-sm">
                                     Gracias <strong>{clientDetails.name}</strong>, tus citas han sido agendadas con éxito.
                                 </p>
+                                {websiteSettings.predefinedNotes && (
+                                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg mt-4 max-w-md text-sm">
+                                        {websiteSettings.predefinedNotes}
+                                    </div>
+                                )}
                                 <Button className="mt-8" onClick={() => router.push('/')}>
                                     Volver al Inicio
                                 </Button>

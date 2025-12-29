@@ -19,6 +19,7 @@ export default function LandingPage() {
     const { data: products, loading: loadingProducts } = useFirestoreQuery<any>('productos');
     const { data: empresa, loading: loadingEmpresa } = useFirestoreQuery<any>('empresa');
     const { data: locales, loading: loadingLocales } = useFirestoreQuery<any>('locales');
+    const { data: settingsData } = useFirestoreQuery<any>('settings');
 
     const router = useRouter();
     // Cart stored as array of Service IDs to allow multiples
@@ -46,10 +47,36 @@ export default function LandingPage() {
         );
     }
 
+    const websiteSettings = settingsData?.find((d: any) => d.id === 'website') || {};
+
+    if (websiteSettings.onlineReservations === false) {
+        return (
+            <div className="flex flex-col h-screen w-full items-center justify-center bg-background px-4 text-center">
+                <div className="max-w-md space-y-6">
+                    <div className="flex justify-center mb-6">
+                        {/* Optional Logo */}
+                        {empresa?.[0]?.logo_url && (
+                            <img src={empresa[0].logo_url} alt="Logo" className="h-20 w-auto object-contain" />
+                        )}
+                    </div>
+                    <h1 className="text-3xl font-bold tracking-tight">Reservas no disponibles temporalmente</h1>
+                    <p className="text-muted-foreground">
+                        En este momento no estamos aceptando reservas en línea. Por favor, contáctanos directamente o intenta más tarde.
+                    </p>
+                    {empresa?.[0]?.phone && (
+                        <Button className="mt-4" onClick={() => window.location.href = `tel:${empresa[0].phone}`}>
+                            Llamar al {empresa[0].phone}
+                        </Button>
+                    )}
+                </div>
+            </div>
+        );
+    }
     const companyName = empresa?.[0]?.name || 'Vatos Alfa';
-    const companySlogan = empresa?.[0]?.slogan || 'Estilo y profesionalismo para el hombre moderno.';
+    const companySlogan = websiteSettings.slogan || empresa?.[0]?.slogan || 'Estilo y profesionalismo para el hombre moderno.';
     const companyDescription = empresa?.[0]?.description || '';
     const logoUrl = empresa?.[0]?.logo_url;
+    const iconUrl = empresa?.[0]?.icon_url;
 
     const formatPrice = (price: any) => {
         return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
@@ -123,7 +150,9 @@ export default function LandingPage() {
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-                        {logoUrl ? (
+                        {iconUrl ? (
+                            <img src={iconUrl} alt="Icon" className="h-9 w-9 rounded-full object-cover border border-slate-200" />
+                        ) : logoUrl ? (
                             <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
                         ) : (
                             <Scissors className="h-6 w-6 text-primary" />
@@ -167,7 +196,7 @@ export default function LandingPage() {
                     {companySlogan}
                 </h1>
                 <p className="relative text-lg md:text-xl text-muted-foreground max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
-                    Agenda tu cita en segundos sin registrarte. Selecciona sucursal, servicios y profesional.
+                    Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional.
                 </p>
                 <div className="relative flex flex-col sm:flex-row gap-4 animate-in fade-in duration-1000 delay-300 z-10">
                     <Link href="#servicios">
@@ -525,9 +554,21 @@ export default function LandingPage() {
 
             {/* Footer */}
             <footer className="py-12 border-t bg-card text-center text-sm text-muted-foreground">
-                <div className="container px-4">
+                <div className="container px-4 flex flex-col items-center gap-4">
                     <p>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
-                    <Link href="/login" className="mt-4 inline-block text-xs hover:underline opacity-50 hover:opacity-100">Acceso Staff</Link>
+
+                    {websiteSettings.privacyPolicyEnabled !== false && (
+                        <div className="flex flex-wrap justify-center gap-6 text-xs font-medium">
+                            <Link href={websiteSettings.privacyUrl || "/privacidad"} className="hover:underline hover:text-primary transition-colors">
+                                Aviso de Privacidad
+                            </Link>
+                            <Link href={websiteSettings.termsUrl || "/terminos"} className="hover:underline hover:text-primary transition-colors">
+                                Términos y Condiciones
+                            </Link>
+                        </div>
+                    )}
+
+                    <Link href="/login" className="mt-2 inline-block text-xs hover:underline opacity-50 hover:opacity-100">Acceso Staff</Link>
                 </div>
             </footer>
         </div >

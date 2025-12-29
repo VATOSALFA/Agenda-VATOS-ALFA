@@ -23,6 +23,7 @@ interface EmpresaSettings {
     description: string;
     website_slug: string;
     logo_url: string;
+    icon_url?: string;
     receipt_logo_url?: string;
     theme?: {
         primaryColor?: string;
@@ -41,7 +42,7 @@ export default function EmpresaPage() {
     const { setThemeColors } = useTheme();
 
     const { data, loading } = useFirestoreQuery<EmpresaSettings>('empresa');
-    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: '' };
+    const settings = data?.[0] || { id: 'main', name: 'VATOS ALFA', description: '', website_slug: 'vatosalfa--agenda-1ae08.us-central1.hosted.app', logo_url: '', icon_url: '' };
 
     const form = useForm<EmpresaSettings>({
         defaultValues: settings
@@ -204,6 +205,43 @@ export default function EmpresaPage() {
                                     onUpload={(url) => field.onChange(url)}
                                     onRemove={() => field.onChange('')}
                                 />
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Icono / Avatar (Opcional)</CardTitle>
+                        <CardDescription>
+                            Este icono se usará en el encabezado de tu sitio y como perfil predeterminado.
+                            Se recomienda una imagen cuadrada (ej. 500x500 px) para evitar recortes.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Controller
+                            name="icon_url"
+                            control={form.control}
+                            render={({ field }) => (
+                                <div className="flex flex-col items-center sm:flex-row gap-6">
+                                    <div className="h-24 w-24 rounded-full border overflow-hidden relative shrink-0">
+                                        {field.value ? (
+                                            <img src={field.value} alt="Icon preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs text-center p-2">
+                                                Sin icono
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 w-full">
+                                        <ImageUploader
+                                            folder="logos"
+                                            currentImageUrl={field.value}
+                                            onUpload={(url) => field.onChange(url)}
+                                            onRemove={() => field.onChange('')}
+                                        />
+                                    </div>
+                                </div>
                             )}
                         />
                     </CardContent>

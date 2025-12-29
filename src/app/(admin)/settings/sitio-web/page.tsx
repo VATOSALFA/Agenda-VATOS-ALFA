@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 const customerFields = [
     { id: 'email', label: 'Email' },
@@ -25,10 +27,12 @@ const customerFields = [
 
 export default function SitioWebPage() {
     const { toast } = useToast();
+    const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const form = useForm({
         defaultValues: {
+            slogan: '',
             onlineReservations: true,
             marketVisibility: false,
             showHoursBy: 'professional',
@@ -40,7 +44,8 @@ export default function SitioWebPage() {
             editPolicy: 'Los clientes pueden editar sus reservas hasta 2 horas antes.',
             maxEdits: 2,
             privacyPolicyEnabled: false,
-            privacyPolicyUrl: '',
+            privacyUrl: '',
+            termsUrl: '',
             minReservationTime: 2,
             maxFutureTime: 30,
             professionalPreference: 'client_choice',
@@ -53,16 +58,73 @@ export default function SitioWebPage() {
         }
     });
 
-    const onSubmit = (data: unknown) => {
+    useEffect(() => {
+        const loadSettings = async () => {
+            if (!db) return;
+            try {
+                const docSnap = await getDoc(doc(db, 'settings', 'website'));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+
+                    // Normalize customerFields (handle Legacy Flat vs New Nested)
+                    let normalizedFields = { ...form.getValues().customerFields };
+
+                    if (data.customerFields) {
+                        normalizedFields = { ...normalizedFields, ...data.customerFields };
+                    } else {
+                        // Check for flat fields in root (Legacy migration)
+                        customerFields.forEach(field => {
+                            if (data[field.id]) {
+                                normalizedFields[field.id] = data[field.id];
+                            }
+                        });
+                    }
+
+                    form.reset({
+                        ...form.getValues(),
+                        ...data,
+                        customerFields: normalizedFields
+                    });
+                }
+            } catch (error) {
+                console.error("Error loading settings:", error);
+            }
+        };
+        loadSettings();
+    }, [db]);
+
+    const onSubmit = async (data: any) => {
+        if (!db) return;
         setIsSubmitting(true);
-        console.log("Website settings saved:", data);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            // Prepare data, ensuring numbers are numbers and cleaning up structure
+            const saveData: any = {
+                ...data,
+                minReservationTime: Number(data.minReservationTime),
+                maxFutureTime: Number(data.maxFutureTime),
+                customerFields: data.customerFields
+            };
+
+            // Remove legacy flat fields if they exist in the form data
+            customerFields.forEach(field => {
+                delete saveData[field.id];
+            });
+
+            await setDoc(doc(db, 'settings', 'website'), saveData);
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en la configuración de tu sitio web han sido guardados."
-            })
-        }, 1500);
+            });
+        } catch (error) {
+            console.error("Error saving settings:", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Hubo un problema al guardar la configuración."
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     return (
@@ -79,12 +141,19 @@ export default function SitioWebPage() {
                     <CardContent className="p-6 space-y-4">
                         <div className="flex items-center justify-between">
                             <Label htmlFor="onlineReservations" className="font-semibold">Reservas en línea</Label>
-                            <Switch id="onlineReservations" defaultChecked={form.getValues('onlineReservations')} />
+                            <Controller
+                                control={form.control}
+                                name="onlineReservations"
+                                render={({ field }) => (
+                                    <Switch
+                                        id="onlineReservations"
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                    />
+                                )}
+                            />
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="marketVisibility" className="font-semibold">Aparecer en Agenda VATOS ALFA Market</Label>
-                            <Switch id="marketVisibility" defaultChecked={form.getValues('marketVisibility')} />
-                        </div>
+
                     </CardContent>
                 </Card>
 
@@ -93,14 +162,48 @@ export default function SitioWebPage() {
                         <AccordionTrigger className="p-6">Reservas en el sitio web</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-4">
                             <div className="space-y-2">
-                                <Label>Muestra tus horas según</Label>
-                                <Select defaultValue={form.getValues('showHoursBy')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="professional">Profesional</SelectItem><SelectItem value="service">Servicio</SelectItem></SelectContent></Select>
+                                <div className="flex justify-between items-center">
+                                    <Label>Título Principal (Slogan)</Label>
+                                    <span className="text-xs text-muted-foreground">
+                                        {(form.watch('slogan') || '').length}/50
+                                    </span>
+                                </div>
+                                <Input
+                                    placeholder="Tu slogan principal"
+                                    maxLength={50}
+                                    {...form.register('slogan')}
+                                />
                             </div>
-                            <div className="flex items-center justify-between"><Label htmlFor="exclusiveForCreatedClients">Reservas exclusivas para clientes creados en Agenda VATOS ALFA</Label><Switch id="exclusiveForCreatedClients" /></div>
-                            <div className="flex items-center justify-between"><Label htmlFor="allowClientNotes">Permitir notas del cliente</Label><Switch id="allowClientNotes" defaultChecked /></div>
+
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="allowClientNotes">Permitir notas del cliente</Label>
+                                <Controller
+                                    control={form.control}
+                                    name="allowClientNotes"
+                                    render={({ field }) => (
+                                        <Switch
+                                            id="allowClientNotes"
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
+                                    )}
+                                />
+                            </div>
                             <div className="space-y-2">
-                                <Label>Notas predefinidas</Label>
-                                <Textarea placeholder="Ej: Por favor, llega 5 minutos antes de tu cita." />
+                                <div className="flex justify-between items-center">
+                                    <Label>Notas predefinidas</Label>
+                                    <span className="text-xs text-muted-foreground">
+                                        {(form.watch('predefinedNotes') || '').length}/75
+                                    </span>
+                                </div>
+                                <Textarea
+                                    placeholder="Ej: Por favor, llega 5 minutos antes de tu cita."
+                                    maxLength={75}
+                                    {...form.register('predefinedNotes')}
+                                />
+                                <p className="text-[0.8rem] text-muted-foreground">
+                                    Este mensaje aparecerá en la pantalla de confirmación. Máximo 75 caracteres.
+                                </p>
                             </div>
                         </AccordionContent>
                     </AccordionItem>
@@ -124,11 +227,39 @@ export default function SitioWebPage() {
                     <AccordionItem value="item-3" className="border rounded-lg bg-card">
                         <AccordionTrigger className="p-6">Reservas y privacidad</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-4">
-                            <div className="flex items-center justify-between"><Label htmlFor="privacyPolicyEnabled">Políticas de Reserva y Privacidad</Label><Switch id="privacyPolicyEnabled" /></div>
-                            <div className="space-y-2">
-                                <Label>Escribe la URL aquí</Label>
-                                <Input placeholder="https://miempresa.com/politicas" />
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="privacyPolicyEnabled">Políticas de Reserva y Privacidad</Label>
+                                <Controller
+                                    control={form.control}
+                                    name="privacyPolicyEnabled"
+                                    render={({ field }) => (
+                                        <Switch
+                                            id="privacyPolicyEnabled"
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
+                                    )}
+                                />
                             </div>
+
+                            {form.watch('privacyPolicyEnabled') && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label>URL de Aviso de Privacidad</Label>
+                                        <Input
+                                            placeholder="https://vatosalfa.com/privacidad"
+                                            {...form.register('privacyUrl')}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>URL de Términos y Condiciones</Label>
+                                        <Input
+                                            placeholder="https://vatosalfa.com/terminos"
+                                            {...form.register('termsUrl')}
+                                        />
+                                    </div>
+                                </>
+                            )}
                         </AccordionContent>
                     </AccordionItem>
                 </Accordion>
@@ -171,24 +302,12 @@ export default function SitioWebPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Preferencia de profesionales</Label>
-                            <Select defaultValue={form.getValues('professionalPreference')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="client_choice">El cliente elige</SelectItem><SelectItem value="random">Aleatorio</SelectItem></SelectContent></Select>
-                        </div>
+
                     </CardContent>
                 </Card>
 
                 <Accordion type="multiple" className="w-full space-y-4">
-                    <AccordionItem value="item-4" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Sistema de reseñas</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <div className="flex items-center justify-between"><Label htmlFor="reviewSystemEnabled">Sistema de reseñas automáticas</Label><Switch id="reviewSystemEnabled" defaultChecked /></div>
-                            <div className="space-y-2">
-                                <Label>Mostrar el puntaje total y comentarios de las reseñas</Label>
-                                <Select defaultValue={form.getValues('showReviews')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mostrar todo</SelectItem><SelectItem value="score_only">Solo puntaje</SelectItem><SelectItem value="none">No mostrar</SelectItem></SelectContent></Select>
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
+
 
                     <AccordionItem value="item-5" className="border rounded-lg bg-card">
                         <AccordionTrigger className="p-6">Configuración de campos adicionales</AccordionTrigger>
@@ -205,8 +324,18 @@ export default function SitioWebPage() {
                                     {customerFields.map(field => (
                                         <TableRow key={field.id}>
                                             <TableCell className="font-medium">{field.label}</TableCell>
-                                            <TableCell className="text-center"><Switch defaultChecked={form.getValues(`customerFields.${field.id}.use`)} /></TableCell>
-                                            <TableCell className="text-center"><Switch defaultChecked={form.getValues(`customerFields.${field.id}.required`)} /></TableCell>
+                                            <TableCell className="text-center">
+                                                <Switch
+                                                    checked={form.watch(`customerFields.${field.id}.use`)}
+                                                    onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.use`, checked)}
+                                                />
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Switch
+                                                    checked={form.watch(`customerFields.${field.id}.required`)}
+                                                    onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.required`, checked)}
+                                                />
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

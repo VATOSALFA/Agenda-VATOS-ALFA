@@ -55,6 +55,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ExternalLink } from 'lucide-react';
 
 const mainNavLinks = [
   { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
@@ -110,7 +112,7 @@ export default function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isAuthPage = pathname === '/login';
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar');
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos';
 
   useEffect(() => {
     if (!db || !user) return;
@@ -375,6 +377,39 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="secondary" size="sm" className="hidden sm:flex">
+                  <Globe className="mr-2 h-4 w-4" />
+                  Sitio web
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-4" align="end">
+                <div className="flex flex-col space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold leading-none">¡Comparte tu link y recibe citas!</h4>
+                    <p className="text-xs text-muted-foreground break-all">
+                      {typeof window !== 'undefined' ? window.location.origin : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                      window.open(window.location.origin, '_blank');
+                    }}>
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Ir a mi sitio web
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => {
+                      navigator.clipboard.writeText(window.location.origin);
+                      toast({ title: "Link copiado", description: "El enlace se ha copiado al portapapeles." });
+                    }}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {canSee('ver_conversaciones') && (
               <Link href="/conversations" passHref>

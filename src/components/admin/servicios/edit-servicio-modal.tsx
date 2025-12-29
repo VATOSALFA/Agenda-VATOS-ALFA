@@ -82,6 +82,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         price: (service.price ?? '') as any,
         duration: (service.duration ?? '') as any,
         images: Array.isArray(service.images) ? service.images.map(imgUrl => ({ value: imgUrl })) : [],
+        payment_type: service.payment_type || 'no-payment',
       });
     } else {
       reset({
@@ -91,7 +92,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         category: '',
         include_vat: false,
         professionals: [],
-        payment_type: 'online-deposit',
+        payment_type: 'no-payment',
         commission_value: '' as any,
         commission_type: '%',
         images: []

@@ -10,6 +10,9 @@ export async function POST(req: NextRequest) {
         // Initialize Mercado Pago
         // Prioritize the var defined in apphosting.yaml
         const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+
+        console.log(`[MP] Initializing with token length: ${accessToken.length}`);
+
         const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);
 
@@ -17,13 +20,22 @@ export async function POST(req: NextRequest) {
         // Prefer env var, fallback to origin, fallback to hardcoded
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.headers.get('origin') || 'https://vatosalfa.com';
 
+        // Sanitize Payer Data (MP requires valid email format)
+        let payerEmail = payer.email;
+        if (!payerEmail || !payerEmail.includes('@')) {
+            payerEmail = 'cliente-sin-email@vatosalfa.com';
+        }
+
+        console.log(`[MP] Creating preference for Reservation ${reservationId} with email ${payerEmail}`);
+
         // Create Preference
         const result = await preference.create({
             body: {
                 items: items,
                 payer: {
-                    email: payer.email,
-                    name: payer.name || 'Cliente'
+                    email: payerEmail, // Must be a valid email
+                    name: payer.name || 'Cliente',
+                    surname: payer.lastName || ''
                 },
                 external_reference: reservationId,
                 payment_methods: {
@@ -52,6 +64,10 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error("Error creating preference:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // Log detailed MP error if available
+        if (error.cause) {
+            console.error("MP Error Cause:", JSON.stringify(error.cause, null, 2));
+        }
+        return NextResponse.json({ error: error.message || 'Error desconocido en MP', details: error.cause }, { status: 500 });
     }
 }

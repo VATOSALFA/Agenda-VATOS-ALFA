@@ -7,7 +7,7 @@ import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-browser';
+import { db } from '@/lib/firebase-client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 

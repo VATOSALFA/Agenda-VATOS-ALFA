@@ -515,30 +515,60 @@ exports.mercadoPagoWebhook = onRequest(
       const { status, transaction_amount } = paymentInfo;
       console.log(`[vFinal] API Check: Status=${status}, Ref=${external_reference}`);
 
-      const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
+      // Logic updated to support both Sales (Ventas) and direct Reservations
       await admin.firestore().runTransaction(async (t) => {
+        const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
         const ventaDoc = await t.get(ventaRef);
-        if (!ventaDoc.exists || ventaDoc.data().pago_estado === 'Pagado') return;
 
-        const ventaData = ventaDoc.data();
-        const montoOriginal = Number(ventaData.total || 0);
-        const montoPagado = Number(transaction_amount || 0);
-        const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
+        // CASE 1: It is a SALE (Venta) (Legacy/Terminal flow)
+        if (ventaDoc.exists) {
+          if (ventaDoc.data().pago_estado === 'Pagado') return;
 
-        t.update(ventaRef, {
-          pago_estado: 'Pagado',
-          mercado_pago_status: status,
-          mercado_pago_id: String(paymentInfo.id),
-          monto_pagado_real: montoPagado,
-          propina: propina,
-          fecha_pago: new Date()
-        });
+          const ventaData = ventaDoc.data();
+          const montoOriginal = Number(ventaData.total || 0);
+          const montoPagado = Number(transaction_amount || 0);
+          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
 
-        if (ventaData.reservationId) {
-          const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
-          const reservaDoc = await t.get(reservaRef);
-          if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
+          t.update(ventaRef, {
+            pago_estado: 'Pagado',
+            mercado_pago_status: status,
+            mercado_pago_id: String(paymentInfo.id),
+            monto_pagado_real: montoPagado,
+            propina: propina,
+            fecha_pago: new Date()
+          });
+
+          if (ventaData.reservationId) {
+            const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
+            const reservaDoc = await t.get(reservaRef);
+            if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
+          }
+          console.log(`[vFinal] Custom: Venta ${external_reference} updated.`);
+          return;
         }
+
+        // CASE 2: It is a Reservaton (Online Booking flow)
+        const reservaRef = admin.firestore().collection('reservas').doc(external_reference);
+        const reservaDoc = await t.get(reservaRef);
+
+        if (reservaDoc.exists) {
+          // Update Reservation
+          t.update(reservaRef, {
+            pago_estado: 'Pagado',
+            estado_pago: 'Pagado', // Redundancy for safety
+            deposit_payment_id: String(paymentInfo.id),
+            deposit_paid_at: new Date(),
+            // If status was pending_payment, we might want to confirm it?
+            // Usually 'Confirmado' implies logic confirmation.
+            // Let's set 'estado' to 'Confirmado' if it was pending payment?
+            // Or just mark payment as paid.
+            // Let's stick to marking payment.
+          });
+          console.log(`[vFinal] Custom: Direct Reservation ${external_reference} updated.`);
+          return;
+        }
+
+        console.warn(`[vFinal] No Venta or Reserva found for ref ${external_reference}`);
       });
       console.log(`[vFinal] SUCCESS: Venta ${external_reference} processed.`);
 

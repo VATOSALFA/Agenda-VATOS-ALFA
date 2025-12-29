@@ -19,6 +19,8 @@ backend:
       secret: MERCADO_PAGO_ACCESS_TOKEN
     - variable: MERCADO_PAGO_WEBHOOK_SECRET
       secret: MERCADO_PAGO_WEBHOOK_SECRET
+    - variable: MERCADO_PAGO_WEB_WEBHOOK_SECRET
+      secret: MERCADO_PAGO_WEB_WEBHOOK_SECRET
   secretManagement:
     grantAccess: true
 

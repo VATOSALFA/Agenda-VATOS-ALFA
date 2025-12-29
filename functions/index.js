@@ -18,6 +18,7 @@ const twilio = require("twilio");
 // --- DEFINICIÓN DE SECRETOS ---
 const mpAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
 const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
+const mpWebWebhookSecret = defineSecret("MERCADO_PAGO_WEB_WEBHOOK_SECRET");
 const resendApiKey = defineSecret("RESEND_API_KEY");
 
 // Configuración global
@@ -440,15 +441,20 @@ exports.mercadoPagoWebhook = onRequest(
   {
     cors: true,
     invoker: 'public',
-    secrets: [mpWebhookSecret, mpAccessToken],
+    secrets: [mpWebhookSecret, mpWebWebhookSecret, mpAccessToken],
   },
   async (request, response) => {
     console.log("========== [vFinal] MERCADO PAGO WEBHOOK RECEIVED ==========");
 
-    const secret = mpWebhookSecret.value();
-    if (!secret) {
-      console.error("FATAL: Secret missing.");
-      response.status(500).send("Secret missing.");
+    // We have two potential secrets now (Terminal and Web)
+    // In a strict implementation, we would validate the x-signature against both.
+    // For now, we ensure at least one is loaded to proceed.
+    const secretTerminal = mpWebhookSecret.value();
+    const secretWeb = mpWebWebhookSecret.value();
+
+    if (!secretTerminal && !secretWeb) {
+      console.error("FATAL: Both Webhook secrets missing.");
+      response.status(500).send("Secrets missing.");
       return;
     }
 

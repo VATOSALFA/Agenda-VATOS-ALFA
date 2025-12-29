@@ -87,13 +87,30 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         const startObj = set(new Date(), { hours: startH, minutes: startM, seconds: 0, milliseconds: 0 });
         const endObj = set(new Date(), { hours: endH, minutes: endM, seconds: 0, milliseconds: 0 });
 
+        // Fetch settings once (outside loop)
+        let minReservationBuffer = 60; // Default 1 hour
+        try {
+            const settingsSnap = await db.collection('settings').doc('website').get();
+            if (settingsSnap.exists) {
+                const data = settingsSnap.data();
+                if (data) {
+                    minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching reservation settings:", e);
+        }
+
         const availableSlots: string[] = [];
         let current = startObj;
 
         // Slot interval (e.g., every 30 mins)
-        const GRID_INTERVAL = 30;
+        const GRID_INTERVAL = 30; // Could be dynamic from settings too
 
         // Helper to check against current time if it's today
+        // Note: This uses Server Time. Ensure Server Time is consistent with Business Time.
+        // Ideally, we would convert 'now' to the business timezone.
+        // For now, assuming server time is reasonably close or using simple logic.
         const queryDate = parse(date, 'yyyy-MM-dd', new Date());
         const isQueryDateToday = isToday(queryDate);
         const now = new Date();
@@ -104,23 +121,6 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             const slotEnd = slotStart + durationMinutes;
 
             // Check if slot is in the past or within minimum reservation time buffer
-            let minReservationBuffer = 0;
-            try {
-                // Fetch settings using Admin SDK
-                const db = await getDb();
-                const settingsSnap = await db.collection('settings').doc('website').get();
-                if (settingsSnap.exists) { // Admin SDK uses .exists property, not method? Or method? Usually .exists as boolean in some versions, or property. Admin SDK v10+ it is .exists getter.
-                    // Actually in nodejs admin sdk, it is `snapshot.exists` (boolean property).
-                    const data = settingsSnap.data();
-                    if (data) {
-                        minReservationBuffer = (Number(data.minReservationTime) || 0) * 60;
-                    }
-                }
-            } catch (e) {
-                minReservationBuffer = 60;
-                console.error("Error fetching reservation settings:", e);
-            }
-
             if (isQueryDateToday && slotStart < (currentMinutes + minReservationBuffer)) {
                 current = addMinutes(current, GRID_INTERVAL);
                 continue;
@@ -128,6 +128,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
 
             // Check if overlaps with any busy interval
             const isBusy = busyIntervals.some(busy => {
+                // Interval intersection: (StartA < EndB) and (EndA > StartB)
                 return (slotStart < busy.end && slotEnd > busy.start);
             });
 

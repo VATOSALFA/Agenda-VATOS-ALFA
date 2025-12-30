@@ -24,7 +24,11 @@ const initializeFirebaseAdmin = () => {
     } else {
       console.log("Inicializando Firebase Admin SDK con Credenciales por Defecto (ADC)...");
       // En entornos de Google Cloud (App Hosting, Functions, Run), esto usa la cuenta de servicio por defecto automáticamente.
-      firebaseAdminApp = admin.initializeApp();
+      // En local, necesitamos especificar el projectId si no está en las credenciales de ADC.
+      firebaseAdminApp = admin.initializeApp({
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agenda-1ae08',
+        credential: admin.credential.applicationDefault()
+      });
     }
 
     console.log("Firebase Admin SDK inicializado con éxito.");

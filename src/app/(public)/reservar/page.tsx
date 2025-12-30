@@ -399,7 +399,15 @@ export default function BookingPage() {
                 // Better to throw error if security is strict. But I'll warn.
             }
 
-            const token = executeRecaptcha ? await executeRecaptcha('booking') : null;
+            let token: string | null = null;
+            try {
+                if (executeRecaptcha) {
+                    token = await executeRecaptcha('booking');
+                }
+            } catch (recaptchaError) {
+                console.error("Recaptcha execution failed, proceeding without token:", recaptchaError);
+                // Allow proceeding even if Recaptcha fails (fail-open) to avoid blocking sales
+            }
 
             if (bookingMode === 'combined') {
                 const cfg = configs['combined'];

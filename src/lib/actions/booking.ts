@@ -41,12 +41,24 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
 
         const { start: startStr, end: endStr } = scheduleDay; // HH:mm
 
+        // 1.1 Add Breaks to Busy Intervals
+        const busyIntervals: { start: number, end: number }[] = [];
+
+        if (scheduleDay.breaks && Array.isArray(scheduleDay.breaks)) {
+            scheduleDay.breaks.forEach((brk: any) => {
+                const [sH, sM] = brk.start.split(':').map(Number);
+                const [eH, eM] = brk.end.split(':').map(Number);
+                busyIntervals.push({
+                    start: sH * 60 + sM,
+                    end: eH * 60 + eM
+                });
+            });
+        }
+
         // 2. Get Busy Slots (Reservations)
         const reservationsSnapshot = await db.collection('reservas')
             .where('fecha', '==', date)
             .get();
-
-        const busyIntervals: { start: number, end: number }[] = [];
 
         reservationsSnapshot.forEach(doc => {
             const data = doc.data();

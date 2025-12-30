@@ -107,10 +107,16 @@ export interface Schedule {
   [key: string]: ScheduleDay;
 }
 
+export interface Break {
+  start: string;
+  end: string;
+}
+
 export interface ScheduleDay {
   enabled: boolean;
   start: string;
   end: string;
+  breaks?: Break[];
 }
 
 export interface Commission {

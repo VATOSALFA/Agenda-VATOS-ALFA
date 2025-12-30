@@ -9,6 +9,7 @@ import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { getDb } from '@/lib/firebase-server';
 import { Metadata } from 'next';
+import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -53,8 +54,10 @@ export default function RootLayout({
           <ThemeProvider>
             <AuthProvider>
               <MercadoPagoProvider>
-                {children}
-                <Toaster />
+                <RecaptchaProvider>
+                  {children}
+                  <Toaster />
+                </RecaptchaProvider>
               </MercadoPagoProvider>
             </AuthProvider>
           </ThemeProvider>

@@ -21,6 +21,8 @@ backend:
       secret: MERCADO_PAGO_WEBHOOK_SECRET
     - variable: MERCADO_PAGO_WEB_WEBHOOK_SECRET
       secret: MERCADO_PAGO_WEB_WEBHOOK_SECRET
+    - variable: RECAPTCHA_SECRET_KEY
+      secret: RECAPTCHA_SECRET_KEY
   secretManagement:
     grantAccess: true
 
@@ -60,3 +62,6 @@ env:
   # --- TWILIO CONFIG ---
   - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
+  # --- RECAPTCHA CONFIG ---
+  - variable: NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+    value: 6Lce0DosAAAAANOwXUjYDZlp8JTRaqnyj9HqZ9Oo

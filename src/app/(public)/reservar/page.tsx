@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 // --- TYPES ---
 type BookingMode = 'combined' | 'separate';
@@ -60,6 +61,7 @@ export default function BookingPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { toast } = useToast();
+    const { executeRecaptcha } = useGoogleReCaptcha();
 
     // Data
     const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
@@ -390,6 +392,15 @@ export default function BookingPage() {
         let errorCount = 0;
 
         try {
+            if (!executeRecaptcha) {
+                console.warn('Recaptcha not ready');
+                // Proceed or block? Usually proceed if it fails to load to not block real users, or block if strict.
+                // For now, let's proceed but maybe without token?
+                // Better to throw error if security is strict. But I'll warn.
+            }
+
+            const token = executeRecaptcha ? await executeRecaptcha('booking') : null;
+
             if (bookingMode === 'combined') {
                 const cfg = configs['combined'];
                 if (!cfg) throw new Error("Config missing");
@@ -403,7 +414,8 @@ export default function BookingPage() {
                     locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
                     paymentStatus: upfrontTotal > 0 ? 'pending_payment' : 'pending',
                     amountDue: upfrontTotal,
-                    totalAmount: totalPrice
+                    totalAmount: totalPrice,
+                    recaptchaToken: token
                 });
 
                 if (res.success && res.reservationId) {
@@ -429,7 +441,8 @@ export default function BookingPage() {
                         locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
                         paymentStatus: itemUpfront > 0 ? 'pending_payment' : 'pending',
                         amountDue: itemUpfront,
-                        totalAmount: Number(item.service.price || 0)
+                        totalAmount: Number(item.service.price || 0),
+                        recaptchaToken: token
                     });
 
                     if (res.success && res.reservationId) {
@@ -1060,6 +1073,11 @@ export default function BookingPage() {
                             </motion.div>
                         )}
                     </AnimatePresence>
+                    <div className="mt-4 text-[10px] text-center text-muted-foreground">
+                        Este sitio está protegido por reCAPTCHA y se aplican la{' '}
+                        <a href="https://policies.google.com/privacy" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Política de Privacidad</a> y los{' '}
+                        <a href="https://policies.google.com/terms" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Términos de Servicio</a> de Google.
+                    </div>
                 </div>
             </div>
         </div>

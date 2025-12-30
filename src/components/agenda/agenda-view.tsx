@@ -789,6 +789,32 @@ export default function AgendaView() {
                         />
                       )}
 
+                      {/* Breaks */}
+                      {isWorking && daySchedule?.breaks?.map((brk: any, i: number) => {
+                        const [startH, startM] = brk.start.split(':').map(Number);
+                        const [endH, endM] = brk.end.split(':').map(Number);
+
+                        const breakStartDecimal = startH + (startM / 60);
+                        const breakEndDecimal = endH + (endM / 60);
+
+                        const minutesFromStart = (breakStartDecimal - startHour) * 60;
+                        const top = minutesFromStart * pixelsPerMinute;
+
+                        const durationMinutes = (breakEndDecimal - breakStartDecimal) * 60;
+                        const height = durationMinutes * pixelsPerMinute;
+
+                        if (height <= 0) return null;
+
+                        return (
+                          <NonWorkBlock
+                            key={`break-${i}`}
+                            top={top}
+                            height={height}
+                            text="Descanso"
+                          />
+                        );
+                      })}
+
                       {/* Hover Popover */}
                       {isWorking && hoveredSlot?.barberId === barber.id && (
                         <div

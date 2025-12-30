@@ -292,6 +292,19 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           allItemsValid = false;
           return;
         }
+
+        // Check for breaks
+        if (daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
+          const breakConflict = daySchedule.breaks.some((brk: any) => {
+            return hora_inicio < brk.end && hora_fin > brk.start;
+          });
+
+          if (breakConflict) {
+            errors[index] = `El profesional está en su horario de descanso.`;
+            allItemsValid = false;
+            return;
+          }
+        }
       }
     });
     setAvailabilityErrors(errors);

@@ -211,6 +211,71 @@ export async function createPublicReservation(data: any) {
         const totalPrice = validServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
         const serviceNames = validServices.map((s: any) => s.name).join(', ');
 
+        // CALCULATE TIMES
+        const [h, m] = data.time.split(':').map(Number);
+        const startTime = set(parse(data.date, 'yyyy-MM-dd', new Date()), { hours: h, minutes: m });
+        const endTime = addMinutes(startTime, totalDuration);
+        const endTimeStr = format(endTime, 'HH:mm');
+        const startTimeStr = data.time;
+
+        // VALIDATION: AVAILABILITY
+        // 1. Get Professional Schedule
+        const profDoc = await db.collection('profesionales').doc(data.professionalId).get();
+        if (!profDoc.exists) return { error: 'Profesional no encontrado' };
+        const profData = profDoc.data();
+
+        const dayName = format(parse(data.date, 'yyyy-MM-dd', new Date()), 'eeee', { locale: es }).toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        const scheduleDay = profData?.schedule?.[dayName];
+
+        if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };
+
+        // Check working hours
+        if (startTimeStr < scheduleDay.start || endTimeStr > scheduleDay.end) {
+            return { error: 'La hora seleccionada está fuera del horario laboral.' };
+        }
+
+        // Check Breaks
+        if (scheduleDay.breaks && Array.isArray(scheduleDay.breaks)) {
+            const isBreak = scheduleDay.breaks.some((brk: any) => {
+                return startTimeStr < brk.end && endTimeStr > brk.start;
+            });
+            if (isBreak) return { error: 'El horario coincide con el descanso del profesional.' };
+        }
+
+        // Check Existing Reservations
+        const reservationsSnapshot = await db.collection('reservas')
+            .where('fecha', '==', data.date)
+            .get(); // Filter by professional in memory to avoid index issues if not exists
+
+        const hasReservationConflict = reservationsSnapshot.docs.some(doc => {
+            const res = doc.data();
+            if (res.estado === 'Cancelado') return false;
+
+            // Check if it's the same professional
+            const isForProf = res.barbero_id === data.professionalId || (res.items && res.items.some((i: any) => i.barbero_id === data.professionalId));
+            if (!isForProf) return false;
+
+            return startTimeStr < res.hora_fin && endTimeStr > res.hora_inicio;
+        });
+
+        if (hasReservationConflict) return { error: 'Ya existe una reserva en este horario.' };
+
+        // Check Blocks
+        const blocksSnapshot = await db.collection('bloqueos_horario')
+            .where('fecha', '==', data.date)
+            .where('barbero_id', '==', data.professionalId)
+            .get();
+
+        const hasBlockConflict = blocksSnapshot.docs.some(doc => {
+            const block = doc.data();
+            return startTimeStr < block.hora_fin && endTimeStr > block.hora_inicio;
+        });
+
+        if (hasBlockConflict) return { error: 'El profesional tiene un bloqueo en este horario.' };
+
+
         const items = validServices.map((s: any) => ({
             id: s.id,
             nombre: s.name,
@@ -221,17 +286,12 @@ export async function createPublicReservation(data: any) {
         }));
 
         // 3. Create Reservation
-        // Calculate End Time
-        const [h, m] = data.time.split(':').map(Number);
-        const startTime = set(parse(data.date, 'yyyy-MM-dd', new Date()), { hours: h, minutes: m });
-        const endTime = addMinutes(startTime, totalDuration);
-
         const reservationData = {
             cliente_id: clientId,
             barbero_id: data.professionalId, // Main professional
             fecha: data.date,
             hora_inicio: data.time,
-            hora_fin: format(endTime, 'HH:mm'),
+            hora_fin: endTimeStr,
             estado: 'Pendiente', // Starts as pending
             servicio: serviceNames, // Legacy field: concatenated names
             local_id: data.locationId || 'default',

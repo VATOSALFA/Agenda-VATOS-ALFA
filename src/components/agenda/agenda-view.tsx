@@ -361,6 +361,35 @@ export default function AgendaView() {
       return;
     }
 
+    // Check if slot overlaps with a break
+    const barber = filteredProfessionals.find(p => p.id === barberId);
+    if (barber) {
+      const daySchedule = getDaySchedule(barber);
+      if (daySchedule && daySchedule.breaks) {
+        const [slotH, slotM] = time.split(':').map(Number);
+        const slotTime = slotH * 60 + slotM;
+        const slotEnd = slotTime + 15; // 15 min slot check
+
+        const isBreak = daySchedule.breaks.some((brk: any) => {
+          const [sH, sM] = brk.start.split(':').map(Number);
+          const [eH, eM] = brk.end.split(':').map(Number);
+          const breakStart = sH * 60 + sM;
+          const breakEnd = eH * 60 + eM;
+
+          // Intersection check
+          return (slotTime < breakEnd && slotEnd > breakStart);
+        });
+
+        if (isBreak) {
+          setHoveredSlot(null);
+          if (popoverState && !popoverTimeoutRef.current) {
+            popoverTimeoutRef.current = setTimeout(() => setPopoverState(null), 400);
+          }
+          return;
+        }
+      }
+    }
+
     setHoveredSlot({ barberId, time });
 
     // Handle popover auto-close with delay
@@ -811,6 +840,7 @@ export default function AgendaView() {
                             top={top}
                             height={height}
                             text="Descanso"
+                          // Add style to ensure it is visually blocking if needed, but logic check is better
                           />
                         );
                       })}

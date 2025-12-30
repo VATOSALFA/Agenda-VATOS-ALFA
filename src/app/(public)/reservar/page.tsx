@@ -317,15 +317,20 @@ export default function BookingPage() {
                     getAvailableSlots({ date: dateStr, professionalId: p.id, durationMinutes: duration || 30 })
                         .catch(err => {
                             console.error(`Error fetching slots for pro ${p.name}:`, err);
-                            return { slots: [] };
+                            return { error: err.message || 'Unknown network error' };
                         })
                 );
 
                 try {
                     const results = await Promise.all(promises);
                     const newMap: Record<string, string[]> = {};
+                    let errorFound = null;
 
                     results.forEach((res: any, index) => {
+                        if (res.error) {
+                            console.error(`Server error for pro ${capablePros[index].name}:`, res.error);
+                            if (!errorFound) errorFound = res.error;
+                        }
                         if (res && res.slots && Array.isArray(res.slots)) {
                             res.slots.forEach((time: string) => {
                                 if (!newMap[time]) newMap[time] = [];
@@ -334,8 +339,13 @@ export default function BookingPage() {
                         }
                     });
 
-                    setTempAvailableSlots(Object.keys(newMap).sort());
+                    const availableTimes = Object.keys(newMap).sort();
+                    setTempAvailableSlots(availableTimes);
                     setTempSlotMap(newMap);
+
+                    if (availableTimes.length === 0 && errorFound) {
+                        toast({ variant: 'destructive', title: 'Error de Disponibilidad', description: errorFound });
+                    }
                 } catch (e) {
                     console.error("Critical error fetching slots:", e);
                     toast({ variant: 'destructive', title: 'Error', description: 'Error al cargar horarios disponibles.' });

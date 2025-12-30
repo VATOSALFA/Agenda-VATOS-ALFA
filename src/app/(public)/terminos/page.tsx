@@ -3,6 +3,10 @@
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { CustomLoader } from '@/components/ui/custom-loader';
 
+import { Button } from '@/components/ui/button';
+import { ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
+
 export default function TerminosPage() {
     const { data: empresaData, loading } = useFirestoreQuery<any>('empresa');
 
@@ -12,6 +16,12 @@ export default function TerminosPage() {
 
     return (
         <div className="container mx-auto py-12 px-4 max-w-3xl">
+            <Button variant="ghost" asChild className="mb-6 -ml-4 text-muted-foreground">
+                <Link href="/">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Volver al Inicio
+                </Link>
+            </Button>
             <h1 className="text-3xl font-bold mb-8 text-primary">Términos y Condiciones de Servicio</h1>
             <div className="prose prose-slate max-w-none space-y-8">
 

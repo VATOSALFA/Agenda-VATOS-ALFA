@@ -238,7 +238,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
     if (agendaSettings && !agendaSettings.simultaneousReservations && values.cliente_id) {
       const clientConflict = allReservations.some(r => {
-        if (r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+        if (r.estado === 'Cancelado' || r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
         return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
       });
       if (clientConflict) {
@@ -268,7 +268,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       if (!agendaSettings?.overlappingReservations) {
         const reservationConflict = allReservations.some(r => {
-          if (!r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+          if (r.estado === 'Cancelado' || !r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
           const hasCommonProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
           if (!hasCommonProfessional) return false;
           return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;

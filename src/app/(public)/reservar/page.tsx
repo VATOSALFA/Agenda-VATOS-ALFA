@@ -878,7 +878,12 @@ export default function BookingPage() {
                         {step === 3 && (
                             <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                                 <div className="flex items-center mb-2">
-                                    <Button variant="ghost" size="icon" onClick={() => setStep(bookingMode === 'separate' ? 2 : 2)} className="-ml-2 mr-2"><ChevronLeft /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => {
+                                        if (bookingMode === 'combined') {
+                                            setActiveConfigId('combined');
+                                        }
+                                        setStep(2);
+                                    }} className="-ml-2 mr-2"><ChevronLeft /></Button>
                                     <h2 className="text-xl font-semibold">Confirma tus datos</h2>
                                 </div>
 

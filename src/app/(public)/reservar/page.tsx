@@ -409,6 +409,8 @@ export default function BookingPage() {
                 // Allow proceeding even if Recaptcha fails (fail-open) to avoid blocking sales
             }
 
+            let lastError = "";
+
             if (bookingMode === 'combined') {
                 const cfg = configs['combined'];
                 if (!cfg) throw new Error("Config missing");
@@ -430,6 +432,8 @@ export default function BookingPage() {
                     createdReservationIds.push(res.reservationId);
                 } else {
                     errorCount++;
+                    lastError = res.error || "Error al crear la reserva combinada";
+                    console.error("Booking error:", res.error);
                 }
 
             } else {
@@ -457,6 +461,8 @@ export default function BookingPage() {
                         createdReservationIds.push(res.reservationId);
                     } else {
                         errorCount++;
+                        lastError = res.error || "Error al crear la reserva individual";
+                        console.error("Booking error:", res.error);
                     }
                 }
             }
@@ -490,7 +496,7 @@ export default function BookingPage() {
                             window.location.href = data.init_point;
                             return; // Don't turn off submitting
                         } else {
-                            throw new Error('No se pudo generar el enlace de pago.');
+                            throw new Error(data.error || 'No se pudo generar el enlace de pago.');
                         }
 
                     } catch (payError: any) {
@@ -503,7 +509,7 @@ export default function BookingPage() {
                     setIsSubmitting(false);
                 }
             } else {
-                toast({ variant: 'destructive', title: 'Error', description: 'Hubo un problema al crear la reserva.' });
+                toast({ variant: 'destructive', title: 'Error', description: lastError || 'Hubo un problema al crear la reserva.' });
                 setIsSubmitting(false);
             }
         } catch (e: any) {

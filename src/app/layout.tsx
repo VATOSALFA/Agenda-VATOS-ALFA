@@ -30,7 +30,8 @@ export async function generateMetadata(): Promise<Metadata> {
       };
     }
   } catch (error) {
-    console.error('Error fetching metadata:', error);
+    // Silently fail in dev/build if credentials aren't available, fallback to default
+    // console.warn('Metadata fetch failed (using default):', error); 
   }
 
   return {

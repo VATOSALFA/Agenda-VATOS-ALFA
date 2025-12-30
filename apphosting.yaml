@@ -9,20 +9,36 @@ run:
 backend:
   id: functions
   env:
+    # --- FIREBASE & TWILIO (Estándar) ---
     - variable: FIREBASE_SERVICE_ACCOUNT_KEY
       secret: FIREBASE_SERVICE_ACCOUNT_KEY
     - variable: TWILIO_ACCOUNT_SID
       secret: TWILIO_ACCOUNT_SID
     - variable: TWILIO_AUTH_TOKEN
       secret: TWILIO_AUTH_TOKEN
-    - variable: MERCADO_PAGO_ACCESS_TOKEN
-      secret: MERCADO_PAGO_ACCESS_TOKEN
-    - variable: MERCADO_PAGO_WEBHOOK_SECRET
-      secret: MERCADO_PAGO_WEBHOOK_SECRET
-    - variable: MERCADO_PAGO_WEB_WEBHOOK_SECRET
-      secret: MERCADO_PAGO_WEB_WEBHOOK_SECRET
+    
+    # --- EMAILS ---
+    - variable: RESEND_API_KEY
+      secret: RESEND_API_KEY
+
+    # --- MERCADO PAGO: WEB (Pagos en Línea) ---
+    # ¡Ahora coinciden perfectamente!
+    - variable: MP_WEB_ACCESS_TOKEN
+      secret: MP_WEB_ACCESS_TOKEN
+    - variable: MP_WEB_WEBHOOK_SECRET
+      secret: MP_WEB_WEBHOOK_SECRET
+
+    # --- MERCADO PAGO: TERMINAL (Física) ---
+    # ¡Simetría total!
+    - variable: MP_TERMINAL_ACCESS_TOKEN
+      secret: MP_TERMINAL_ACCESS_TOKEN
+    - variable: MP_TERMINAL_WEBHOOK_SECRET
+      secret: MP_TERMINAL_WEBHOOK_SECRET
+
+    # --- RECAPTCHA ---
     - variable: RECAPTCHA_SECRET_KEY
       secret: RECAPTCHA_SECRET_KEY
+      
   secretManagement:
     grantAccess: true
 
@@ -37,8 +53,11 @@ headers:
     function: functions
 
 env:
-  # Variables de entorno para el frontend (Next.js)
-  # --- FIREBASE PROJECT CONFIG ---
+  # --- APP URL (CRÍTICO) ---
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://vatosalfa.com
+
+  # --- FIREBASE CLIENT CONFIG ---
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     secret: NEXT_PUBLIC_FIREBASE_API_KEY
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
@@ -53,15 +72,20 @@ env:
     secret: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-  # --- MERCADO PAGO CONFIG ---
-  - variable: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
-    secret: NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY
-  # --- GEMINI CONFIG ---
+  
+  # --- MERCADO PAGO CLIENT ---
+  # También actualizamos este secreto para que el nombre sea específico
+  - variable: NEXT_PUBLIC_MP_WEB_PUBLIC_KEY
+    secret: NEXT_PUBLIC_MP_WEB_PUBLIC_KEY
+
+  # --- GEMINI ---
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
-  # --- TWILIO CONFIG ---
+  
+  # --- TWILIO ---
   - variable: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
     secret: NEXT_PUBLIC_TWILIO_PHONE_NUMBER
-  # --- RECAPTCHA CONFIG ---
+  
+  # --- RECAPTCHA (Valor fijo) ---
   - variable: NEXT_PUBLIC_RECAPTCHA_SITE_KEY
-    value: 6Lce0DosAAAAANOwXUjYDZlp8JTRaqnyj9HqZ9Oo
+    value: 6Lce0DosAAAAANOwXUjYDZIp8JTRaqnyJ9HqZ9Oo

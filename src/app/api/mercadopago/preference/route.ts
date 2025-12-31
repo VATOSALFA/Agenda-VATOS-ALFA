@@ -11,7 +11,15 @@ export async function POST(req: NextRequest) {
         // Prioritize the var defined in apphosting.yaml
         const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
 
-        console.log(`[MP] Initializing with token length: ${accessToken.length}`);
+        console.log(`[MP] Loading token...`);
+        console.log(`[MP] MERCADO_PAGO_ACCESS_TOKEN exists: ${!!process.env.MERCADO_PAGO_ACCESS_TOKEN}`);
+        console.log(`[MP] MP_ACCESS_TOKEN exists: ${!!process.env.MP_ACCESS_TOKEN}`);
+        console.log(`[MP] Final Token Length: ${accessToken.length}`);
+        if (accessToken.length > 10) {
+            console.log(`[MP] Token Start: ${accessToken.substring(0, 15)}...`);
+        } else {
+            console.log(`[MP] Token is likely missing or empty!`);
+        }
 
         const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);

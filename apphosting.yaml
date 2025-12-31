@@ -25,6 +25,9 @@ backend:
     # ¡Ahora coinciden perfectamente!
     - variable: MP_WEB_ACCESS_TOKEN
       secret: MP_WEB_ACCESS_TOKEN
+    # Mapeamos la variable estándar del código al secreto específico de WEB
+    - variable: MERCADO_PAGO_ACCESS_TOKEN
+      secret: MP_WEB_ACCESS_TOKEN
     - variable: MP_WEB_WEBHOOK_SECRET
       secret: MP_WEB_WEBHOOK_SECRET
 

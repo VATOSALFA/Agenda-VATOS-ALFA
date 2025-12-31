@@ -37,6 +37,14 @@ export async function POST(req: NextRequest) {
         console.log(`[MP] Creating preference for Reservation ${reservationId} with email ${payerEmail}`);
 
         // Create Preference
+        const backUrls = {
+            success: `${baseUrl}/reserva/confirmada`,
+            failure: `${baseUrl}/reserva/fallida`,
+            pending: `${baseUrl}/reserva/pendiente`
+        };
+
+        console.log(`[MP] Using Back URLs:`, JSON.stringify(backUrls, null, 2));
+
         const result = await preference.create({
             body: {
                 items: items,
@@ -52,12 +60,8 @@ export async function POST(req: NextRequest) {
                         { id: "ticket" } // Exclude cash payments if instant confirmation is needed? Or keep them? Usually for booking, instant is better.
                     ]
                 },
-                back_urls: {
-                    success: `${baseUrl}/reserva/confirmada`,
-                    failure: `${baseUrl}/reserva/fallida`,
-                    pending: `${baseUrl}/reserva/pendiente`
-                },
-                auto_return: 'approved',
+                back_urls: backUrls,
+                auto_return: baseUrl.includes('localhost') ? undefined : 'approved',
                 // notification_url: `${baseUrl}/api/mercadopago/webhook`, // Can be added later
                 metadata: {
                     reservation_id: reservationId

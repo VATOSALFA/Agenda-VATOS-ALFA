@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Trash2, Loader2 } from 'lucide-react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -22,7 +23,8 @@ interface PresentationModalProps {
 
 export function PresentationModal({ isOpen, onClose, onDataSaved }: PresentationModalProps) {
   const { toast } = useToast();
-  const [newPresentationName, setNewPresentationName] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [unit, setUnit] = useState('ml');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [queryKey, setQueryKey] = useState(0);
   const { db } = useAuth();
@@ -30,43 +32,48 @@ export function PresentationModal({ isOpen, onClose, onDataSaved }: Presentation
   const { data: presentations, loading } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
 
   const handleAddPresentation = async () => {
-    if(!db) return;
-    if (newPresentationName.trim() === '') {
-        toast({ variant: 'destructive', title: 'Error', description: 'El nombre del formato no puede estar vacío.' });
-        return;
+    if (!db) return;
+    if (quantity.trim() === '') {
+      toast({ variant: 'destructive', title: 'Error', description: 'La cantidad no puede estar vacía.' });
+      return;
     }
-    
+
+    // Concatenate for storage
+    const newPresentationName = `${quantity.trim()} ${unit}`;
+
+
     setIsSubmitting(true);
     try {
-        const querySnapshot = await getDocs(collection(db, 'formatos_productos'));
-        const order = querySnapshot.size;
+      const querySnapshot = await getDocs(collection(db, 'formatos_productos'));
+      const order = querySnapshot.size;
 
-        const docRef = await addDoc(collection(db, 'formatos_productos'), {
-            name: newPresentationName.trim(),
-            order,
-            created_at: Timestamp.now(),
-        });
-        setNewPresentationName('');
-        toast({ title: 'Formato agregado' });
-        onDataSaved(docRef.id);
-        onClose();
+      const docRef = await addDoc(collection(db, 'formatos_productos'), {
+        name: newPresentationName.trim(),
+        order,
+        created_at: Timestamp.now(),
+      });
+      setQuantity('');
+      setUnit('ml');
+      toast({ title: 'Formato agregado' });
+      onDataSaved(docRef.id);
+      onClose();
     } catch (error) {
-        console.error("Error creating presentation:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear el formato.' });
+      console.error("Error creating presentation:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear el formato.' });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
-  
+
   const handleDeletePresentation = async (idToDelete: string) => {
-     if(!db) return;
-     try {
-        await deleteDoc(doc(db, 'formatos_productos', idToDelete));
-        toast({ title: 'Formato eliminado' });
-        setQueryKey(prev => prev + 1);
-     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el formato.' });
-     }
+    if (!db) return;
+    try {
+      await deleteDoc(doc(db, 'formatos_productos', idToDelete));
+      toast({ title: 'Formato eliminado' });
+      setQueryKey(prev => prev + 1);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el formato.' });
+    }
   };
 
   return (
@@ -76,45 +83,62 @@ export function PresentationModal({ isOpen, onClose, onDataSaved }: Presentation
           <DialogTitle>Administrar Formatos/Presentaciones</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
-            <div className="space-y-1">
-                <Label htmlFor="presentation-name">Nombre</Label>
-                <div className="flex gap-2">
-                    <Input 
-                        id="presentation-name" 
-                        placeholder="Ej: 100ml, 80gr, Unidad"
-                        value={newPresentationName}
-                        onChange={(e) => setNewPresentationName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddPresentation()}
-                        disabled={isSubmitting}
-                    />
-                    <Button variant="outline" onClick={handleAddPresentation} disabled={isSubmitting}>
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4"/>}
-                        Agregar
-                    </Button>
-                </div>
+          <div className="space-y-1">
+            <Label>Nuevo Formato</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ej: 100"
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="flex-grow"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddPresentation()}
+                disabled={isSubmitting}
+              />
+              <div className="w-[100px]">
+                <Select value={unit} onValueChange={setUnit} disabled={isSubmitting}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ml">ml</SelectItem>
+                    <SelectItem value="gr">gr</SelectItem>
+                    <SelectItem value="oz">oz</SelectItem>
+                    <SelectItem value="l">l</SelectItem>
+                    <SelectItem value="kg">kg</SelectItem>
+                    <SelectItem value="pza">pza</SelectItem>
+                    <SelectItem value="u">u</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" onClick={handleAddPresentation} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                Agregar
+              </Button>
             </div>
+          </div>
 
-            <ScrollArea className="h-48 rounded-md border">
-                <div className="p-4">
-                {loading && <div className="flex justify-center items-center h-full"><Loader2 className="h-6 w-6 animate-spin"/></div>}
-                {!loading && presentations.map((presentation) => (
-                    <div key={presentation.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
-                        <span className="text-sm">{presentation.name}</span>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-destructive/70 hover:text-destructive"
-                            onClick={() => handleDeletePresentation(presentation.id)}
-                        >
-                            <Trash2 className="h-4 w-4"/>
-                        </Button>
-                    </div>
-                ))}
-                 {!loading && presentations.length === 0 && (
-                    <p className="text-center text-sm text-muted-foreground py-4">No hay formatos creados.</p>
-                 )}
+          <ScrollArea className="h-48 rounded-md border">
+            <div className="p-4">
+              {loading && <div className="flex justify-center items-center h-full"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+              {!loading && presentations.map((presentation) => (
+                <div key={presentation.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md">
+                  <span className="text-sm">{presentation.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive/70 hover:text-destructive"
+                    onClick={() => handleDeletePresentation(presentation.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-            </ScrollArea>
+              ))}
+              {!loading && presentations.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-4">No hay formatos creados.</p>
+              )}
+            </div>
+          </ScrollArea>
         </div>
         <DialogFooter>
           <Button type="button" onClick={onClose}>Cerrar</Button>

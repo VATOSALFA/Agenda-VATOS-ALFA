@@ -5,7 +5,7 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
-import { writeBatch, collection, doc, Timestamp, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { writeBatch, collection, doc, Timestamp, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import type { Client } from '@/lib/types';
 
@@ -33,7 +33,7 @@ interface UploadClientsModalProps {
 type ParsedClient = Omit<Client, 'id' | 'creado_en'> & { creado_en?: any };
 
 interface ClientSettings {
-    autoClientNumber?: boolean;
+  autoClientNumber?: boolean;
 }
 
 export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: UploadClientsModalProps) {
@@ -52,7 +52,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const json: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          
+
           const headers: string[] = json[0].map((h: any) => String(h).toLowerCase().trim());
           const nameIndex = headers.indexOf('nombre');
           const lastnameIndex = headers.indexOf('apellido');
@@ -71,23 +71,23 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const cancelledAppointmentsIndex = headers.indexOf('citas canceladas');
           const totalSpentIndex = headers.indexOf('gasto total');
           const clientNumberIndex = headers.indexOf('número de cliente');
-          
+
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
-              toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
-              return;
+            toast({ variant: 'destructive', title: 'Formato incorrecto', description: 'El archivo debe contener las columnas: nombre, apellido, y telefono.' });
+            return;
           }
 
           const data: ParsedClient[] = json.slice(1).map(row => {
             let birthDate = null;
             if (birthDateIndex > -1 && row[birthDateIndex] instanceof Date) {
-                birthDate = format(row[birthDateIndex], 'yyyy-MM-dd');
+              birthDate = format(row[birthDateIndex], 'yyyy-MM-dd');
             } else if (dayIndex > -1 && monthIndex > -1 && yearIndex > -1) {
-                const day = row[dayIndex];
-                const month = row[monthIndex];
-                const year = row[yearIndex];
-                if (day && month && year) {
-                    birthDate = format(new Date(year, month - 1, day), 'yyyy-MM-dd');
-                }
+              const day = row[dayIndex];
+              const month = row[monthIndex];
+              const year = row[yearIndex];
+              if (day && month && year) {
+                birthDate = format(new Date(year, month - 1, day), 'yyyy-MM-dd');
+              }
             }
 
             let clientSinceDate = Timestamp.now();
@@ -95,32 +95,32 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
               const day = row[clientSinceDayIndex];
               const month = row[clientSinceMonthIndex];
               const year = row[clientSinceYearIndex];
-              if(day && month && year) {
+              if (day && month && year) {
                 clientSinceDate = Timestamp.fromDate(new Date(year, month - 1, day));
               }
             }
 
             return {
-                nombre: row[nameIndex] || '',
-                apellido: row[lastnameIndex] || '',
-                correo: row[emailIndex] || '',
-                telefono: String(row[phoneIndex] || ''),
-                fecha_nacimiento: birthDate,
-                creado_en: clientSinceDate,
-                citas_totales: Number(row[totalAppointmentsIndex]) || 0,
-                citas_asistidas: Number(row[attendedAppointmentsIndex]) || 0,
-                citas_no_asistidas: Number(row[noShowAppointmentsIndex]) || 0,
-                citas_canceladas: Number(row[cancelledAppointmentsIndex]) || 0,
-                gasto_total: Number(row[totalSpentIndex]) || 0,
-                numero_cliente: row[clientNumberIndex] ? String(row[clientNumberIndex]) : undefined,
+              nombre: row[nameIndex] || '',
+              apellido: row[lastnameIndex] || '',
+              correo: row[emailIndex] || '',
+              telefono: String(row[phoneIndex] || ''),
+              fecha_nacimiento: birthDate,
+              creado_en: clientSinceDate,
+              citas_totales: Number(row[totalAppointmentsIndex]) || 0,
+              citas_asistidas: Number(row[attendedAppointmentsIndex]) || 0,
+              citas_no_asistidas: Number(row[noShowAppointmentsIndex]) || 0,
+              citas_canceladas: Number(row[cancelledAppointmentsIndex]) || 0,
+              gasto_total: Number(row[totalSpentIndex]) || 0,
+              numero_cliente: row[clientNumberIndex] ? String(row[clientNumberIndex]) : undefined,
             }
-          }).filter(client => client.nombre && client.apellido && client.telefono); 
+          }).filter(client => client.nombre && client.apellido && client.telefono);
 
           setParsedData(data);
 
         } catch (error) {
-            console.error("Error parsing file:", error);
-            toast({ variant: 'destructive', title: 'Error al leer el archivo', description: 'Asegúrate de que sea un archivo de Excel válido.' });
+          console.error("Error parsing file:", error);
+          toast({ variant: 'destructive', title: 'Error al leer el archivo', description: 'Asegúrate de que sea un archivo de Excel válido.' });
         }
       };
       reader.readAsBinaryString(file);
@@ -139,51 +139,51 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
 
   const handleUpload = async () => {
     if (parsedData.length === 0) {
-        toast({ variant: 'destructive', title: 'No hay datos', description: 'No hay clientes válidos para importar.' });
-        return;
+      toast({ variant: 'destructive', title: 'No hay datos', description: 'No hay clientes válidos para importar.' });
+      return;
     }
     setIsProcessing(true);
     try {
-        const settingsRef = doc(db, 'configuracion', 'clientes');
-        const settingsSnap = await getDocs(query(collection(db, 'configuracion'), where('__name__', '==', 'clientes')));
-        const clientSettings = settingsSnap.docs[0]?.data() as ClientSettings | undefined;
-        const autoNumberEnabled = clientSettings?.autoClientNumber ?? false;
-        
-        let lastClientNumber = 0;
-        if(autoNumberEnabled) {
-            const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
-            const lastClientSnap = await getDocs(q);
-            if (!lastClientSnap.empty) {
-                const lastClient = lastClientSnap.docs[0].data();
-                if (lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
-                    lastClientNumber = Number(lastClient.numero_cliente);
-                }
-            }
+      const settingsRef = doc(db, 'configuracion', 'clientes');
+      const settingsSnap = await getDocs(query(collection(db, 'configuracion'), where('__name__', '==', 'clientes')));
+      const clientSettings = settingsSnap.docs[0]?.data() as ClientSettings | undefined;
+      const autoNumberEnabled = clientSettings?.autoClientNumber ?? false;
+
+      let lastClientNumber = 0;
+      if (autoNumberEnabled) {
+        const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
+        const lastClientSnap = await getDocs(q);
+        if (!lastClientSnap.empty) {
+          const lastClient = lastClientSnap.docs[0].data();
+          if (lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
+            lastClientNumber = Number(lastClient.numero_cliente);
+          }
         }
-        
-        const batch = writeBatch(db);
-        parsedData.forEach((clientData, index) => {
-            const clientRef = doc(collection(db, 'clientes'));
-            const dataToSave: Partial<Client> = {
-              ...clientData,
-              creado_en: clientData.creado_en || Timestamp.now(),
-            };
+      }
 
-            if (autoNumberEnabled && !clientData.numero_cliente) {
-                dataToSave.numero_cliente = String(lastClientNumber + index + 1);
-            }
+      const batch = writeBatch(db);
+      parsedData.forEach((clientData, index) => {
+        const clientRef = doc(collection(db, 'clientes'));
+        const dataToSave: Partial<Client> = {
+          ...clientData,
+          creado_en: clientData.creado_en || Timestamp.now(),
+        };
 
-            batch.set(clientRef, dataToSave);
-        });
-        await batch.commit();
-        toast({ title: '¡Éxito!', description: `${parsedData.length} clientes han sido importados.` });
-        onUploadComplete();
-        handleClose();
+        if (autoNumberEnabled && !clientData.numero_cliente) {
+          dataToSave.numero_cliente = String(lastClientNumber + index + 1);
+        }
+
+        batch.set(clientRef, dataToSave);
+      });
+      await batch.commit();
+      toast({ title: '¡Éxito!', description: `${parsedData.length} clientes han sido importados.` });
+      onUploadComplete();
+      handleClose();
     } catch (error) {
-        console.error("Error uploading clients:", error);
-        toast({ variant: 'destructive', title: 'Error de Carga', description: 'No se pudieron guardar los clientes.' });
+      console.error("Error uploading clients:", error);
+      toast({ variant: 'destructive', title: 'Error de Carga', description: 'No se pudieron guardar los clientes.' });
     } finally {
-        setIsProcessing(false);
+      setIsProcessing(false);
     }
   }
 
@@ -205,53 +205,53 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
 
         {parsedData.length === 0 ? (
           <div className="py-8 space-y-6">
-             <div {...getRootProps()} className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/5' : ''}`}>
-                <input {...getInputProps()} />
-                <UploadCloud className="h-12 w-12 text-muted-foreground" />
-                <p className="mt-4 text-center text-muted-foreground">
-                    Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo.
-                </p>
-             </div>
-             <Alert>
-                <FileSpreadsheet className="h-4 w-4" />
-                <AlertTitle>Formato del archivo</AlertTitle>
-                <AlertDescription>
-                    Asegúrate de que tu archivo .xlsx, .xls o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) otras columnas como <strong>correo</strong>, <strong>fecha de nacimiento</strong>, etc.
-                    <a href="/Base de datos clientes.csv" download="plantilla-clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
-                </AlertDescription>
-             </Alert>
+            <div {...getRootProps()} className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/5' : ''}`}>
+              <input {...getInputProps()} />
+              <UploadCloud className="h-12 w-12 text-muted-foreground" />
+              <p className="mt-4 text-center text-muted-foreground">
+                Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo.
+              </p>
+            </div>
+            <Alert>
+              <FileSpreadsheet className="h-4 w-4" />
+              <AlertTitle>Formato del archivo</AlertTitle>
+              <AlertDescription>
+                Asegúrate de que tu archivo .xlsx, .xls o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) otras columnas como <strong>correo</strong>, <strong>fecha de nacimiento</strong>, etc.
+                <a href="/Base de datos clientes.csv" download="plantilla-clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+              </AlertDescription>
+            </Alert>
           </div>
         ) : (
-            <div className="flex-grow flex flex-col overflow-hidden">
-                <p className="text-sm font-semibold mb-2">Vista previa de la importación ({parsedData.length} clientes)</p>
-                <ScrollArea className="border rounded-md flex-grow">
-                    <Table>
-                        <TableHeader className="sticky top-0 bg-muted">
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Apellido</TableHead>
-                                <TableHead>Correo</TableHead>
-                                <TableHead>Teléfono</TableHead>
-                                <TableHead>Gasto Total</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {parsedData.slice(0, 100).map((client, index) => (
-                                <TableRow key={index}>
-                                    <TableCell>{client.nombre}</TableCell>
-                                    <TableCell>{client.apellido}</TableCell>
-                                    <TableCell>{client.correo || 'N/A'}</TableCell>
-                                    <TableCell>{client.telefono}</TableCell>
-                                    <TableCell>${(client.gasto_total || 0).toLocaleString('es-CL')}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {parsedData.length > 100 && <p className="text-center text-sm text-muted-foreground p-4">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
-                </ScrollArea>
-            </div>
+          <div className="flex-grow flex flex-col overflow-hidden">
+            <p className="text-sm font-semibold mb-2">Vista previa de la importación ({parsedData.length} clientes)</p>
+            <ScrollArea className="border rounded-md flex-grow">
+              <Table>
+                <TableHeader className="sticky top-0 bg-muted">
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Apellido</TableHead>
+                    <TableHead>Correo</TableHead>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>Gasto Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedData.slice(0, 100).map((client, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{client.nombre}</TableCell>
+                      <TableCell>{client.apellido}</TableCell>
+                      <TableCell>{client.correo || 'N/A'}</TableCell>
+                      <TableCell>{client.telefono}</TableCell>
+                      <TableCell>${(client.gasto_total || 0).toLocaleString('es-CL')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {parsedData.length > 100 && <p className="text-center text-sm text-muted-foreground p-4">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
+            </ScrollArea>
+          </div>
         )}
-        
+
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isProcessing}>Cancelar</Button>
           <Button onClick={handleUpload} disabled={parsedData.length === 0 || isProcessing}>

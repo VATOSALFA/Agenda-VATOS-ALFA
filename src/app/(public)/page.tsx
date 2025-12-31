@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
@@ -24,9 +24,11 @@ export default function LandingPage() {
     const router = useRouter();
     // Cart stored as array of Service IDs to allow multiples
     const [cart, setCart] = useState<string[]>([]);
+    const [isBooking, setIsBooking] = useState(false);
     const [productCart, setProductCart] = useState<string[]>([]); // New: Product Cart
     const [selectedPro, setSelectedPro] = useState<any>(null);
     const [selectedProduct, setSelectedProduct] = useState<any>(null); // New: Selected Product
+    const [selectedService, setSelectedService] = useState<any>(null); // New: Selected Service
     const [selectedBranch, setSelectedBranch] = useState<string>('');
 
     // Auto-select branch if only one exists or set default
@@ -126,6 +128,7 @@ export default function LandingPage() {
 
     const handleBooking = () => {
         if (cart.length === 0 && productCart.length === 0) return;
+        setIsBooking(true);
         const serviceQuery = cart.join(',');
         const productQuery = productCart.join(',');
 
@@ -318,50 +321,57 @@ export default function LandingPage() {
                         <p className="text-muted-foreground">Calidad y detalle en cada corte.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
                         {services?.filter((s: any) => s.active).map((service: any) => {
                             const count = getCount(service.id);
                             const isSelected = count > 0;
 
                             return (
-                                <Card key={service.id} className={cn("hover:shadow-xl transition-all duration-300 border-muted group flex flex-col bg-background", isSelected ? "border-primary ring-1 ring-primary" : "")}>
-                                    <CardHeader>
-                                        <CardTitle className="group-hover:text-primary transition-colors">{service.name}</CardTitle>
-                                        <CardDescription className="line-clamp-2">{service.description || 'Servicio profesional de barbería.'}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="flex-1">
-                                        <div className="flex justify-between items-baseline mt-2">
-                                            <span className="text-2xl font-bold">{formatPrice(service.price)}</span>
-                                            <span className="text-sm font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full">{service.duration} min</span>
-                                        </div>
-                                    </CardContent>
-                                    <CardFooter>
-                                        {isSelected ? (
-                                            <div className="flex items-center justify-between w-full bg-slate-100 rounded-md p-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-10 w-10 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                    onClick={() => removeFromCart(service.id)}
-                                                >
-                                                    <Minus className="h-4 w-4" />
-                                                </Button>
-                                                <span className="font-bold text-lg">{count}</span>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-10 w-10 text-primary hover:bg-primary/10"
-                                                    onClick={() => addToCart(service.id)}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
-                                            </div>
+                                <Card
+                                    key={service.id}
+                                    className={cn(
+                                        "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-white overflow-hidden p-2",
+                                        isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-50"
+                                    )}
+                                    onClick={() => setSelectedService(service)}
+                                >
+                                    {/* Small Square Image/Icon */}
+                                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
+                                        {service.images && service.images.length > 0 ? (
+                                            <img
+                                                src={service.images[0]}
+                                                alt={service.name}
+                                                className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
                                         ) : (
-                                            <Button className="w-full" size="lg" onClick={() => addToCart(service.id)}>
-                                                Agendar Cita
-                                            </Button>
+                                            <div className="h-full w-full flex items-center justify-center text-slate-300">
+                                                <Scissors className="h-8 w-8" />
+                                            </div>
                                         )}
-                                    </CardFooter>
+                                        {/* Optional "Added" indicator overlay if selected */}
+                                        {isSelected && (
+                                            <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                <div className="bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
+                                                    <Check className="h-4 w-4" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
+                                        <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
+                                            {service.name}
+                                        </h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
+                                            {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* Simple Arrow or Action Icon */}
+                                    <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                                        <ChevronRight className="h-6 w-6" />
+                                    </div>
                                 </Card>
                             );
                         })}
@@ -461,6 +471,78 @@ export default function LandingPage() {
                 )
             }
 
+            {/* Service Details Modal */}
+            <Dialog open={!!selectedService} onOpenChange={(open) => !open && setSelectedService(null)}>
+                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto max-h-[600px] flex flex-col sm:flex-row">
+                    <div className="w-full sm:w-1/2 bg-slate-50 flex items-center justify-center p-0 relative">
+                        <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
+                            {selectedService?.images && selectedService.images.length > 0 ? (
+                                <img src={selectedService.images[0]} alt={selectedService.name} className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center bg-slate-200">
+                                    <Scissors className="h-24 w-24 text-muted-foreground/30" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto">
+                        <div>
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight">{selectedService?.name}</DialogTitle>
+                            </DialogHeader>
+
+                            <div className="flex items-baseline justify-between mb-4 border-b pb-4">
+                                <span className="text-3xl font-bold text-primary">{selectedService ? formatPrice(selectedService.price) : ''}</span>
+                                <div className="flex items-center text-muted-foreground gap-1">
+                                    <Clock className="h-4 w-4" />
+                                    <span className="text-sm font-medium">{selectedService?.duration} min</span>
+                                </div>
+                            </div>
+
+                            {selectedService?.payment_type === 'online-deposit' && (
+                                <div className="mb-6">
+                                    <span className="text-sm text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 flex items-center w-full justify-center gap-2">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                        </span>
+                                        {(() => {
+                                            const type = selectedService.payment_amount_type || '%';
+                                            const val = selectedService.payment_amount_value;
+                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                            return 'Requiere anticipo del 50%';
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
+                                <h4 className="font-semibold text-foreground mb-2">Descripción del servicio</h4>
+                                {selectedService?.description ? (
+                                    <p className="whitespace-pre-line">{selectedService.description}</p>
+                                ) : (
+                                    <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t">
+                            <Button className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
+                                addToCart(selectedService.id);
+                                setSelectedService(null);
+                            }}>
+                                <Plus className="mr-2 h-5 w-5" /> Agregar y Seguir Explorando
+                            </Button>
+                            <Button variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedService(null)}>
+                                Volver a Servicios
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Product Details Modal */}
             <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
                 <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto max-h-[600px] flex flex-col sm:flex-row">
@@ -505,8 +587,14 @@ export default function LandingPage() {
                                 <span className="text-sm font-medium text-muted-foreground">{totalItems} item{totalItems > 1 ? 's' : ''} seleccionado{totalItems > 1 ? 's' : ''}</span>
                                 <span className="text-2xl font-bold text-primary">{formatPrice(totalPrice)}</span>
                             </div>
-                            <Button size="lg" className="h-14 px-8 text-lg shadow-lg" onClick={handleBooking}>
-                                Confirmar Reserva <ArrowRight className="ml-2 h-5 w-5" />
+                            <Button size="lg" className="h-14 px-8 text-lg shadow-lg" onClick={handleBooking} disabled={isBooking}>
+                                {isBooking ? (
+                                    <CustomLoader size={24} className="text-primary-foreground" />
+                                ) : cart.length > 0 ? (
+                                    <>Confirmar Reserva <ArrowRight className="ml-2 h-5 w-5" /></>
+                                ) : (
+                                    <>Comprar Productos <ShoppingBag className="ml-2 h-5 w-5" /></>
+                                )}
                             </Button>
                         </div>
                     </div>

@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
-import type { Sender } from '@/app/settings/emails/page';
+import type { Sender } from '@/app/(admin)/settings/emails/page';
 
 interface AddSenderModalProps {
   isOpen: boolean;
@@ -35,19 +35,19 @@ type SenderFormData = z.infer<typeof senderSchema>;
 export function AddSenderModal({ isOpen, onClose, onSave, sender }: AddSenderModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!sender;
-  
+
   const form = useForm<SenderFormData>({
     resolver: zodResolver(senderSchema),
     defaultValues: {
-        email: '',
+      email: '',
     },
   });
-  
+
   useEffect(() => {
     if (sender) {
-        form.setValue('email', sender.email);
+      form.setValue('email', sender.email);
     } else {
-        form.reset({ email: '' });
+      form.reset({ email: '' });
     }
   }, [sender, form, isOpen]);
 
@@ -65,35 +65,35 @@ export function AddSenderModal({ isOpen, onClose, onSave, sender }: AddSenderMod
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-                <DialogHeader>
-                  <DialogTitle>{isEditMode ? 'Editar correo' : 'Agregar correo'}</DialogTitle>
-                </DialogHeader>
-                <div className="py-4">
-                    <FormField
-                        control={form.control}
-                        name="email"
-                        render={({ field }) => (
-                            <FormItem>
-                                <Label htmlFor="email">Ingresa el email</Label>
-                                <FormControl>
-                                    <Input id="email" placeholder="nombre@ejemplo.com" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={onClose}>
-                      Cerrar
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Guardar
-                    </Button>
-                </DialogFooter>
-            </form>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <DialogHeader>
+              <DialogTitle>{isEditMode ? 'Editar correo' : 'Agregar correo'}</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <Label htmlFor="email">Ingresa el email</Label>
+                    <FormControl>
+                      <Input id="email" placeholder="nombre@ejemplo.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cerrar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar
+              </Button>
+            </DialogFooter>
+          </form>
         </Form>
       </DialogContent>
     </Dialog>

@@ -35,6 +35,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
+    match /ajustes_sitio/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
 
     // 2. User Profiles
     match /usuarios/{userId} {
@@ -58,14 +62,20 @@ service cloud.firestore {
 
     // 5. Services & Products (Catalog)
     match /servicios/{document=**} { 
-      allow read: if true; // <--- Público para que vean el menú de precios
+      allow read: if true; 
       allow write: if isAuthenticated(); 
     }
     
     // Lo demás de productos lo dejamos protegido
     match /categorias_servicios/{document=**} { allow read, write: if isAuthenticated(); }
-    match /products/{document=**} { allow read, write: if isAuthenticated(); }
-    match /productos/{document=**} { allow read, write: if isAuthenticated(); } 
+    match /products/{document=**} { 
+      allow read: if true;
+      allow write: if isAuthenticated(); 
+    }
+    match /productos/{document=**} { 
+      allow read: if true;
+      allow write: if isAuthenticated(); 
+    } 
     match /brands/{document=**} { allow read, write: if isAuthenticated(); }
     match /presentations/{document=**} { allow read, write: if isAuthenticated(); }
     match /categories/{document=**} { allow read, write: if isAuthenticated(); }

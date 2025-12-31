@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
 import { Info, Loader2, Plus } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -45,7 +47,11 @@ const newProductSchema = z.object({
   description: z.string().optional(),
   stock_alarm_threshold: z.coerce.number().optional().nullable(),
   notification_email: z.string().email('Email inválido').optional().or(z.literal('')),
+
   images: z.array(z.object({ value: z.string() })).optional().default([]),
+  payment_type: z.string().optional(),
+  payment_amount_value: z.coerce.string().optional(),
+  payment_amount_type: z.enum(['%', '$']).default('%'),
 });
 
 type NewProductFormData = z.infer<typeof newProductSchema>;
@@ -76,7 +82,9 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       stock: 0,
       includes_vat: false,
       commission_type: '%',
+
       images: [],
+      payment_type: 'no-payment',
     }
   });
 
@@ -93,14 +101,19 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
         stock: product.stock || 0,
         commission_value: product.commission?.value,
         commission_type: product.commission?.type,
-        images: Array.isArray(product.images) ? product.images.map(imgUrl => ({ value: imgUrl })) : [],
+
+        images: Array.isArray(product.images) ? product.images.map((imgUrl: string) => ({ value: imgUrl })) : [],
+        payment_type: product.payment_type || 'no-payment',
+        payment_amount_value: (product.payment_amount_value ?? '') as any,
+        payment_amount_type: product.payment_amount_type || '%',
       });
     } else {
       form.reset({
         nombre: '', barcode: '', brand_id: '', category_id: '', presentation_id: '',
         public_price: '' as any, stock: '' as any, purchase_cost: '' as any, internal_price: null, commission_value: '' as any,
         commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: null, notification_email: '',
-        images: []
+
+        images: [], payment_type: 'no-payment', payment_amount_value: '' as any, payment_amount_type: '%'
       });
     }
   }, [product, form, isOpen]);
@@ -136,7 +149,10 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
           value: parseOptionalNumber(commission_value) ?? 0,
           type: commission_type || '%'
         },
-        images: data.images?.map(img => img.value).filter(Boolean) || [],
+        payment_type: (data.payment_type as any) || 'no-payment',
+        payment_amount_value: Number(data.payment_amount_value) || 0,
+        payment_amount_type: data.payment_amount_type || '%',
+        images: data.images?.map((img: any) => img.value).filter(Boolean) || [],
         updated_at: Timestamp.now(),
       };
 
@@ -217,23 +233,23 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField name="nombre" control={form.control} render={({ field }) => (<FormItem><FormLabel>Nombre *</FormLabel><FormControl><Input placeholder="Indica el nombre del producto" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField name="barcode" control={form.control} render={({ field }) => (<FormItem><FormLabel>Código de barras</FormLabel><FormControl><Input placeholder="Indica el código del producto" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField name="brand_id" control={form.control} render={({ field }) => (<FormItem><FormLabel>Marca *</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecciona una marca" /></SelectTrigger></FormControl><SelectContent>{brands.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setIsBrandModalOpen(true)}><Plus className="h-4 w-4" /></Button></div><FormMessage /></FormItem>)} />
-                    <FormField name="category_id" control={form.control} render={({ field }) => (<FormItem><FormLabel>Categoría *</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger></FormControl><SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setIsCategoryModalOpen(true)}><Plus className="h-4 w-4" /></Button></div><FormMessage /></FormItem>)} />
-                    <FormField name="presentation_id" control={form.control} render={({ field }) => (<FormItem><FormLabel>Formato/Presentación *</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecciona un formato" /></SelectTrigger></FormControl><SelectContent>{presentations.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setIsPresentationModalOpen(true)}><Plus className="h-4 w-4" /></Button></div><FormMessage /></FormItem>)} />
+                    <FormField name="brand_id" control={form.control} render={({ field }) => (<FormItem><FormLabel>Marca *</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecciona una marca" /></SelectTrigger></FormControl><SelectContent>{brands.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setIsBrandModalOpen(true)}><Plus className="h-4 w-4" /></Button></div><FormMessage /></FormItem>)} />
+                    <FormField name="category_id" control={form.control} render={({ field }) => (<FormItem><FormLabel>Categoría *</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger></FormControl><SelectContent>{categories.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setIsCategoryModalOpen(true)}><Plus className="h-4 w-4" /></Button></div><FormMessage /></FormItem>)} />
+                    <FormField name="presentation_id" control={form.control} render={({ field }) => (<FormItem><FormLabel>Formato/Presentación *</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecciona un formato" /></SelectTrigger></FormControl><SelectContent>{presentations.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setIsPresentationModalOpen(true)}><Plus className="h-4 w-4" /></Button></div><FormMessage /></FormItem>)} />
                     <FormField name="public_price" control={form.control} render={({ field }) => (<FormItem><FormLabel>Precio de venta al público *</FormLabel><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span><FormControl><Input type="number" placeholder="0" className="pl-6" {...field} /></FormControl></div><FormMessage /></FormItem>)} />
                     <FormField name="stock" control={form.control} render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Cantidad en stock *</FormLabel><FormControl><Input type="number" placeholder="0" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Agregar imágenes</CardTitle>
+                      <CardTitle>Agregar imagen</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        ¡Carga hasta 3 imágenes de tu servicio! Te recomendamos que tengan un tamaño mínimo de 200x200px y un peso máximo de 3MB.
+                        ¡Carga una imagen de tu producto! Te recomendamos que tenga un tamaño mínimo de 200x200px y un peso máximo de 3MB.
                       </p>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[...Array(3)].map((_, index) => (
+                        {[...Array(1)].map((_, index) => (
                           <ImageUploader
                             key={fields[index]?.id || `placeholder-${index}`}
                             folder="productos"
@@ -263,7 +279,39 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                     </div>
                     <FormField name="commission_value" control={form.control} render={({ field }) => (<FormItem><FormLabel>Comisión de venta *</FormLabel><div className="flex gap-2"><FormControl><Input type="number" placeholder="0" className="flex-grow" {...field} value={field.value ?? ''} /></FormControl><Controller name="commission_type" control={form.control} render={({ field: selectField }) => (<Select onValueChange={selectField.onChange} value={selectField.value}><SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="%">%</SelectItem><SelectItem value="$">$</SelectItem></SelectContent></Select>)} /></div><FormMessage /></FormItem>)} />
                     <FormField name="includes_vat" control={form.control} render={({ field }) => (<FormItem className="flex items-center space-x-2 pt-2"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} id="includes_vat" /></FormControl><FormLabel htmlFor="includes_vat" className="!mt-0 font-normal">Precio incluye IVA en comprobante de caja</FormLabel></FormItem>)} />
+
                     <FormField name="description" control={form.control} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea placeholder="Describe el producto..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+
+                    <Card className="md:col-span-2">
+                      <CardHeader>
+                        <CardTitle>Pago en línea</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Controller
+                          name="payment_type"
+                          control={form.control}
+                          render={({ field }) => (
+                            <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-4">
+                              <div className="flex items-start space-x-3 rounded-md border p-4">
+                                <RadioGroupItem value="full-payment" id="full-payment" />
+                                <div className="grid gap-1.5 leading-none">
+                                  <Label htmlFor="full-payment">Se debe pagar en línea</Label>
+                                  <p className="text-sm text-muted-foreground">Tus clientes deberán realizar el pago completo de este producto en línea.</p>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 rounded-md border p-4">
+                                <RadioGroupItem value="no-payment" id="no-payment" />
+                                <div className="grid gap-1.5 leading-none">
+                                  <Label htmlFor="no-payment">No se puede pagar en línea</Label>
+                                  <p className="text-sm text-muted-foreground">Tus clientes no podrán comprar este producto online, solo ver su existencia.</p>
+                                </div>
+                              </div>
+                            </RadioGroup>
+                          )}
+                        />
+                      </CardContent>
+                    </Card>
+
                   </div>
                   <div className="space-y-4 pt-6 border-t"><Alert><Info className="h-4 w-4" /><AlertTitle>¿Para qué sirven las alarmas de stock?</AlertTitle><AlertDescription>Las alarmas de stock te ayudan a mantener un inventario saludable. Cuando el stock de un producto llegue al mínimo que definas, te enviaremos una notificación para que no te quedes sin unidades.</AlertDescription></Alert><h3 className="text-lg font-semibold">Alarma de stock</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

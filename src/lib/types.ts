@@ -146,6 +146,9 @@ export interface Product {
   active: boolean;
   order: number;
   images?: string[];
+  payment_type?: 'online-deposit' | 'full-payment' | 'no-payment';
+  payment_amount_value?: number;
+  payment_amount_type?: '%' | '$';
 }
 
 export interface ProductCategory {
@@ -183,6 +186,8 @@ export interface Service {
   images?: string[];
   professionals?: string[];
   payment_type?: string;
+  payment_amount_type?: '%' | '$';
+  payment_amount_value?: number;
   description?: string; // Optional description if needed
 }
 

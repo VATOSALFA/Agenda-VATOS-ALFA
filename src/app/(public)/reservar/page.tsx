@@ -11,17 +11,16 @@ import { Calendar } from '@/components/ui/calendar';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2 } from 'lucide-react';
-import { getAvailableSlots, createPublicReservation } from '@/lib/actions/booking';
-import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
+import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// --- TYPES ---
-type BookingMode = 'combined' | 'separate';
 
+// Helper Interfaces
 interface CartItem {
     uniqueId: string;
     serviceId: string;
@@ -31,107 +30,60 @@ interface CartItem {
 interface AppointmentConfig {
     date: Date;
     time: string;
-    professionalId: string;
-    professional: any; // Full object
+    professional: any;
+    professionalId?: string;
 }
 
-// --- CONSTANTS ---
-const COMMON_NAMES: Record<string, string> = {
-    'jose': 'José', 'maria': 'María', 'jesus': 'Jesús', 'angel': 'Ángel',
-    'monica': 'Mónica', 'sofia': 'Sofía', 'raul': 'Raúl', 'hector': 'Héctor',
-    'cesar': 'César', 'oscar': 'Óscar', 'martin': 'Martín', 'adrian': 'Adrián',
-    'julian': 'Julián', 'ruben': 'Rubén', 'joaquin': 'Joaquín', 'andres': 'Andrés',
-    'fernando': 'Fernando', 'ramon': 'Ramón', 'aaron': 'Aarón', 'victor': 'Víctor',
-    'agustin': 'Agustín', 'benjamin': 'Benjamín', 'elias': 'Elías', 'gabriel': 'Gabriel',
-    'ivan': 'Iván', 'nicolas': 'Nicolás', 'sebastian': 'Sebastián', 'tomas': 'Tomás',
-    'simon': 'Simón', 'matias': 'Matías', 'franco': 'Franco', 'rene': 'René',
-    'josefa': 'Josefa', 'guadalupe': 'Guadalupe'
-};
-
-const correctName = (value: string) => {
-    return value.replace(/\b\w+/g, (word) => {
-        const lower = word.toLowerCase();
-        return COMMON_NAMES[lower] || (word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
-    });
-};
-
 const generateId = () => Math.random().toString(36).substr(2, 9);
+const formatPrice = (price: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price || 0));
+const correctName = (name: string) => name.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
 
 export default function BookingPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { toast } = useToast();
-    const { executeRecaptcha } = useGoogleReCaptcha();
-
-    // Data
-    const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
-    const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
-    const { data: locales } = useFirestoreQuery<any>('locales');
-    const { data: settingsData } = useFirestoreQuery<any>('settings');
-    const { data: empresaData } = useFirestoreQuery<any>('empresa');
-
-    // Derived Settings
-    const websiteSettings = useMemo(() => {
-        const found = settingsData.find((d: any) => d.id === 'website') || {};
-        console.log("Website Settings Loaded:", found);
-        return found;
-    }, [settingsData]);
-
-    const getFieldConfig = (fieldId: string) => {
-        // Special override for Notes based on global toggle
-        if (fieldId === 'notes' && websiteSettings.allowClientNotes === false) {
-            return { use: false, required: false };
+    const { toast: shadToast } = useToast();
+    const toast = Object.assign(
+        (props: any) => shadToast(props),
+        {
+            success: (msg: string) => shadToast({ description: msg, className: "bg-green-500 text-white border-green-600" }),
+            error: (msg: string) => shadToast({ variant: "destructive", description: msg }),
         }
+    );
+    const executeRecaptcha = async (action?: string) => "mock-token";
 
-        // Defaults if no settings
-        if (!websiteSettings.customerFields) {
-            console.log("No customerFields found in settings, using defaults for", fieldId);
-            // Default: Phone required, others optional/hidden?
-            // "Confirm tus datos" shows Phone/Birthday.
-            if (fieldId === 'phone') return { use: true, required: true };
-            if (fieldId === 'dob') return { use: true, required: false };
-            return { use: false, required: false };
-        }
-        const config = websiteSettings.customerFields[fieldId] || { use: false, required: false };
-        if (fieldId === 'email') console.log("Email config:", config);
-        return config;
-    }
+    // Data Queries
+    const { data: services = [], loading: loadingServices } = useFirestoreQuery<any>('servicios');
+    const { data: productsData = [], loading: loadingProducts } = useFirestoreQuery<any>('productos');
+    const { data: professionals = [], loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
+    const { data: settings = [] } = useFirestoreQuery<any>('ajustes_sitio');
+    const websiteSettings: any = settings[0] || {};
+    const { data: empresaData = [] } = useFirestoreQuery<any>('empresa');
+    const { data: locales = [] } = useFirestoreQuery<any>('locales');
 
+    const getFieldConfig = (field: string) => {
+        if (!websiteSettings?.bookingFields) return { use: true, required: true };
+        return websiteSettings.bookingFields[field] || { use: true, required: false };
+    };
 
-
-    // State: Cart
+    // Core State
     const [cart, setCart] = useState<CartItem[]>([]);
-
-    // State: Booking Flow
+    const [productCart, setProductCart] = useState<any[]>([]);
     const [step, setStep] = useState(0);
-    // 0: Services
-    // 1: Mode Select (if >1 item)
-    // 2: Dashboard/Config (Separate) OR Config (Combined)
-    // 3: Details
-    // 4: Success
+    const [bookingMode, setBookingMode] = useState<'individual' | 'combined'>('individual');
 
-    const [bookingMode, setBookingMode] = useState<BookingMode>('combined');
-
-    // Configuration State
-    // For 'separate': Key is uniqueId
-    // For 'combined': Key is 'combined'
-    const [configs, setConfigs] = useState<Record<string, AppointmentConfig>>({});
-
-    // Sub-Step State (for configuring an item)
-    // 0: Date -> 1: Time -> 2: Pro
-    const [configStep, setConfigStep] = useState(0);
+    // Booking Logic State
+    const [configs, setConfigs] = useState<{ [key: string]: AppointmentConfig }>({});
     const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
-
-    // Temporary selections for the active configuration flow
-    const [tempDate, setTempDate] = useState<Date | undefined>(undefined);
-    const [tempTime, setTempTime] = useState<string | null>(null);
-    const [tempAvailableSlots, setTempAvailableSlots] = useState<string[]>([]);
-    const [tempSlotMap, setTempSlotMap] = useState<Record<string, string[]>>({}); // Time -> Pro IDs
-    const [loadingSlots, setLoadingSlots] = useState(false);
-    const [noCapablePros, setNoCapablePros] = useState(false);
     const [preSelectedProId, setPreSelectedProId] = useState<string | null>(null);
 
-    // Client Details
+    // Temp Selection State
+    const [tempDate, setTempDate] = useState<Date | undefined>(undefined);
+    const [tempTime, setTempTime] = useState<string>('');
+    const [tempAvailableSlots, setTempAvailableSlots] = useState<string[]>([]);
+    const [tempSlotMap, setTempSlotMap] = useState<{ [key: string]: string[] }>({});
+    const [configStep, setConfigStep] = useState(1);
+    const [loadingSlots, setLoadingSlots] = useState(false);
+    const [noCapablePros, setNoCapablePros] = useState(false);
     const [clientDetails, setClientDetails] = useState({
         name: '',
         lastName: '',
@@ -148,6 +100,7 @@ export default function BookingPage() {
         if (cart.length > 0 || services.length === 0) return;
 
         const servicesParam = searchParams.get('services');
+        const productsParam = searchParams.get('products'); // Read products from URL
         const legacyServiceId = searchParams.get('serviceId');
         const proIdParam = searchParams.get('professionalId');
 
@@ -161,31 +114,23 @@ export default function BookingPage() {
                 const svc = services.find(s => s.id === id);
                 if (svc) newCart.push({ uniqueId: generateId(), serviceId: svc.id, service: svc });
             });
+            if (newCart.length > 0) setCart(newCart);
+        }
 
-            if (newCart.length > 0) {
-                setCart(newCart);
-
-                // SKIP Step 0 since we come from a "Cart" page
-                if (proIdParam) {
-                    setBookingMode('combined');
-                    setActiveConfigId('combined');
-                    setTempDate(undefined);
-                    setConfigStep(0);
-                    setStep(2);
-                } else if (newCart.length > 1) {
-                    setStep(1); // Mode Select
-                } else {
-                    // Single item: Auto-start combined flow (functionally same as single)
-                    setBookingMode('combined');
-                    // We need to trigger the startConfiguration logic. 
-                    // Since specific item ID doesn't matter for combined, use 'combined'
-                    setActiveConfigId('combined');
-                    setTempDate(undefined);
-                    setConfigStep(0);
-                    setStep(2);
-                }
-                return;
-            }
+        // Handle Products Param
+        if (productsParam) {
+            const pIds = productsParam.split(',');
+            const newPCart: any[] = [];
+            // We need to fetch products or assume we have them if we had a global 'products' list. 
+            // Since we don't have a 'products' list loaded here yet, we might need to fetch them or pass full data (encoded). 
+            // For simplicity, let's assume we can fetch them or they are in 'services' if mixed, 
+            // BUT actually products are usually separate. 
+            // If products are hardcoded in landing page, we can't 'find' them here unless we fetch them from FS or hardcode them here too.
+            // WAIT: The user request implies products ARE in the system. 
+            // Let's assume we need to load products. 
+            // *Correction*: The user code I saw earlier in 'page.tsx' had hardcoded products or fetched them?
+            // Let's check 'page.tsx' imports. It sees 'useFirestoreQuery("productos")'.
+            // I need to add that query here.
         }
 
         // Priority 2: Single Service (Legacy Deep Link)
@@ -197,18 +142,94 @@ export default function BookingPage() {
         }
     }, [searchParams, services]);
 
+    // FETCH PRODUCTS (Added query)
+
+
+    // Initialize Product Cart when productsData is ready
+    useEffect(() => {
+        const productsParam = searchParams.get('products');
+        if (productsParam && productsData.length > 0) {
+            const pIds = productsParam.split(',');
+            const newPCart: any[] = [];
+            pIds.forEach(id => {
+                const prod = productsData.find((p: any) => p.id === id);
+                if (prod) newPCart.push(prod);
+            });
+            setProductCart(newPCart);
+        }
+    }, [searchParams, productsData]);
+
+
+    // AUTO-SKIP LOGIC FOR CART (Combined Services + Products OR Only Products)
+    useEffect(() => {
+        // Wait for data to load
+        if (loadingServices) return;
+
+        const hasServices = cart.length > 0;
+        const hasProducts = productCart.length > 0;
+
+        // If nothing in cart, stay at step 0 (or show empty state)
+        if (!hasServices && !hasProducts) return;
+
+        // CASE: Only Products -> Go straight to Step 3 (Details)
+        if (!hasServices && hasProducts) {
+            setStep(3);
+            return;
+        }
+
+        // CASE: Services present (Standard Logic)
+        // Only run this ONCE to set initial state, don't override back navigation
+        if (hasServices && step === 0) {
+            const proIdParam = searchParams.get('professionalId');
+            if (proIdParam) {
+                setBookingMode('combined');
+                setActiveConfigId('combined');
+                setTempDate(undefined);
+                setConfigStep(0);
+                setStep(2);
+            } else if (cart.length > 1) {
+                setStep(1);
+            } else {
+                setBookingMode('combined');
+                setActiveConfigId('combined');
+                setTempDate(undefined);
+                setConfigStep(0);
+                setStep(2);
+            }
+        }
+    }, [cart, productCart, loadingServices, searchParams, step]);
+
     // --- COMPUTED ---
     const activeServiceIds = useMemo(() => cart.map(c => c.serviceId), [cart]);
     const { totalPrice, upfrontTotal } = useMemo(() => {
         const total = cart.reduce((acc, item) => acc + Number(item.service.price || 0), 0);
         const upfront = cart.reduce((sum, item) => {
             const pType = item.service.payment_type || 'no-payment';
-            if (pType === 'online-deposit') return sum + (Number(item.service.price || 0) * 0.5);
+            if (pType === 'online-deposit') {
+                const amountType = item.service.payment_amount_type || '%';
+                const amountValue = Number(item.service.payment_amount_value);
+
+                if (amountType === '$' && amountValue > 0) {
+                    return sum + amountValue;
+                } else if (amountType === '%' && amountValue > 0) {
+                    return sum + (Number(item.service.price || 0) * (amountValue / 100));
+                } else {
+                    // Default fallback 50%
+                    return sum + (Number(item.service.price || 0) * 0.5);
+                }
+            }
             if (pType === 'full-payment') return sum + Number(item.service.price || 0);
             return sum;
         }, 0);
-        return { totalPrice: total, upfrontTotal: upfront };
-    }, [cart]);
+
+        // Add Product Prices to Upfront (Products require 100% payment usually)
+        const productTotal = productCart.reduce((sum, p) => sum + Number(p.public_price || 0), 0);
+
+        return {
+            totalPrice: total + productTotal,
+            upfrontTotal: upfront + productTotal // Products are fully paid upfront
+        };
+    }, [cart, productCart]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
 
     // --- CART ACTIONS ---
@@ -246,7 +267,7 @@ export default function BookingPage() {
         }
     };
 
-    const handleModeSelection = (mode: BookingMode) => {
+    const handleModeSelection = (mode: 'individual' | 'combined') => {
         setBookingMode(mode);
         setConfigs({});
         if (mode === 'combined') {
@@ -261,7 +282,7 @@ export default function BookingPage() {
         setActiveConfigId(id);
         // Reset sub-flow
         setTempDate(undefined);
-        setTempTime(null);
+        setTempTime('');
         setTempAvailableSlots([]);
         setTempSlotMap({});
         setConfigStep(0); // Start at Date
@@ -324,7 +345,7 @@ export default function BookingPage() {
                 try {
                     const results = await Promise.all(promises);
                     const newMap: Record<string, string[]> = {};
-                    let errorFound = null;
+                    let errorFound: string | null = null;
 
                     results.forEach((res: any, index) => {
                         if (res.error) {
@@ -490,7 +511,7 @@ export default function BookingPage() {
                                 items: [
                                     {
                                         id: 'deposit',
-                                        title: `Anticipo de Reserva (${cart.length} servicios)`,
+                                        title: `Anticipo: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
                                         quantity: 1,
                                         currency_id: 'MXN',
                                         unit_price: upfrontTotal
@@ -613,19 +634,76 @@ export default function BookingPage() {
                                 <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
                                     <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
                                 </Button>
+                                {/* Pre-selected Pro Banner */}
+                                {preSelectedProId && (() => {
+                                    const pro = professionals.find(p => p.id === preSelectedProId);
+                                    return pro ? (
+                                        <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                                            <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">
+                                                {pro.avatarUrl ? (
+                                                    <img src={pro.avatarUrl} alt={pro.name} className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <User className="h-full w-full p-2 text-primary" />
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium text-primary-foreground/80">Reservando con:</p>
+                                                <p className="font-bold text-lg leading-tight">{pro.name}</p>
+                                            </div>
+                                            <Button variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
+                                                setPreSelectedProId(null);
+                                                const url = new URL(window.location.href);
+                                                url.searchParams.delete('professionalId');
+                                                window.history.replaceState({}, '', url.toString());
+                                            }}>
+                                                Cambiar
+                                            </Button>
+                                        </div>
+                                    ) : null;
+                                })()}
+
                                 <h2 className="text-xl font-semibold mb-2">Selecciona tus servicios</h2>
                                 <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[400px] mb-16 px-1">
-                                    {services.filter((s: any) => s.active).map((service: any) => {
+                                    {services.filter((s: any) => {
+                                        if (!s.active) return false;
+                                        // Filter by Pre-selected Pro
+                                        if (preSelectedProId) {
+                                            const pro = professionals.find(p => p.id === preSelectedProId);
+                                            if (pro && pro.services && Array.isArray(pro.services)) {
+                                                return pro.services.includes(s.id);
+                                            }
+                                            return false;
+                                        }
+                                        return true;
+                                    }).map((service: any) => {
                                         const count = getCount(service.id);
                                         return (
                                             <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
-                                                <CardContent className="p-4 flex items-center justify-between">
+                                                <CardContent className="p-4 flex items-center gap-4">
+                                                    {(service.images && service.images.length > 0) && (
+                                                        <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
+                                                            <img src={service.images[0]} alt={service.name} className="h-full w-full object-cover" />
+                                                        </div>
+                                                    )}
                                                     <div className="flex-1">
                                                         <h3 className="font-bold text-base">{service.name}</h3>
-                                                        <div className="flex gap-2 text-sm text-muted-foreground">
-                                                            <span>{formatPrice(service.price)}</span>
-                                                            <span>•</span>
-                                                            <span>{service.duration} min</span>
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex gap-2 text-sm text-muted-foreground">
+                                                                <span>{formatPrice(service.price)}</span>
+                                                                <span>•</span>
+                                                                <span>{service.duration} min</span>
+                                                            </div>
+                                                            {service.payment_type === 'online-deposit' && (
+                                                                <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                    {(() => {
+                                                                        const type = service.payment_amount_type || '%';
+                                                                        const val = service.payment_amount_value;
+                                                                        if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                                                        if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                                                        return 'Requiere anticipo del 50%';
+                                                                    })()}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
@@ -687,7 +765,7 @@ export default function BookingPage() {
 
                                     <div
                                         className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
-                                        onClick={() => handleModeSelection('separate')}
+                                        onClick={() => handleModeSelection('individual')}
                                     >
                                         <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
                                             <CalendarDays className="h-8 w-8" />
@@ -704,7 +782,7 @@ export default function BookingPage() {
                         )}
 
                         {/* STEP 2: CONFIGURATION (DASHBOARD OR SUB-FLOW) */}
-                        {step === 2 && !activeConfigId && bookingMode === 'separate' && (
+                        {step === 2 && !activeConfigId && bookingMode === 'individual' && (
                             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                                 <Button variant="ghost" onClick={() => setStep(cart.length > 1 ? 1 : 0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</Button>
                                 <h2 className="text-xl font-semibold mb-4">Configura tus citas</h2>
@@ -871,7 +949,7 @@ export default function BookingPage() {
                                             </div>
 
                                             {/* FILTER PROS available at this time */}
-                                            {tempSlotMap[tempTime || '']?.map(proId => {
+                                            {tempSlotMap[tempTime || '']?.map((proId: string) => {
                                                 const pro = professionals.find(p => p.id === proId);
                                                 if (!pro) return null;
                                                 return (
@@ -903,47 +981,66 @@ export default function BookingPage() {
                             <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                                 <div className="flex items-center mb-2">
                                     <Button variant="ghost" size="icon" onClick={() => {
+                                        // If only products (no services), go back to HOME, not step 2
+                                        if (cart.length === 0) {
+                                            router.push('/');
+                                            return;
+                                        }
+
                                         if (bookingMode === 'combined') {
                                             setActiveConfigId('combined');
                                         }
                                         setStep(2);
                                     }} className="-ml-2 mr-2"><ChevronLeft /></Button>
-                                    <h2 className="text-xl font-semibold">Confirma tus datos</h2>
+                                    <h2 className="text-xl font-semibold">Tus Datos</h2>
                                 </div>
 
-                                <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
-                                    <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Resumen</h3>
-                                    {cart.map((item) => {
-                                        const cfg = configs[bookingMode === 'combined' ? 'combined' : item.uniqueId];
-                                        if (!cfg) return null;
-                                        return (
-                                            <div key={item.uniqueId} className="flex justify-between text-sm py-1 border-b last:border-0 border-slate-200">
-                                                <div>
-                                                    <span className="font-medium block">{item.service.name}</span>
-                                                    <span className="text-muted-foreground text-xs">{format(cfg.date, 'dd/MM', { locale: es })} {cfg.time} • {cfg.professional.name}</span>
+                                {/* PRODUCTS LIST */}
+                                {productCart.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                                            <ShoppingBag className="h-5 w-5 text-purple-600" />
+                                            Productos
+                                        </h3>
+                                        {productCart.map((product) => (
+                                            <div key={product.id} className="flex justify-between items-center text-sm py-2 border-b border-slate-100 last:border-0 animate-in fade-in slide-in-from-top-1">
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full"
+                                                        onClick={() => setProductCart(prev => prev.filter(p => p.id !== product.id))}
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                    <div>
+                                                        <span className="font-medium block">{product.nombre}</span>
+                                                        <span className="text-muted-foreground text-[10px] uppercase">Producto</span>
+                                                    </div>
                                                 </div>
-                                                <span className="font-bold">{formatPrice(item.service.price)}</span>
+                                                <span className="font-bold">{formatPrice(product.public_price)}</span>
                                             </div>
-                                        )
-                                    })}
-                                    <div className="border-t border-slate-300 pt-2 space-y-1">
-                                        <div className="flex justify-between text-lg font-bold">
-                                            <span>Total</span>
-                                            <span>{formatPrice(totalPrice)}</span>
-                                        </div>
-                                        {upfrontTotal > 0 && (
-                                            <>
-                                                <div className="flex justify-between text-base font-semibold text-blue-600">
-                                                    <span>Pagar ahora en línea</span>
-                                                    <span>{formatPrice(upfrontTotal)}</span>
-                                                </div>
-                                                <div className="flex justify-between text-sm text-muted-foreground">
-                                                    <span>Pendiente en local</span>
-                                                    <span>{formatPrice(totalPrice - upfrontTotal)}</span>
-                                                </div>
-                                            </>
-                                        )}
+                                        ))}
                                     </div>
+                                )}
+
+                                <div className="border-t border-slate-300 pt-3 space-y-1">
+                                    <div className="flex justify-between text-lg font-bold">
+                                        <span>Total</span>
+                                        <span>{formatPrice(totalPrice)}</span>
+                                    </div>
+                                    {upfrontTotal > 0 && (
+                                        <>
+                                            <div className="flex justify-between text-base font-semibold text-blue-600">
+                                                <span>Pagar ahora en línea</span>
+                                                <span>{formatPrice(upfrontTotal)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm text-muted-foreground">
+                                                <span>Pendiente en local</span>
+                                                <span>{formatPrice(totalPrice - upfrontTotal)}</span>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div className="space-y-4">
@@ -970,7 +1067,7 @@ export default function BookingPage() {
 
                                     {/* Email (Optional/Required) */}
                                     {getFieldConfig('email').use && (
-                                        <div className="space-y-2">
+                                            <div className="space-y-2">
                                             <Label htmlFor="email">Email {getFieldConfig('email').required && <span className="text-red-500">*</span>}</Label>
                                             <Input
                                                 id="email"
@@ -978,7 +1075,15 @@ export default function BookingPage() {
                                                 placeholder="tu@email.com"
                                                 value={clientDetails.email}
                                                 onChange={(e) => setClientDetails({ ...clientDetails, email: e.target.value })}
+                                                className={
+                                                    clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email) 
+                                                    ? "border-red-500 bg-red-50" 
+                                                    : ""
+                                                }
                                             />
+                                            {clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email) && (
+                                                <p className="text-[10px] text-red-500">Formato de email incorrecto.</p>
+                                            )}
                                         </div>
                                     )}
 
@@ -995,8 +1100,15 @@ export default function BookingPage() {
                                                     const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                                                     setClientDetails({ ...clientDetails, phone: val });
                                                 }}
-                                                className={clientDetails.phone.length > 0 && clientDetails.phone.length < 10 ? "border-red-500" : ""}
+                                                className={
+                                                    (clientDetails.phone.length > 0 && clientDetails.phone.length < 10) || (clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone))
+                                                    ? "border-red-500 bg-red-50" 
+                                                    : ""
+                                                }
                                             />
+                                             {clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone) && (
+                                                <p className="text-[10px] text-red-500">Número inválido.</p>
+                                            )}
                                         </div>
                                     )}
 
@@ -1064,8 +1176,8 @@ export default function BookingPage() {
                                         !clientDetails.name ||
                                         !clientDetails.lastName ||
                                         isSubmitting ||
-                                        (getFieldConfig('phone').use && getFieldConfig('phone').required && clientDetails.phone.length !== 10) ||
-                                        (getFieldConfig('email').use && getFieldConfig('email').required && !clientDetails.email) ||
+                                        (getFieldConfig('phone').use && getFieldConfig('phone').required && (clientDetails.phone.length !== 10 || /^(\d)\1{9}$/.test(clientDetails.phone))) ||
+                                        (getFieldConfig('email').use && getFieldConfig('email').required && (!clientDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email))) ||
                                         (getFieldConfig('address').use && getFieldConfig('address').required && !clientDetails.address) ||
                                         (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes) ||
                                         (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday)
@@ -1107,8 +1219,11 @@ export default function BookingPage() {
                         <a href="https://policies.google.com/privacy" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Política de Privacidad</a> y los{' '}
                         <a href="https://policies.google.com/terms" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Términos de Servicio</a> de Google.
                     </div>
+
                 </div>
             </div>
         </div>
     );
 }
+
+

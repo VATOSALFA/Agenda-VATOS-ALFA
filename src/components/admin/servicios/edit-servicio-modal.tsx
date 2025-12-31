@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,11 +40,14 @@ const serviceSchema = z.object({
   price: requiredNumberSchema,
   duration: requiredNumberSchema,
   category: z.string().min(1, 'La categoría es requerida.'),
+  description: z.string().max(200, 'La descripción no puede exceder los 200 caracteres.').optional(),
   include_vat: z.boolean().default(false),
   commission_value: requiredNumberSchema,
   commission_type: z.enum(['%', '$']).default('%'),
   professionals: z.array(z.string()).optional(),
   payment_type: z.string().optional(),
+  payment_amount_value: z.coerce.string().optional(),
+  payment_amount_type: z.enum(['%', '$']).default('%'),
   images: z.array(z.object({ value: z.string() })).optional().default([]),
 });
 
@@ -61,7 +65,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
-      name: '', price: '' as any, duration: '' as any, category: '', include_vat: false, commission_value: '' as any, commission_type: '%', professionals: [], images: []
+      name: '', description: '', price: '' as any, duration: '' as any, category: '', include_vat: false, commission_value: '' as any, commission_type: '%', professionals: [], images: []
     }
   });
 
@@ -78,15 +82,19 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         ...service,
         commission_value: (service.defaultCommission?.value ?? '') as any,
         commission_type: service.defaultCommission?.type || '%',
+        description: service.description || '',
         include_vat: service.include_vat || false, // Ensure boolean
         price: (service.price ?? '') as any,
         duration: (service.duration ?? '') as any,
         images: Array.isArray(service.images) ? service.images.map(imgUrl => ({ value: imgUrl })) : [],
         payment_type: service.payment_type || 'no-payment',
+        payment_amount_value: (service.payment_amount_value ?? '') as any,
+        payment_amount_type: service.payment_amount_type || '%',
       });
     } else {
       reset({
         name: '',
+        description: '',
         price: '' as any,
         duration: '' as any,
         category: '',
@@ -134,7 +142,10 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
       const dataToSave = {
         ...data,
         price: Number(data.price),
+        description: data.description || '',
         duration: Number(data.duration),
+        payment_amount_value: Number(data.payment_amount_value) || 0,
+        payment_amount_type: data.payment_amount_type || '%',
         defaultCommission: {
           value: Number(data.commission_value) || 0,
           type: data.commission_type || '%'
@@ -217,6 +228,26 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                             <FormLabel>Nombre del servicio *</FormLabel>
                             <FormControl>
                               <Input placeholder="El nombre aparecerá en el Sitio Web" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <FormField
+                        control={control}
+                        name="description"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Descripción detallada</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Textarea placeholder="Describe el servicio, qué incluye, recomendaciones, etc." {...field} maxLength={200} />
+                                <div className="absolute bottom-2 right-2 text-xs text-muted-foreground bg-background/80 px-1 rounded">
+                                  {field.value?.length || 0}/200
+                                </div>
+                              </div>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -370,9 +401,40 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                             <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-4">
                               <div className="flex items-start space-x-3 rounded-md border p-4">
                                 <RadioGroupItem value="online-deposit" id="online-deposit" />
-                                <div className="grid gap-1.5 leading-none">
+                                <div className="grid gap-1.5 leading-none w-full">
                                   <Label htmlFor="online-deposit">Abono en línea</Label>
                                   <p className="text-sm text-muted-foreground">Tus clientes deberán pagar una parte del servicio al agendar. Podrás cobrar con POS de AgendaPro el monto restante.</p>
+                                  {(watch('payment_type') === 'online-deposit') && (
+                                    <div className="pt-2">
+                                      <Label className="text-xs">Monto del anticipo</Label>
+                                      <div className="flex gap-2">
+                                        <div className="flex-grow">
+                                          <Controller
+                                            control={control}
+                                            name="payment_amount_value"
+                                            render={({ field }) => (
+                                              <Input type="number" placeholder="50" className="h-9" {...field} />
+                                            )}
+                                          />
+                                        </div>
+                                        <div className="w-[80px]">
+                                          <Controller
+                                            control={control}
+                                            name="payment_amount_type"
+                                            render={({ field }) => (
+                                              <Select onValueChange={field.onChange} value={field.value || '%'}>
+                                                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="%">%</SelectItem>
+                                                  <SelectItem value="$">$</SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            )}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex items-start space-x-3 rounded-md border p-4">
@@ -410,26 +472,24 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                         </p>
                       </CardHeader>
                       <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {[...Array(3)].map((_, index) => (
-                            <ImageUploader
-                              key={fields[index]?.id || `placeholder-${index}`}
-                              folder="servicios"
-                              currentImageUrl={fields[index]?.value}
-                              onUpload={(url) => {
-                                if (fields[index]) {
-                                  update(index, { value: url });
-                                } else {
-                                  append({ value: url });
-                                }
-                              }}
-                              onRemove={() => {
-                                if (fields[index]) {
-                                  remove(index);
-                                }
-                              }}
-                            />
-                          ))}
+                        <div className="grid grid-cols-1 gap-4">
+                          <ImageUploader
+                            key={fields[0]?.id || `placeholder-0`}
+                            folder="servicios"
+                            currentImageUrl={fields[0]?.value}
+                            onUpload={(url) => {
+                              if (fields[0]) {
+                                update(0, { value: url });
+                              } else {
+                                append({ value: url });
+                              }
+                            }}
+                            onRemove={() => {
+                              if (fields[0]) {
+                                remove(0);
+                              }
+                            }}
+                          />
                         </div>
                       </CardContent>
                     </Card>

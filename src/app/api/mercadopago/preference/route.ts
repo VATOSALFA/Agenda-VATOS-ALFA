@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
                 statement_descriptor: "VATOS ALFA",
                 expires: true,
                 date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min expiration
+                binary_mode: true, // Force instant approval/rejection (no pending/review)
                 payment_methods: {
                     installments: 1,
                     excluded_payment_types: [

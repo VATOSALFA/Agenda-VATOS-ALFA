@@ -55,15 +55,12 @@ export default function BookingPage() {
     const { data: services = [], loading: loadingServices } = useFirestoreQuery<any>('servicios');
     const { data: productsData = [], loading: loadingProducts } = useFirestoreQuery<any>('productos');
     const { data: professionals = [], loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
-    const { data: settings = [] } = useFirestoreQuery<any>('ajustes_sitio');
-    const websiteSettings: any = settings[0] || {};
+    const { data: settingsDocs = [], loading: loadingSettings } = useFirestoreQuery<any>('settings');
+    const websiteSettings: any = settingsDocs.find((d: any) => d.id === 'website') || {};
     const { data: empresaData = [] } = useFirestoreQuery<any>('empresa');
     const { data: locales = [] } = useFirestoreQuery<any>('locales');
 
-    const getFieldConfig = (field: string) => {
-        if (!websiteSettings?.bookingFields) return { use: true, required: true };
-        return websiteSettings.bookingFields[field] || { use: true, required: false };
-    };
+
 
     // Core State
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -161,43 +158,45 @@ export default function BookingPage() {
 
 
     // AUTO-SKIP LOGIC FOR CART (Combined Services + Products OR Only Products)
+    // AUTO-SKIP LOGIC FOR CART (Combined Services + Products OR Only Products)
+    // ONLY runs if we are processing the INITIAL URL parameters (not manual adds)
+    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
     useEffect(() => {
         // Wait for data to load
         if (loadingServices) return;
+        if (initialLoadComplete) return; // Prevent re-running on manual cart updates
 
-        const hasServices = cart.length > 0;
-        const hasProducts = productCart.length > 0;
+        const servicesParam = searchParams.get('services');
+        const legacyServiceId = searchParams.get('serviceId');
 
-        // If nothing in cart, stay at step 0 (or show empty state)
-        if (!hasServices && !hasProducts) return;
-
-        // CASE: Only Products -> Go straight to Step 3 (Details)
-        if (!hasServices && hasProducts) {
-            setStep(3);
-            return;
-        }
-
-        // CASE: Services present (Standard Logic)
-        // Only run this ONCE to set initial state, don't override back navigation
-        if (hasServices && step === 0) {
-            const proIdParam = searchParams.get('professionalId');
-            if (proIdParam) {
-                setBookingMode('combined');
-                setActiveConfigId('combined');
-                setTempDate(undefined);
-                setConfigStep(0);
-                setStep(2);
-            } else if (cart.length > 1) {
-                setStep(1);
-            } else {
-                setBookingMode('combined');
-                setActiveConfigId('combined');
-                setTempDate(undefined);
-                setConfigStep(0);
-                setStep(2);
+        // If we have URL params, we might want to auto-navigate
+        if (servicesParam || legacyServiceId) {
+            const hasServices = cart.length > 0;
+            if (hasServices && step === 0) {
+                const proIdParam = searchParams.get('professionalId');
+                if (proIdParam) {
+                    setBookingMode('combined');
+                    setActiveConfigId('combined');
+                    setTempDate(undefined);
+                    setConfigStep(0);
+                    setStep(2);
+                } else if (cart.length > 1) {
+                    setStep(1);
+                } else {
+                    setBookingMode('combined');
+                    setActiveConfigId('combined');
+                    setTempDate(undefined);
+                    setConfigStep(0);
+                    setStep(2);
+                }
             }
         }
-    }, [cart, productCart, loadingServices, searchParams, step]);
+
+        // Mark initial load as done after first pass (whether we moved or not)
+        setInitialLoadComplete(true);
+
+    }, [cart, loadingServices, searchParams, step, initialLoadComplete]);
 
     // --- COMPUTED ---
     const activeServiceIds = useMemo(() => cart.map(c => c.serviceId), [cart]);
@@ -253,12 +252,17 @@ export default function BookingPage() {
     const handleServicesConfirmed = () => {
         if (cart.length === 0) return;
 
+        // Manual confirmation always goes to next relevant step
+        // If Pro is pre-selected, we skip mode selection and go to Config
         if (preSelectedProId) {
             setBookingMode('combined');
-            startConfiguration('combined');
+            setActiveConfigId('combined'); // Critical for Step 2 rendering
+            setStep(2); // Direct to Date/Time
+            setConfigStep(0);
             return;
         }
 
+        // Standard flow
         if (cart.length > 1) {
             setStep(1); // Mode Select
         } else {
@@ -577,10 +581,30 @@ export default function BookingPage() {
     const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString());
 
 
-    // Render Helpers
+    // DYNAMIC FIELD CONFIG: Enforces requirements for payments
+    const getFieldConfig = (field: string) => {
+        // 1. Base Config (from Settings)
+        // Check 'customerFields' (New Agtanda Standard) then Root (Legacy/Direct)
+        // Matches structure seen in Firestore: settings/website/email|phone|etc
+        const baseConfig = websiteSettings?.customerFields?.[field]
+            || websiteSettings?.[field]
+            || { use: true, required: false };
+
+        // 2. Payment Overrides (Hybrid Logic)
+        if (upfrontTotal > 0) {
+            // MercadoPago REQUIRES Email & Phone.
+            if (field === 'email' || field === 'phone') {
+                return { use: true, required: true };
+            }
+        }
+
+        // 3. Return Logic (Respects Settings)
+        return baseConfig;
+    };
+
     const formatPrice = (price: any) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
 
-    if (loadingServices || loadingProfessionals) return <div className="h-screen flex items-center justify-center"><CustomLoader size={50} /></div>;
+    if (loadingServices || loadingProfessionals || loadingSettings) return <div className="h-screen flex items-center justify-center"><CustomLoader size={50} /></div>;
 
     if (websiteSettings.onlineReservations === false) {
         return (
@@ -647,7 +671,7 @@ export default function BookingPage() {
                                                 )}
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-sm font-medium text-primary-foreground/80">Reservando con:</p>
+                                                <p className="text-sm font-medium text-muted-foreground">Reservando con:</p>
                                                 <p className="font-bold text-lg leading-tight">{pro.name}</p>
                                             </div>
                                             <Button variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
@@ -1024,23 +1048,45 @@ export default function BookingPage() {
                                     </div>
                                 )}
 
-                                <div className="border-t border-slate-300 pt-3 space-y-1">
-                                    <div className="flex justify-between text-lg font-bold">
-                                        <span>Total</span>
-                                        <span>{formatPrice(totalPrice)}</span>
+                                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                                    <h3 className="font-bold text-lg border-b pb-2">Resumen de Compra</h3>
+
+                                    <div className="space-y-2">
+                                        {/* Services */}
+                                        {cart.map((item) => (
+                                            <div key={item.uniqueId} className="flex justify-between text-sm text-slate-700">
+                                                <span>{item.service.name}</span>
+                                                <span className="font-medium">{formatPrice(item.service.price)}</span>
+                                            </div>
+                                        ))}
+
+                                        {/* Products */}
+                                        {productCart.map((product) => (
+                                            <div key={product.id} className="flex justify-between text-sm text-slate-700">
+                                                <span>{product.nombre}</span>
+                                                <span className="font-medium">{formatPrice(product.public_price)}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    {upfrontTotal > 0 && (
-                                        <>
-                                            <div className="flex justify-between text-base font-semibold text-blue-600">
-                                                <span>Pagar ahora en línea</span>
-                                                <span>{formatPrice(upfrontTotal)}</span>
-                                            </div>
-                                            <div className="flex justify-between text-sm text-muted-foreground">
-                                                <span>Pendiente en local</span>
-                                                <span>{formatPrice(totalPrice - upfrontTotal)}</span>
-                                            </div>
-                                        </>
-                                    )}
+
+                                    <div className="border-t border-slate-300 pt-3 space-y-1">
+                                        <div className="flex justify-between text-lg font-bold">
+                                            <span>Total</span>
+                                            <span>{formatPrice(totalPrice)}</span>
+                                        </div>
+                                        {upfrontTotal > 0 && (
+                                            <>
+                                                <div className="flex justify-between text-base font-semibold text-blue-600">
+                                                    <span>Pagar ahora en línea</span>
+                                                    <span>{formatPrice(upfrontTotal)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm text-muted-foreground">
+                                                    <span>Pendiente en local</span>
+                                                    <span>{formatPrice(totalPrice - upfrontTotal)}</span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">
@@ -1067,7 +1113,7 @@ export default function BookingPage() {
 
                                     {/* Email (Optional/Required) */}
                                     {getFieldConfig('email').use && (
-                                            <div className="space-y-2">
+                                        <div className="space-y-2">
                                             <Label htmlFor="email">Email {getFieldConfig('email').required && <span className="text-red-500">*</span>}</Label>
                                             <Input
                                                 id="email"
@@ -1076,9 +1122,9 @@ export default function BookingPage() {
                                                 value={clientDetails.email}
                                                 onChange={(e) => setClientDetails({ ...clientDetails, email: e.target.value })}
                                                 className={
-                                                    clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email) 
-                                                    ? "border-red-500 bg-red-50" 
-                                                    : ""
+                                                    clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email)
+                                                        ? "border-red-500 bg-red-50"
+                                                        : ""
                                                 }
                                             />
                                             {clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email) && (
@@ -1102,11 +1148,11 @@ export default function BookingPage() {
                                                 }}
                                                 className={
                                                     (clientDetails.phone.length > 0 && clientDetails.phone.length < 10) || (clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone))
-                                                    ? "border-red-500 bg-red-50" 
-                                                    : ""
+                                                        ? "border-red-500 bg-red-50"
+                                                        : ""
                                                 }
                                             />
-                                             {clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone) && (
+                                            {clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone) && (
                                                 <p className="text-[10px] text-red-500">Número inválido.</p>
                                             )}
                                         </div>
@@ -1214,6 +1260,8 @@ export default function BookingPage() {
                             </motion.div>
                         )}
                     </AnimatePresence>
+
+
                     <div className="mt-4 text-[10px] text-center text-muted-foreground">
                         Este sitio está protegido por reCAPTCHA y se aplican la{' '}
                         <a href="https://policies.google.com/privacy" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Política de Privacidad</a> y los{' '}

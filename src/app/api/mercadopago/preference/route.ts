@@ -56,22 +56,31 @@ export async function POST(req: NextRequest) {
 
         const result = await preference.create({
             body: {
-                items: items,
+                items: items.map((item: any) => ({
+                    ...item,
+                    unit_price: Number(item.unit_price) // Ensure it's a number
+                })),
                 payer: {
-                    email: payerEmail, // Must be a valid email
+                    email: payerEmail,
                     name: payer.name || 'Cliente',
-                    surname: payer.lastName || ''
+                    surname: payer.lastName || '',
+                    phone: {
+                        area_code: '52', // Assuming MX for now, can be improved later
+                        number: payer.phone?.replace(/\D/g, '') || ''
+                    }
                 },
                 external_reference: reservationId,
+                statement_descriptor: "VATOS ALFA",
+                expires: true,
+                date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min expiration
                 payment_methods: {
                     installments: 1,
                     excluded_payment_types: [
-                        { id: "ticket" } // Exclude cash payments if instant confirmation is needed? Or keep them? Usually for booking, instant is better.
+                        { id: "ticket" }
                     ]
                 },
                 back_urls: backUrls,
                 auto_return: baseUrl.includes('localhost') ? undefined : 'approved',
-                // notification_url: `${baseUrl}/api/mercadopago/webhook`, // Can be added later
                 metadata: {
                     reservation_id: reservationId
                 }

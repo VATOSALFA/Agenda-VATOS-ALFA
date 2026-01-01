@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
 
         console.log(`[MP] Loading token...`);
         console.log(`[MP] MERCADO_PAGO_ACCESS_TOKEN exists: ${!!process.env.MERCADO_PAGO_ACCESS_TOKEN}`);
+        console.log(`[MP] MP_WEB_ACCESS_TOKEN exists: ${!!process.env.MP_WEB_ACCESS_TOKEN}`); // Explicit Check
         console.log(`[MP] MP_ACCESS_TOKEN exists: ${!!process.env.MP_ACCESS_TOKEN}`);
         console.log(`[MP] Final Token Length: ${accessToken.length}`);
 

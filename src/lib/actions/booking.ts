@@ -180,19 +180,48 @@ export async function createPublicReservation(data: any) {
 
         // 1. Check/Create Client
         const clientsRef = db.collection('clientes');
-        const q = clientsRef.where('telefono', '==', data.client.phone).limit(1);
-        const snapshot = await q.get();
-
         let clientId;
 
-        if (!snapshot.empty) {
-            clientId = snapshot.docs[0].id;
+        // Fetch Checking Settings
+        let validateEmail = true;
+        let validatePhone = true;
+        try {
+            const settingsSnap = await db.collection('configuracion').doc('clientes').get();
+            if (settingsSnap.exists) {
+                const s = settingsSnap.data();
+                if (s) {
+                    validateEmail = s.validateEmail !== false; // Default true
+                    validatePhone = s.validatePhone !== false; // Default true
+                }
+            }
+        } catch (e) { console.warn("Could not read client settings, defaulting to validation on"); }
+
+        // Attempt to find existing
+        let existingDoc;
+
+        if (validateEmail && data.client.email) {
+            const q = clientsRef.where('email', '==', data.client.email).limit(1);
+            const snap = await q.get();
+            if (!snap.empty) existingDoc = snap.docs[0];
+        }
+
+        if (!existingDoc && validatePhone && data.client.phone) {
+            const q = clientsRef.where('telefono', '==', data.client.phone).limit(1);
+            const snap = await q.get();
+            if (!snap.empty) existingDoc = snap.docs[0];
+        }
+
+        if (existingDoc) {
+            clientId = existingDoc.id;
+            // Optional: Update info if missing? For now, just link.
         } else {
             const newClientRef = await clientsRef.add({
                 nombre: data.client.name,
                 apellido: data.client.lastName,
                 telefono: data.client.phone,
+                email: data.client.email || '',
                 fecha_nacimiento: data.client.birthday || null,
+                notas: data.client.notes || '',
                 createdAt: FieldValue.serverTimestamp(),
                 origen: 'web_publica'
             });

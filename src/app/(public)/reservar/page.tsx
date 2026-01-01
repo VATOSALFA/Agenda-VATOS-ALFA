@@ -456,9 +456,12 @@ export default function BookingPage() {
                 const serviceNames = cart.map(c => c.service.name);
 
                 bookingsPayload.push({
+                    id: generateId(), // Pre-generate ID for idempotency
+                    canal_reserva: 'web_publica', // Triggers Globe/Lock icons
                     client: clientDetails,
                     serviceIds: cart.map(c => c.serviceId),
                     serviceNames: serviceNames,
+                    servicePrices: cart.map(c => Number(c.service.price || 0)),
                     professionalId: cfg.professionalId,
                     date: format(cfg.date, 'yyyy-MM-dd'),
                     time: cfg.time,
@@ -483,9 +486,12 @@ export default function BookingPage() {
                     const endTime = format(endDate, 'HH:mm');
 
                     bookingsPayload.push({
+                        id: generateId(), // Pre-generate ID
+                        canal_reserva: 'web_publica', // Triggers Globe/Lock icons
                         client: clientDetails,
                         serviceIds: [item.serviceId],
                         serviceNames: [item.service.name],
+                        servicePrices: [Number(item.service.price || 0)],
                         professionalId: cfg.professionalId,
                         date: format(cfg.date, 'yyyy-MM-dd'),
                         time: cfg.time,

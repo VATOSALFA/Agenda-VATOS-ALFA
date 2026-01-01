@@ -904,8 +904,8 @@ export default function AgendaView() {
                                 <div className="flex-grow overflow-hidden pr-1">
                                   <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event.customer?.nombre || 'Cliente Eliminado') : event.motivo}</p>
                                 </div>
-                                {(event.type === 'appointment' && event.pago_estado === 'Pagado') && (
-                                  <div className="absolute top-0 right-0 h-full w-6 bg-green-500 flex items-center justify-center">
+                                {(event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) && (
+                                  <div className={cn("absolute top-0 right-0 h-full w-6 flex items-center justify-center", event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500')}>
                                     <DollarSign className="h-4 w-4 text-black font-bold" />
                                   </div>
                                 )}
@@ -933,11 +933,15 @@ export default function AgendaView() {
                                   </div>
                                   {event.pago_estado &&
                                     <div className="flex items-center gap-2 text-sm">
-                                      <DollarSign className="w-4 h-4" />
+                                      <DollarSign className={cn("w-4 h-4", event.pago_estado === 'deposit_paid' ? 'text-orange-500' : 'text-green-600')} />
                                       <span className={cn(
-                                        event.pago_estado === 'Pagado' ? 'text-green-600' : 'text-yellow-600'
+                                        event.pago_estado === 'Pagado' ? 'text-green-600' :
+                                          event.pago_estado === 'deposit_paid' ? 'text-orange-600 font-medium' :
+                                            'text-yellow-600'
                                       )}>
-                                        {event.pago_estado === 'Pagado' ? 'Pago asociado' : 'Pago pendiente'}
+                                        {event.pago_estado === 'Pagado' ? 'Pago completo' :
+                                          event.pago_estado === 'deposit_paid' ? 'Anticipo pagado' :
+                                            'Pago pendiente'}
                                       </span>
                                     </div>
                                   }

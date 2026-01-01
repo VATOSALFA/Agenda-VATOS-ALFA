@@ -113,6 +113,7 @@ interface NewSaleSheetProps {
         items: (Product | ServiceType)[];
         reservationId?: string;
         local_id?: string;
+        anticipoPagado?: number; // Added field
     };
     onSaleComplete?: () => void;
 }
@@ -160,7 +161,7 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 });
 ClientCombobox.displayName = 'ClientCombobox';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }: any) => (
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }: any) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
@@ -224,6 +225,16 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, onOpenAddItem, u
                     <span>Descuento:</span>
                     <span>-${totalDiscount.toLocaleString('es-MX')}</span>
                 </div>
+                {/* This is passed as a prop, but ResumenCarrito doesn't have access to the state 'anticipoPagado' directly unless passed. 
+                    I need to add 'anticipoPagado' to the props of ResumenCarrito. 
+                    Wait, I am editing ResumenCarrito which is defined in the same file. */}
+                {/* I will add a placeholder prop access here, and update the component signature next.*/}
+                {anticipoPagado > 0 && (
+                    <div className="flex justify-between text-green-600 font-medium">
+                        <span>Anticipo Pagado:</span>
+                        <span>-${anticipoPagado.toLocaleString('es-MX')}</span>
+                    </div>
+                )}
                 <div className="flex justify-between font-bold text-xl pt-2 border-t">
                     <span>Total:</span>
                     <span className="text-primary">${total.toLocaleString('es-MX')}</span>
@@ -369,6 +380,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         [cart]
     );
 
+    const [anticipoPagado, setAnticipoPagado] = useState(0);
+
     const totalDiscount = useMemo(() => {
         return cart.reduce((acc, item) => {
             const itemTotal = (item.precio || 0) * item.cantidad;
@@ -380,7 +393,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }, 0);
     }, [cart]);
 
-    const total = useMemo(() => Math.max(0, subtotal - totalDiscount), [subtotal, totalDiscount]);
+    const total = useMemo(() => Math.max(0, subtotal - totalDiscount - anticipoPagado), [subtotal, totalDiscount, anticipoPagado]);
 
     const form = useForm<SaleFormData>({
         resolver: zodResolver(saleSchema(total)),
@@ -540,6 +553,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 };
             });
             setCart(initialCartItems);
+            if (initialData.anticipoPagado) {
+                setAnticipoPagado(initialData.anticipoPagado);
+            }
             setStep(2);
         }
     }, [initialData, form, isOpen]);

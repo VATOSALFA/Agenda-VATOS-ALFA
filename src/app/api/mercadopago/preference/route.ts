@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
         const backUrls = {
             success: `${baseUrl}/reserva/confirmada`,
             failure: `${baseUrl}/reserva/fallida`,
-            pending: `${baseUrl}/reserva/pendiente`
+            pending: `${baseUrl}/reserva/confirmada` // Even if pending, show success/info page
         };
 
         console.log(`[MP] Using Back URLs:`, JSON.stringify(backUrls, null, 2));
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
                         number: payer.phone?.replace(/\D/g, '') || ''
                     }
                 },
-                external_reference: reservationId,
+                external_reference: reservationId || `TEMP_${Date.now()}_${Math.random().toString(36).substring(7)}`,
                 statement_descriptor: "VATOS ALFA",
                 expires: true,
                 date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min expiration
@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
                 back_urls: backUrls,
                 auto_return: baseUrl.includes('localhost') ? undefined : 'approved',
                 metadata: {
-                    reservation_id: reservationId
+                    reservation_id: reservationId || 'pending_creation',
+                    booking_json: body.bookingData ? JSON.stringify(body.bookingData) : undefined
                 }
             }
         });

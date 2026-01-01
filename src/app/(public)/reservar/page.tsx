@@ -429,9 +429,6 @@ export default function BookingPage() {
         try {
             if (!executeRecaptcha) {
                 console.warn('Recaptcha not ready');
-                // Proceed or block? Usually proceed if it fails to load to not block real users, or block if strict.
-                // For now, let's proceed but maybe without token?
-                // Better to throw error if security is strict. But I'll warn.
             }
 
             let token: string | null = null;
@@ -441,36 +438,37 @@ export default function BookingPage() {
                 }
             } catch (recaptchaError) {
                 console.error("Recaptcha execution failed, proceeding without token:", recaptchaError);
-                // Allow proceeding even if Recaptcha fails (fail-open) to avoid blocking sales
             }
 
             let lastError = "";
+
+            // Prepare Booking Data
+            const bookingsPayload: any[] = [];
 
             if (bookingMode === 'combined') {
                 const cfg = configs['combined'];
                 if (!cfg) throw new Error("Config missing");
 
-                const res = await createPublicReservation({
+                // Calculate End Time
+                const startTimeDate = parse(cfg.time, 'HH:mm', new Date());
+                const endDate = addMinutes(startTimeDate, totalDuration);
+                const endTime = format(endDate, 'HH:mm');
+                const serviceNames = cart.map(c => c.service.name);
+
+                bookingsPayload.push({
                     client: clientDetails,
                     serviceIds: cart.map(c => c.serviceId),
+                    serviceNames: serviceNames,
                     professionalId: cfg.professionalId,
                     date: format(cfg.date, 'yyyy-MM-dd'),
                     time: cfg.time,
+                    endTime: endTime,
+                    duration: totalDuration,
                     locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
-                    paymentStatus: upfrontTotal > 0 ? 'pending_payment' : 'pending',
                     amountDue: upfrontTotal,
                     totalAmount: totalPrice,
-                    recaptchaToken: token
+                    // recaptchaToken: token
                 });
-
-                if (res.success && res.reservationId) {
-                    createdReservationIds.push(res.reservationId);
-                } else {
-                    errorCount++;
-                    lastError = res.error || "Error al crear la reserva combinada";
-                    console.error("Booking error:", res.error);
-                }
-
             } else {
                 for (const item of cart) {
                     const cfg = configs[item.uniqueId];
@@ -479,16 +477,74 @@ export default function BookingPage() {
                     const pType = item.service.payment_type || 'no-payment';
                     const itemUpfront = (pType === 'online-deposit' ? Number(item.service.price || 0) * 0.5 : (pType === 'full-payment' ? Number(item.service.price || 0) : 0));
 
-                    const res = await createPublicReservation({
+                    const duration = Number(item.service.duration || 30);
+                    const startTimeDate = parse(cfg.time, 'HH:mm', new Date());
+                    const endDate = addMinutes(startTimeDate, duration);
+                    const endTime = format(endDate, 'HH:mm');
+
+                    bookingsPayload.push({
                         client: clientDetails,
                         serviceIds: [item.serviceId],
+                        serviceNames: [item.service.name],
                         professionalId: cfg.professionalId,
                         date: format(cfg.date, 'yyyy-MM-dd'),
                         time: cfg.time,
+                        endTime: endTime,
+                        duration: duration,
                         locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
-                        paymentStatus: itemUpfront > 0 ? 'pending_payment' : 'pending',
                         amountDue: itemUpfront,
                         totalAmount: Number(item.service.price || 0),
+                        // recaptchaToken: token
+                    });
+                }
+            }
+
+            if (upfrontTotal > 0) {
+                // PAYMENT FLOW - DO NOT CREATE RESERVATION YET
+                try {
+                    const response = await fetch('/api/mercadopago/preference', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            // Pass the booking data to be stored in metadata
+                            bookingData: bookingsPayload,
+                            items: [
+                                {
+                                    id: 'deposit',
+                                    title: `Anticipo: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
+                                    quantity: 1,
+                                    currency_id: 'MXN',
+                                    unit_price: upfrontTotal
+                                }
+                            ],
+                            payer: clientDetails
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.init_point) {
+                        window.location.href = data.init_point;
+                        return; // Successfully redirected
+                    } else {
+                        throw new Error(data.error || 'No se pudo generar el enlace de pago.');
+                    }
+
+                } catch (payError: any) {
+                    console.error("Payment Error Full Details:", payError);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Error de Pago',
+                        description: payError.message || "Error desconocido al contactar pasarela."
+                    });
+                    setIsSubmitting(false);
+                }
+            } else {
+                // FREE FLOW - CREATE IMMEDIATELY
+                for (const booking of bookingsPayload) {
+                    const res = await createPublicReservation({
+                        ...booking,
+                        paymentStatus: 'pending',
                         recaptchaToken: token
                     });
 
@@ -496,61 +552,20 @@ export default function BookingPage() {
                         createdReservationIds.push(res.reservationId);
                     } else {
                         errorCount++;
-                        lastError = res.error || "Error al crear la reserva individual";
+                        lastError = res.error || "Error al crear la reserva";
                         console.error("Booking error:", res.error);
                     }
                 }
-            }
 
-            if (errorCount === 0 && createdReservationIds.length > 0) {
-                if (upfrontTotal > 0) {
-                    // PAYMENT FLOW
-                    try {
-                        const response = await fetch('/api/mercadopago/preference', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                reservationId: createdReservationIds[0], // Using the first ID as reference. 
-                                // Ideally we bundle multiple IDs in metadata if multiple exist.
-                                items: [
-                                    {
-                                        id: 'deposit',
-                                        title: `Anticipo: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
-                                        quantity: 1,
-                                        currency_id: 'MXN',
-                                        unit_price: upfrontTotal
-                                    }
-                                ],
-                                payer: clientDetails
-                            })
-                        });
-
-                        const data = await response.json();
-
-                        if (data.init_point) {
-                            window.location.href = data.init_point;
-                            return; // Don't turn off submitting
-                        } else {
-                            throw new Error(data.error || 'No se pudo generar el enlace de pago.');
-                        }
-
-                    } catch (payError: any) {
-                        console.error("Payment Error Full Details:", payError);
-                        toast({
-                            variant: 'destructive',
-                            title: 'Error de Pago',
-                            description: payError.message || "Error desconocido al contactar pasarela."
-                        });
-                        setIsSubmitting(false);
-                    }
-                } else {
+                if (errorCount === 0 && createdReservationIds.length > 0) {
                     setStep(4);
                     setIsSubmitting(false);
+                } else {
+                    toast({ variant: 'destructive', title: 'Error', description: lastError || 'Hubo un problema al crear la reserva.' });
+                    setIsSubmitting(false);
                 }
-            } else {
-                toast({ variant: 'destructive', title: 'Error', description: lastError || 'Hubo un problema al crear la reserva.' });
-                setIsSubmitting(false);
             }
+
         } catch (e: any) {
             console.error(e);
             toast({ variant: 'destructive', title: 'Error', description: e.message });

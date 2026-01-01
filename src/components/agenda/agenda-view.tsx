@@ -102,7 +102,10 @@ const getStatusColor = (status: string | undefined) => {
       return 'bg-pink-300/80 border-pink-500 text-pink-900';
     case 'No asiste':
       return 'bg-orange-300/80 border-orange-500 text-orange-900';
-    case 'Pendiente':
+    case 'Pendiente': // Legacy
+    case 'pending_payment':
+      return 'bg-red-300/80 border-red-500 text-red-900';
+    case 'Pendiente de Pago': // New standard
       return 'bg-red-300/80 border-red-500 text-red-900';
     case 'En espera':
       return 'bg-indigo-300/80 border-indigo-500 text-indigo-900';

@@ -235,7 +235,7 @@ export function ReservationDetailModal({
                 <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
               </div>
               <Badge variant={reservation.pago_estado === 'Pagado' ? 'default' : 'secondary'} className={cn(reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800')}>
-                {reservation.pago_estado}
+                {reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' : reservation.pago_estado}
               </Badge>
             </div>
 

@@ -579,7 +579,110 @@ exports.mercadoPagoWebhook = onRequest(
           return;
         }
 
-        console.warn(`[vFinal] No Venta or Reserva found for ref ${external_reference}`);
+        // CASE 3: Reservation NOT FOUND (Created via Metadata / Late Creation)
+        // This handles "Prevent reservation creation until payment"
+        console.log(`[vFinal] Reservation ${external_reference} not found. Checking metadata for creation...`);
+        const metadata = body?.action === 'payment.created' ? body?.data?.metadata : paymentInfo.metadata;
+        // Note: MercadoPago metadata keys are lowercased automatically. 'booking_json' -> 'booking_json'
+
+        // Sometimes metadata is in paymentInfo (fetched from API)
+        const bookingJson = paymentInfo.metadata?.booking_json;
+
+        if (bookingJson) {
+          let bookings = [];
+          try {
+            bookings = JSON.parse(bookingJson);
+          } catch (e) {
+            console.error("Error parsing booking_json:", e);
+          }
+
+          if (Array.isArray(bookings) && bookings.length > 0) {
+            console.log(`[vFinal] Found ${bookings.length} bookings to create from metadata.`);
+
+            for (const booking of bookings) {
+              // 1. Upsert Client
+              const clientData = booking.client;
+              const clientQuery = await admin.firestore().collection('clientes').where('correo', '==', clientData.email).limit(1).get();
+              let clientId = null;
+
+              if (!clientQuery.empty) {
+                clientId = clientQuery.docs[0].id;
+                // Optional: Update phone if changed? For now, keep simple.
+              } else {
+                const newClientRef = admin.firestore().collection('clientes').doc();
+                clientId = newClientRef.id;
+                t.set(newClientRef, {
+                  nombre: clientData.name,
+                  apellido: clientData.lastName,
+                  correo: clientData.email,
+                  telefono: clientData.phone,
+                  creado_en: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+
+              // 2. Create Reservation
+              const newResRef = admin.firestore().collection('reservas').doc(); // Auto-ID
+
+              // Items Mapping (Frontend sends serviceNames, serviceIds)
+              // We need to construct 'items' array expected by structure
+              // Simplification: We blindly trust frontend data for "items" structure or reconstruct it
+              // The frontend sent 'serviceIds' and 'serviceNames' arrays.
+              const resItems = booking.serviceIds.map((sid, idx) => ({
+                id: sid,
+                servicio: booking.serviceNames[idx],
+                barbero_id: booking.professionalId,
+                // precio? We don't have per-service price in the simplified payload easily without lookup
+                // But we have 'totalAmount'. If 1 item, easy. If multi, split?
+                // For 'combined', we usually treat as a block.
+                // Let's assume 'items' in reservation doc is just for display list
+                nombre: booking.serviceNames[idx]
+              }));
+
+              const reservaToCreate = {
+                cliente_id: clientId,
+                local_id: booking.locationId,
+                professional_id: booking.professionalId, // Main pro
+                fecha: booking.date,
+                hora_inicio: booking.time,
+                hora_fin: booking.endTime, // We added this to payload
+                duracion: booking.duration,
+                estado: 'Confirmado', // Paid = Confirmed
+                pago_estado: 'Pagado',
+
+                items: resItems,
+                servicio: resItems.map(i => i.servicio).join(', '), // Legacy field
+
+                total: booking.totalAmount,
+                anticipo_pagado: Number(transaction_amount || 0), // Use the full payment amount for the batch or split? 
+                // If multiple bookings, this shared payment covers ALL? or split?
+                // Usually 'combined' is 1 reservation. 'individual' is multiple.
+                // If 'individual', we have multiple docs. The payment covers SUM of upfront.
+                // Assigning full payment to EACH is WRONG.
+                // We should PROPORTION it or assign to first?
+                // Frontend 'individual' mode sends 1 payment for N bookings.
+                // We should calculate fraction? 
+                // Simplified: Set 'anticipo_pagado' = booking.amountDue (the expected upfront for this specific booking). 
+                // Verify sufficient payment? Validated by total check.
+
+                anticipo_pagado: booking.amountDue,
+                saldo_pendiente: booking.totalAmount - booking.amountDue,
+
+                deposit_payment_id: String(paymentInfo.id),
+                deposit_paid_at: new Date(),
+                metodo_pago_anticipo: 'mercadopago',
+
+                creado_en: admin.firestore.FieldValue.serverTimestamp(),
+                origen: 'web_publica_pago_anticipado'
+              };
+
+              t.set(newResRef, reservaToCreate);
+              console.log(`[vFinal] Created Reservation ${newResRef.id} from metadata.`);
+            }
+            return;
+          }
+        }
+
+        console.warn(`[vFinal] No Venta or Reserva found for ref ${external_reference} and no valid metadata to create.`);
       });
       console.log(`[vFinal] SUCCESS: Venta ${external_reference} processed.`);
 

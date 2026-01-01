@@ -560,18 +560,22 @@ exports.mercadoPagoWebhook = onRequest(
 
         if (reservaDoc.exists) {
           // Update Reservation
+          const reservaData = reservaDoc.data();
+          const total = reservaData.total || 0;
+          const pagadoAhora = Number(transaction_amount || 0);
+
           t.update(reservaRef, {
-            pago_estado: 'Pagado',
-            estado_pago: 'Pagado', // Redundancy for safety
+            pago_estado: 'Pagado', // Status of the *payment* (deposit)
+            estado: 'Confirmado',  // CONFIRM the appointment so it appears in agenda
+
+            // Record Financials
             deposit_payment_id: String(paymentInfo.id),
             deposit_paid_at: new Date(),
-            // If status was pending_payment, we might want to confirm it?
-            // Usually 'Confirmado' implies logic confirmation.
-            // Let's set 'estado' to 'Confirmado' if it was pending payment?
-            // Or just mark payment as paid.
-            // Let's stick to marking payment.
+            anticipo_pagado: pagadoAhora,
+            saldo_pendiente: total > pagadoAhora ? (total - pagadoAhora) : 0,
+            metodo_pago_anticipo: 'mercadopago'
           });
-          console.log(`[vFinal] Custom: Direct Reservation ${external_reference} updated.`);
+          console.log(`[vFinal] Custom: Direct Reservation ${external_reference} CONFIRMED and UPDATED with payment $${pagadoAhora}.`);
           return;
         }
 

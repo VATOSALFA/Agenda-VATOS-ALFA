@@ -299,7 +299,12 @@ export async function createPublicReservation(data: any) {
             total: totalPrice,
             origen: 'web_publica',
             canal_reserva: 'web_publica',
-            createdAt: FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp(),
+            // Financials for Upfront Payment
+            pago_estado: data.paymentStatus || 'pendiente', // 'pending_payment', 'pending', 'paid'
+            anticipo_esperado: data.amountDue || 0,
+            saldo_pendiente: data.totalAmount && data.amountDue ? (data.totalAmount - data.amountDue) : (data.totalAmount || totalPrice),
+            requiere_pago_anticipado: (data.amountDue || 0) > 0
         };
 
         const resRef = await db.collection('reservas').add(reservationData);

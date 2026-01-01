@@ -24,6 +24,12 @@ export async function POST(req: NextRequest) {
         }
 
         const client = new MercadoPagoConfig({ accessToken });
+
+        if (!accessToken || accessToken.length < 10) {
+            console.error("[MP] Token missing or invalid.");
+            return NextResponse.json({ error: "Configuración de pago incompleta (Token faltante)." }, { status: 500 });
+        }
+
         const preference = new Preference(client);
 
         // Determine base URL (Production vs Local)

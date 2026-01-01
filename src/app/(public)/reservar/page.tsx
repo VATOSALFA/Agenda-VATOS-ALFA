@@ -535,8 +535,12 @@ export default function BookingPage() {
                         }
 
                     } catch (payError: any) {
-                        console.error("Payment Error:", payError);
-                        toast({ variant: 'destructive', title: 'Error de Pago', description: payError.message });
+                        console.error("Payment Error Full Details:", payError);
+                        toast({
+                            variant: 'destructive',
+                            title: 'Error de Pago',
+                            description: payError.message || "Error desconocido al contactar pasarela."
+                        });
                         setIsSubmitting(false);
                     }
                 } else {

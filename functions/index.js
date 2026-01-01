@@ -16,9 +16,10 @@ const { MercadoPagoConfig, Point } = require("mercadopago");
 const twilio = require("twilio");
 
 // --- DEFINICIÓN DE SECRETOS ---
-const mpAccessToken = defineSecret("MERCADO_PAGO_ACCESS_TOKEN");
-const mpWebhookSecret = defineSecret("MERCADO_PAGO_WEBHOOK_SECRET");
-const mpWebWebhookSecret = defineSecret("MERCADO_PAGO_WEB_WEBHOOK_SECRET");
+// Actualizado para coincidir con Google Secret Manager
+const mpAccessToken = defineSecret("MP_WEB_ACCESS_TOKEN");
+const mpWebhookSecret = defineSecret("MP_TERMINAL_WEBHOOK_SECRET"); // Terminal (Legacy)
+const mpWebWebhookSecret = defineSecret("MP_WEB_WEBHOOK_SECRET");   // Web (Landing)
 const resendApiKey = defineSecret("RESEND_API_KEY");
 
 // Configuración global

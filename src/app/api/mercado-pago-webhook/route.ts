@@ -73,22 +73,100 @@ export async function POST(req: NextRequest) {
         const db = getDb();
 
         await db.runTransaction(async (t: any) => {
-            // Check Reservation
             const reservaRef = db.collection('reservas').doc(external_reference);
             const reservaDoc = await t.get(reservaRef);
 
+            // Logic to calculate Payment Status
+            const determinePaymentStatus = (total: number, paid: number) => {
+                if (paid >= total * 0.99) return 'Pagado'; // Tolerance for float errors
+                return 'deposit_paid'; // or 'parcialmente_pagado'
+            };
+
+            // CASE A: Reservation Exists (Update)
             if (reservaDoc.exists) {
+                const data = reservaDoc.data();
+                const total = Number(data.totalAmount || data.precio || 0);
+                const paid = Number(transaction_amount || 0);
+
                 t.update(reservaRef, {
-                    pago_estado: 'Pagado',
-                    estado_pago: 'Pagado',
+                    pago_estado: determinePaymentStatus(total, paid),
                     deposit_payment_id: String(paymentInfo.id),
                     deposit_paid_at: new Date(),
+                    monto_pagado: paid,
+                    // If it was pending confirmation, confirm it now
+                    estado: data.estado === 'Pendiente' ? 'Confirmado' : data.estado
                 });
                 console.log(`[Next.js] Reservation ${external_reference} updated.`);
                 return;
             }
 
-            // Check Venta (Legacy/Terminal)
+            // CASE B: Reservation Does NOT Exist (Create)
+            // We need metadata to create it
+            const bookingJson = paymentInfo.metadata?.booking_json || body?.data?.metadata?.booking_json;
+
+            if (bookingJson) {
+                console.log(`[Next.js] Creating new reservation(s) from metadata for Ref ${external_reference}`);
+                try {
+                    const bookingsData = JSON.parse(bookingJson);
+                    const paidAmount = Number(transaction_amount || 0);
+
+                    // If it's an array, we might have multiple bookings.
+                    // The first one gets the 'external_reference' ID. 
+                    // Subsequent ones get new IDs.
+                    const bookingsArray = Array.isArray(bookingsData) ? bookingsData : [bookingsData];
+
+                    if (bookingsArray.length === 0) return;
+
+                    // We distribute the payment amount across bookings? 
+                    // Or usually, the payment is for the TOTAL of the cart.
+                    // For simplicity, we mark all as 'deposit_paid' if the global amount matches the upfront total.
+                    // But strictly, we should link the payment ID to all of them.
+
+                    for (let i = 0; i < bookingsArray.length; i++) {
+                        const booking = bookingsArray[i];
+
+                        // ID Strategy
+                        let ref = reservaRef; // First item uses the Payment Reference ID
+                        if (i > 0) {
+                            ref = db.collection('reservas').doc(); // Generate new ID for others
+                        }
+
+                        const total = Number(booking.totalAmount || 0);
+                        // We assume the payment covers the required upfront for ALL items.
+                        // So we mark them all as having the deposit paid.
+
+                        // Sanitize undefineds
+                        const newReservation = {
+                            ...booking,
+                            id: ref.id,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            estado: 'Confirmado', // Confirmed because they paid
+                            pago_estado: 'deposit_paid', // Start with deposit paid
+                            monto_pagado: (i === 0) ? paidAmount : 0, // Attribute payment to first one or split? Better to attribute to first one for tracking.
+                            deposit_payment_id: String(paymentInfo.id),
+                            payment_method: 'mercadopago',
+                            // Ensure fields required by frontend exist
+                            client: booking.client || {},
+                            serviceIds: booking.serviceIds || [],
+                            professionalId: booking.professionalId,
+                            locationId: booking.locationId
+                        };
+
+                        t.set(ref, newReservation);
+                        console.log(`[Next.js] Created Reservation ${ref.id}`);
+                    }
+                    return;
+
+                } catch (jsonError) {
+                    console.error("[Next.js] Failed to parse booking_json:", jsonError);
+                    // Do not fail transaction, just log. Manual Fix required.
+                }
+            }
+
+            console.warn(`[Next.js] Reference ${external_reference} not found and no valid metadata to create it.`);
+
+            // Fallback for Legacy Sales (Ventas)
             const ventaRef = db.collection('ventas').doc(external_reference);
             const ventaDoc = await t.get(ventaRef);
 
@@ -108,16 +186,7 @@ export async function POST(req: NextRequest) {
                     propina: propina,
                     fecha_pago: new Date()
                 });
-
-                // Also update linked reservation if exists
-                if (ventaData?.reservationId) {
-                    const linkedResRef = db.collection('reservas').doc(ventaData.reservationId);
-                    const linkedResDoc = await t.get(linkedResRef);
-                    if (linkedResDoc.exists) t.update(linkedResRef, { pago_estado: 'Pagado' });
-                }
                 console.log(`[Next.js] Venta ${external_reference} updated.`);
-            } else {
-                console.warn(`[Next.js] No Venta or Reserva found for ref ${external_reference}`);
             }
         });
 

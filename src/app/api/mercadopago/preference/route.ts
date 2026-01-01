@@ -8,8 +8,8 @@ export async function POST(req: NextRequest) {
         const { reservationId, items, payer } = body;
 
         // Initialize Mercado Pago
-        // Prioritize the var defined in apphosting.yaml
-        const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+        // Prioritize the var defined in apphosting.yaml, but fallback to direct Secret name
+        const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_WEB_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
 
         console.log(`[MP] Loading token...`);
         console.log(`[MP] MERCADO_PAGO_ACCESS_TOKEN exists: ${!!process.env.MERCADO_PAGO_ACCESS_TOKEN}`);

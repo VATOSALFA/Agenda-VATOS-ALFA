@@ -20,6 +20,11 @@ export const firebaseConfig: FirebaseOptions = {
     measurementId: sanitize(process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID)
 };
 
+console.log("[FirebaseConfig] Loading...", {
+    apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 5) + '...' : 'MISSING',
+    projectId: firebaseConfig.projectId
+});
+
 function initializeFirebase() {
     if (getApps().length > 0) {
         return {

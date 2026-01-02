@@ -234,8 +234,14 @@ export function ReservationDetailModal({
                 <p className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</p>
                 <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
               </div>
-              <Badge variant={reservation.pago_estado === 'Pagado' ? 'default' : 'secondary'} className={cn(reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800')}>
-                {reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' : reservation.pago_estado}
+              <Badge variant={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid' ? 'default' : 'secondary'} className={cn(
+                reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' :
+                  reservation.pago_estado === 'deposit_paid' ? 'bg-orange-100 text-orange-800' :
+                    'bg-yellow-100 text-yellow-800'
+              )}>
+                {reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' :
+                  reservation.pago_estado === 'deposit_paid' ? 'Anticipo Pagado' :
+                    reservation.pago_estado}
               </Badge>
             </div>
 
@@ -309,7 +315,8 @@ export function ReservationDetailModal({
 
             {reservation.pago_estado !== 'Pagado' ? (
               <Button onClick={onPay} className="bg-primary hover:bg-primary/90">
-                <CreditCard className="mr-2 h-4 w-4" /> Pagar
+                <CreditCard className="mr-2 h-4 w-4" />
+                {reservation.pago_estado === 'deposit_paid' ? 'Pagar Saldo Pendiente' : 'Pagar'}
               </Button>
             ) : (
               <Button onClick={handleViewPayment} disabled={isLoadingSale}>

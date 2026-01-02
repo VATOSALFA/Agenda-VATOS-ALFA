@@ -79,6 +79,8 @@ export interface Reservation {
     whatsapp_notification: boolean;
     whatsapp_reminder: boolean;
   };
+  monto_pagado?: number;
+  deposit_payment_id?: string;
 }
 
 export interface TimeBlock {

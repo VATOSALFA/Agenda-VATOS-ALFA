@@ -487,12 +487,15 @@ export default function AgendaView() {
         client,
         items: cartItems.map(i => ({ ...i, nombre: i.name })),
         reservationId: selectedReservation.id,
-        local_id: selectedReservation.local_id
+        local_id: selectedReservation.local_id,
+        anticipoPagado: selectedReservation.monto_pagado || 0 // Pass the paid deposit
       });
       setIsDetailModalOpen(false);
       setIsSaleSheetOpen(true);
     }
   }
+
+
 
   const handleUpdateStatus = async (reservationId: string, newStatus: string) => {
     if (!db) {
@@ -906,7 +909,11 @@ export default function AgendaView() {
                                 </div>
                                 {(event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) && (
                                   <div className={cn("absolute top-0 right-0 h-full w-6 flex items-center justify-center", event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500')}>
-                                    <DollarSign className="h-4 w-4 text-black font-bold" />
+                                    {event.pago_estado === 'deposit_paid' ? (
+                                      <span className="text-black font-bold text-xs">A</span>
+                                    ) : (
+                                      <DollarSign className="h-4 w-4 text-black font-bold" />
+                                    )}
                                   </div>
                                 )}
                                 <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && event.pago_estado === 'Pagado') ? "right-7" : "right-1")}>
@@ -933,7 +940,11 @@ export default function AgendaView() {
                                   </div>
                                   {event.pago_estado &&
                                     <div className="flex items-center gap-2 text-sm">
-                                      <DollarSign className={cn("w-4 h-4", event.pago_estado === 'deposit_paid' ? 'text-orange-500' : 'text-green-600')} />
+                                      {event.pago_estado === 'deposit_paid' ? (
+                                        <span className="font-bold text-orange-500">A</span>
+                                      ) : (
+                                        <DollarSign className={cn("w-4 h-4", event.pago_estado === 'deposit_paid' ? 'text-orange-500' : 'text-green-600')} />
+                                      )}
                                       <span className={cn(
                                         event.pago_estado === 'Pagado' ? 'text-green-600' :
                                           event.pago_estado === 'deposit_paid' ? 'text-orange-600 font-medium' :

@@ -55,22 +55,23 @@ export async function POST(req: NextRequest) {
                     description: item.description || item.title || 'Servicio de Barbería' // Detailed description
                 })),
                 payer: {
-                    // Only sending email to avoid anti-fraud mismatches (e.g. Reserver != Card Holder)
-                    // Mercado Pago will collect the correct Card Holder name/phone during checkout.
+                    // Send email as primary identifier
                     ...(payer.email && payer.email.includes('@') ? { email: payer.email } : {}),
-                    // ...(payer.name ? { name: payer.name } : {}),
-                    // ...(payer.lastName ? { surname: payer.lastName } : {}),
-                    // ...(payer.phone && payer.phone.replace(/\D/g, '').length > 0 ? {
-                    //    phone: {
-                    //        area_code: '52',
-                    //        number: payer.phone.replace(/\D/g, '')
-                    //    }
-                    // } : {})
+                    // Only send Name/Surname if they look valid (not 'Cita', 'Cliente', etc) to avoid anti-fraud conflicts
+                    ...(payer.name && payer.name.length > 2 && !['cita', 'cliente', 'usuario'].includes(payer.name.toLowerCase()) ? { name: payer.name } : {}),
+                    ...(payer.lastName && payer.lastName.length > 2 ? { surname: payer.lastName } : {}),
+                    // Send phone only if strictly numeric and valid length for MX (10 digits)
+                    ...(payer.phone && payer.phone.replace(/\D/g, '').length === 10 ? {
+                        phone: {
+                            area_code: '52',
+                            number: payer.phone.replace(/\D/g, '')
+                        }
+                    } : {})
                 },
                 external_reference: reservationId, // This ID is guaranteed to be a valid Firestore ID now
                 statement_descriptor: "VATOS ALFA",
                 expires: true,
-                date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+                date_of_expiration: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 60 min expiration
                 // binary_mode: true, // REMOVED: Causing false positives in anti-fraud
                 payment_methods: {
                     installments: 1,

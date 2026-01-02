@@ -702,6 +702,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pendiente', // <--- IMPORTANTE: Nace como pendiente
                     creado_en: Timestamp.now(),
+                    anticipoPagado: anticipoPagado || 0,
                 };
 
                 if (reservationId) {
@@ -940,6 +941,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pagado',
                     creado_en: Timestamp.now(),
+                    anticipoPagado: anticipoPagado || 0,
                 };
 
                 if (data.metodo_pago === 'combinado') {
@@ -1087,7 +1089,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         </ScrollArea>
                                     </Tabs>
                                 </div>
-                                <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
+                                <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
                             </div>
                         )}
 
@@ -1302,7 +1304,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </FormItem>
                                         )} />
                                     </div>
-                                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
+                                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>

@@ -677,6 +677,59 @@ exports.mercadoPagoWebhook = onRequest(
 
               t.set(newResRef, reservaToCreate);
               console.log(`[vFinal] Created Reservation ${newResRef.id} from metadata.`);
+
+              // --- CREATE SALE RECORD (Venta) ---
+              // Creates a corresponding sale record in 'ventas' to mirror physical sales logic
+              const newSaleRef = db.collection('ventas').doc();
+
+              // Map items for the sale record
+              // Note: booking.servicePrices needs to be added to frontend payload for accuracy
+              // Fallback: Use total / count or assume booking.totalAmount if single item
+              const saleItems = resItems.map((item, idx) => ({
+                id: item.id || 'service_id',
+                nombre: item.servicio || 'Servicio',
+                tipo: 'servicio',
+                cantidad: 1,
+                precio: booking.servicePrices ? Number(booking.servicePrices[idx] || 0) : (booking.totalAmount / resItems.length),
+                subtotal: booking.servicePrices ? Number(booking.servicePrices[idx] || 0) : (booking.totalAmount / resItems.length),
+                barbero_id: booking.professionalId,
+                servicio: item.servicio
+              }));
+
+              const saleData = {
+                id: newSaleRef.id,
+                cliente_id: clientId,
+                local_id: booking.locationId,
+                fecha_hora_venta: admin.firestore.FieldValue.serverTimestamp(),
+                metodo_pago: 'mercadopago',
+                mercado_pago_id: String(paymentInfo.id),
+                items: saleItems,
+                subtotal: booking.totalAmount,
+                descuento: { valor: 0, tipo: 'fixed' },
+                total: booking.totalAmount, // Total Value
+
+                // Payment Details (Anticipo)
+                detalle_pago_combinado: {
+                  efectivo: 0,
+                  tarjeta: Number(booking.amountDue || 0)
+                },
+                monto_pagado_real: Number(booking.amountDue || 0), // Use specific booking amount due
+                saldo_pendiente: booking.totalAmount - Number(booking.amountDue || 0),
+
+                reservationId: newResRef.id,
+                creado_por_nombre: 'Sistema Online',
+                creado_por_id: 'system',
+
+                estado: (booking.totalAmount - Number(booking.amountDue || 0)) <= 0 ? 'pagado' : 'pagado_parcial',
+                pagado: (booking.totalAmount - Number(booking.amountDue || 0)) <= 0,
+                origen: 'web_publica',
+
+                // Financial helper fields
+                propina: 0
+              };
+
+              t.set(newSaleRef, saleData);
+              console.log(`[vFinal] Created Sale (Venta) ${newSaleRef.id} for financials.`);
             }
             return;
           }

@@ -53,19 +53,21 @@ export async function POST(req: NextRequest) {
                     unit_price: Number(item.unit_price) // Ensure number
                 })),
                 payer: {
-                    email: payerEmail,
-                    name: payer.name || 'Cliente',
-                    surname: payer.lastName || '',
-                    phone: {
-                        area_code: '52',
-                        number: payer.phone?.replace(/\D/g, '') || ''
-                    }
+                    ...(payer.email && payer.email.includes('@') ? { email: payer.email } : {}),
+                    ...(payer.name ? { name: payer.name } : {}),
+                    ...(payer.lastName ? { surname: payer.lastName } : {}),
+                    ...(payer.phone && payer.phone.replace(/\D/g, '').length > 0 ? {
+                        phone: {
+                            area_code: '52',
+                            number: payer.phone.replace(/\D/g, '')
+                        }
+                    } : {})
                 },
                 external_reference: reservationId, // This ID is guaranteed to be a valid Firestore ID now
                 statement_descriptor: "VATOS ALFA",
                 expires: true,
                 date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-                binary_mode: true,
+                // binary_mode: true, // REMOVED: Causing false positives in anti-fraud
                 payment_methods: {
                     installments: 1,
                     excluded_payment_types: [

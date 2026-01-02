@@ -292,10 +292,12 @@ exports.createPointPayment = onCall(
 
       const paymentIntent = {
         amount: Math.round(amount * 100),
-        notification_url: "https://vatosalfa.com/api/mercado-pago-webhook",
+        // Use the Cloud Function URL which is reliable and handles both Terminal and Web payments
+        notification_url: "https://mercadopagowebhook-nhesymz2aa-uc.a.run.app",
         additional_info: {
           external_reference: referenceId,
-          print_on_terminal: true
+          print_on_terminal: true,
+          ticket_description: "Venta VATOS ALFA"
         }
       };
 

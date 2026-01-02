@@ -55,15 +55,17 @@ export async function POST(req: NextRequest) {
                     description: item.description || item.title || 'Servicio de Barbería' // Detailed description
                 })),
                 payer: {
+                    // Only sending email to avoid anti-fraud mismatches (e.g. Reserver != Card Holder)
+                    // Mercado Pago will collect the correct Card Holder name/phone during checkout.
                     ...(payer.email && payer.email.includes('@') ? { email: payer.email } : {}),
-                    ...(payer.name ? { name: payer.name } : {}),
-                    ...(payer.lastName ? { surname: payer.lastName } : {}),
-                    ...(payer.phone && payer.phone.replace(/\D/g, '').length > 0 ? {
-                        phone: {
-                            area_code: '52',
-                            number: payer.phone.replace(/\D/g, '')
-                        }
-                    } : {})
+                    // ...(payer.name ? { name: payer.name } : {}),
+                    // ...(payer.lastName ? { surname: payer.lastName } : {}),
+                    // ...(payer.phone && payer.phone.replace(/\D/g, '').length > 0 ? {
+                    //    phone: {
+                    //        area_code: '52',
+                    //        number: payer.phone.replace(/\D/g, '')
+                    //    }
+                    // } : {})
                 },
                 external_reference: reservationId, // This ID is guaranteed to be a valid Firestore ID now
                 statement_descriptor: "VATOS ALFA",

@@ -50,7 +50,9 @@ export async function POST(req: NextRequest) {
             body: {
                 items: items.map((item: any) => ({
                     ...item,
-                    unit_price: Number(item.unit_price) // Ensure number
+                    unit_price: Number(item.unit_price),
+                    category_id: 'services', // "services" category improves approval rates for non-physical goods
+                    description: item.description || item.title || 'Servicio de Barbería' // Detailed description
                 })),
                 payer: {
                     ...(payer.email && payer.email.includes('@') ? { email: payer.email } : {}),

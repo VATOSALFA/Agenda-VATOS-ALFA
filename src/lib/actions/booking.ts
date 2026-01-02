@@ -120,13 +120,32 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         const GRID_INTERVAL = 30; // Could be dynamic from settings too
 
         // Helper to check against current time if it's today
-        // Note: This uses Server Time. Ensure Server Time is consistent with Business Time.
-        // Ideally, we would convert 'now' to the business timezone.
-        // For now, assuming server time is reasonably close or using simple logic.
-        const queryDate = parse(date, 'yyyy-MM-dd', new Date());
-        const isQueryDateToday = isToday(queryDate);
-        const now = new Date();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        // FIX: Ensure we use the Business Timezone (Mexico City) instead of Server Time (UTC)
+        const timeZone = 'America/Mexico_City';
+        const nowRaw = new Date();
+
+        // Get current date in Mexico: YYYY-MM-DD
+        const mexicoDateStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(nowRaw);
+
+        const isQueryDateToday = (date === mexicoDateStr);
+
+        // Get current time in Mexico: HH:mm
+        const mexicoTimeParts = new Intl.DateTimeFormat('en-GB', {
+            timeZone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).formatToParts(nowRaw);
+
+        const nowH = parseInt(mexicoTimeParts.find(p => p.type === 'hour')?.value || '0', 10);
+        const nowM = parseInt(mexicoTimeParts.find(p => p.type === 'minute')?.value || '0', 10);
+
+        const currentMinutes = nowH * 60 + nowM;
 
         while (addMinutes(current, durationMinutes) <= endObj) {
             const slotStart = current.getHours() * 60 + current.getMinutes();

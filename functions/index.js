@@ -33,10 +33,29 @@ if (admin.apps.length === 0) {
 }
 
 // --- CONFIGURACIÓN MERCADO PAGO ---
-const getMercadoPagoConfig = () => {
+// --- CONFIGURACIÓN MERCADO PAGO ---
+const getMercadoPagoConfig = async () => {
+  // 1. Try to get from Firestore Configuration (Dynamic)
+  try {
+    const db = admin.firestore();
+    const configDoc = await db.collection('configuracion').doc('mercadopago').get();
+    if (configDoc.exists) {
+      const data = configDoc.data();
+      if (data.accessToken && data.accessToken.length > 10) {
+        return { client: new MercadoPagoConfig({ accessToken: data.accessToken }), accessToken: data.accessToken };
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch MP config from Firestore, falling back to env:", e);
+  }
+
+  // 2. Fallback to Secret Manager (Static/Env)
   const accessToken = mpAccessToken.value();
   if (!accessToken) {
-    throw new HttpsError('internal', 'El Access Token de Mercado Pago no se pudo leer desde Secret Manager.');
+    // If neither exists, we can't proceed.
+    // However, for setup functions, we might want to return null/empty to allow UI to show "Unconfigured".
+    console.error('El Access Token de Mercado Pago no está configurado (ni Firestore ni Secrets).');
+    throw new HttpsError('failed-precondition', 'La integración con Mercado Pago no está configurada.');
   }
   return { client: new MercadoPagoConfig({ accessToken }), accessToken };
 };
@@ -231,7 +250,7 @@ exports.getPointTerminals = onCall(
       throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
     }
     try {
-      const { client } = getMercadoPagoConfig();
+      const { client } = await getMercadoPagoConfig();
       const point = new Point(client);
       const devices = await point.getDevices({});
       return { success: true, devices: devices.devices || [] };
@@ -255,7 +274,7 @@ exports.setTerminalPDVMode = onCall(
     if (!terminalId) throw new HttpsError('invalid-argument', 'Falta terminalId.');
 
     try {
-      const { client } = getMercadoPagoConfig();
+      const { client } = await getMercadoPagoConfig();
       const point = new Point(client);
       const result = await point.changeDeviceOperatingMode({
         device_id: terminalId,
@@ -287,7 +306,7 @@ exports.createPointPayment = onCall(
     }
 
     try {
-      const { accessToken } = getMercadoPagoConfig();
+      const { accessToken } = await getMercadoPagoConfig();
       const url = `https://api.mercadopago.com/point/integration-api/devices/${terminalId}/payment-intents`;
 
       const paymentIntent = {
@@ -296,8 +315,7 @@ exports.createPointPayment = onCall(
         notification_url: "https://mercadopagowebhook-nhesymz2aa-uc.a.run.app",
         additional_info: {
           external_reference: referenceId,
-          print_on_terminal: true,
-          ticket_description: "Venta VATOS ALFA"
+          print_on_terminal: true
         }
       };
 
@@ -342,7 +360,7 @@ exports.createStore = onCall(
     if (!name) throw new HttpsError('invalid-argument', 'Falta nombre de sucursal.');
 
     try {
-      const { accessToken } = getMercadoPagoConfig();
+      const { accessToken } = await getMercadoPagoConfig();
       const userRes = await fetch('https://api.mercadopago.com/users/me', { headers: { Authorization: `Bearer ${accessToken}` } });
       const userData = await userRes.json();
       const userId = userData.id;
@@ -390,7 +408,7 @@ exports.createPos = onCall(
     if (!name || (!store_id && !external_store_id)) throw new HttpsError('invalid-argument', 'Falta nombre o store_id.');
 
     try {
-      const { accessToken } = getMercadoPagoConfig();
+      const { accessToken } = await getMercadoPagoConfig();
       const response = await fetch(`https://api.mercadopago.com/pos`, {
         method: 'POST',
         headers: {
@@ -452,8 +470,9 @@ exports.mercadoPagoWebhook = onRequest(
     // We have two potential secrets now (Terminal and Web)
     // In a strict implementation, we would validate the x-signature against both.
     // For now, we ensure at least one is loaded to proceed.
-    const secretTerminal = mpWebhookSecret.value();
-    const secretWeb = mpWebWebhookSecret.value();
+    // TRIM is critical because Windows 'echo' often adds newlines to secrets.
+    const secretTerminal = mpWebhookSecret.value() ? mpWebhookSecret.value().trim() : "";
+    const secretWeb = mpWebWebhookSecret.value() ? mpWebWebhookSecret.value().trim() : "";
 
     if (!secretTerminal && !secretWeb) {
       console.error("FATAL: Both Webhook secrets missing.");
@@ -474,13 +493,57 @@ exports.mercadoPagoWebhook = onRequest(
 
       console.log(`[vFinal] Topic: ${topic}, ID: ${dataId}`);
 
+      // --- SIGNATURE VALIDATION ---
+      const xSignature = request.headers['x-signature'];
+      const xRequestId = request.headers['x-request-id'];
+
+      if (xSignature && xRequestId) {
+        const parts = xSignature.split(',');
+        let ts = null;
+        let receivedHash = null;
+        for (const part of parts) {
+          const [key, value] = part.split('=').map(s => s.trim());
+          if (key === 'ts') ts = value;
+          if (key === 'v1') receivedHash = value;
+        }
+
+        if (ts && receivedHash) {
+          const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+          let isValid = false;
+
+          // Try Terminal Secret
+          if (secretTerminal) {
+            const calculatedHash = crypto.createHmac('sha256', secretTerminal).update(manifest).digest('hex');
+            if (calculatedHash === receivedHash) isValid = true;
+          }
+
+          // Try Web Secret if not valid yet
+          if (!isValid && secretWeb) {
+            const calculatedHash = crypto.createHmac('sha256', secretWeb).update(manifest).digest('hex');
+            if (calculatedHash === receivedHash) isValid = true;
+          }
+
+          if (!isValid) {
+            console.error(`[vFinal] Invalid HMAC Signature. Manifest: ${manifest}`);
+            console.error(`[vFinal] Received: ${receivedHash}`);
+            // Non-blocking for now to ensure payments are processed. Security is covered by API check.
+            console.warn("[vFinal] WARNING: Signature validation failed, but proceeding to API check for continuity.");
+          } else {
+            console.log("[vFinal] HMAC Signature Verified Successfully.");
+          }
+        }
+      } else {
+        console.warn("[vFinal] Missing x-signature or x-request-id. Skiping verification.");
+      }
+      // ----------------------------
+
       if (dataId == "123456" || dataId == 123456) {
         console.log("[vFinal] Test simulation detected (123456). Returning OK.");
         response.status(200).send("OK");
         return;
       }
 
-      const { accessToken } = getMercadoPagoConfig();
+      const { accessToken } = await getMercadoPagoConfig();
       let paymentInfo = null;
 
       // 1. Try fetching as a direct Payment
@@ -531,26 +594,37 @@ exports.mercadoPagoWebhook = onRequest(
 
         // CASE 1: It is a SALE (Venta) (Legacy/Terminal flow)
         if (ventaDoc.exists) {
-          if (ventaDoc.data().pago_estado === 'Pagado') return;
-
           const ventaData = ventaDoc.data();
+          if (ventaData.pago_estado === 'Pagado') return;
+
+          // PRE-READ Linked Reservation (Must be done before ANY write)
+          let reservaRef = null;
+          let reservaDoc = null;
+          if (ventaData.reservationId) {
+            reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
+            reservaDoc = await t.get(reservaRef);
+          }
+
           const montoOriginal = Number(ventaData.total || 0);
           const montoPagado = Number(transaction_amount || 0);
           const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
 
+          // NOW WRITE to Sale
           t.update(ventaRef, {
             pago_estado: 'Pagado',
             mercado_pago_status: status,
             mercado_pago_id: String(paymentInfo.id),
             monto_pagado_real: montoPagado,
             propina: propina,
-            fecha_pago: new Date()
+            fecha_pago: new Date(),
+            // Add terminal info for tracking
+            mp_store_id: paymentInfo.store_id || null,
+            mp_pos_id: paymentInfo.pos_id || null
           });
 
-          if (ventaData.reservationId) {
-            const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
-            const reservaDoc = await t.get(reservaRef);
-            if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
+          // NOW WRITE to Linked Reservation
+          if (reservaDoc && reservaDoc.exists) {
+            t.update(reservaRef, { pago_estado: 'Pagado' });
           }
           console.log(`[vFinal] Custom: Venta ${external_reference} updated.`);
           return;

@@ -24,7 +24,6 @@ const sidebarNavItems = [
   { title: "Usuarios", href: "/settings/users" },
   { title: "Integraciones", href: "/settings/integrations" },
   { title: "Códigos de autorización", href: "/settings/auth-codes" },
-  { title: "Diagnóstico", href: "/settings/diagnostico" },
 ];
 
 

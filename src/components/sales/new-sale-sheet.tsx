@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
 import type { Client, Product, Service as ServiceType, Profesional, Local, User } from '@/lib/types';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 import { sendGoogleReviewRequest } from '@/ai/flows/send-google-review-flow';
-import { functions, httpsCallable } from '@/lib/firebase-client';
+import { functions, httpsCallable, db } from '@/lib/firebase-client';
+import { BluetoothPrinter } from '@/lib/printer';
 
 
 import { Button } from '@/components/ui/button';
@@ -560,6 +561,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [initialData, form, isOpen]);
 
+    // ... existing imports ...
+
+    // ... inside NewSaleSheet ...
+
     const finalizeSaleProcess = async (clientId: string, localId: string) => {
         toast({
             title: '¡Venta registrada!',
@@ -568,6 +573,51 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
         try {
             if (db) {
+                // 1. Check for Ticket Printer Setting
+                const pagosRef = doc(db, 'configuracion', 'pagos');
+                const pagosSnap = await getDoc(pagosRef);
+                const printerEnabled = pagosSnap.exists() && pagosSnap.data().ticketPrinterEnabled;
+
+                // 2. Trigger Print if Enabled and Manual Payment (Cash/Combined/Transfer)
+                // We prioritize printing for Cash, but usually useful for all walk-ins.
+                // User requirement: "una vez incluida todas las ventas que se pagan en efectivo debria de imprimir su ticket"
+                // So strictly enforcing cash or combined (which has cash).
+                const isCashOrCombined = paymentMethod === 'efectivo' || paymentMethod === 'combinado';
+
+                if (printerEnabled && isCashOrCombined) {
+                    try {
+                        const local = locales.find(l => l.id === localId);
+                        const printer = BluetoothPrinter.getInstance();
+
+                        // Attempt connection (silent if permitted, picker if not)
+                        if (!printer.isConnected()) await printer.connect();
+
+                        const ticketData = {
+                            storeName: local?.name || "VATOS ALFA",
+                            storeAddress: local?.address || "",
+                            date: new Date().toLocaleString('es-MX'),
+                            customerName: selectedClient ? `${selectedClient.nombre} ${selectedClient.apellido}` : "Cliente General",
+                            reservationId: reservationId || "",
+                            items: cart,
+                            subtotal: subtotal,
+                            anticipoPagado: anticipoPagado,
+                            discount: totalDiscount,
+                            total: total
+                        };
+
+                        await printer.print(printer.formatTicket(ticketData));
+                        toast({ title: "Imprimiendo Ticket..." });
+                    } catch (printErr: any) {
+                        console.error("Printing failed:", printErr);
+                        toast({
+                            variant: "destructive",
+                            title: "Error de Impresión",
+                            description: "No se pudo imprimir el ticket. Verifica la conexión Bluetooth."
+                        });
+                    }
+                }
+
+                // ... existing Google Review logic ...
                 const settingsRef = doc(db, 'configuracion', 'recordatorios');
                 const settingsSnap = await getDoc(settingsRef);
                 const settings = settingsSnap.data() as ReminderSettings | undefined;
@@ -591,7 +641,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
             }
         } catch (e) {
-            console.error("Error en flujo de reviews:", e);
+            console.error("Error en flujo de post-venta:", e);
         }
 
         handleClose();
@@ -1232,6 +1282,76 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             </>
                                                         )}
                                                     </Button>
+                                                    {isWaitingForPayment && (
+                                                        <div className="flex flex-col gap-2 mt-2">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                className="w-full text-destructive hover:text-destructive"
+                                                                onClick={async () => {
+                                                                    // Cancel manual
+                                                                    setIsWaitingForPayment(false);
+                                                                    setIsSendingToTerminal(false);
+                                                                    if (unsubscribeRef.current) {
+                                                                        unsubscribeRef.current();
+                                                                        unsubscribeRef.current = undefined;
+                                                                    }
+                                                                    if (saleIdRef.current) {
+                                                                        await cancelPendingSale();
+                                                                    }
+                                                                    toast({ title: "Operación cancelada", description: "Puedes intentar cobrar de nuevo." });
+                                                                }}
+                                                            >
+                                                                Cancelar Espera
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="link"
+                                                                className="w-full text-xs text-muted-foreground underline"
+                                                                onClick={async () => {
+                                                                    // Manual Confirmation
+                                                                    if (!confirm("¿El ticket salió impreso corretamente? Solo confirma si el cobro REALMENTE se realizó.")) return;
+
+                                                                    setIsWaitingForPayment(false);
+                                                                    setIsSendingToTerminal(false);
+                                                                    if (unsubscribeRef.current) {
+                                                                        unsubscribeRef.current();
+                                                                        unsubscribeRef.current = undefined;
+                                                                    }
+
+                                                                    // Manually force PAIDO status
+                                                                    if (saleIdRef.current && db) {
+                                                                        try {
+                                                                            setIsSubmitting(true);
+                                                                            const saleRef = doc(db, 'ventas', saleIdRef.current);
+                                                                            await updateDoc(saleRef, {
+                                                                                pago_estado: 'Pagado',
+                                                                                metodo_pago: 'tarjeta', // Ensure method is card
+                                                                                monto_pagado_real: total,
+                                                                                fecha_pago: new Date(),
+                                                                                notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
+                                                                            });
+
+                                                                            // Also update Reservation status if linked
+                                                                            if (reservationId) {
+                                                                                const resRef = doc(db, 'reservas', reservationId);
+                                                                                await updateDoc(resRef, { pago_estado: 'Pagado' });
+                                                                            }
+                                                                            // finalizeSaleProcess usually takes (saleId, items). Passing cart as second arg.
+                                                                            await finalizeSaleProcess(form.getValues('cliente_id'), form.getValues('local_id'));
+
+                                                                        } catch (err) {
+                                                                            console.error("Error confirming manual payment:", err);
+                                                                            toast({ variant: "destructive", title: "Error", description: "No se pudo confirmar la venta manual." });
+                                                                            setIsSubmitting(false);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            >
+                                                                ¿Ya se cobró? Finalizar Manualmente
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 {terminals && !terminals.length && !terminalsLoading && <p className="text-xs text-muted-foreground mt-2">No se encontraron terminales en modo PDV. Ve a Ajustes &gt; Terminal para activarlas.</p>}
                                             </Card>
@@ -1359,7 +1479,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         )}
                     </SheetFooter>
                 </SheetContent>
-            </Sheet>
+            </Sheet >
 
             <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
                 <DialogContent className="sm:max-w-lg" hideCloseButton>

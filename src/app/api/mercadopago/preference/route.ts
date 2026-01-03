@@ -84,7 +84,8 @@ export async function POST(req: NextRequest) {
                 metadata: {
                     reservation_id: reservationId,
                     booking_json: body.bookingData ? JSON.stringify(body.bookingData) : undefined
-                }
+                },
+                notification_url: "https://mercadopagowebhook-nhesymz2aa-uc.a.run.app"
             }
         });
 

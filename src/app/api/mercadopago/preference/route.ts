@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
             items: items.map((item: any) => ({
                 ...item,
                 unit_price: Number(item.unit_price),
-                category_id: 'services',
+                category_id: item.category_id || 'services',
                 description: item.description || item.title || 'Servicio de Barbería'
             })),
             payer: {

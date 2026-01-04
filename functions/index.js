@@ -786,15 +786,21 @@ exports.mercadoPagoWebhook = onRequest(
 
               t.set(newResRef, reservaToCreate);
               console.log(`[vFinal] Created Reservation ${newResRef.id} from metadata.`);
-
             }
 
             // 3. Create Aggregate Sale (Venta)
             // Use 'external_reference' as Sale ID (Matches Payment ID/Ref)
             const saleRef = admin.firestore().collection('ventas').doc(external_reference);
 
+            // Calculate Global Status
+            const amountPaid = Number(transaction_amount || 0);
+            const isFullPayment = amountPaid >= saleTotal;
+            const remainingBalance = saleTotal > amountPaid ? (saleTotal - amountPaid) : 0;
+            const globalStatus = isFullPayment ? 'Pagado' : 'Pago Parcial';
+
             const finalSale = {
               id: external_reference,
+              reservationId: external_reference, // CRITICAL: Link for frontend queries
               fecha_hora_venta: admin.firestore.FieldValue.serverTimestamp(),
               cliente_id: clientIdForSale,
               local_id: localIdForSale,
@@ -805,17 +811,17 @@ exports.mercadoPagoWebhook = onRequest(
               metodo_pago: 'mercadopago',
 
               // Payment Status
-              pago_estado: 'Pagado',
+              pago_estado: globalStatus,
               mercado_pago_id: String(paymentInfo.id),
               detalle_pago_combinado: {
                 efectivo: 0,
-                tarjeta: Number(transaction_amount || 0)
+                tarjeta: amountPaid
               },
-              monto_pagado_real: Number(transaction_amount || 0),
-              saldo_pendiente: 0, // Online payments are usually full or deposits handled as 'paid' for that chunk
+              monto_pagado_real: amountPaid,
+              saldo_pendiente: remainingBalance,
 
               origen: 'web_publica',
-              status: 'completed',
+              status: remainingBalance > 0 ? 'completed' : 'completed', // Sale created is completed step, payment status differs
               creado_por_nombre: 'Sistema Online',
               creado_por_id: 'system',
               propina: 0

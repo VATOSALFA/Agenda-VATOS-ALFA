@@ -518,6 +518,8 @@ export default function BookingPage() {
                                 {
                                     id: 'deposit',
                                     title: `Anticipo: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
+                                    description: `Pago de anticipo para reserva de: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
+                                    category_id: 'services',
                                     quantity: 1,
                                     currency_id: 'MXN',
                                     unit_price: upfrontTotal

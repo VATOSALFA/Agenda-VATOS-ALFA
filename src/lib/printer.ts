@@ -119,15 +119,20 @@ export class BluetoothPrinter {
     };
 
     /**
-     * Prints text to the connected printer.
+     * Prints text or binary data to the connected printer.
      */
-    public async print(text: string): Promise<void> {
+    public async print(content: string | Uint8Array): Promise<void> {
         if (!this.characteristic) {
             throw new Error("No hay impresora conectada.");
         }
 
-        const encoder = new TextEncoder();
-        const data = encoder.encode(text);
+        let data: Uint8Array;
+        if (typeof content === 'string') {
+            const encoder = new TextEncoder();
+            data = encoder.encode(content);
+        } else {
+            data = content;
+        }
 
         // Chunking for BLE limits (usually 20 bytes default, expanded to 512 in newer versions, but ~500 safety)
         const CHUNK_SIZE = 100;
@@ -135,6 +140,141 @@ export class BluetoothPrinter {
             const chunk = data.slice(i, i + CHUNK_SIZE);
             await this.characteristic.writeValue(chunk);
         }
+    }
+
+    /**
+     * Prints an image from a URL.
+     * Resizes to 384px width (standard 58mm) and dither/thresholds to B&W.
+     */
+    public async printImage(imageUrl: string): Promise<void> {
+        if (!imageUrl) return;
+        try {
+            console.log("Processing image for print:", imageUrl);
+            const bitmap = await this.processImage(imageUrl);
+            const rasterCommand = this.generateRasterData(bitmap);
+            await this.print(rasterCommand);
+        } catch (error) {
+            console.error("Failed to print image:", error);
+            // Don't throw, just log so text ticket still prints
+        }
+    }
+
+    private async processImage(videoUrl: string, targetWidth: number = 384): Promise<{ data: Uint8Array; width: number; height: number }> {
+        return new Promise((resolve, reject) => {
+            // Use local proxy to bypass CORS issues with external Firebase/CDN images
+            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(videoUrl)}`;
+
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                // Calculate height preserving aspect ratio
+                const ratio = targetWidth / img.width;
+                const targetHeight = Math.round(img.height * ratio);
+
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error("Cannot get canvas context"));
+                    return;
+                }
+
+                // White background
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+                const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+                const data = imageData.data;
+                const monochromeData = new Uint8Array(targetWidth * targetHeight / 8);
+
+                // Simple Thresholding (could use Dithering for better photos, but fine for logos)
+                // We pack 1 bit per pixel. 0 = White/Transparent (Paper), 1 = Black (Dot)
+                // NOTE: ESC/POS Raster format might vary. GS v 0 usually expects 1 = Print (Black).
+                let byteIndex = 0;
+                let bitIndex = 7;
+                let currentByte = 0;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    const alpha = data[i + 3];
+
+                    // Luminance formula
+                    const gray = (r * 0.299 + g * 0.587 + b * 0.114);
+
+                    // If transparent or bright -> 0 (White/Paper)
+                    // If dark -> 1 (Black/Print)
+                    const isPrint = (alpha > 128 && gray < 128) ? 1 : 0;
+
+                    if (isPrint) {
+                        currentByte |= (1 << bitIndex);
+                    }
+
+                    bitIndex--;
+                    if (bitIndex < 0) {
+                        monochromeData[byteIndex] = currentByte;
+                        byteIndex++;
+                        currentByte = 0;
+                        bitIndex = 7;
+                    }
+                }
+                // Flush last partial byte (unlikely with 384 width which is byte aligned)
+                if (bitIndex !== 7) {
+                    monochromeData[byteIndex] = currentByte;
+                }
+
+                resolve({ data: monochromeData, width: targetWidth, height: targetHeight });
+            };
+            img.onerror = (e) => {
+                console.error("Image Load Error:", e);
+                reject(new Error("Failed to load image via proxy. Check URL or Network."));
+            };
+            img.src = proxyUrl;
+        });
+    }
+
+    private generateRasterData(image: { data: Uint8Array; width: number; height: number }): Uint8Array {
+        const { data, width, height } = image;
+        // GS v 0 m xL xH yL yH d1...dk
+        // m=0 (density normal), xL,xH = bytes width, yL,yH = dots height
+        const xBytes = Math.ceil(width / 8);
+        const xL = xBytes % 256;
+        const xH = Math.floor(xBytes / 256);
+        const yL = height % 256;
+        const yH = Math.floor(height / 256);
+
+        // Command header: GS v 0 m xL xH yL yH
+        const header = new Uint8Array([0x1d, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
+
+        const combined = new Uint8Array(header.length + data.length);
+        combined.set(header);
+        combined.set(data, header.length);
+
+        return combined;
+    }
+
+    private removeAccents(str: string): string {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    private wordWrap(text: string, maxLength: number): string[] {
+        const words = text.split(' ');
+        const lines: string[] = [];
+        let currentLine = words[0];
+
+        for (let i = 1; i < words.length; i++) {
+            if (currentLine.length + 1 + words[i].length <= maxLength) {
+                currentLine += ' ' + words[i];
+            } else {
+                lines.push(currentLine);
+                currentLine = words[i];
+            }
+        }
+        lines.push(currentLine);
+        return lines;
     }
 
     /**
@@ -149,29 +289,59 @@ export class BluetoothPrinter {
         const BOLD_ON = ESC + "E" + "\u0001";
         const BOLD_OFF = ESC + "E" + "\u0000";
         const FEED = ESC + "d" + "\u0003"; // Feed 3 lines
-        const CUT = GS + "V" + "\u0041" + "\u0003"; // Cut partial
 
         let receipt = "";
 
         receipt += INITIALIZE;
         receipt += ALIGN_CENTER;
-        receipt += BOLD_ON + (data.storeName || "VATOS ALFA") + "\n" + BOLD_OFF;
-        if (data.storeAddress) receipt += data.storeAddress + "\n";
+
+        // Store Name (Wrapped & Sanitized)
+        const storeName = this.removeAccents(data.storeName || "VATOS ALFA");
+        receipt += BOLD_ON + storeName + "\n" + BOLD_OFF;
+
+        // Address (Wrapped & Sanitized)
+        if (data.storeAddress) {
+            const address = this.removeAccents(data.storeAddress);
+            const addressLines = this.wordWrap(address, 32);
+            addressLines.forEach(line => receipt += line + "\n");
+        }
         receipt += "--------------------------------\n";
 
         receipt += ALIGN_LEFT;
         receipt += `Fecha: ${data.date}\n`;
-        receipt += `Cliente: ${data.customerName}\n`;
+
+        // Customer (Wrapped & Sanitized)
+        const customerName = this.removeAccents(data.customerName || "Cliente General");
+        const customerLines = this.wordWrap(`Cliente: ${customerName}`, 32);
+        customerLines.forEach(line => receipt += line + "\n");
+
         if (data.reservationId) receipt += `Reserva: ${data.reservationId.slice(0, 8)}\n`;
 
         receipt += "--------------------------------\n";
         receipt += BOLD_ON + "CANT  DESCRIPCION      IMPORTE" + BOLD_OFF + "\n";
 
         data.items.forEach((item: any) => {
-            const name = item.nombre.substring(0, 16).padEnd(16, " ");
             const qty = item.cantidad.toString().padStart(2, "0");
-            const price = "$" + (item.subtotal || 0).toFixed(2);
-            receipt += `${qty}    ${name} ${price}\n`;
+            const priceVal = (item.subtotal || 0).toFixed(2);
+            const price = "$" + priceVal;
+
+            // Calculate available space for name
+            // Qty (2) + Space (2) + Name (X) + Space (1) + Price (Length) = 32
+            // 4 + X + 1 + PriceLength = 32
+            // X = 32 - 5 - PriceLength
+            const maxNameLen = 32 - 5 - price.length;
+
+            const rawName = this.removeAccents(item.nombre);
+            const nameLines = this.wordWrap(rawName, maxNameLen > 0 ? maxNameLen : 10);
+
+            // First line: QTY  NAME  PRICE
+            const firstName = nameLines[0].padEnd(maxNameLen, " ");
+            receipt += `${qty}  ${firstName} ${price}\n`;
+
+            // Subsequent lines:      NAME
+            for (let i = 1; i < nameLines.length; i++) {
+                receipt += `    ${nameLines[i]}\n`; // Indent to align with description column
+            }
         });
 
         receipt += "--------------------------------\n";
@@ -190,10 +360,9 @@ export class BluetoothPrinter {
 
         receipt += "--------------------------------\n";
         receipt += ALIGN_CENTER;
-        receipt += "¡Gracias por su preferencia!\n";
+        receipt += this.removeAccents("¡Gracias por su preferencia!") + "\n";
         receipt += "--------------------------------\n";
         receipt += FEED;
-        // receipt += CUT; // Uncomment if printer supports cutter
 
         return receipt;
     }

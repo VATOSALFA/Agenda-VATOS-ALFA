@@ -298,6 +298,48 @@ export default function PagosAgendaProPage() {
                                     <Input id="mercadoPagoAccessToken" {...field} placeholder="Tu Access Token de MercadoPago" type="password" />
                                 )} />
                             </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="mercadoPagoUserId">User ID (Requerido para Sincronización)</Label>
+                                <Controller name="mercadoPagoUserId" control={form.control} render={({ field }) => (
+                                    <Input id="mercadoPagoUserId" {...field} placeholder="Ej: 123456789" />
+                                )} />
+                            </div>
+                            <div className="pt-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={async () => {
+                                        const token = form.getValues('mercadoPagoAccessToken');
+                                        const uid = form.getValues('mercadoPagoUserId');
+                                        if (!token || !uid) {
+                                            toast({ variant: "destructive", title: "Faltan datos", description: "Guarda primero tu Access Token y User ID." });
+                                            return;
+                                        }
+                                        toast({ title: "Sincronizando...", description: "Creando Sucursal y Caja en Mercado Pago..." });
+                                        try {
+                                            const res = await fetch('/api/mercadopago/sync-store', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ accessToken: token, userId: uid })
+                                            });
+                                            const data = await res.json();
+                                            if (res.ok) {
+                                                toast({ title: "¡Éxito!", description: `Sucursal y Caja sincronizadas. ID Sucursal: ${data.store.id}` });
+                                            } else {
+                                                throw new Error(data.error || "Error desconocido");
+                                            }
+                                        } catch (e: any) {
+                                            toast({ variant: "destructive", title: "Error", description: e.message });
+                                        }
+                                    }}
+                                >
+                                    Sincronizar Sucursales y Cajas (Mejorar Calidad MP)
+                                </Button>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Esto creará la sucursal y caja vía API para cumplir con los estándares de calidad de Mercado Pago.
+                                </p>
+                            </div>
                         </AccordionContent>
                     </AccordionItem>
 

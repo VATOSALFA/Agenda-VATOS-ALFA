@@ -311,8 +311,8 @@ exports.createPointPayment = onCall(
 
       const paymentIntent = {
         amount: Math.round(amount * 100),
-        // Use the Cloud Function URL which is reliable and handles both Terminal and Web payments
-        notification_url: "https://mercadopagowebhook-nhesymz2aa-uc.a.run.app",
+        // CRITICAL for Quality: Valid HTTPS Webhook URL (Matching User Dashboard)
+        notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook",
         additional_info: {
           external_reference: referenceId,
           print_on_terminal: true

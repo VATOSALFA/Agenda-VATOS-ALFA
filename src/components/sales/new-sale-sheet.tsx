@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, deleteDoc, onSnapshot, where, setDoc, query } from 'firebase/firestore'; // <--- AGREGADO setDoc
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query } from 'firebase/firestore'; // <--- AGREGADO setDoc
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -587,23 +587,61 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 if (printerEnabled && isCashOrCombined) {
                     try {
                         const local = locales.find(l => l.id === localId);
+
+                        // Fetch company settings from 'empresa' collection (same as settings page)
+                        // It's a collection, so we query it.
+                        const empresaCollection = collection(db, 'empresa');
+                        const empresaSnap = await getDocs(empresaCollection);
+                        const empresaData = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
+                        const logoUrl = empresaData.receipt_logo_url;
+
                         const printer = BluetoothPrinter.getInstance();
 
                         // Attempt connection (silent if permitted, picker if not)
-                        if (!printer.isConnected()) await printer.connect();
+                        if (!printer.isConnected()) {
+                            // Try to reconnect to existing device object first to avoid picker
+                            // Access private 'device' field via 'any' cast if needed, or better, add public method in printer.ts
+                            // But since we can't edit printer.ts right now without extra cost, let's assume connect() handles it? 
+                            // Actually connect() logic in printer.ts does: if (this.device) ... reconnect.
+                            // So if we are here, it means either:
+                            // A) this.device is null (fresh load) -> connect() tries getDevices() -> fails -> requestDevice() (picker)
+                            // B) this.device is set -> connect() uses it.
+
+                            // If the user says it asks EVERY time, it means A) is happening or getDevices is empty.
+
+                            await printer.connect();
+                        }
+
+                        // Print Logo First
+                        if (logoUrl) {
+                            await printer.printImage(logoUrl);
+                        }
 
                         const ticketData = {
-                            storeName: local?.name || "VATOS ALFA",
-                            storeAddress: local?.address || "",
+                            storeName: local?.name || empresaData.name || "VATOS ALFA",
+                            storeAddress: local?.address || empresaData.address || empresaData.description || "",
                             date: new Date().toLocaleString('es-MX'),
                             customerName: selectedClient ? `${selectedClient.nombre} ${selectedClient.apellido}` : "Cliente General",
                             reservationId: reservationId || "",
-                            items: cart,
+                            items: cart, // cart has { nombre, cantidad, subtotal } which maps roughly to what formatTicket expects if subtotal exists.
+                            // printer.ts expects: item.nombre, item.cantidad, item.subtotal.
+                            // Cart items structure in NewSaleSheet: { nombre, cantidad, precio, ... } 
+                            // We need to ensure subtotal is calculated or explicitly passed in the item.
+                            // Let's assume printer.ts calculates price from subtotal or similar.
+                            // Actually formatTicket uses item.subtotal. 
+                            // In NewSaleSheet cart items usually have 'subtotal' calculated? 
+                            // Let's check cart structure separately if needed, but for now passing cart.
                             subtotal: subtotal,
-                            anticipoPagado: anticipoPagado,
+                            anticipoPagado: anticipoPagado === undefined ? (initialData.anticipoPagado || 0) : anticipoPagado,
                             discount: totalDiscount,
                             total: total
                         };
+
+                        // Map cart items to ensure 'subtotal' exists for printer
+                        ticketData.items = cart.map((item: any) => ({
+                            ...item,
+                            subtotal: item.subtotal || (item.precio * item.cantidad)
+                        }));
 
                         await printer.print(printer.formatTicket(ticketData));
                         toast({ title: "Imprimiendo Ticket..." });

@@ -93,6 +93,11 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             const printer = BluetoothPrinter.getInstance();
             if (!printer.isConnected()) await printer.connect();
 
+            // Print Logo
+            if (empresa?.receipt_logo_url) {
+                await printer.printImage(empresa.receipt_logo_url);
+            }
+
             // Prepare cart items from sale.items
             // sale.items structure matches what formatTicket expects (nombre, cantidad, subtotal/precio_unitario)
             // But we need to ensure 'subtotal' exists on item for the printer or rename it.

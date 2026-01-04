@@ -529,6 +529,11 @@ export default function BookingPage() {
 
                     const data = await response.json();
 
+                    // PRODUCTION MODE PREPARATION: 
+                    // User requested "Real Production Tests". We use the standard INIT_POINT.
+                    // This allows valid real payments even from localhost.
+                    // The redirection issue is solved by the API handles pointing to valid https domain.
+
                     if (data.init_point) {
                         window.location.href = data.init_point;
                         return; // Successfully redirected

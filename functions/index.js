@@ -651,7 +651,33 @@ exports.mercadoPagoWebhook = onRequest(
             saldo_pendiente: total > pagadoAhora ? (total - pagadoAhora) : 0,
             metodo_pago_anticipo: 'mercadopago'
           });
-          console.log(`[vFinal] Custom: Direct Reservation ${external_reference} CONFIRMED and UPDATED with payment $${pagadoAhora}.`);
+          // CRITICAL: Create 'ventas' document for Reporting
+          const saleRef = admin.firestore().collection('ventas').doc(external_reference);
+          const saleDoc = await t.get(saleRef);
+
+          if (!saleDoc.exists) {
+            const saleData = {
+              fecha_hora_venta: new Date(),
+              cliente_id: reservaData.cliente_id,
+              local_id: reservaData.local_id || 'default',
+              professional_id: reservaData.barbero_id || null,
+              items: reservaData.items || [],
+              subtotal: total,
+              total: total,
+              descuento: { tipo: 'none', valor: 0 },
+              metodo_pago: 'mercadopago',
+              pago_estado: 'Pagado',
+              mercado_pago_id: String(paymentInfo.id),
+              monto_pagado_real: pagadoAhora,
+              origen: 'web_publica',
+              status: 'completed',
+              reservationId: external_reference
+            };
+            t.set(saleRef, saleData);
+            console.log(`[vFinal] Created 'ventas' doc for Reservation ${external_reference}`);
+          }
+
+          console.log(`[vFinal] Custom: Direct Reservation ${external_reference} CONFIRMED.`);
           return;
         }
 
@@ -675,6 +701,11 @@ exports.mercadoPagoWebhook = onRequest(
           if (Array.isArray(bookings) && bookings.length > 0) {
             console.log(`[vFinal] Found ${bookings.length} bookings to create from metadata.`);
 
+            const saleItems = [];
+            let saleTotal = 0;
+            let clientIdForSale = null;
+            let localIdForSale = 'default';
+
             for (const booking of bookings) {
               // 1. Upsert Client
               const clientData = booking.client;
@@ -683,7 +714,6 @@ exports.mercadoPagoWebhook = onRequest(
 
               if (!clientQuery.empty) {
                 clientId = clientQuery.docs[0].id;
-                // Optional: Update phone if changed? For now, keep simple.
               } else {
                 const newClientRef = admin.firestore().collection('clientes').doc();
                 clientId = newClientRef.id;
@@ -692,27 +722,30 @@ exports.mercadoPagoWebhook = onRequest(
                   apellido: clientData.lastName,
                   correo: clientData.email,
                   telefono: clientData.phone,
-                  creado_en: admin.firestore.FieldValue.serverTimestamp()
+                  creado_en: admin.firestore.FieldValue.serverTimestamp(),
+                  origen: 'web_publica'
                 });
               }
 
+              if (!clientIdForSale) clientIdForSale = clientId;
+
               // 2. Create Reservation
-              const newResRef = admin.firestore().collection('reservas').doc(); // Auto-ID
+              const resId = booking.id || admin.firestore().collection('reservas').doc().id;
+              const newResRef = admin.firestore().collection('reservas').doc(resId);
 
               // Items Mapping (Frontend sends serviceNames, serviceIds)
-              // We need to construct 'items' array expected by structure
-              // Simplification: We blindly trust frontend data for "items" structure or reconstruct it
-              // The frontend sent 'serviceIds' and 'serviceNames' arrays.
               const resItems = booking.serviceIds.map((sid, idx) => ({
                 id: sid,
                 servicio: booking.serviceNames[idx],
                 barbero_id: booking.professionalId,
-                // precio? We don't have per-service price in the simplified payload easily without lookup
-                // But we have 'totalAmount'. If 1 item, easy. If multi, split?
-                // For 'combined', we usually treat as a block.
-                // Let's assume 'items' in reservation doc is just for display list
-                nombre: booking.serviceNames[idx]
+                nombre: booking.serviceNames[idx],
+                tipo: 'servicio',
+                precio: Number(booking.servicePrices?.[idx] || 0)
               }));
+
+              saleItems.push(...resItems);
+              saleTotal += Number(booking.totalAmount || 0);
+              localIdForSale = booking.locationId || 'default';
 
               const reservaToCreate = {
                 cliente_id: clientId,
@@ -754,59 +787,42 @@ exports.mercadoPagoWebhook = onRequest(
               t.set(newResRef, reservaToCreate);
               console.log(`[vFinal] Created Reservation ${newResRef.id} from metadata.`);
 
-              // --- CREATE SALE RECORD (Venta) ---
-              // Creates a corresponding sale record in 'ventas' to mirror physical sales logic
-              const newSaleRef = db.collection('ventas').doc();
-
-              // Map items for the sale record
-              // Note: booking.servicePrices needs to be added to frontend payload for accuracy
-              // Fallback: Use total / count or assume booking.totalAmount if single item
-              const saleItems = resItems.map((item, idx) => ({
-                id: item.id || 'service_id',
-                nombre: item.servicio || 'Servicio',
-                tipo: 'servicio',
-                cantidad: 1,
-                precio: booking.servicePrices ? Number(booking.servicePrices[idx] || 0) : (booking.totalAmount / resItems.length),
-                subtotal: booking.servicePrices ? Number(booking.servicePrices[idx] || 0) : (booking.totalAmount / resItems.length),
-                barbero_id: booking.professionalId,
-                servicio: item.servicio
-              }));
-
-              const saleData = {
-                id: newSaleRef.id,
-                cliente_id: clientId,
-                local_id: booking.locationId,
-                fecha_hora_venta: admin.firestore.FieldValue.serverTimestamp(),
-                metodo_pago: 'mercadopago',
-                mercado_pago_id: String(paymentInfo.id),
-                items: saleItems,
-                subtotal: booking.totalAmount,
-                descuento: { valor: 0, tipo: 'fixed' },
-                total: booking.totalAmount, // Total Value
-
-                // Payment Details (Anticipo)
-                detalle_pago_combinado: {
-                  efectivo: 0,
-                  tarjeta: Number(booking.amountDue || 0)
-                },
-                monto_pagado_real: Number(booking.amountDue || 0), // Use specific booking amount due
-                saldo_pendiente: booking.totalAmount - Number(booking.amountDue || 0),
-
-                reservationId: newResRef.id,
-                creado_por_nombre: 'Sistema Online',
-                creado_por_id: 'system',
-
-                estado: (booking.totalAmount - Number(booking.amountDue || 0)) <= 0 ? 'pagado' : 'pagado_parcial',
-                pagado: (booking.totalAmount - Number(booking.amountDue || 0)) <= 0,
-                origen: 'web_publica',
-
-                // Financial helper fields
-                propina: 0
-              };
-
-              t.set(newSaleRef, saleData);
-              console.log(`[vFinal] Created Sale (Venta) ${newSaleRef.id} for financials.`);
             }
+
+            // 3. Create Aggregate Sale (Venta)
+            // Use 'external_reference' as Sale ID (Matches Payment ID/Ref)
+            const saleRef = admin.firestore().collection('ventas').doc(external_reference);
+
+            const finalSale = {
+              id: external_reference,
+              fecha_hora_venta: admin.firestore.FieldValue.serverTimestamp(),
+              cliente_id: clientIdForSale,
+              local_id: localIdForSale,
+              items: saleItems,
+              subtotal: saleTotal,
+              total: saleTotal,
+              descuento: { valor: 0, tipo: 'fixed' },
+              metodo_pago: 'mercadopago',
+
+              // Payment Status
+              pago_estado: 'Pagado',
+              mercado_pago_id: String(paymentInfo.id),
+              detalle_pago_combinado: {
+                efectivo: 0,
+                tarjeta: Number(transaction_amount || 0)
+              },
+              monto_pagado_real: Number(transaction_amount || 0),
+              saldo_pendiente: 0, // Online payments are usually full or deposits handled as 'paid' for that chunk
+
+              origen: 'web_publica',
+              status: 'completed',
+              creado_por_nombre: 'Sistema Online',
+              creado_por_id: 'system',
+              propina: 0
+            };
+
+            t.set(saleRef, finalSale);
+            console.log(`[vFinal] Created Aggregate Sale (Venta) ${external_reference} for financials.`);
             return;
           }
         }

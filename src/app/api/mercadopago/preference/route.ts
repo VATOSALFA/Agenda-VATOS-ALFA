@@ -27,75 +27,88 @@ export async function POST(req: NextRequest) {
         const client = new MercadoPagoConfig({ accessToken });
         const preference = new Preference(client);
 
-        // Determine base URL
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.headers.get('origin') || 'https://vatosalfa.com';
+        // Determine base URL with explicit fallback
+        // Priority: Environment Variable -> Production Fallback
+        let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://vatosalfa.com';
 
-        // Sanitize Payer Data
-        let payerEmail = payer.email;
-        if (!payerEmail || !payerEmail.includes('@')) {
-            payerEmail = 'cliente-sin-email@vatosalfa.com';
+        // Normalize URL: Remove trailing slash
+        if (baseUrl.endsWith('/')) {
+            baseUrl = baseUrl.slice(0, -1);
         }
 
-        console.log(`[MP] Creating preference for Reservation ${reservationId} with email ${payerEmail}`);
+        // --- CRITICAL FIX FOR LOCALHOST TESTING ---
+        // Mercado Pago "auto_return" STRICTLY requires a specific format (often HTTPS) 
+        // and sometimes rejects 'http://localhost' with "invalid back_url".
+        // To unblock testing, if we are on localhost, we will set the BACK URL 
+        // to the PRODUCTION domain (https://vatosalfa.com).
 
-        // Create Preference
-        // User requested redirect to HOME after success.
+        const isLocal = baseUrl.includes('localhost');
+        const returnUrl = isLocal ? 'https://vatosalfa.com' : baseUrl;
+
+        // Protocol Check for BaseURL (only if NOT local and NOT already having protocol)
+        if (!isLocal && !baseUrl.startsWith('http')) {
+            baseUrl = `https://${baseUrl}`;
+        }
+
+        console.log(`[MP] Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`[MP] Base URL: ${baseUrl}`);
+        console.log(`[MP] Return URL for Redirects: ${returnUrl}`);
+
+        // Construct Back URLs
         const backUrls = {
-            success: `${baseUrl}/`,
-            failure: `${baseUrl}/reserva/fallida`,
-            pending: `${baseUrl}/`
+            success: `${returnUrl}/`,
+            failure: `${returnUrl}/reserva/fallida`,
+            pending: `${returnUrl}/`
         };
 
-        const result = await preference.create({
-            body: {
-                items: items.map((item: any) => ({
-                    ...item,
-                    unit_price: Number(item.unit_price),
-                    category_id: 'services', // "services" category improves approval rates for non-physical goods
-                    description: item.description || item.title || 'Servicio de Barbería' // Detailed description
-                })),
-                payer: {
-                    // Send email as primary identifier
-                    ...(payer.email && payer.email.includes('@') ? { email: payer.email } : {}),
-                    // Only send Name/Surname if they look valid (not 'Cita', 'Cliente', etc) to avoid anti-fraud conflicts
-                    ...(payer.name && payer.name.length > 2 && !['cita', 'cliente', 'usuario'].includes(payer.name.toLowerCase()) ? { name: payer.name } : {}),
-                    ...(payer.lastName && payer.lastName.length > 2 ? { surname: payer.lastName } : {}),
-                    // Send phone only if strictly numeric and valid length for MX (10 digits)
-                    ...(payer.phone && payer.phone.replace(/\D/g, '').length === 10 ? {
-                        phone: {
-                            area_code: '52',
-                            number: payer.phone.replace(/\D/g, '')
-                        }
-                    } : {})
-                },
-                external_reference: reservationId, // This ID is guaranteed to be a valid Firestore ID now
-                statement_descriptor: "VATOS ALFA",
-                expires: true,
-                date_of_expiration: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 60 min expiration
-                // binary_mode: true, // REMOVED: Causing false positives in anti-fraud
-                payment_methods: {
-                    installments: 1,
-                    excluded_payment_types: [
-                        { id: "ticket" }
-                    ]
-                },
-                back_urls: backUrls,
-                auto_return: 'approved', // Redirect automatically
-                metadata: {
-                    reservation_id: reservationId,
-                    booking_json: body.bookingData ? JSON.stringify(body.bookingData) : undefined
-                },
-                notification_url: "https://mercadopagowebhook-nhesymz2aa-uc.a.run.app"
-            }
-        });
+        const bodyData = {
+            items: items.map((item: any) => ({
+                ...item,
+                unit_price: Number(item.unit_price),
+                category_id: 'services',
+                description: item.description || item.title || 'Servicio de Barbería'
+            })),
+            payer: {
+                ...(payer.email && payer.email.includes('@') ? { email: payer.email } : {}),
+                ...(payer.name && payer.name.length > 2 && !['cita', 'cliente', 'usuario'].includes(payer.name.toLowerCase()) ? { name: payer.name } : {}),
+                ...(payer.lastName && payer.lastName.length > 2 ? { surname: payer.lastName } : {}),
+                ...(payer.phone && payer.phone.replace(/\D/g, '').length === 10 ? {
+                    phone: {
+                        area_code: '52',
+                        number: payer.phone.replace(/\D/g, '')
+                    }
+                } : {})
+            },
+            external_reference: reservationId,
+            statement_descriptor: "VATOS ALFA",
+            expires: true,
+            date_of_expiration: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            payment_methods: {
+                installments: 1,
+                excluded_payment_types: [{ id: "ticket" }]
+            },
+            back_urls: backUrls,
+            auto_return: 'approved',
+            metadata: {
+                reservation_id: reservationId,
+                booking_json: body.bookingData ? JSON.stringify(body.bookingData) : undefined
+            },
+            notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook"
+        };
+
+        const result = await preference.create({ body: bodyData });
 
         return NextResponse.json({
             id: result.id,
-            init_point: result.init_point
+            init_point: result.init_point,
+            sandbox_init_point: result.sandbox_init_point // Explicitly return sandbox point
         });
 
     } catch (error: any) {
         console.error("Error creating preference:", error);
+        // Log detailed cause if available from MP SDK
+        if (error.cause) console.error("MP Error Cause:", JSON.stringify(error.cause, null, 2));
+
         return NextResponse.json({ error: error.message || 'Error desconocido en MP', details: error.cause }, { status: 500 });
     }
 }

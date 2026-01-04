@@ -228,6 +228,7 @@ export interface Sale {
   };
   professionalNames?: string; // transient
   tipPaid?: boolean;
+  pago_estado?: string;
 }
 
 export interface SaleItem {

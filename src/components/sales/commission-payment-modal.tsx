@@ -121,6 +121,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             }
 
             sale.items?.forEach((item, itemIndex) => {
+                // Filter out non-completed payments for commissions
+                if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') return;
+
                 if (!item.barbero_id || item.commissionPaid) return;
 
                 const professional = professionalMap.get(item.barbero_id);

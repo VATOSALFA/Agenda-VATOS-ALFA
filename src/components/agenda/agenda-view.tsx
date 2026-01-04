@@ -107,6 +107,8 @@ const getStatusColor = (status: string | undefined) => {
       return 'bg-red-300/80 border-red-500 text-red-900';
     case 'Pendiente de Pago': // New standard
       return 'bg-red-300/80 border-red-500 text-red-900';
+    case 'deposit_paid':
+      return 'bg-orange-300/80 border-orange-500 text-orange-900';
     case 'En espera':
       return 'bg-indigo-300/80 border-indigo-500 text-indigo-900';
     case 'Cancelado':

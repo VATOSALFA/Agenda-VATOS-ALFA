@@ -756,7 +756,16 @@ exports.mercadoPagoWebhook = onRequest(
                 hora_fin: booking.endTime, // We added this to payload
                 duracion: booking.duration,
                 estado: 'Confirmado', // Paid = Confirmed
-                pago_estado: 'Pagado',
+                pago_estado: 'deposit_paid', // Default to deposit_paid for online bookings which are usually deposits.
+                // If it's a full payment, we could verify, but usually online = deposit.
+                // Actually, better logic: 
+                // If amountPaid >= total ? 'Pagado' : 'deposit_paid'
+                // But here 'transaction_amount' is local to scope.
+                // Let's use 'deposit_paid' as safe default for online bookings unless we know for sure it's 100%.
+                // Given the previous block (Case 3), we are making it from metadata.
+                // Let's assume deposit_paid to be safe. "Pagado" implies fully settled.
+
+                pago_estado: (Number(transaction_amount || 0) >= booking.totalAmount) ? 'Pagado' : 'deposit_paid',
 
                 items: resItems,
                 servicio: resItems.map(i => i.servicio).join(', '), // Legacy field
@@ -796,7 +805,7 @@ exports.mercadoPagoWebhook = onRequest(
             const amountPaid = Number(transaction_amount || 0);
             const isFullPayment = amountPaid >= saleTotal;
             const remainingBalance = saleTotal > amountPaid ? (saleTotal - amountPaid) : 0;
-            const globalStatus = isFullPayment ? 'Pagado' : 'Pago Parcial';
+            const globalStatus = isFullPayment ? 'Pagado' : 'deposit_paid'; // Changed from 'Pago Parcial' to 'deposit_paid' to match frontend logic
 
             const finalSale = {
               id: external_reference,

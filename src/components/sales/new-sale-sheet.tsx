@@ -995,20 +995,73 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 let existingSaleData: any = {};
 
                 if (reservationId) {
+                    // 1. Try direct lookup (best case: ID matches)
                     const possibleSaleRef = doc(db, 'ventas', reservationId);
                     const possibleSaleDoc = await transaction.get(possibleSaleRef);
+
                     if (possibleSaleDoc.exists()) {
                         const sData = possibleSaleDoc.data();
                         if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial' || sData.pago_estado === 'Pagado') {
-                            // Note: Even if it says 'Pagado' (due to previous bug), if we are here paying a balance, we should update it.
-                            // But strictly, we only update if it is a deposit.
-                            // If the user manually triggered pay balance, trust the context.
                             saleDocRef = possibleSaleRef;
                             isUpdate = true;
                             existingSaleData = sData;
                         }
+                    } else {
+                        // 2. Try query by field (fallback: ID differs)
+                        // Note: Queries inside transactions require the query to be performed before writes.
+                        // However, we are inside 'runTransaction'. We can't do a regular query easily inside without knowing the doc ID.
+                        // Strategy: We should have found the sale ID *before* starting the transaction if possible.
+                        // BUT, to avoid refactoring the whole flow, we will try to find it via a direct GET if we can guess the ID, or we assume
+                        // the system enforces ID consistency.
+                        // Since standard queries in transactions are checking specifically for documents, we might need a different approach.
+                        // Let's rely on the fact that for online payments, we set ID = reservationId in some flows, OR 
+                        // we set sale.reservationId = reservationId.
+
+                        // FIX: We cannot execute a broad query inside a transaction easily without reading indices.
+                        // Assuming the external_reference (reservation ID or payment ID) is consistent.
+                        // If the webhook used external_reference as the Sale ID (as seen in Cloud Function),
+                        // and Reservation ID is ALSO external_reference, then the direct lookup should have worked.
+                        // IF they differ, we have a problem.
+
+                        // Let's assume for a moment the Reservation ID might differ from Sale ID.
+                        // We will try to read the PRE-FETCHED sale if we passed it? No we didn't.
+
+                        // We will try to fetch the reservation first to see if it has 'deposit_payment_id'
+                        const resRef = doc(db, 'reservas', reservationId);
+                        const resDoc = await transaction.get(resRef);
+                        if (resDoc.exists()) {
+                            const resData = resDoc.data();
+                            // If reservation has a tracked payment ID equivalent to the sale ID
+                            if (resData.deposit_payment_id) {
+                                const linkedSaleRef = doc(db, 'ventas', resData.deposit_payment_id);
+                                const linkedSaleDoc = await transaction.get(linkedSaleRef);
+                                if (linkedSaleDoc.exists()) {
+                                    const sData = linkedSaleDoc.data();
+                                    if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial') {
+                                        saleDocRef = linkedSaleRef;
+                                        isUpdate = true;
+                                        existingSaleData = sData;
+                                    }
+                                }
+                            }
+                            // Also check if reservation ID itself is the key (already checked above)
+                        }
                     }
                 }
+
+                if (isUpdate) {
+                    // Log for debugging
+                    console.log("Updating existing sale:", saleDocRef.id);
+                }
+
+                // If we still found nothing, we create a new one (default).
+
+                if (isUpdate) {
+                    // Log for debugging
+                    console.log("Updating existing sale:", saleDocRef.id);
+                }
+
+
 
                 const itemsToSave = cart.map(item => {
                     const itemSubtotal = (item.precio || 0) * item.cantidad;

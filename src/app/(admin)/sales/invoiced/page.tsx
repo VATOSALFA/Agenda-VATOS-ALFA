@@ -261,9 +261,24 @@ export default function InvoicedSalesPage() {
             if (sale.metodo_pago === 'combinado') {
                 acc['efectivo'] = (acc['efectivo'] || 0) + (sale.detalle_pago_combinado?.efectivo || 0);
                 acc['tarjeta'] = (acc['tarjeta'] || 0) + (sale.detalle_pago_combinado?.tarjeta || 0);
+
+                // Add online payments if present in combined
+                const onlineAmount = sale.detalle_pago_combinado?.pagos_en_linea || 0;
+                if (onlineAmount > 0) {
+                    acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + onlineAmount;
+                }
             } else {
-                const method = sale.metodo_pago || 'otro';
-                acc[method] = (acc[method] || 0) + (sale.total || 0);
+                let method = sale.metodo_pago || 'otro';
+                let amount = sale.total || 0;
+
+                // Handle partial payment case for direct 'mercadopago' sales (not combined yet)
+                if (sale.pago_estado === 'deposit_paid') {
+                    amount = sale.monto_pagado_real || 0;
+                }
+
+                if (method === 'mercadopago') method = 'Pagos en Linea';
+
+                acc[method] = (acc[method] || 0) + amount;
             }
             return acc;
         }, {} as Record<string, number>);

@@ -632,7 +632,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             // In NewSaleSheet cart items usually have 'subtotal' calculated? 
                             // Let's check cart structure separately if needed, but for now passing cart.
                             subtotal: subtotal,
-                            anticipoPagado: anticipoPagado === undefined ? (initialData.anticipoPagado || 0) : anticipoPagado,
+                            anticipoPagado: anticipoPagado === undefined ? (initialData?.anticipoPagado || 0) : anticipoPagado,
                             discount: totalDiscount,
                             total: total
                         };
@@ -1069,21 +1069,45 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 if (isUpdate) {
                     // Merge with existing payments if updating
-                    const previousCombined = existingSaleData.detalle_pago_combinado || { efectivo: 0, tarjeta: 0 };
 
-                    // If the simplified 'metodo_pago' was used, map it to combined structure
-                    let currentPaymentDetails = { efectivo: 0, tarjeta: 0 };
-                    if (data.metodo_pago === 'combinado') {
-                        currentPaymentDetails = { efectivo: data.pago_efectivo || 0, tarjeta: data.pago_tarjeta || 0 };
-                    } else if (data.metodo_pago === 'efectivo') {
-                        currentPaymentDetails = { efectivo: amountBeingPaid, tarjeta: 0 };
-                    } else if (data.metodo_pago === 'tarjeta') {
-                        currentPaymentDetails = { efectivo: 0, tarjeta: amountBeingPaid };
+                    // 1. Extract previous payments
+                    let prevEfectivo = 0;
+                    let prevTarjeta = 0;
+                    let prevOnline = 0;
+
+                    const prevCombined = existingSaleData.detalle_pago_combinado;
+
+                    if (existingSaleData.metodo_pago === 'combinado' && prevCombined) {
+                        prevEfectivo = prevCombined.efectivo || 0;
+                        prevTarjeta = prevCombined.tarjeta || 0;
+                        prevOnline = prevCombined.pagos_en_linea || 0;
+                    } else if (existingSaleData.metodo_pago === 'mercadopago') {
+                        // The deposit was likely 'mercadopago'
+                        prevOnline = existingSaleData.monto_pagado_real || existingSaleData.total || 0;
+                    } else if (existingSaleData.metodo_pago === 'efectivo') {
+                        prevEfectivo = existingSaleData.total || 0;
+                    } else if (existingSaleData.metodo_pago === 'tarjeta') {
+                        prevTarjeta = existingSaleData.total || 0;
                     }
 
+                    // 2. Extract current payments (amountBeingPaid is the balance being paid NOW)
+                    let currEfectivo = 0;
+                    let currTarjeta = 0;
+
+                    if (data.metodo_pago === 'combinado') {
+                        currEfectivo = data.pago_efectivo || 0;
+                        currTarjeta = data.pago_tarjeta || 0;
+                    } else if (data.metodo_pago === 'efectivo') {
+                        currEfectivo = amountBeingPaid;
+                    } else if (data.metodo_pago === 'tarjeta') {
+                        currTarjeta = amountBeingPaid;
+                    }
+
+                    // 3. Combine
                     saleDataToSave.detalle_pago_combinado = {
-                        efectivo: (previousCombined.efectivo || 0) + currentPaymentDetails.efectivo,
-                        tarjeta: (previousCombined.tarjeta || 0) + currentPaymentDetails.tarjeta
+                        efectivo: prevEfectivo + currEfectivo,
+                        tarjeta: prevTarjeta + currTarjeta,
+                        pagos_en_linea: prevOnline
                     };
                     saleDataToSave.metodo_pago = 'combinado'; // Always combined when merging multiple payments
 

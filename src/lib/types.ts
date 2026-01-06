@@ -226,12 +226,15 @@ export interface Sale {
   detalle_pago_combinado?: {
     efectivo: number;
     tarjeta: number;
+    pagos_en_linea?: number;
   };
   professionalNames?: string; // transient
   tipPaid?: boolean;
   pago_estado?: string;
   monto_pagado_real?: number;
+  anticipoPagado?: number;
 }
+
 
 export interface SaleItem {
   barbero_id: string;

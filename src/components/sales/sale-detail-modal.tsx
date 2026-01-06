@@ -114,7 +114,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 storeAddress: localData?.address || empresa?.address || "",
                 date: formatDate(sale.fecha_hora_venta), // Reuse format logic or simplified
                 customerName: sale.client ? `${sale.client.nombre} ${sale.client.apellido}` : "Cliente General",
-                reservationId: sale.reserva_id || "",
+                reservationId: sale.reservationId || "",
                 items: formattedItems,
                 subtotal: subtotal,
                 anticipoPagado: (sale as any).anticipoPagado || 0, // In case we added it to Sale type or it's extra field
@@ -164,7 +164,24 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                             <InfoItem label="Cajero" value={sale.creado_por_nombre || 'Sin información'} />
                             <InfoItem label="Cliente" value={`${sale.client?.nombre || ''} ${sale.client?.apellido || ''}`.trim() || 'No registrado'} />
                             <InfoItem label="Local" value={localData?.name || 'Desconocido'} />
-                            <InfoItem label="Método de pago" value={sale.metodo_pago} />
+                            {sale.metodo_pago === 'combinado' && sale.detalle_pago_combinado ? (
+                                <div className="col-span-3 mt-2 border-t pt-2">
+                                    <div className="font-semibold text-xs mb-1">Desglose de Pago:</div>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                        {(sale.detalle_pago_combinado.efectivo > 0) && (
+                                            <div className="flex justify-between"><span>Efectivo:</span> <span>${sale.detalle_pago_combinado.efectivo.toLocaleString('es-MX')}</span></div>
+                                        )}
+                                        {(sale.detalle_pago_combinado.tarjeta > 0) && (
+                                            <div className="flex justify-between"><span>Tarjeta:</span> <span>${sale.detalle_pago_combinado.tarjeta.toLocaleString('es-MX')}</span></div>
+                                        )}
+                                        {(sale.detalle_pago_combinado.pagos_en_linea && sale.detalle_pago_combinado.pagos_en_linea > 0) && (
+                                            <div className="flex justify-between"><span>Pagos en Linea:</span> <span>${sale.detalle_pago_combinado.pagos_en_linea.toLocaleString('es-MX')}</span></div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <InfoItem label="Método de pago" value={sale.metodo_pago === 'mercadopago' ? 'Pagos en Linea' : sale.metodo_pago} />
+                            )}
                             <InfoItem label="Monto total" value={`$${sale.total.toLocaleString('es-MX')}`} />
                         </div>
                     </div>

@@ -268,7 +268,10 @@ export default function InvoicedSalesPage() {
             return acc;
         }, {} as Record<string, number>);
 
-        const totalSales = populatedSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+        const totalSales = populatedSales.reduce((acc, sale) => {
+            const actualRevenue = sale.pago_estado === 'deposit_paid' ? (sale.monto_pagado_real || 0) : (sale.total || 0);
+            return acc + actualRevenue;
+        }, 0);
 
         return {
             totalSales: {

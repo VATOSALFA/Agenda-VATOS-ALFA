@@ -80,6 +80,7 @@ export interface Reservation {
     whatsapp_reminder: boolean;
   };
   monto_pagado?: number;
+  anticipo_pagado?: number;
   deposit_payment_id?: string;
 }
 
@@ -229,6 +230,7 @@ export interface Sale {
   professionalNames?: string; // transient
   tipPaid?: boolean;
   pago_estado?: string;
+  monto_pagado_real?: number;
 }
 
 export interface SaleItem {

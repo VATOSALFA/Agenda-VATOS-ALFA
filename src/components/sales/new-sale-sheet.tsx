@@ -989,7 +989,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 }
 
-                const ventaRef = doc(collection(db, "ventas"));
+                // Determine if we are updating an existing online deposit sale
+                let saleDocRef = doc(collection(db, "ventas")); // Default new
+                let isUpdate = false;
+                let existingSaleData: any = {};
+
+                if (reservationId) {
+                    const possibleSaleRef = doc(db, 'ventas', reservationId);
+                    const possibleSaleDoc = await transaction.get(possibleSaleRef);
+                    if (possibleSaleDoc.exists()) {
+                        const sData = possibleSaleDoc.data();
+                        if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial' || sData.pago_estado === 'Pagado') {
+                            // Note: Even if it says 'Pagado' (due to previous bug), if we are here paying a balance, we should update it.
+                            // But strictly, we only update if it is a deposit.
+                            // If the user manually triggered pay balance, trust the context.
+                            saleDocRef = possibleSaleRef;
+                            isUpdate = true;
+                            existingSaleData = sData;
+                        }
+                    }
+                }
+
                 const itemsToSave = cart.map(item => {
                     const itemSubtotal = (item.precio || 0) * item.cantidad;
                     const itemDiscountValue = Number(item.discountValue) || 0;
@@ -1014,6 +1034,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     };
                 });
 
+                // Calculate correct totals
+                const grandTotal = subtotal - totalDiscount; // Full value of the service/products
+                const amountBeingPaid = total; // The remainder being paid now
+
                 const saleDataToSave: any = {
                     ...data,
                     items: itemsToSave,
@@ -1023,13 +1047,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         tipo: 'fixed',
                         monto: totalDiscount
                     },
-                    total,
+                    total: grandTotal, // Save the full value, not just the remainder
                     fecha_hora_venta: Timestamp.now(),
+                    fecha_pago: Timestamp.now(),
                     creado_por_id: user?.uid,
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pagado',
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
+                    monto_pagado_real: (isUpdate ? (existingSaleData.monto_pagado_real || 0) : 0) + amountBeingPaid,
+                    saldo_pendiente: 0,
+                    status: 'completed'
                 };
 
                 if (data.metodo_pago === 'combinado') {
@@ -1039,17 +1067,41 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     };
                 }
 
-                if (reservationId) {
-                    saleDataToSave.reservationId = reservationId;
-                }
+                if (isUpdate) {
+                    // Merge with existing payments if updating
+                    const previousCombined = existingSaleData.detalle_pago_combinado || { efectivo: 0, tarjeta: 0 };
 
-                transaction.set(ventaRef, saleDataToSave);
+                    // If the simplified 'metodo_pago' was used, map it to combined structure
+                    let currentPaymentDetails = { efectivo: 0, tarjeta: 0 };
+                    if (data.metodo_pago === 'combinado') {
+                        currentPaymentDetails = { efectivo: data.pago_efectivo || 0, tarjeta: data.pago_tarjeta || 0 };
+                    } else if (data.metodo_pago === 'efectivo') {
+                        currentPaymentDetails = { efectivo: amountBeingPaid, tarjeta: 0 };
+                    } else if (data.metodo_pago === 'tarjeta') {
+                        currentPaymentDetails = { efectivo: 0, tarjeta: amountBeingPaid };
+                    }
+
+                    saleDataToSave.detalle_pago_combinado = {
+                        efectivo: (previousCombined.efectivo || 0) + currentPaymentDetails.efectivo,
+                        tarjeta: (previousCombined.tarjeta || 0) + currentPaymentDetails.tarjeta
+                    };
+                    saleDataToSave.metodo_pago = 'combinado'; // Always combined when merging multiple payments
+
+                    transaction.update(saleDocRef, saleDataToSave);
+                } else {
+                    if (reservationId) {
+                        saleDataToSave.reservationId = reservationId;
+                    }
+                    transaction.set(saleDocRef, saleDataToSave);
+                }
 
                 if (reservationId) {
                     const reservationRef = doc(db, 'reservas', reservationId);
                     transaction.update(reservationRef, {
                         pago_estado: 'Pagado',
-                        estado: 'Asiste'
+                        estado: 'Asiste',
+                        monto_pagado: saleDataToSave.monto_pagado_real,
+                        saldo_pendiente: 0
                     });
                 }
             });

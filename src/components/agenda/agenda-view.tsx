@@ -490,7 +490,7 @@ export default function AgendaView() {
         items: cartItems.map(i => ({ ...i, nombre: i.name })),
         reservationId: selectedReservation.id,
         local_id: selectedReservation.local_id,
-        anticipoPagado: selectedReservation.monto_pagado || 0 // Pass the paid deposit
+        anticipoPagado: selectedReservation.anticipo_pagado || selectedReservation.monto_pagado || 0
       });
       setIsDetailModalOpen(false);
       setIsSaleSheetOpen(true);

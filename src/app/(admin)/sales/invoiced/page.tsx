@@ -271,9 +271,8 @@ export default function InvoicedSalesPage() {
                 let method = sale.metodo_pago || 'otro';
                 let amount = sale.total || 0;
 
-                // Handle partial payment case for direct 'mercadopago' sales (not combined yet)
-                if (sale.pago_estado === 'deposit_paid') {
-                    amount = sale.monto_pagado_real || 0;
+                if (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) { // Updated safegaurd
+                    amount = sale.monto_pagado_real;
                 }
 
                 if (method === 'mercadopago') method = 'Pagos en Linea';
@@ -284,7 +283,11 @@ export default function InvoicedSalesPage() {
         }, {} as Record<string, number>);
 
         const totalSales = populatedSales.reduce((acc, sale) => {
-            const actualRevenue = sale.pago_estado === 'deposit_paid' ? (sale.monto_pagado_real || 0) : (sale.total || 0);
+            // Use real paid amount if available (for deposits/partial), otherwise total
+            // This handles cases where status might be 'deposit_paid' OR if we just want to track actual inflow
+            const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
             return acc + actualRevenue;
         }, 0);
 
@@ -587,8 +590,22 @@ export default function InvoicedSalesPage() {
                                             <TableCell className="capitalize">{getSaleConcept(sale)}</TableCell>
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell>{sale.professionalNames}</TableCell>
-                                            <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                            <TableCell>${(sale.total || 0).toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="capitalize">
+                                                {sale.pago_estado === 'deposit_paid' ? 'Pago en Linea' : (
+                                                    sale.metodo_pago === 'combinado' ? 'Pago Combinado' : (
+                                                        sale.metodo_pago === 'mercadopago' ? 'Pagos en Linea' : sale.metodo_pago
+                                                    )
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {sale.pago_estado === 'deposit_paid' ? (
+                                                    <span className="text-orange-600 font-medium">
+                                                        ${(sale.monto_pagado_real || 0).toLocaleString('es-MX')} (Anticipo)
+                                                    </span>
+                                                ) : (
+                                                    `$${(sale.total || 0).toLocaleString('es-MX')}`
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 {sale.descuento?.valor > 0
                                                     ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-MX')}`)

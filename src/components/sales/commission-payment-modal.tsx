@@ -124,6 +124,13 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                 // Filter out non-completed payments for commissions
                 if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') return;
 
+                // Safety check: specific for online/partial payments that might have been marked 'Pagado' incorrectly
+                // If it has a tracked 'monto_pagado_real' that is less than the total, it's not fully paid.
+                // We allow a small epsilon for floating point issues.
+                if (sale.monto_pagado_real !== undefined && (sale.total - sale.monto_pagado_real) > 1) {
+                    return;
+                }
+
                 if (!item.barbero_id || item.commissionPaid) return;
 
                 const professional = professionalMap.get(item.barbero_id);

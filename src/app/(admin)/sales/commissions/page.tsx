@@ -146,6 +146,17 @@ export default function CommissionsPage() {
         const commissionRows: CommissionRowData[] = [];
 
         filteredSales.forEach(sale => {
+            // Strict check: Commissions are ONLY for fully paid sales
+            if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
+                return;
+            }
+
+            // Secondary check: If real paid amount is significant less than total (allowing for small rounding errors), skip
+            // This catches cases where status might be 'Pagado' incorrectly but amount is obviously partial
+            if (sale.monto_pagado_real !== undefined && (sale.total - sale.monto_pagado_real) > 1) {
+                return;
+            }
+
             const client = clientMap.get(sale.cliente_id);
             const clientName = client ? `${client.nombre} ${client.apellido}` : 'Cliente desconocido';
 

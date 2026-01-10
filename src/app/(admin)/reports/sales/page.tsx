@@ -34,7 +34,7 @@ const KpiCard = ({ title, value, change, isPositive, prefix = '', suffix = '' }:
 );
 
 const CustomBarLabel = (props: any) => {
-    const {x, y, width, value} = props;
+    const { x, y, width, value } = props;
     return (
         <text x={x + width + 10} y={y + 10} fill="hsl(var(--foreground))" textAnchor="start" fontSize={12}>
             {`$${value.toLocaleString('es-MX')}`}
@@ -65,7 +65,7 @@ export default function SalesReportPage() {
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
-    
+
     const isLoading = salesLoading || servicesLoading || categoriesLoading;
 
     const handlePeriodChange = (value: string) => {
@@ -82,7 +82,7 @@ export default function SalesReportPage() {
     const handleSearch = () => {
         setQueryKey(prev => prev + 1);
     };
-    
+
     const categoryMap = useMemo(() => {
         if (categoriesLoading) return new Map();
         return new Map(categories.map(c => [c.id, c.name]));
@@ -97,15 +97,23 @@ export default function SalesReportPage() {
             salesByCategory: [],
             salesByService: []
         };
-        
-        const totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+
+        const totalSales = sales.reduce((sum, sale) => {
+            const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+            return sum + amount;
+        }, 0);
         const salesCount = sales.length;
         const averageSale = salesCount > 0 ? totalSales / salesCount : 0;
-        
+
         const salesByDate: Record<string, number> = {};
         sales.forEach(sale => {
             const date = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
-            salesByDate[date] = (salesByDate[date] || 0) + (sale.total || 0);
+            const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+            salesByDate[date] = (salesByDate[date] || 0) + amount;
         });
 
         const salesOverTime = Object.entries(salesByDate).map(([date, total]) => ({
@@ -117,14 +125,22 @@ export default function SalesReportPage() {
         const salesByCategory: Record<string, number> = {};
 
         sales.forEach(sale => {
+            const saleTotal = sale.total || 1;
+            const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+            const ratio = realPaid / saleTotal;
+
             (sale.items || []).forEach((item: SaleItem) => {
+                const itemAmount = (item.subtotal || 0) * ratio;
+
                 if (item.tipo === 'servicio') {
                     const service = services.find(s => s.id === item.id || s.name === item.servicio);
                     if (service) {
-                        salesByService[service.name] = (salesByService[service.name] || 0) + (item.subtotal || 0);
+                        salesByService[service.name] = (salesByService[service.name] || 0) + itemAmount;
                         const categoryName = categoryMap.get(service.category);
                         if (categoryName) {
-                            salesByCategory[categoryName] = (salesByCategory[categoryName] || 0) + (item.subtotal || 0);
+                            salesByCategory[categoryName] = (salesByCategory[categoryName] || 0) + itemAmount;
                         }
                     }
                 }
@@ -164,8 +180,8 @@ export default function SalesReportPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                         <div className="space-y-1 md:col-span-2">
-                             <label className="text-sm font-medium">Rango de fechas</label>
+                        <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium">Rango de fechas</label>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
@@ -184,75 +200,75 @@ export default function SalesReportPage() {
                     </div>
                 </CardContent>
             </Card>
-            
+
             <Card>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
                     <div className="lg:col-span-1">
                         <h3 className="text-xl font-semibold mb-4">Resumen</h3>
                         <div className="space-y-6">
-                           <KpiCard title="Total" value={aggregatedData.totalSales.toLocaleString('es-MX')} prefix="$" />
-                           <KpiCard title="Cantidad de ventas" value={aggregatedData.salesCount.toLocaleString()} />
-                           <KpiCard title="Venta promedio" value={aggregatedData.averageSale.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
+                            <KpiCard title="Total" value={aggregatedData.totalSales.toLocaleString('es-MX')} prefix="$" />
+                            <KpiCard title="Cantidad de ventas" value={aggregatedData.salesCount.toLocaleString()} />
+                            <KpiCard title="Venta promedio" value={aggregatedData.averageSale.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
                         </div>
                     </div>
                     <div className="lg:col-span-2">
                         <h3 className="text-xl font-semibold mb-4">Ventas por periodo</h3>
                         {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
-                        <ResponsiveContainer width="100%" height={250}>
-                            <LineChart data={aggregatedData.salesOverTime}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                                <YAxis tickFormatter={(value) => `$${value/1000}k`} tick={{ fontSize: 12 }} />
-                                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
-                                <Legend iconSize={10} wrapperStyle={{fontSize: "12px"}}/>
-                                <Line type="monotone" name="Periodo seleccionado" dataKey="current" stroke="hsl(var(--primary))" strokeWidth={2} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                            <ResponsiveContainer width="100%" height={250}>
+                                <LineChart data={aggregatedData.salesOverTime}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                                    <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} />
+                                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Legend iconSize={10} wrapperStyle={{ fontSize: "12px" }} />
+                                    <Line type="monotone" name="Periodo seleccionado" dataKey="current" stroke="hsl(var(--primary))" strokeWidth={2} />
+                                </LineChart>
+                            </ResponsiveContainer>
                         )}
                     </div>
                 </div>
             </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Ventas por categoría</CardTitle>
                     </CardHeader>
                     <CardContent>
-                         {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
-                        <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={aggregatedData.salesByCategory} layout="vertical" margin={{ left: 60 }}>
-                                <XAxis type="number" hide />
-                                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
-                                    {aggregatedData.salesByCategory.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                        {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
+                            <ResponsiveContainer width="100%" height={250}>
+                                <BarChart data={aggregatedData.salesByCategory} layout="vertical" margin={{ left: 60 }}>
+                                    <XAxis type="number" hide />
+                                    <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                                    <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
+                                        {aggregatedData.salesByCategory.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
                         )}
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Ventas por servicio (Top 5)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         {isLoading ? <div className="h-[250px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
-                         <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={aggregatedData.salesByService} layout="vertical" margin={{ left: 120 }}>
-                                <XAxis type="number" hide />
-                                <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
-                                     {aggregatedData.salesByService.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                            <ResponsiveContainer width="100%" height={250}>
+                                <BarChart data={aggregatedData.salesByService} layout="vertical" margin={{ left: 120 }}>
+                                    <XAxis type="number" hide />
+                                    <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                                    <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
+                                        {aggregatedData.salesByService.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
                         )}
                     </CardContent>
                 </Card>

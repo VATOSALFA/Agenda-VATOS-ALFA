@@ -305,8 +305,8 @@ export default function InvoicedSalesPage() {
             },
             paymentMethods: {
                 data: Object.entries(salesByPaymentMethod).map(([name, value]) => ({ name, value })),
-                total: totalSales,
-                dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia', 'Pagos en linea']
+                total: totalSales, // Ensure totals match
+                dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia', 'Pagos en Linea']
             },
         };
     }, [populatedSales]);
@@ -383,7 +383,7 @@ export default function InvoicedSalesPage() {
             'Detalle': sale.items?.map(i => i.nombre).join(', ') || 'N/A',
             'Profesional': sale.professionalNames || 'N/A',
             'Método de Pago': sale.metodo_pago,
-            'Total': sale.total,
+            'Total': (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total,
             'Descuento': '0.00%', // Placeholder
         }));
 
@@ -598,42 +598,26 @@ export default function InvoicedSalesPage() {
                                             <TableCell>{sale.professionalNames}</TableCell>
                                             <TableCell className="capitalize">
                                                 {sale.pago_estado === 'deposit_paid' ? 'Pago en Linea' : (
-                                                    sale.metodo_pago === 'combinado' ? 'Pago Combinado' : (
-                                                        sale.metodo_pago === 'mercadopago' ? 'Pagos en Linea' : sale.metodo_pago
-                                                    )
+                                                    sale.metodo_pago === 'combinado' ? 'Combinado' :
+                                                        sale.metodo_pago === 'mercadopago' ? 'Pago en Linea' : sale.metodo_pago
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {sale.pago_estado === 'deposit_paid' ? (
-                                                    <span className="text-orange-600 font-medium">
-                                                        ${(sale.monto_pagado_real || 0).toLocaleString('es-MX')} (Anticipo)
-                                                    </span>
-                                                ) : (
-                                                    `$${(sale.total || 0).toLocaleString('es-MX')}`
-                                                )}
+                                                ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX')}
                                             </TableCell>
-                                            <TableCell>
-                                                {sale.descuento?.valor > 0
-                                                    ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-MX')}`)
-                                                    : '0.00%'
-                                                }
-                                            </TableCell>
+                                            <TableCell>0.00%</TableCell>
                                             <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
-                                                        <Eye className="mr-2 h-4 w-4" /> Ver
+                                                <div className="flex justify-end gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleViewDetails(sale)}>
+                                                        <Eye className="h-4 w-4" />
                                                     </Button>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="outline" size="sm">
-                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                            <Button variant="ghost" size="icon">
+                                                                <MoreHorizontal className="h-4 w-4" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada", description: "El envío de comprobantes estará disponible próximamente." })}>
-                                                                <Send className="mr-2 h-4 w-4 text-blue-500" />
-                                                                <span className="text-blue-500">Enviar Comprobante</span>
-                                                            </DropdownMenuItem>
                                                             <DropdownMenuItem onSelect={() => window.print()}>
                                                                 <Printer className="mr-2 h-4 w-4 text-yellow-500" />
                                                                 <span className="text-yellow-500">Imprimir</span>
@@ -661,7 +645,12 @@ export default function InvoicedSalesPage() {
                                     <TableRow>
                                         <TableCell colSpan={6} className="text-right font-bold">Total</TableCell>
                                         <TableCell className="font-bold">
-                                            ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-MX')}
+                                            ${populatedSales.reduce((acc, sale) => {
+                                                const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                                                    ? sale.monto_pagado_real
+                                                    : (sale.total || 0);
+                                                return acc + actualRevenue;
+                                            }, 0).toLocaleString('es-MX')}
                                         </TableCell>
                                         <TableCell colSpan={2}></TableCell>
                                     </TableRow>
@@ -669,7 +658,7 @@ export default function InvoicedSalesPage() {
                             )}
                         </Table>
                     </CardContent>
-                </Card>
+                </Card >
 
                 {!salesLoading && populatedSales.length > 0 && (
                     <div className="flex items-center justify-end space-x-6 p-4">
@@ -714,9 +703,10 @@ export default function InvoicedSalesPage() {
                             </Button>
                         </div>
                     </div>
-                )}
+                )
+                }
 
-            </div>
+            </div >
 
             {selectedSale && (
                 <SaleDetailModal
@@ -724,43 +714,46 @@ export default function InvoicedSalesPage() {
                     onOpenChange={setIsDetailModalOpen}
                     sale={selectedSale}
                 />
-            )}
-            {saleToDelete && (
-                <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
-                    if (!open) {
-                        setSaleToDelete(null);
-                        setDeleteConfirmationText('');
-                    }
-                }}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="space-y-2 py-2">
-                            <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
-                            <Input
-                                id="delete-confirm"
-                                value={deleteConfirmationText}
-                                onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                                placeholder="ELIMINAR"
-                            />
-                        </div>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={handleDeleteSale}
-                                disabled={deleteConfirmationText !== 'ELIMINAR'}
-                                className="bg-destructive hover:bg-destructive/90"
-                            >
-                                Sí, eliminar venta
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            )
+            }
+            {
+                saleToDelete && (
+                    <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
+                        if (!open) {
+                            setSaleToDelete(null);
+                            setDeleteConfirmationText('');
+                        }
+                    }}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="space-y-2 py-2">
+                                <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                                <Input
+                                    id="delete-confirm"
+                                    value={deleteConfirmationText}
+                                    onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={handleDeleteSale}
+                                    disabled={deleteConfirmationText !== 'ELIMINAR'}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                >
+                                    Sí, eliminar venta
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )
+            }
 
             <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
                 <AlertDialogContent>

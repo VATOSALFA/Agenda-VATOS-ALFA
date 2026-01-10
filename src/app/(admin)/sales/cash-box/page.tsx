@@ -484,13 +484,21 @@ export default function CashBoxPage() {
 
     const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado').reduce((sum, sale) => {
         if (sale.metodo_pago === 'efectivo') {
-            return sum + sale.total;
+            const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+            return sum + amount;
         }
         return sum + (sale.detalle_pago_combinado?.efectivo || 0);
     }, 0), [salesWithClientData]);
 
     const ingresosManuales = useMemo(() => ingresos.reduce((sum, i) => sum + i.monto, 0), [ingresos]);
-    const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => sum + (sale.total || 0), 0) + ingresosManuales, [salesWithClientData, ingresosManuales]);
+    const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => {
+        const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+            ? sale.monto_pagado_real
+            : (sale.total || 0);
+        return sum + amount;
+    }, 0) + ingresosManuales, [salesWithClientData, ingresosManuales]);
     const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
     const efectivoEnCaja = ingresosEfectivo + ingresosManuales - totalEgresos;
 
@@ -659,8 +667,8 @@ export default function CashBoxPage() {
                                                         <TableCell>{sale.client?.nombre} {sale.client?.apellido}</TableCell>
                                                         <TableCell>{Array.from(new Set(sale.items?.map(i => professionalMap.get(i.barbero_id) || 'N/A').filter(Boolean))).join(', ')}</TableCell>
                                                         <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
-                                                        <TableCell className="text-right font-medium">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                        <TableCell className="text-right font-medium text-primary">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                        <TableCell className="text-right font-medium">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                        <TableCell className="text-right font-medium text-primary">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                         <TableCell className="text-right">
                                                             <div className="flex items-center justify-end gap-2">
                                                                 <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>

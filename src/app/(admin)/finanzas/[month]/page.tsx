@@ -19,14 +19,14 @@ import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 const monthNameToNumber: { [key: string]: number } = {
@@ -65,11 +65,11 @@ export default function FinanzasMensualesPage() {
     const { toast } = useToast();
     const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
     const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
-    
+
     const { startDate, endDate } = useMemo(() => {
         if (monthNumber === undefined) {
-             const now = new Date();
-             return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
+            const now = new Date();
+            return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
         }
         const date = new Date(currentYear, monthNumber, 1);
         return {
@@ -84,7 +84,7 @@ export default function FinanzasMensualesPage() {
             where('fecha_hora_venta', '<=', Timestamp.fromDate(endDate))
         ];
     }, [startDate, endDate]);
-    
+
     const egresosQueryConstraints = useMemo(() => {
         return [
             where('fecha', '>=', Timestamp.fromDate(startDate)),
@@ -102,7 +102,7 @@ export default function FinanzasMensualesPage() {
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-    
+
     const dailyIncome = useMemo(() => {
         if (!sales) return [];
         const groupedByDay = sales.reduce((acc, sale) => {
@@ -110,23 +110,29 @@ export default function FinanzasMensualesPage() {
             if (!acc[saleDate]) {
                 acc[saleDate] = { fecha: saleDate, efectivo: 0, deposito: 0, total: 0 };
             }
-            
+
+            const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+
             const metodoPago = sale.metodo_pago;
 
-            if (metodoPago === 'efectivo') {
-                acc[saleDate].efectivo += sale.total;
+            if (sale.pago_estado === 'deposit_paid' || metodoPago === 'mercadopago') {
+                acc[saleDate].deposito += realPaid;
+            } else if (metodoPago === 'efectivo') {
+                acc[saleDate].efectivo += realPaid;
             } else if (['tarjeta', 'transferencia'].includes(metodoPago)) {
-                acc[saleDate].deposito += sale.total;
+                acc[saleDate].deposito += realPaid;
             } else if (metodoPago === 'combinado' && sale.detalle_pago_combinado) {
                 acc[saleDate].efectivo += sale.detalle_pago_combinado.efectivo || 0;
-                acc[saleDate].deposito += sale.detalle_pago_combinado.tarjeta || 0;
+                acc[saleDate].deposito += (sale.detalle_pago_combinado.tarjeta || 0) + (sale.detalle_pago_combinado.pagos_en_linea || 0);
             }
-            
-            acc[saleDate].total += sale.total;
+
+            acc[saleDate].total += realPaid;
             return acc;
         }, {} as Record<string, { fecha: string; efectivo: number; deposito: number; total: number }>);
 
-        return Object.values(groupedByDay).sort((a,b) => a.fecha.localeCompare(b.fecha));
+        return Object.values(groupedByDay).sort((a, b) => a.fecha.localeCompare(b.fecha));
     }, [sales]);
 
     const calculatedEgresos = useMemo(() => {
@@ -138,13 +144,21 @@ export default function FinanzasMensualesPage() {
             const productMap = new Map(products.map(p => [p.id, p]));
 
             sales.forEach(sale => {
+                // Strict check: Commissions are ONLY for fully paid sales
+                if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
+                    return;
+                }
+                if (sale.monto_pagado_real !== undefined && (sale.total - sale.monto_pagado_real) > 1) {
+                    return;
+                }
+
                 const saleDate = sale.fecha_hora_venta.toDate();
-                
+
                 sale.items?.forEach(item => {
                     if (!item.barbero_id) return;
                     const professional = professionalMap.get(item.barbero_id);
                     if (!professional) return;
-                    
+
                     const itemSubtotal = item.subtotal || item.precio_unitario || 0;
                     const itemDiscount = item.descuento?.monto || 0;
                     const finalItemPrice = itemSubtotal - itemDiscount;
@@ -166,22 +180,22 @@ export default function FinanzasMensualesPage() {
                         const commissionAmount = commissionConfig.type === '%'
                             ? finalItemPrice * (commissionConfig.value / 100)
                             : commissionConfig.value;
-                        
+
                         const key = `${format(saleDate, 'yyyy-MM-dd')}-${professional.id}`;
                         if (!commissionsByDayAndProf[key]) {
                             commissionsByDayAndProf[key] = { professionalName: professional.name, serviceCommission: 0, productCommission: 0, date: saleDate };
                         }
-                        
+
                         if (item.tipo === 'servicio') {
-                           commissionsByDayAndProf[key].serviceCommission += commissionAmount;
+                            commissionsByDayAndProf[key].serviceCommission += commissionAmount;
                         } else if (item.tipo === 'producto') {
-                           commissionsByDayAndProf[key].productCommission += commissionAmount;
+                            commissionsByDayAndProf[key].productCommission += commissionAmount;
                         }
                     }
                 });
             });
         }
-        
+
         const commissionEgresos: Egreso[] = [];
         Object.values(commissionsByDayAndProf).forEach((data) => {
             if (data.serviceCommission > 0) {
@@ -207,9 +221,9 @@ export default function FinanzasMensualesPage() {
         });
 
 
-        const manualEgresos: Egreso[] = egresos.map(e => ({...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
-        
-        return [...commissionEgresos, ...manualEgresos].sort((a,b) => {
+        const manualEgresos: Egreso[] = egresos.map(e => ({ ...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
+
+        return [...commissionEgresos, ...manualEgresos].sort((a, b) => {
             const dateA = a.fecha instanceof Date ? a.fecha : new Date();
             const dateB = b.fecha instanceof Date ? b.fecha : new Date();
             return dateA.getTime() - dateB.getTime();
@@ -220,38 +234,44 @@ export default function FinanzasMensualesPage() {
 
     // Calculation logic
     const ingresoTotal = useMemo(() => dailyIncome.reduce((sum, d) => sum + d.total, 0), [dailyIncome]);
-    
+
     const productSummary = useMemo(() => {
         if (salesLoading || productsLoading || professionalsLoading) {
             return { ventaProductos: 0, reinversion: 0, comisionProfesionales: 0, utilidadVatosAlfa: 0 };
         }
-        
+
         const productMap = new Map(products.map(p => [p.id, p]));
         const professionalMap = new Map(professionals.map(p => [p.id, p]));
 
         let ventaProductos = 0;
         let reinversion = 0;
         let comisionProfesionales = 0;
-        
+
         sales.forEach(sale => {
+            const saleTotal = sale.total || 1;
+            const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+            const ratio = realPaid / saleTotal;
+
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
                     const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
                     const itemDiscount = item.descuento?.monto || 0;
-                    const finalItemPrice = itemSubtotal - itemDiscount;
+                    const finalItemPrice = (itemSubtotal - itemDiscount) * ratio;
 
                     ventaProductos += finalItemPrice;
-                    
+
                     const product = productMap.get(item.id);
                     if (product && product.purchase_cost) {
                         reinversion += product.purchase_cost * item.cantidad;
                     }
-                    
+
                     if (product && item.barbero_id) {
                         const professional = professionalMap.get(item.barbero_id);
                         if (professional) {
                             const commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                            if(commissionConfig) {
+                            if (commissionConfig) {
                                 comisionProfesionales += commissionConfig.type === '%'
                                     ? finalItemPrice * (commissionConfig.value / 100)
                                     : commissionConfig.value;
@@ -261,9 +281,9 @@ export default function FinanzasMensualesPage() {
                 }
             })
         });
-        
+
         const utilidadVatosAlfa = ventaProductos - reinversion - comisionProfesionales;
-        
+
         return { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa };
     }, [sales, products, professionals, salesLoading, productsLoading, professionalsLoading]);
 
@@ -271,7 +291,7 @@ export default function FinanzasMensualesPage() {
 
     const commissionsSummary = useMemo(() => {
         const summary: Record<string, { commission: number, tips: number }> = {};
-        
+
         professionals.forEach(prof => {
             summary[prof.name] = { commission: 0, tips: 0 };
         });
@@ -279,12 +299,12 @@ export default function FinanzasMensualesPage() {
         calculatedEgresos.forEach(egreso => {
             if (egreso.concepto.toLowerCase().includes('comisi')) {
                 const profName = egreso.aQuien; // aQuien is already the name
-                 if (summary[profName]) {
+                if (summary[profName]) {
                     summary[profName].commission += egreso.monto;
                 }
             }
         });
-        
+
         return Object.entries(summary).map(([name, data]) => ({
             name,
             ...data
@@ -293,7 +313,7 @@ export default function FinanzasMensualesPage() {
     }, [calculatedEgresos, professionals]);
 
     const totalComisiones = commissionsSummary.reduce((acc, curr) => acc + curr.commission + curr.tips, 0);
-    
+
     const nominaTotal = useMemo(() => {
         return calculatedEgresos
             .filter(e => e.concepto === 'Nómina')
@@ -317,8 +337,8 @@ export default function FinanzasMensualesPage() {
 
     const handleOpenEditEgreso = (egreso: Egreso) => {
         const editableEgreso = {
-          ...egreso,
-          fecha: egreso.fecha instanceof Timestamp ? egreso.fecha.toDate() : new Date(egreso.fecha)
+            ...egreso,
+            fecha: egreso.fecha instanceof Timestamp ? egreso.fecha.toDate() : new Date(egreso.fecha)
         }
         setEditingEgreso(editableEgreso);
         setIsEgresoModalOpen(true);
@@ -355,214 +375,214 @@ export default function FinanzasMensualesPage() {
 
     return (
         <>
-        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-            <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
+            <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+                <h2 className="text-3xl font-bold tracking-tight">Resumen de {capitalize(monthName as string)}</h2>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
-                <Card className="lg:col-span-4">
-                    <CardHeader>
-                        <CardTitle>Resumen</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 text-sm">
-                    {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
-                        <>
-                            <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
-                            <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
-                            <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
-                            <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatriz}>
-                                {isEditingCommission ? (
-                                    <div className="flex items-center gap-1">
-                                        <Input
-                                            type="number"
-                                            value={beatrizCommissionPercent}
-                                            onChange={(e) => setBeatrizCommissionPercent(Number(e.target.value))}
-                                            className="w-20 h-7 text-sm"
-                                            autoFocus
-                                        />
-                                        <Button size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(false)}><Save className="h-4 w-4" /></Button>
-                                    </div>
-                                ) : (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(true)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </ResumenGeneralItem>
-                            <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl"/>
-                        </>
-                    )}
-                    </CardContent>
-                </Card>
-                <Card className="lg:col-span-3">
-                    <CardHeader>
-                        <CardTitle>Productos</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Venta de productos</span>
-                            <span className="font-semibold">${ventaProductos.toLocaleString('es-MX')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Reinversión</span>
-                            <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-MX')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-base">
-                            <span className="text-muted-foreground">Comisión de profesionales</span>
-                            <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-MX')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
-                            <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
-                            <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-MX')}</span>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card className="lg:col-span-5">
-                    <CardHeader>
-                        <CardTitle>Egresos</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="comisiones" className="border-b-0">
-                                <div className="flex justify-between items-center text-base py-1.5 border-b">
-                                    <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
-                                        <span className="text-muted-foreground">Comisiones</span>
-                                    </AccordionTrigger>
-                                     <span className="font-semibold mr-4">${totalComisiones.toLocaleString('es-MX')}</span>
-                                </div>
-                                <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-md">
-                                    <div className="space-y-2">
-                                        <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
-                                            <span>Profesional</span>
-                                            <span className="text-right">Comisión</span>
-                                            <span className="text-right">Propinas Terminal</span>
-                                            <span className="text-right">Total</span>
-                                        </div>
-                                        {commissionsSummary.map(({name, commission, tips}) => (
-                                            <div key={name} className="grid grid-cols-4 text-xs">
-                                                <span>{name}</span>
-                                                <span className="text-right font-mono">${commission.toLocaleString('es-MX')}</span>
-                                                <span className="text-right font-mono">${tips.toLocaleString('es-MX')}</span>
-                                                <span className="text-right font-bold">${(commission + tips).toLocaleString('es-MX')}</span>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+                    <Card className="lg:col-span-4">
+                        <CardHeader>
+                            <CardTitle>Resumen</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1 text-sm">
+                            {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                                <>
+                                    <ResumenGeneralItem label="Ingreso Total" amount={ingresoTotal} />
+                                    <ResumenGeneralItem label="Egreso Total" amount={egresoTotal} />
+                                    <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
+                                    <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatriz}>
+                                        {isEditingCommission ? (
+                                            <div className="flex items-center gap-1">
+                                                <Input
+                                                    type="number"
+                                                    value={beatrizCommissionPercent}
+                                                    onChange={(e) => setBeatrizCommissionPercent(Number(e.target.value))}
+                                                    className="w-20 h-7 text-sm"
+                                                    autoFocus
+                                                />
+                                                <Button size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(false)}><Save className="h-4 w-4" /></Button>
                                             </div>
-                                        ))}
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
-                        <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
-                        <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
-                         <div className="flex justify-between items-center text-lg pt-2 mt-2">
-                            <span className="font-bold text-primary">Total</span>
-                            <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-MX')}</span>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-            
-             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                 <Card className="lg:col-span-5">
-                    <CardHeader>
-                        <CardTitle>Ingresos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={4} className="text-center h-24">
-                                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                                        </TableCell>
-                                    </TableRow>
-                                ) : dailyIncome.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={4} className="text-center h-24">
-                                            No hay ingresos registrados para {capitalize(monthName)}.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    dailyIncome.map((ingreso, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell>{ingreso.fecha}</TableCell>
-                                            <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell>${ingreso.deposito.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-                <Card className="lg:col-span-7">
-                    <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle>Egresos</CardTitle>
-                        <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
-                            <PlusCircle className="mr-2 h-4 w-4"/> Agregar Egreso
-                        </Button>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
-                            <TableBody>
-                            {isLoading ? (
-                                    <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                            ) : calculatedEgresos.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
-                            ) : (
-                                calculatedEgresos.map((egreso) => (
-                                    <TableRow key={egreso.id}>
-                                        <TableCell>{safeFormatDate(egreso.fecha)}</TableCell>
-                                        <TableCell>{egreso.concepto}</TableCell>
-                                        <TableCell>{egreso.aQuien}</TableCell>
-                                        <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-MX')}</TableCell>
-                                        <TableCell>{egreso.comentarios}</TableCell>
-                                        <TableCell className="text-right">
-                                            {!egreso.id.startsWith('comm-') && (
-                                                <div className="flex gap-1 justify-end">
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                        ) : (
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(true)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </ResumenGeneralItem>
+                                    <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNeta} isPrimary isBold className="text-xl" />
+                                </>
                             )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
+                        </CardContent>
+                    </Card>
+                    <Card className="lg:col-span-3">
+                        <CardHeader>
+                            <CardTitle>Productos</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <div className="flex justify-between items-center text-base">
+                                <span className="text-muted-foreground">Venta de productos</span>
+                                <span className="font-semibold">${ventaProductos.toLocaleString('es-MX')}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-base">
+                                <span className="text-muted-foreground">Reinversión</span>
+                                <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-MX')}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-base">
+                                <span className="text-muted-foreground">Comisión de profesionales</span>
+                                <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-MX')}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
+                                <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
+                                <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-MX')}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className="lg:col-span-5">
+                        <CardHeader>
+                            <CardTitle>Egresos</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="comisiones" className="border-b-0">
+                                    <div className="flex justify-between items-center text-base py-1.5 border-b">
+                                        <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
+                                            <span className="text-muted-foreground">Comisiones</span>
+                                        </AccordionTrigger>
+                                        <span className="font-semibold mr-4">${totalComisiones.toLocaleString('es-MX')}</span>
+                                    </div>
+                                    <AccordionContent className="pt-2 pb-2 pl-4 pr-2 bg-muted/50 rounded-md">
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-4 text-xs font-semibold text-muted-foreground">
+                                                <span>Profesional</span>
+                                                <span className="text-right">Comisión</span>
+                                                <span className="text-right">Propinas Terminal</span>
+                                                <span className="text-right">Total</span>
+                                            </div>
+                                            {commissionsSummary.map(({ name, commission, tips }) => (
+                                                <div key={name} className="grid grid-cols-4 text-xs">
+                                                    <span>{name}</span>
+                                                    <span className="text-right font-mono">${commission.toLocaleString('es-MX')}</span>
+                                                    <span className="text-right font-mono">${tips.toLocaleString('es-MX')}</span>
+                                                    <span className="text-right font-bold">${(commission + tips).toLocaleString('es-MX')}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                            <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
+                            <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
+                            <div className="flex justify-between items-center text-lg pt-2 mt-2">
+                                <span className="font-bold text-primary">Total</span>
+                                <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-MX')}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
 
-        <AddEgresoModal
-            isOpen={isEgresoModalOpen}
-            onOpenChange={setIsEgresoModalOpen}
-            onFormSubmit={() => {
-                setIsEgresoModalOpen(false);
-                setEditingEgreso(null);
-                setQueryKey(prev => prev + 1);
-            }}
-            egreso={editingEgreso}
-        />
-        
-        {egresoToDelete && (
-            <AlertDialog open={!!egresoToDelete} onOpenChange={() => setEgresoToDelete(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Se eliminará permanentemente el egreso de <strong>{egresoToDelete.concepto}</strong> por <strong>${egresoToDelete.monto.toLocaleString('es-MX')}</strong>.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteEgreso} className="bg-destructive hover:bg-destructive/90">
-                            Sí, eliminar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        )}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <Card className="lg:col-span-5">
+                        <CardHeader>
+                            <CardTitle>Ingresos</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center h-24">
+                                                <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : dailyIncome.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center h-24">
+                                                No hay ingresos registrados para {capitalize(monthName)}.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        dailyIncome.map((ingreso, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell>{ingreso.fecha}</TableCell>
+                                                <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
+                                                <TableCell>${ingreso.deposito.toLocaleString('es-MX')}</TableCell>
+                                                <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                    <Card className="lg:col-span-7">
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle>Egresos</CardTitle>
+                            <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Egreso
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    ) : calculatedEgresos.length === 0 ? (
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                    ) : (
+                                        calculatedEgresos.map((egreso) => (
+                                            <TableRow key={egreso.id}>
+                                                <TableCell>{safeFormatDate(egreso.fecha)}</TableCell>
+                                                <TableCell>{egreso.concepto}</TableCell>
+                                                <TableCell>{egreso.aQuien}</TableCell>
+                                                <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-MX')}</TableCell>
+                                                <TableCell>{egreso.comentarios}</TableCell>
+                                                <TableCell className="text-right">
+                                                    {!egreso.id.startsWith('comm-') && (
+                                                        <div className="flex gap-1 justify-end">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            <AddEgresoModal
+                isOpen={isEgresoModalOpen}
+                onOpenChange={setIsEgresoModalOpen}
+                onFormSubmit={() => {
+                    setIsEgresoModalOpen(false);
+                    setEditingEgreso(null);
+                    setQueryKey(prev => prev + 1);
+                }}
+                egreso={editingEgreso}
+            />
+
+            {egresoToDelete && (
+                <AlertDialog open={!!egresoToDelete} onOpenChange={() => setEgresoToDelete(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Se eliminará permanentemente el egreso de <strong>{egresoToDelete.concepto}</strong> por <strong>${egresoToDelete.monto.toLocaleString('es-MX')}</strong>.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteEgreso} className="bg-destructive hover:bg-destructive/90">
+                                Sí, eliminar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
         </>
     );
 }

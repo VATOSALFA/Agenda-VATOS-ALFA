@@ -201,7 +201,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                     <TableRow key={index}>
                                         <TableCell>{item.nombre}</TableCell>
                                         <TableCell>{sellerMap.get(item.barbero_id) || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">${(item.precio_unitario || 0).toLocaleString('es-MX')}</TableCell>
+                                        <TableCell className="text-right">${(item.precio_unitario || item.precio || 0).toLocaleString('es-MX')}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -216,10 +216,32 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                         <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-MX')}</TableCell>
                                     </TableRow>
                                 )}
-                                <TableRow className="font-bold text-lg">
-                                    <TableCell colSpan={2} className="text-right">Total</TableCell>
-                                    <TableCell className="text-right">${sale.total.toLocaleString('es-MX')}</TableCell>
+                                <TableRow className="font-bold text-lg border-t-2">
+                                    {/* Logic to detailed breakdown if it's a partial payment */}
+                                    {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)) ? (
+                                        <>
+                                            <TableCell colSpan={2} className="text-right pt-2">Valor Total del Servicio</TableCell>
+                                            <TableCell className="text-right pt-2">${sale.total.toLocaleString('es-MX')}</TableCell>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <TableCell colSpan={2} className="text-right">Total</TableCell>
+                                            <TableCell className="text-right">${sale.total.toLocaleString('es-MX')}</TableCell>
+                                        </>
+                                    )}
                                 </TableRow>
+                                {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)) && (
+                                    <>
+                                        <TableRow className="text-orange-600 font-medium">
+                                            <TableCell colSpan={2} className="text-right">Anticipo Pagado</TableCell>
+                                            <TableCell className="text-right">-${(sale.monto_pagado_real || 0).toLocaleString('es-MX')}</TableCell>
+                                        </TableRow>
+                                        <TableRow className="text-muted-foreground">
+                                            <TableCell colSpan={2} className="text-right">Saldo Pendiente</TableCell>
+                                            <TableCell className="text-right">${(sale.total - (sale.monto_pagado_real || 0)).toLocaleString('es-MX')}</TableCell>
+                                        </TableRow>
+                                    </>
+                                )}
                             </TableFooter>
                         </Table>
                     </div>

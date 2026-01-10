@@ -244,7 +244,13 @@ export default function InvoicedSalesPage() {
 
         const salesByType = populatedSales.reduce((acc, sale) => {
             const saleSubtotal = sale.subtotal || 1; // Avoid division by zero
-            const saleTotal = sale.total || 0;
+            let saleTotal = sale.total || 0;
+
+            // Use real paid amount if available (for deposits/partial)
+            if (sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < saleTotal)) {
+                saleTotal = sale.monto_pagado_real || 0;
+            }
+
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(item => {
                     const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';

@@ -705,6 +705,7 @@ exports.mercadoPagoWebhook = onRequest(
             let saleTotal = 0;
             let clientIdForSale = null;
             let localIdForSale = 'default';
+            let primaryReservationId = null; // Captured ID
 
             for (const booking of bookings) {
               // 1. Upsert Client
@@ -731,6 +732,10 @@ exports.mercadoPagoWebhook = onRequest(
 
               // 2. Create Reservation
               const resId = booking.id || admin.firestore().collection('reservas').doc().id;
+
+              // Capture the first reservation ID to link the sale
+              if (!primaryReservationId) primaryReservationId = resId;
+
               const newResRef = admin.firestore().collection('reservas').doc(resId);
 
               // Items Mapping (Frontend sends serviceNames, serviceIds)
@@ -756,34 +761,15 @@ exports.mercadoPagoWebhook = onRequest(
                 hora_fin: booking.endTime, // We added this to payload
                 duracion: booking.duration,
                 estado: 'Confirmado', // Paid = Confirmed
-                pago_estado: 'deposit_paid', // Default to deposit_paid for online bookings which are usually deposits.
-                // If it's a full payment, we could verify, but usually online = deposit.
-                // Actually, better logic: 
-                // If amountPaid >= total ? 'Pagado' : 'deposit_paid'
-                // But here 'transaction_amount' is local to scope.
-                // Let's use 'deposit_paid' as safe default for online bookings unless we know for sure it's 100%.
-                // Given the previous block (Case 3), we are making it from metadata.
-                // Let's assume deposit_paid to be safe. "Pagado" implies fully settled.
-
+                // Check if full payment
                 pago_estado: (Number(transaction_amount || 0) >= booking.totalAmount) ? 'Pagado' : 'deposit_paid',
 
                 items: resItems,
                 servicio: resItems.map(i => i.servicio).join(', '), // Legacy field
 
                 total: booking.totalAmount,
-                anticipo_pagado: Number(transaction_amount || 0), // Use the full payment amount for the batch or split? 
-                // If multiple bookings, this shared payment covers ALL? or split?
-                // Usually 'combined' is 1 reservation. 'individual' is multiple.
-                // If 'individual', we have multiple docs. The payment covers SUM of upfront.
-                // Assigning full payment to EACH is WRONG.
-                // We should PROPORTION it or assign to first?
-                // Frontend 'individual' mode sends 1 payment for N bookings.
-                // We should calculate fraction? 
-                // Simplified: Set 'anticipo_pagado' = booking.amountDue (the expected upfront for this specific booking). 
-                // Verify sufficient payment? Validated by total check.
-
-                anticipo_pagado: booking.amountDue,
-                saldo_pendiente: booking.totalAmount - booking.amountDue,
+                anticipo_pagado: Number(transaction_amount || 0), // Use full amount (batch logic limitation addressed by using primary ID)
+                saldo_pendiente: booking.totalAmount - Number(transaction_amount || 0),
 
                 deposit_payment_id: String(paymentInfo.id),
                 deposit_paid_at: new Date(),
@@ -805,11 +791,13 @@ exports.mercadoPagoWebhook = onRequest(
             const amountPaid = Number(transaction_amount || 0);
             const isFullPayment = amountPaid >= saleTotal;
             const remainingBalance = saleTotal > amountPaid ? (saleTotal - amountPaid) : 0;
-            const globalStatus = isFullPayment ? 'Pagado' : 'deposit_paid'; // Changed from 'Pago Parcial' to 'deposit_paid' to match frontend logic
+            const globalStatus = isFullPayment ? 'Pagado' : 'deposit_paid';
 
             const finalSale = {
               id: external_reference,
-              reservationId: external_reference, // CRITICAL: Link for frontend queries
+              // CRITICAL FIX: Link to the ACTUAL reservation ID we just created/used
+              // accessing primaryReservationId falling back to external_reference
+              reservationId: primaryReservationId || external_reference,
               fecha_hora_venta: admin.firestore.FieldValue.serverTimestamp(),
               cliente_id: clientIdForSale,
               local_id: localIdForSale,

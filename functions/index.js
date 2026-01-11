@@ -637,11 +637,12 @@ exports.mercadoPagoWebhook = onRequest(
         if (reservaDoc.exists) {
           // Update Reservation
           const reservaData = reservaDoc.data();
-          const total = reservaData.total || 0;
+          const total = Number(reservaData.total || 0);
           const pagadoAhora = Number(transaction_amount || 0);
+          const isFullPay = pagadoAhora >= (total - 0.01); // Tolerance
 
           t.update(reservaRef, {
-            pago_estado: 'Pagado', // Status of the *payment* (deposit)
+            pago_estado: isFullPay ? 'Pagado' : 'deposit_paid', // Dynamic Status
             estado: 'Confirmado',  // CONFIRM the appointment so it appears in agenda
 
             // Record Financials
@@ -652,6 +653,7 @@ exports.mercadoPagoWebhook = onRequest(
             metodo_pago_anticipo: 'mercadopago'
           });
           // CRITICAL: Create 'ventas' document for Reporting
+          // Use 'external_reference' as Sale ID if possible, or new ID linked to reservation
           const saleRef = admin.firestore().collection('ventas').doc(external_reference);
           const saleDoc = await t.get(saleRef);
 
@@ -666,16 +668,23 @@ exports.mercadoPagoWebhook = onRequest(
               total: total,
               descuento: { tipo: 'none', valor: 0 },
               metodo_pago: 'mercadopago',
-              pago_estado: 'Pagado',
+              pago_estado: isFullPay ? 'Pagado' : 'deposit_paid', // Dynamic Status
               mercado_pago_id: String(paymentInfo.id),
               monto_pagado_real: pagadoAhora,
               origen: 'web_publica',
               status: 'completed',
-              reservationId: external_reference
+              reservationId: external_reference, // Link directly
+              // If ID differs, we might need logic, but usually external_reference is safe for Case 2
+              saldo_pendiente: total > pagadoAhora ? (total - pagadoAhora) : 0,
+              detalle_pago_combinado: {
+                efectivo: 0,
+                tarjeta: pagadoAhora
+              }
             };
             t.set(saleRef, saleData);
-            console.log(`[vFinal] Created 'ventas' doc for Reservation ${external_reference}`);
+            console.log(`[vFinal] Created 'ventas' doc (Case 2) for Reservation ${external_reference}`);
           }
+
 
           console.log(`[vFinal] Custom: Direct Reservation ${external_reference} CONFIRMED.`);
           return;
@@ -749,8 +758,14 @@ exports.mercadoPagoWebhook = onRequest(
               }));
 
               saleItems.push(...resItems);
-              saleTotal += Number(booking.totalAmount || 0);
+              const bTotal = Number(booking.totalAmount || 0);
+              saleTotal += bTotal;
               localIdForSale = booking.locationId || 'default';
+
+              // Strict Comparison
+              const paidNow = Number(transaction_amount || 0);
+              const isPaid = paidNow >= (bTotal - 0.01);
+              console.log(`[vFinal] Booking Check: Paid ${paidNow} vs Total ${bTotal}. Result: ${isPaid ? 'Pagado' : 'deposit_paid'}`);
 
               const reservaToCreate = {
                 cliente_id: clientId,
@@ -761,15 +776,15 @@ exports.mercadoPagoWebhook = onRequest(
                 hora_fin: booking.endTime, // We added this to payload
                 duracion: booking.duration,
                 estado: 'Confirmado', // Paid = Confirmed
-                // Check if full payment
-                pago_estado: (Number(transaction_amount || 0) >= booking.totalAmount) ? 'Pagado' : 'deposit_paid',
+
+                pago_estado: isPaid ? 'Pagado' : 'deposit_paid',
 
                 items: resItems,
                 servicio: resItems.map(i => i.servicio).join(', '), // Legacy field
 
-                total: booking.totalAmount,
-                anticipo_pagado: Number(transaction_amount || 0), // Use full amount (batch logic limitation addressed by using primary ID)
-                saldo_pendiente: booking.totalAmount - Number(transaction_amount || 0),
+                total: bTotal,
+                anticipo_pagado: paidNow, // Use full amount (batch logic limitation addressed by using primary ID)
+                saldo_pendiente: bTotal > paidNow ? (bTotal - paidNow) : 0,
 
                 deposit_payment_id: String(paymentInfo.id),
                 deposit_paid_at: new Date(),
@@ -789,7 +804,7 @@ exports.mercadoPagoWebhook = onRequest(
 
             // Calculate Global Status
             const amountPaid = Number(transaction_amount || 0);
-            const isFullPayment = amountPaid >= saleTotal;
+            const isFullPayment = amountPaid >= (saleTotal - 0.01);
             const remainingBalance = saleTotal > amountPaid ? (saleTotal - amountPaid) : 0;
             const globalStatus = isFullPayment ? 'Pagado' : 'deposit_paid';
 

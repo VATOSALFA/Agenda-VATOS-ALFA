@@ -937,6 +937,31 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (!db) return;
         setIsSubmitting(true);
         try {
+            // Pre-transaction: Try to find existing sale by reservationId
+            // This is CRITICAL because the saleId might differ from reservationId
+            let preFoundSaleId: string | null = null;
+            let preFoundSaleData: any = null;
+
+            if (reservationId) {
+                const q = query(
+                    collection(db, 'ventas'),
+                    where('reservationId', '==', reservationId),
+                    where('pago_estado', 'in', ['deposit_paid', 'Pago Parcial', 'Pendiente', 'Pagado']) // Include Pagado just in case valid audit, but logic below filters
+                );
+
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    // Use the first valid one found
+                    const doc = snapshot.docs[0];
+                    const d = doc.data();
+                    // Strict check: Only grab it if it looks like an active partial sale
+                    if (d.pago_estado === 'deposit_paid' || d.pago_estado === 'Pago Parcial' || d.pago_estado === 'Pendiente' || (d.pago_estado === 'Pagado' && d.monto_pagado_real < d.total)) {
+                        preFoundSaleId = doc.id;
+                        preFoundSaleData = d;
+                    }
+                }
+            }
+
             await runTransaction(db, async (transaction) => {
 
                 // Consolidar cantidades por producto para el stock
@@ -994,37 +1019,31 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 let isUpdate = false;
                 let existingSaleData: any = {};
 
-                if (reservationId) {
-                    // 1. Try direct lookup (best case: ID matches)
+                if (preFoundSaleId) {
+                    // PRIORITIZE the sale found via Query
+                    saleDocRef = doc(db, 'ventas', preFoundSaleId);
+                    // We must read it inside transaction to be atomic
+                    const saleCheck = await transaction.get(saleDocRef);
+                    if (saleCheck.exists()) {
+                        const sData = saleCheck.data();
+                        isUpdate = true;
+                        existingSaleData = sData;
+                    }
+                } else if (reservationId) {
+                    // Fallback: Try direct lookup (best case: ID matches)
                     const possibleSaleRef = doc(db, 'ventas', reservationId);
                     const possibleSaleDoc = await transaction.get(possibleSaleRef);
 
                     if (possibleSaleDoc.exists()) {
                         const sData = possibleSaleDoc.data();
-                        if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial' || sData.pago_estado === 'Pagado') {
+                        if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial') {
                             saleDocRef = possibleSaleRef;
                             isUpdate = true;
                             existingSaleData = sData;
                         }
                     } else {
-                        // 2. Try query by field (fallback: ID differs)
-                        // Note: Queries inside transactions require the query to be performed before writes.
-                        // However, we are inside 'runTransaction'. We can't do a regular query easily inside without knowing the doc ID.
-                        // Strategy: We should have found the sale ID *before* starting the transaction if possible.
-                        // BUT, to avoid refactoring the whole flow, we will try to find it via a direct GET if we can guess the ID, or we assume
-                        // the system enforces ID consistency.
-                        // Since standard queries in transactions are checking specifically for documents, we might need a different approach.
-                        // Let's rely on the fact that for online payments, we set ID = reservationId in some flows, OR 
-                        // we set sale.reservationId = reservationId.
-
-                        // FIX: We cannot execute a broad query inside a transaction easily without reading indices.
-                        // Assuming the external_reference (reservation ID or payment ID) is consistent.
-                        // If the webhook used external_reference as the Sale ID (as seen in Cloud Function),
-                        // and Reservation ID is ALSO external_reference, then the direct lookup should have worked.
-                        // IF they differ, we have a problem.
-
-                        // Let's assume for a moment the Reservation ID might differ from Sale ID.
-                        // We will try to read the PRE-FETCHED sale if we passed it? No we didn't.
+                        // 2. Try query by field (fallback: ID differs) - We already did this via 'preFoundSaleId' outside transaction
+                        // but let's keep the reservation check just in case.
 
                         // We will try to fetch the reservation first to see if it has 'deposit_payment_id'
                         const resRef = doc(db, 'reservas', reservationId);
@@ -1044,7 +1063,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     }
                                 }
                             }
-                            // Also check if reservation ID itself is the key (already checked above)
                         }
                     }
                 }

@@ -729,15 +729,30 @@ exports.mercadoPagoWebhook = onRequest(
             let primaryReservationId = null; // Captured ID
 
             for (const booking of bookings) {
-              // 1. Upsert Client
+              // ... dentro de: for (const booking of bookings) {
+
+              // 1. Upsert Client (CORREGIDO PARA EVITAR DUPLICADOS)
               const clientData = booking.client;
-              const clientQuery = await admin.firestore().collection('clientes').where('correo', '==', clientData.email).limit(1).get();
+              const clientsRef = admin.firestore().collection('clientes');
               let clientId = null;
 
+              // Intento A: Buscar por Correo
+              let clientQuery = await clientsRef.where('correo', '==', clientData.email).limit(1).get();
+
+              if (clientQuery.empty) {
+                // Intento B: Buscar por Teléfono (Limpiamos el numero para dejar solo digitos)
+                const phoneClean = clientData.phone.replace(/\D/g, "").slice(-10);
+                // Buscamos coincidencia exacta de los ultimos 10 digitos
+                clientQuery = await clientsRef.where('telefono', '==', phoneClean).limit(1).get();
+              }
+
               if (!clientQuery.empty) {
+                // CLIENTE ENCONTRADO - USAMOS EL EXISTENTE
                 clientId = clientQuery.docs[0].id;
+                console.log(`[vFinal] Cliente existente encontrado por coincidencias: ${clientId}`);
               } else {
-                const newClientRef = admin.firestore().collection('clientes').doc();
+                // CLIENTE NO EXISTE - CREAMOS UNO NUEVO
+                const newClientRef = clientsRef.doc();
                 clientId = newClientRef.id;
                 t.set(newClientRef, {
                   nombre: clientData.name,
@@ -747,7 +762,10 @@ exports.mercadoPagoWebhook = onRequest(
                   creado_en: admin.firestore.FieldValue.serverTimestamp(),
                   origen: 'web_publica'
                 });
+                console.log(`[vFinal] Creando nuevo cliente: ${clientId}`);
               }
+
+
 
               if (!clientIdForSale) clientIdForSale = clientId;
 
@@ -832,21 +850,26 @@ exports.mercadoPagoWebhook = onRequest(
             const saleRef = admin.firestore().collection('ventas').doc(external_reference);
 
             // Calculate Global Status based on first booking's intent (usually identical for all in cart)
+            // Calculate Global Status based on first booking's intent
             const firstBooking = bookings[0];
             let globalStatus = 'deposit_paid';
+
+            // --- CORRECCIÓN: Definimos la variable AQUÍ AFUERA para que sea global ---
+            const amountPaid = Number(transaction_amount || 0);
+            // -----------------------------------------------------------------------
 
             if (firstBooking?.paymentType === 'deposit') {
               globalStatus = 'deposit_paid';
             } else if (firstBooking?.paymentType === 'full') {
               globalStatus = 'Pagado';
             } else {
-              const amountPaid = Number(transaction_amount || 0);
+              // Usamos la variable que definimos arriba
               const isFullPayment = (saleTotal > 0.01) && (amountPaid >= (saleTotal - 0.01));
               globalStatus = isFullPayment ? 'Pagado' : 'deposit_paid';
             }
 
-            const amountPaidRef = Number(transaction_amount || 0);
-            const remainingBalance = saleTotal > amountPaidRef ? (saleTotal - amountPaidRef) : 0;
+            // Calculamos el balance usando la misma variable
+            const remainingBalance = saleTotal > amountPaid ? (saleTotal - amountPaid) : 0;
 
             const finalSale = {
               id: external_reference,

@@ -470,6 +470,7 @@ export default function BookingPage() {
                     locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
                     amountDue: upfrontTotal,
                     totalAmount: totalPrice,
+                    paymentType: upfrontTotal < (totalPrice - 0.01) ? 'deposit' : 'full',
                     // recaptchaToken: token
                 });
             } else {
@@ -500,6 +501,7 @@ export default function BookingPage() {
                         locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
                         amountDue: itemUpfront,
                         totalAmount: Number(item.service.price || 0),
+                        paymentType: itemUpfront < (Number(item.service.price || 0) - 0.01) ? 'deposit' : 'full',
                         // recaptchaToken: token
                     });
                 }

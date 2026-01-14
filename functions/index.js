@@ -758,14 +758,20 @@ exports.mercadoPagoWebhook = onRequest(
               }));
 
               saleItems.push(...resItems);
-              const bTotal = Number(booking.totalAmount || 0);
+
+              const calculatedTotal = resItems.reduce((acc, curr) => acc + curr.precio, 0);
+              const bTotalParam = Number(booking.totalAmount || 0);
+              const bTotal = bTotalParam > 0 ? bTotalParam : calculatedTotal;
+
               saleTotal += bTotal;
               localIdForSale = booking.locationId || 'default';
 
               // Strict Comparison
               const paidNow = Number(transaction_amount || 0);
-              const isPaid = paidNow >= (bTotal - 0.01);
-              console.log(`[vFinal] Booking Check: Paid ${paidNow} vs Total ${bTotal}. Result: ${isPaid ? 'Pagado' : 'deposit_paid'}`);
+              const MIN_TOTAL_FOR_PAID = 0.01;
+              const isPaid = (bTotal > MIN_TOTAL_FOR_PAID) && (paidNow >= (bTotal - 0.01));
+
+              console.log(`[vFinal] Booking Check: Paid ${paidNow} vs Total ${bTotal} (Calc: ${calculatedTotal}). Result: ${isPaid ? 'Pagado' : 'deposit_paid'}`);
 
               const reservaToCreate = {
                 cliente_id: clientId,
@@ -804,7 +810,7 @@ exports.mercadoPagoWebhook = onRequest(
 
             // Calculate Global Status
             const amountPaid = Number(transaction_amount || 0);
-            const isFullPayment = amountPaid >= (saleTotal - 0.01);
+            const isFullPayment = (saleTotal > 0.01) && (amountPaid >= (saleTotal - 0.01));
             const remainingBalance = saleTotal > amountPaid ? (saleTotal - amountPaid) : 0;
             const globalStatus = isFullPayment ? 'Pagado' : 'deposit_paid';
 

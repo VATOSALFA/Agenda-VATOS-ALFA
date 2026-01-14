@@ -342,21 +342,27 @@ export function ReservationDetailModal({
               <Button
                 variant="destructive"
                 onClick={handleCancelClick}
-                disabled={reservation.pago_estado === 'Pagado'}
+                // Deshabilitar cancelación si ya hay un pago parcial o total para evitar inconsistencias financieras
+                disabled={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid'}
               >
                 <Trash2 className="mr-2 h-4 w-4" /> Cancelar Reserva
               </Button>
             )}
 
             {reservation.pago_estado !== 'Pagado' ? (
-              <Button onClick={onPay} className="bg-primary hover:bg-primary/90">
+              <Button onClick={onPay} className={cn(
+                "hover:bg-primary/90",
+                reservation.pago_estado === 'deposit_paid' ? "bg-orange-600 hover:bg-orange-700" : "bg-primary"
+              )}>
                 <CreditCard className="mr-2 h-4 w-4" />
-                {reservation.pago_estado === 'deposit_paid' ? 'Pagar Saldo Pendiente' : 'Pagar'}
+                {reservation.pago_estado === 'deposit_paid'
+                  ? `Cobrar Restante ($${(reservation.saldo_pendiente || 0).toFixed(2)})`
+                  : 'Cobrar Total'}
               </Button>
             ) : (
-              <Button onClick={handleViewPayment} disabled={isLoadingSale}>
+              <Button onClick={handleViewPayment} disabled={isLoadingSale} variant="outline">
                 {isLoadingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Eye className="mr-2 h-4 w-4" />}
-                Ver Pago
+                Ver Recibo
               </Button>
             )}
           </DialogFooter>

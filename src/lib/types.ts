@@ -64,6 +64,9 @@ export interface Reservation {
   fecha: string;
   estado: string;
   pago_estado?: string;
+  saldo_pendiente?: number;
+  total?: number;             // <--- Para arreglar el error de agenda-view.tsx
+
   customer?: Client; // Updated from string to Client object
   professionalNames?: string; // transient property
   type?: 'appointment' | 'block';

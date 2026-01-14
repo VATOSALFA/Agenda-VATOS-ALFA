@@ -627,9 +627,13 @@ exports.mercadoPagoWebhook = onRequest(
             mp_pos_id: paymentInfo.pos_id || null
           });
 
-          // NOW WRITE to Linked Reservation
+          // NOW WRITE to Linked Reservation (CÓDIGO CORREGIDO)
           if (reservaDoc && reservaDoc.exists) {
-            t.update(reservaRef, { pago_estado: 'Pagado' });
+            // Usamos la misma lógica que calculamos arriba para la venta
+            t.update(reservaRef, {
+              pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
+              saldo_pendiente: saldoPendiente // Actualizamos también el saldo
+            });
           }
           console.log(`[vFinal] Custom: Venta ${external_reference} updated.`);
           return;

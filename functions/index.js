@@ -696,24 +696,31 @@ exports.mercadoPagoWebhook = onRequest(
         }
 
         // CASE 3: Reservation NOT FOUND (Created via Metadata / Late Creation)
-        // This handles "Prevent reservation creation until payment"
         console.log(`[vFinal] Reservation ${external_reference} not found. Checking metadata for creation...`);
-        const metadata = body?.action === 'payment.created' ? body?.data?.metadata : paymentInfo.metadata;
-        // Note: MercadoPago metadata keys are lowercased automatically. 'booking_json' -> 'booking_json'
 
-        // Sometimes metadata is in paymentInfo (fetched from API)
-        const bookingJson = paymentInfo.metadata?.booking_json;
+        // Use the metadata object derived earlier (from BODY if available, else API)
+        // Re-extracting here to be safe and explicit
+        const bodyMetadata = body?.action === 'payment.created' ? body?.data?.metadata : null;
+        const effectiveMetadata = bodyMetadata || paymentInfo.metadata || {};
+
+        // Log keys to debug snakification or missing data
+        console.log(`[vFinal] Metadata Keys Available: ${Object.keys(effectiveMetadata).join(', ')}`);
+
+        // Robust Access: Try snake_case (standard) and camelCase fallback
+        const bookingJson = effectiveMetadata.booking_json || effectiveMetadata.booking_JSON || effectiveMetadata.bookingJson;
 
         if (bookingJson) {
           let bookings = [];
           try {
             bookings = JSON.parse(bookingJson);
           } catch (e) {
-            console.error("Error parsing booking_json:", e);
+            console.error("[vFinal] CRITICAL: Error parsing booking_json:", e);
+            console.error("[vFinal] Raw booking_json:", bookingJson);
           }
 
           if (Array.isArray(bookings) && bookings.length > 0) {
             console.log(`[vFinal] Found ${bookings.length} bookings to create from metadata.`);
+
 
             const saleItems = [];
             let saleTotal = 0;

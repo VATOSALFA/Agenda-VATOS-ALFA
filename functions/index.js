@@ -609,12 +609,17 @@ exports.mercadoPagoWebhook = onRequest(
           const montoPagado = Number(transaction_amount || 0);
           const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
 
+          // Calculate dynamic status for update
+          const isFullPay = montoPagado >= (montoOriginal * 0.99); // Tolerance
+          const saldoPendiente = montoOriginal > montoPagado ? (montoOriginal - montoPagado) : 0;
+
           // NOW WRITE to Sale
           t.update(ventaRef, {
-            pago_estado: 'Pagado',
+            pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
             mercado_pago_status: status,
             mercado_pago_id: String(paymentInfo.id),
             monto_pagado_real: montoPagado,
+            saldo_pendiente: saldoPendiente,
             propina: propina,
             fecha_pago: new Date(),
             // Add terminal info for tracking

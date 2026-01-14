@@ -182,19 +182,36 @@ export async function POST(req: NextRequest) {
                         );
 
                         // Create the Venta
+                        // Create the Venta
+                        const realTotal = allItems.reduce((sum: number, item: any) => sum + (item.precio || 0), 0);
+                        const saldoPendiente = realTotal - paidAmount;
+                        const pagoEstado = (paidAmount >= realTotal * 0.99) ? 'Pagado' : 'Pago Parcial';
+
                         t.set(saleRef, {
                             id: external_reference,
                             fecha_hora_venta: new Date(),
-                            total: paidAmount, // The amount paid online
-                            subtotal: paidAmount,
-                            metodo_pago: 'Pagos en linea', // Exact string requested
+                            total: realTotal,
+                            subtotal: realTotal,
+                            descuento: {
+                                valor: 0,
+                                tipo: 'fixed',
+                                monto: 0
+                            },
+                            metodo_pago: 'mercadopago', // Use standard enum
+                            monto_pagado_real: paidAmount,
+                            saldo_pendiente: saldoPendiente > 0 ? saldoPendiente : 0,
                             items: allItems,
                             cliente_id: bookingsArray[0]?.client?.id || 'unknown',
                             client: bookingsArray[0]?.client || {},
                             local_id: bookingsArray[0]?.locationId || 'default',
-                            estado: 'pagado',
-                            tipo: 'anticipo', // Mark as deposit/online payment
-                            origen: 'web'
+                            estado: 'completed', // Sale status
+                            pago_estado: pagoEstado,
+                            tipo: 'anticipo',
+                            origen: 'web_publica',
+                            anticipoPagado: paidAmount, // Explicit field for UI
+                            mercado_pago_id: String(paymentInfo.id),
+                            mercado_pago_status: 'approved',
+                            reservationId: external_reference
                         });
                     }
 
@@ -220,11 +237,15 @@ export async function POST(req: NextRequest) {
                 const montoPagado = Number(transaction_amount || 0);
                 const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
 
+                const isFullPay = montoPagado >= (montoOriginal * 0.99);
+                const saldoPendiente = montoOriginal > montoPagado ? (montoOriginal - montoPagado) : 0;
+
                 t.update(ventaRef, {
-                    pago_estado: 'Pagado',
+                    pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
                     mercado_pago_status: status,
                     mercado_pago_id: String(paymentInfo.id),
                     monto_pagado_real: montoPagado,
+                    saldo_pendiente: saldoPendiente,
                     propina: propina,
                     fecha_pago: new Date()
                 });

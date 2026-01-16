@@ -474,7 +474,7 @@ export default function LandingPage() {
             {/* Service Details Modal */}
             <Dialog open={!!selectedService} onOpenChange={(open) => !open && setSelectedService(null)}>
                 <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
-                    <div className="w-full sm:w-1/2 bg-slate-50 flex items-center justify-center p-0 relative">
+                    <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
                         <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {selectedService?.images && selectedService.images.length > 0 ? (
                                 <img src={selectedService.images[0]} alt={selectedService.name} className="h-full w-full object-cover" />

@@ -276,7 +276,7 @@ export default function LandingPage() {
 
             {/* Professional Profile Dialog */}
             <Dialog open={!!selectedPro} onOpenChange={(open) => !open && setSelectedPro(null)}>
-                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto max-h-[600px] flex flex-col sm:flex-row">
+                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
                     {/* Image Section - Large and Square-ish */}
                     <div className="w-full sm:w-1/2 bg-slate-100 flex items-center justify-center p-6 lg:p-10 relative">
                         <div className="relative w-full aspect-square max-w-[350px] shadow-xl rounded-lg overflow-hidden border-4 border-white transform transition-transform hover:scale-[1.02] duration-500">
@@ -291,7 +291,7 @@ export default function LandingPage() {
                     </div>
 
                     {/* Info Section */}
-                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-center text-center sm:text-left overflow-y-auto">
+                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-center text-center sm:text-left overflow-y-auto flex-1 sm:flex-none">
                         <DialogHeader>
                             <DialogTitle className="text-3xl lg:text-4xl font-extrabold mb-2 text-primary tracking-tight text-center sm:text-left">{selectedPro?.name}</DialogTitle>
                         </DialogHeader>

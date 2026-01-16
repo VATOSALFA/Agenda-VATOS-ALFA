@@ -18,7 +18,7 @@ export default function LandingPage() {
     const { data: products, loading: loadingProducts } = useFirestoreQuery<any>('productos');
     const { data: empresa, loading: loadingEmpresa } = useFirestoreQuery<any>('empresa');
     const { data: locales, loading: loadingLocales } = useFirestoreQuery<any>('locales');
-    const { data: settingsData } = useFirestoreQuery<any>('settings');
+    const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
 
     const router = useRouter();
     // Cart stored as array of Service IDs to allow multiples
@@ -40,7 +40,7 @@ export default function LandingPage() {
         }
     }, [locales, selectedBranch]);
 
-    if (loadingServices || loadingEmpresa || loadingLocales) {
+    if (loadingServices || loadingEmpresa || loadingLocales || loadingSettings) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <CustomLoader size={50} />
@@ -193,18 +193,18 @@ export default function LandingPage() {
             {/* Hero */}
             <section
                 className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden"
-                style={{ backgroundColor: websiteSettings?.customization?.primaryColor ? `${websiteSettings.customization.primaryColor}15` : 'hsl(var(--primary) / 0.1)' }}
+                style={{ backgroundColor: websiteSettings?.customization?.primaryColor || 'hsl(var(--primary))' }}
             >
-                <div className="absolute inset-0 z-0 bg-background/30 backdrop-blur-[1px] pointer-events-none"></div>
-                <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary to-foreground/70 animate-in slide-in-from-bottom-5 duration-700 z-10">
+                <div className="absolute inset-0 z-0 bg-background/0 pointer-events-none"></div>
+                <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
                     {companySlogan}
                 </h1>
-                <p className="relative text-lg md:text-xl text-muted-foreground max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
+                <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
                     Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional.
                 </p>
                 <div className="relative flex flex-col sm:flex-row gap-4 animate-in fade-in duration-1000 delay-300 z-10">
                     <Link href="#servicios">
-                        <Button size="lg" className="h-12 px-8 text-lg w-full sm:w-auto">
+                        <Button size="lg" variant="secondary" className="h-12 px-8 text-lg w-full sm:w-auto">
                             Ver Servicios <ArrowRight className="ml-2 h-5 w-5" />
                         </Button>
                     </Link>

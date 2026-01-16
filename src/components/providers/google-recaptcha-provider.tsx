@@ -2,12 +2,16 @@
 
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 
 export function RecaptchaProvider({ children }: { children: ReactNode }) {
     const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    const pathname = usePathname();
 
-    if (!siteKey) {
-        console.warn("Recaptcha Site Key missing");
+    const isReservationPage = pathname?.startsWith('/reservar');
+
+    if (!siteKey || !isReservationPage) {
+        if (!siteKey) console.warn("Recaptcha Site Key missing");
         return <>{children}</>;
     }
 

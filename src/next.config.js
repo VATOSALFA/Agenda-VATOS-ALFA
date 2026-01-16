@@ -28,18 +28,6 @@ const nextConfig = {
         hostname: 'placehold.co',
         port: '',
         pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'media.twiliocdn.com',
-        port: '',
-        pathname: '/**',
-      },
-       {
-        protocol: 'https',
-        hostname: 'api.twilio.com',
-        port: '',
-        pathname: '/**',
       }
     ],
   },

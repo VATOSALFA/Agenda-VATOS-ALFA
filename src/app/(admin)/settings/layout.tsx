@@ -16,7 +16,6 @@ const sidebarNavItems = [
   { title: "Sitio Web", href: "/settings/sitio-web" },
   { title: "Agenda", href: "/settings/agenda" },
   { title: "Recordatorios", href: "/settings/recordatorios" },
-  { title: "WhatsApp", href: "/settings/whatsapp" },
   { title: "Pagos", href: "/settings/pagos" },
   { title: "Terminal", href: "/settings/terminal" },
   { title: "Emails", href: "/settings/emails" },

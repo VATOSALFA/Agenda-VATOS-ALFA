@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useParams } from 'next/navigation';
@@ -33,8 +31,6 @@ const monthNameToNumber: { [key: string]: number } = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
 };
-
-
 
 const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean }) => (
     <div className="flex justify-between items-center text-base py-1.5 border-b last:border-b-0">
@@ -135,101 +131,24 @@ export default function FinanzasMensualesPage() {
         return Object.values(groupedByDay).sort((a, b) => a.fecha.localeCompare(b.fecha));
     }, [sales]);
 
+    // --- CORRECCIÓN APLICADA AQUÍ ---
+    // Eliminamos el cálculo predictivo. Solo mostramos lo que existe en la BD 'egresos'.
     const calculatedEgresos = useMemo(() => {
-        const commissionsByDayAndProf: Record<string, { professionalName: string; serviceCommission: number, productCommission: number, date: Date }> = {};
+        if (egresosLoading) return [];
 
-        if (!salesLoading && !professionalsLoading && !servicesLoading && !productsLoading) {
-            const professionalMap = new Map(professionals.map(p => [p.id, p]));
-            const serviceMap = new Map(services.map(s => [s.id, s]));
-            const productMap = new Map(products.map(p => [p.id, p]));
+        const manualEgresos: Egreso[] = egresos.map(e => ({
+            ...e,
+            fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha)
+        }));
 
-            sales.forEach(sale => {
-                // Strict check: Commissions are ONLY for fully paid sales
-                if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
-                    return;
-                }
-                if (sale.monto_pagado_real !== undefined && (sale.total - sale.monto_pagado_real) > 1) {
-                    return;
-                }
-
-                const saleDate = sale.fecha_hora_venta.toDate();
-
-                sale.items?.forEach(item => {
-                    if (!item.barbero_id) return;
-                    const professional = professionalMap.get(item.barbero_id);
-                    if (!professional) return;
-
-                    const itemSubtotal = item.subtotal || item.precio_unitario || 0;
-                    const itemDiscount = item.descuento?.monto || 0;
-                    const finalItemPrice = itemSubtotal - itemDiscount;
-
-                    let commissionConfig = null;
-                    if (item.tipo === 'servicio') {
-                        const service = services.find(s => s.name === item.nombre);
-                        if (service) {
-                            commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
-                        }
-                    } else if (item.tipo === 'producto') {
-                        const product = productMap.get(item.id);
-                        if (product) {
-                            commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                        }
-                    }
-
-                    if (commissionConfig) {
-                        const commissionAmount = commissionConfig.type === '%'
-                            ? finalItemPrice * (commissionConfig.value / 100)
-                            : commissionConfig.value;
-
-                        const key = `${format(saleDate, 'yyyy-MM-dd')}-${professional.id}`;
-                        if (!commissionsByDayAndProf[key]) {
-                            commissionsByDayAndProf[key] = { professionalName: professional.name, serviceCommission: 0, productCommission: 0, date: saleDate };
-                        }
-
-                        if (item.tipo === 'servicio') {
-                            commissionsByDayAndProf[key].serviceCommission += commissionAmount;
-                        } else if (item.tipo === 'producto') {
-                            commissionsByDayAndProf[key].productCommission += commissionAmount;
-                        }
-                    }
-                });
-            });
-        }
-
-        const commissionEgresos: Egreso[] = [];
-        Object.values(commissionsByDayAndProf).forEach((data) => {
-            if (data.serviceCommission > 0) {
-                commissionEgresos.push({
-                    id: `comm-serv-${data.professionalName}-${data.date.toISOString()}`,
-                    fecha: data.date,
-                    concepto: 'Comisión Servicios',
-                    aQuien: data.professionalName,
-                    monto: data.serviceCommission,
-                    comentarios: '',
-                });
-            }
-            if (data.productCommission > 0) {
-                commissionEgresos.push({
-                    id: `comm-prod-${data.professionalName}-${data.date.toISOString()}`,
-                    fecha: data.date,
-                    concepto: 'Comision Venta de productos',
-                    aQuien: data.professionalName,
-                    monto: data.productCommission,
-                    comentarios: '',
-                });
-            }
-        });
-
-
-        const manualEgresos: Egreso[] = egresos.map(e => ({ ...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha) }));
-
-        return [...commissionEgresos, ...manualEgresos].sort((a, b) => {
+        return manualEgresos.sort((a, b) => {
             const dateA = a.fecha instanceof Date ? a.fecha : new Date();
             const dateB = b.fecha instanceof Date ? b.fecha : new Date();
             return dateA.getTime() - dateB.getTime();
         });
 
-    }, [sales, professionals, services, products, egresos, salesLoading, professionalsLoading, servicesLoading, productsLoading]);
+    }, [egresos, egresosLoading]);
+    // ---------------------------------
 
 
     // Calculation logic
@@ -297,8 +216,9 @@ export default function FinanzasMensualesPage() {
         });
 
         calculatedEgresos.forEach(egreso => {
+            // Buscamos conceptos que indiquen comisión para agruparlos visualmente
             if (egreso.concepto.toLowerCase().includes('comisi')) {
-                const profName = egreso.aQuien; // aQuien is already the name
+                const profName = egreso.aQuien;
                 if (summary[profName]) {
                     summary[profName].commission += egreso.monto;
                 }

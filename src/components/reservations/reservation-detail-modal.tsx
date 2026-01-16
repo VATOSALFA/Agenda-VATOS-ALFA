@@ -26,9 +26,7 @@ import {
   Circle,
   Save,
   Trash2,
-  Send,
   Eye,
-  MessageCircle,
 } from 'lucide-react';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
@@ -42,7 +40,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
-import Link from 'next/link';
+
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 
@@ -76,7 +74,6 @@ export function ReservationDetailModal({
   const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
   const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
-  const [isSending, setIsSending] = useState(false);
 
   const { toast } = useToast();
   const { db } = useAuth();
@@ -194,58 +191,7 @@ export function ReservationDetailModal({
     }
   };
 
-  const handleSendReminder = async () => {
-    if (!reservation.customer?.telefono) {
-      toast({ variant: 'destructive', title: 'Sin teléfono', description: 'El cliente no tiene un número de teléfono registrado.' });
-      return;
-    }
 
-    setIsSending(true);
-
-    try {
-      const local = locales.find((l: Local) => l.id === reservation.local_id);
-      const professionalId = reservation.items?.[0]?.barbero_id;
-      const professional = professionalId ? professionals.find((p: Profesional) => p.id === professionalId) : null;
-
-      if (!local || !professional) {
-        throw new Error("No se pudo encontrar el local o el profesional asociado.");
-      }
-
-      const fullDateStr = `${format(parse(reservation.fecha, 'yyyy-MM-dd', new Date()), "dd 'de' MMMM", { locale: es })} a las ${reservation.hora_inicio}`;
-
-      const response = await fetch('/api/send-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: reservation.customer.telefono,
-          contentSid: 'HX259d67c1e5304a9db9b08a09d7db9e1c',
-          contentVariables: {
-            '1': reservation.customer.nombre,
-            '2': local.name,
-            '3': fullDateStr,
-            '4': reservation.servicio,
-            '5': professional.name,
-          },
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast({ title: 'Recordatorio enviado', description: 'El mensaje de recordatorio ha sido enviado al cliente.' });
-      } else {
-        throw new Error(result.error || 'Error desconocido al enviar el mensaje.');
-      }
-
-    } catch (error: any) {
-      console.error("Error sending reminder:", error);
-      toast({ variant: 'destructive', title: 'Error de envío', description: error.message });
-    } finally {
-      setIsSending(false);
-    }
-  }
-
-  const clientNameParam = encodeURIComponent(`${reservation.customer?.nombre} ${reservation.customer?.apellido}`);
 
   return (
     <>
@@ -254,10 +200,6 @@ export function ReservationDetailModal({
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
             <DialogTitle>Detalle de la Reserva</DialogTitle>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleSendReminder} disabled={isSending}>
-                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Enviar Recordatorio
-              </Button>
               <Button variant="outline" size="sm" onClick={onEdit} disabled={reservation.pago_estado === 'Pagado'}>
                 <Pencil className="mr-2 h-4 w-4" /> Editar
               </Button>
@@ -305,13 +247,7 @@ export function ReservationDetailModal({
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <span>{reservation.customer?.telefono || 'No registrado'}</span>
                 </div>
-                {reservation.customer?.telefono && (
-                  <Link href={`/conversations?phone=${reservation.customer.telefono}&name=${clientNameParam}`} passHref>
-                    <Button variant="outline" size="sm">
-                      <MessageCircle className="w-4 h-4 mr-2" /> Ver Conversación
-                    </Button>
-                  </Link>
-                )}
+
               </div>
             </div>
 

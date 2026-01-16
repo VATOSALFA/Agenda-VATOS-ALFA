@@ -477,7 +477,7 @@ export default function LandingPage() {
                     <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
                         <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {selectedService?.images && selectedService.images.length > 0 ? (
-                                <img src={selectedService.images[0]} alt={selectedService.name} className="h-full w-full object-cover" />
+                                <img src={selectedService.images[0]} alt={selectedService.name} className="h-full w-full object-contain p-2" />
                             ) : (
                                 <div className="h-full w-full flex items-center justify-center bg-slate-200">
                                     <Scissors className="h-24 w-24 text-muted-foreground/30" />

@@ -10,7 +10,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ParticlesBackground } from '@/components/ui/particles-background';
 import { cn } from '@/lib/utils'; // Make sure this is imported
 
 export default function LandingPage() {
@@ -192,9 +191,11 @@ export default function LandingPage() {
             </header>
 
             {/* Hero */}
-            <section className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-card">
-                <ParticlesBackground />
-                <div className="absolute inset-0 z-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-background to-background pointer-events-none"></div>
+            <section
+                className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden"
+                style={{ backgroundColor: websiteSettings?.customization?.primaryColor ? `${websiteSettings.customization.primaryColor}15` : 'hsl(var(--primary) / 0.1)' }}
+            >
+                <div className="absolute inset-0 z-0 bg-background/30 backdrop-blur-[1px] pointer-events-none"></div>
                 <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary to-foreground/70 animate-in slide-in-from-bottom-5 duration-700 z-10">
                     {companySlogan}
                 </h1>

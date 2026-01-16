@@ -6,12 +6,6 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-} from 'firebase/firestore';
-import {
   Calendar,
   Tag,
   Users,
@@ -33,7 +27,6 @@ import {
   Share2,
   Landmark,
   LogOut,
-  MessagesSquare,
   Scissors,
   Percent,
   Store,
@@ -109,31 +102,11 @@ export default function Header() {
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
 
-  const [unreadCount, setUnreadCount] = useState(0);
-
   const isAuthPage = pathname === '/login';
   const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos';
 
-  useEffect(() => {
-    if (!db || !user) return;
-    const q = query(
-      collection(db, 'conversations'),
-      where('unreadCount', '>', 0)
-    );
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      let totalUnread = 0;
-      querySnapshot.forEach(doc => {
-        totalUnread += doc.data().unreadCount;
-      });
-      setUnreadCount(totalUnread);
-    });
-
-    return () => unsubscribe();
-  }, [db, user]);
-
-
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
+
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(websiteUrl);
@@ -411,18 +384,7 @@ export default function Header() {
               </PopoverContent>
             </Popover>
 
-            {canSee('ver_conversaciones') && (
-              <Link href="/conversations" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground relative">
-                  <MessagesSquare className="h-5 w-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
-                      {unreadCount}
-                    </span>
-                  )}
-                </Button>
-              </Link>
-            )}
+
 
             {user?.role === 'Administrador general' && (
               <Link href="/settings/empresa" passHref>

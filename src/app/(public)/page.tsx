@@ -629,7 +629,7 @@ export default function LandingPage() {
                                     </CardContent>
                                     <CardFooter>
                                         <Button variant="outline" className="w-full" asChild>
-                                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(local.address)}`} target="_blank" rel="noopener noreferrer">
+                                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
                                                 Ver en Mapa
                                             </a>
                                         </Button>

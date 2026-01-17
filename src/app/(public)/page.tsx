@@ -394,75 +394,54 @@ export default function LandingPage() {
                             <p className="text-muted-foreground">Lleva la experiencia de la barbería a tu casa.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
                             {products.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined)).map((product: any) => {
                                 const pCount = getProductCount(product.id);
                                 const isPSelected = pCount > 0;
 
                                 return (
-                                    <Card key={product.id} className={cn("overflow-hidden hover:shadow-lg transition-all border-none bg-slate-50/50 relative group", isPSelected && "ring-2 ring-primary bg-primary/5")}>
-                                        <div className="aspect-square relative overflow-hidden bg-white mb-4 rounded-xl m-4 border shadow-sm group-hover:shadow-md transition-all">
+                                    <Card
+                                        key={product.id}
+                                        className={cn(
+                                            "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-white overflow-hidden p-2",
+                                            isPSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-50"
+                                        )}
+                                        onClick={() => setSelectedProduct(product)}
+                                    >
+                                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
                                             {product.images && product.images.length > 0 ? (
                                                 <img
                                                     src={product.images[0]}
                                                     alt={product.nombre}
-                                                    className="h-full w-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
+                                                    className="h-full w-full object-contain p-2 group-hover:scale-105 transition-transform duration-500"
                                                 />
                                             ) : (
-                                                <div className="h-full w-full flex items-center justify-center bg-slate-100 text-slate-300">
-                                                    <ShoppingBag className="h-16 w-16" />
+                                                <div className="h-full w-full flex items-center justify-center text-slate-300">
+                                                    <ShoppingBag className="h-8 w-8" />
                                                 </div>
                                             )}
 
-                                            {/* Hover Actions: Eye */}
-                                            <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="icon"
-                                                    className="h-10 w-10 rounded-full bg-white text-primary hover:bg-white hover:scale-110 transition-transform shadow-lg"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        setSelectedProduct(product);
-                                                    }}
-                                                >
-                                                    <Eye className="h-5 w-5" />
-                                                </Button>
+                                            {/* Quantity Badge if selected */}
+                                            {isPSelected && (
+                                                <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                    <div className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center shadow-sm text-xs font-bold">
+                                                        {pCount}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
+                                            <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
+                                                {product.nombre}
+                                            </h3>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="font-bold text-lg text-slate-900">{formatPrice(product.public_price)}</span>
                                             </div>
                                         </div>
 
-                                        <div className="px-6 pb-6 text-center">
-                                            <h3 className="font-bold text-lg mb-1 truncate" title={product.nombre}>{product.nombre}</h3>
-                                            <p className="text-primary font-bold text-xl mb-3">{formatPrice(product.public_price)}</p>
-
-                                            {isPSelected ? (
-                                                <div className="flex items-center justify-center gap-3 bg-white rounded-full border shadow-sm p-1 max-w-[140px] mx-auto">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-full"
-                                                        onClick={() => removeFromProductCart(product.id)}
-                                                    >
-                                                        <Minus className="h-4 w-4" />
-                                                    </Button>
-                                                    <span className="font-bold">{pCount}</span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-primary hover:bg-primary/10 rounded-full"
-                                                        onClick={() => addToProductCart(product.id)}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <Button
-                                                    className="w-full rounded-full"
-                                                    variant="outline"
-                                                    onClick={() => addToProductCart(product.id)}
-                                                >
-                                                    Agregar
-                                                </Button>
-                                            )}
+                                        <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                                            <ChevronRight className="h-6 w-6" />
                                         </div>
                                     </Card>
                                 )

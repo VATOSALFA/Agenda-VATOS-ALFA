@@ -293,6 +293,51 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                           render={({ field }) => (
                             <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-4">
                               <div className="flex items-start space-x-3 rounded-md border p-4">
+                                <RadioGroupItem value="deposit" id="deposit" />
+                                <div className="grid gap-1.5 leading-none w-full">
+                                  <Label htmlFor="deposit">Abono en línea</Label>
+                                  <p className="text-sm text-muted-foreground">Tus clientes deberán pagar una parte del producto al agendar. Podrás cobrar el monto restante en el local.</p>
+
+                                  {form.watch('payment_type') === 'deposit' && (
+                                    <div className="mt-4 flex gap-2 w-full max-w-sm animate-in fade-in slide-in-from-top-2">
+                                      <div className="flex-1">
+                                        <Label className="text-xs mb-1.5 block">Monto del anticipo</Label>
+                                        <FormField
+                                          name="payment_amount_value"
+                                          control={form.control}
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input type="number" placeholder="Ej: 50" {...field} />
+                                            </FormControl>
+                                          )}
+                                        />
+                                      </div>
+                                      <div className="w-[100px]">
+                                        <Label className="text-xs mb-1.5 block opacity-0">Tipo</Label>
+                                        <FormField
+                                          name="payment_amount_type"
+                                          control={form.control}
+                                          render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                              <FormControl>
+                                                <SelectTrigger>
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                              </FormControl>
+                                              <SelectContent>
+                                                <SelectItem value="%">%</SelectItem>
+                                                <SelectItem value="$">$</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          )}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-start space-x-3 rounded-md border p-4">
                                 <RadioGroupItem value="full-payment" id="full-payment" />
                                 <div className="grid gap-1.5 leading-none">
                                   <Label htmlFor="full-payment">Se debe pagar en línea</Label>

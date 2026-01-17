@@ -296,7 +296,7 @@ exports.mercadoPagoWebhook = onRequest(
   {
     cors: true,
     invoker: 'public',
-    secrets: [mpWebhookSecret, mpWebWebhookSecret, mpAccessToken],
+    secrets: [mpWebhookSecret, mpWebWebhookSecret, mpAccessToken, resendApiKey],
   },
   async (request, response) => {
     console.log("========== [vFinal] MERCADO PAGO WEBHOOK RECEIVED ==========");
@@ -422,7 +422,7 @@ exports.mercadoPagoWebhook = onRequest(
       console.log(`[vFinal] API Check: Status=${status}, Ref=${external_reference}`);
 
       // Logic updated to support both Sales (Ventas) and direct Reservations
-      await admin.firestore().runTransaction(async (t) => {
+      const transactionResult = await admin.firestore().runTransaction(async (t) => {
         const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
         const ventaDoc = await t.get(ventaRef);
 
@@ -530,7 +530,7 @@ exports.mercadoPagoWebhook = onRequest(
 
 
           console.log(`[vFinal] Custom: Direct Reservation ${external_reference} CONFIRMED.`);
-          return;
+          return { sendEmail: true, reservationId: external_reference, clientId: reservaData.cliente_id, localId: reservaData.local_id };
         }
 
         // CASE 3: Reservation NOT FOUND (Created via Metadata / Late Creation)
@@ -784,13 +784,17 @@ exports.mercadoPagoWebhook = onRequest(
 
             t.set(saleRef, finalSale);
             console.log(`[vFinal] Created Aggregate Sale (Venta) ${external_reference} for financials.`);
-            return;
+            return { sendEmail: true, reservationId: primaryReservationId || external_reference, clientId: clientIdForSale, localId: localIdForSale };
           }
         }
 
         console.warn(`[vFinal] No Venta or Reserva found for ref ${external_reference} and no valid metadata to create.`);
       });
       console.log(`[vFinal] SUCCESS: Venta ${external_reference} processed.`);
+
+      if (transactionResult && transactionResult.sendEmail) {
+        await sendReservationConfirmationEmail(transactionResult.reservationId, transactionResult.clientId, transactionResult.localId);
+      }
 
     } catch (error) {
       console.error('[vFinal] Error processing webhook:', error);
@@ -1042,3 +1046,145 @@ exports.backfillClientNumbers = onRequest(
     }
   }
 );
+
+/**
+ * Helper: Send Reservation Confirmation Email
+ * Triggered after successful booking payment/creation
+ * @param {string} reservationId
+ * @param {string} clientId
+ * @param {string} localId
+ */
+async function sendReservationConfirmationEmail(reservationId, clientId, localId) {
+  try {
+    console.log(`[Email] Starting email send for Res: ${reservationId}, Client: ${clientId}`);
+    const db = admin.firestore();
+
+    // 1. Fetch Data in Parallel
+    const [configEmailSnap, configEmpresaSnap, localSnap, clientSnap, resSnap] = await Promise.all([
+      db.collection('configuracion').doc('emails').get(),
+      db.collection('configuracion').doc('empresa').get(),
+      db.collection('locales').doc(localId).get(),
+      db.collection('clientes').doc(clientId).get(),
+      db.collection('reservas').doc(reservationId).get()
+    ]);
+
+    // 2. Extract Data
+    // const emailConfig = configEmailSnap.exists ? configEmailSnap.data() : {}; // Reserved for future specific settings
+    const empresaConfig = configEmpresaSnap.exists ? configEmpresaSnap.data() : {};
+    const localData = localSnap.exists ? localSnap.data() : {};
+    const clientData = clientSnap.exists ? clientSnap.data() : {};
+    const resData = resSnap.exists ? resSnap.data() : {};
+
+    // Remitente (Sender)
+    const senderEmail = 'contacto@vatosalfa.com';
+    const senderName = empresaConfig.nombre || 'VATOS ALFA Barber Shop';
+
+    // Recipient
+    const recipientEmail = clientData.email || clientData.correo;
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      console.log(`[Email] Client ${clientId} has no valid email (${recipientEmail}). Skipping.`);
+      return;
+    }
+
+    // Logo
+    const logoUrl = empresaConfig.logo_url || empresaConfig.logo || 'https://vatosalfa.com/logo.png';
+
+    // Phones
+    const localPhone = localData.telefono || 'el número de contacto';
+
+    // Formatting
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    let dateObj = new Date();
+    if (resData.fecha) {
+      if (resData.fecha.toDate) dateObj = resData.fecha.toDate();
+      else if (typeof resData.fecha === 'string') dateObj = new Date(resData.fecha.replace(/-/g, '/')); // Simple ISO fix or parseISO
+      // Correct approach for 'yyyy-mm-dd' string:
+      else if (typeof resData.fecha === 'string' && resData.fecha.length === 10) {
+        const [y, m, d] = resData.fecha.split('-').map(Number);
+        dateObj = new Date(y, m - 1, d);
+      }
+    }
+    const dateStr = dateObj.toLocaleDateString('es-MX', options);
+    const timeStr = resData.hora_inicio || '00:00';
+
+    // Items List
+    const itemsListHtml = (resData.items || []).map(i =>
+      `<li style="margin-bottom: 5px;">${i.nombre || i.servicio || 'Servicio'} - $${i.precio}</li>`
+    ).join('');
+
+    // API Key
+    // Check if secret is available, else use fallback provided by user
+    let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+    try {
+      if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value();
+    } catch (e) { /* ignore */ }
+
+    const resend = new Resend(apiKey);
+
+    // HTML Content
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+        <div style="text-align: center; padding: 20px 0;">
+          <img src="${logoUrl}" alt="${senderName}" style="max-height: 80px; object-fit: contain;" />
+        </div>
+        
+        <h2 style="color: #1a1a1a; text-align: center; margin-bottom: 20px;">¡Tu reserva está confirmada!</h2>
+        
+        <p>Hola <strong>${clientData.nombre || 'Cliente'}</strong>,</p>
+        <p>Tu cita ha sido agendada exitosamente. Aquí están los detalles:</p>
+        
+        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #eee;">
+          <p style="margin: 5px 0;"><strong>Fecha:</strong> ${dateStr}</p>
+          <p style="margin: 5px 0;"><strong>Hora:</strong> ${timeStr}</p>
+          <p style="margin: 5px 0;"><strong>Lugar:</strong> ${localData.nombre || 'Nuestra Barbería'}</p>
+          ${localData.direccion ? `<p style="margin: 5px 0; font-size: 0.9em; color: #666;">${localData.direccion}</p>` : ''}
+          
+          <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+            <p style="margin-bottom: 5px;"><strong>Servicios:</strong></p>
+            <ul style="padding-left: 20px; margin-top: 0;">${itemsListHtml}</ul>
+          </div>
+          
+          <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+             <p style="margin: 5px 0;"><strong>Total:</strong> $${resData.total || resData.precio || 0}</p>
+             <p style="margin: 5px 0;"><strong>Anticipo Pagado:</strong> $${resData.anticipo_pagado || 0}</p>
+             ${resData.saldo_pendiente > 0 ? `<p style="margin: 5px 0; color: #d9534f;"><strong>Saldo Pendiente (Pagar en local):</strong> $${resData.saldo_pendiente}</p>` : '<p style="margin: 5px 0; color: #5cb85c;"><strong>¡Totalmente Pagado!</strong></p>'}
+          </div>
+        </div>
+
+        <div style="background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; font-size: 0.95em; margin-bottom: 20px; border: 1px solid #ffeeba;">
+          <strong>Nota importante:</strong> Favor de llegar 5 minutos antes de la hora de tu cita.
+        </div>
+
+        <p style="font-size: 0.9em; color: #555; text-align: justify;">
+          Esta es una dirección de correo de solo envío, por favor no respondas a este mensaje. 
+          Si necesitas <strong>cancelar o cambiar la hora</strong>, por favor manda un mensaje de WhatsApp al teléfono: 
+          <strong>${localPhone}</strong>.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        
+        <div style="text-align: center; font-size: 0.8em; color: #999;">
+          <p style="margin: 5px 0;">${senderName}</p>
+          <p style="margin: 5px 0;">${localData.direccion || ''}</p>
+        </div>
+      </div>
+    `;
+
+    // Send
+    const { data: emailData, error } = await resend.emails.send({
+      from: `${senderName} <${senderEmail}>`,
+      to: [recipientEmail],
+      subject: `Confirmación de Reserva - ${senderName}`,
+      html: htmlContent,
+    });
+
+    if (error) {
+      console.error("[Email] Resend API Error:", error);
+    } else {
+      console.log(`[Email] Sent successfully. ID: ${emailData?.id}`);
+    }
+
+  } catch (err) {
+    console.error("[Email] Execution Error:", err);
+  }
+}

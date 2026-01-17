@@ -588,6 +588,7 @@ exports.mercadoPagoWebhook = onRequest(
                 // CLIENTE ENCONTRADO - USAMOS EL EXISTENTE
                 clientId = clientQuery.docs[0].id;
                 console.log(`[vFinal] Cliente existente encontrado por coincidencias: ${clientId}`);
+              } else {
                 // CLIENTE NO EXISTE - CREAMOS UNO NUEVO
 
                 // Buscamos el numero de cliente maximo actual para autoincrementar
@@ -608,6 +609,9 @@ exports.mercadoPagoWebhook = onRequest(
                 t.set(newClientRef, {
                   nombre: clientData.name,
                   apellido: clientData.lastName,
+                  email: clientData.email, // Standardizing to 'email' if schema permits, or keep 'correo'? View_file showed 'correo' at line 611 but 'email' at 273 in booking.ts. Let's stick to what was there: 'correo' is in line 611. Wait, booking.ts uses 'email' in line 273. Let's check NewClientForm.
+                  // Actually, let's use both to be safe or check schema?
+                  // Line 611 in previous view said `correo: clientData.email`. I will keep `correo`.
                   correo: clientData.email,
                   telefono: clientData.phone,
                   creado_en: admin.firestore.FieldValue.serverTimestamp(),

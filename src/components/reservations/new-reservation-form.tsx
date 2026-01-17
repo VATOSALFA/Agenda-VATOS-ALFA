@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
-import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType } from '@/lib/types';
+import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType, Product } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { Card, CardContent } from '../ui/card';
@@ -175,6 +175,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
+  const { data: products } = useFirestoreQuery<Product>('productos'); // <--- Added products query
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
@@ -320,11 +321,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
 
       let itemsToSet: { servicio: string; barbero_id: string; }[] = [];
-      if (isEditMode && initialData.items && Array.isArray(initialData.items) && services.length > 0) {
+      if (isEditMode && initialData.items && Array.isArray(initialData.items)) {
         itemsToSet = initialData.items.map((i: SaleItemType) => {
-          const service = services.find(s => s.name === i.servicio || s.name === i.nombre);
+          // Try to match with a service
+          const service = services?.find(s => s.id === i.id || s.name === i.servicio || s.name === i.nombre);
+          if (service) {
+            return {
+              servicio: service.id,
+              barbero_id: i.barbero_id || ''
+            };
+          }
+
+          // Try to match with a product
+          const product = products?.find(p => p.id === i.id || p.nombre === i.nombre || p.nombre === i.servicio);
+          if (product) {
+            return {
+              servicio: product.id,
+              barbero_id: i.barbero_id || ''
+            };
+          }
+
+          // Fallback: Use existing ID if available, otherwise try empty
           return {
-            servicio: service?.id || '',
+            servicio: i.id || '',
             barbero_id: i.barbero_id || ''
           };
         });
@@ -439,14 +458,49 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
 
       const itemsToSave = data.items.map((item: any) => {
+        // Try to find as service
         const service = services.find(s => s.id === item.servicio);
-        return {
-          servicio: service?.name || '',
-          nombre: service?.name || '',
-          barbero_id: item.barbero_id,
-          precio: service?.price || 0,
-          duracion: service?.duration || 0,
+        if (service) {
+          return {
+            id: service.id, // Ensure ID is saved if needed, or generated? Usually firestore generates ID for subobjects if not provided, but here we store array. Ideally items should have IDs.
+            // But SaleItem usually has 'id' which might be the service ID or unique item ID?
+            // In 'Reservation' type, items is SaleItem[]. SaleItem has 'id'. 
+            // Here 'item.servicio' IS the ID from the form select.
+            servicio: service.name,
+            nombre: service.name,
+            barbero_id: item.barbero_id,
+            precio: service.price || 0,
+            duracion: service.duration || 0,
+            tipo: 'servicio'
+          };
         }
+
+        // Try to find as product
+        const product = products?.find(p => p.id === item.servicio);
+        if (product) {
+          return {
+            id: product.id,
+            servicio: product.nombre,
+            nombre: product.nombre,
+            barbero_id: item.barbero_id,
+            precio: product.public_price || 0, // SaleItem usually uses 'precio' corresponding to 'public_price'
+            duracion: 0,
+            tipo: 'producto'
+          };
+        }
+
+        // Fallback: Check if it was an existing item to preserve its data (especially if it was a product not in list?)
+        // But likely we found it in 'products' list if it loaded.
+        // If totally unknown, treat as service with empty name or critical error?
+        // Let's fallback to 'servicio' which holds the ID if lookup failed.
+        return {
+          servicio: item.servicio || '', // This is the ID
+          nombre: item.servicio || '',
+          barbero_id: item.barbero_id,
+          precio: 0,
+          duracion: 0,
+          tipo: 'servicio' // Default
+        };
       });
 
       const dataToSave: Partial<Reservation> & { hora_inicio?: string, hora_fin?: string } = {
@@ -711,51 +765,74 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
 
                 <div className="space-y-4">
-                  {fields.map((field, index) => (
-                    <Card key={field.id} className="p-4 relative bg-muted/50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Servicios</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
-                              <SelectContent>{services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
-                        <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
-                          <FormItem>
-                            <div className="flex items-center gap-2">
-                              <FormLabel>Profesional</FormLabel>
-                              {isEditMode && (initialData?.canal_reserva?.startsWith('web_publica') || initialData?.origen?.startsWith('web_publica')) && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 p-0 hover:bg-transparent"
-                                  onClick={() => setIsProfessionalLocked(!isProfessionalLocked)}
-                                  title={isProfessionalLocked ? "Desbloquear selección" : "Bloquear selección"}
-                                >
-                                  {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
-                                </Button>
-                              )}
-                            </div>
-                            <Select onValueChange={field.onChange} value={field.value} disabled={isProfessionalLocked}>
-                              <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
-                              <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                            {availabilityErrors[index] && <p className="text-sm font-medium text-destructive">{availabilityErrors[index]}</p>}
-                          </FormItem>
-                        )} />
-                      </div>
-                      {fields.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </Card>
-                  ))}
+                  {fields.map((field, index) => {
+                    // Determine if the current item is a service or product
+                    // We need to access the current value of this field to know what is selected
+                    const currentItemId = form.getValues(`items.${index}.servicio`); // The field is named 'servicio' in schema but holds ID
+                    // Check if it matches a product
+                    const isProduct = products?.some(p => p.id === currentItemId) ||
+                      (initialData?.items?.[index] && (initialData.items[index] as any).tipo === 'producto');
+
+                    return (
+                      <Card key={field.id} className="p-4 relative bg-muted/50">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{isProduct ? 'Producto' : 'Servicios'}</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} disabled={isProduct}>
+                                {/* Disable changing product to service here if it's a product? Or allow mixed? 
+                                  User said it was a product. Usually products are read-only in this edit view unless we add full product support.
+                                  Let's just show it. If it's a product ID, we need to ensure the SelectItem exists or it shows up.
+                              */}
+                                <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  {services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                  {/* If it is a product, we must render an item for it so the SelectValue can display the name, 
+                                    otherwise it shows the ID or empty. */}
+                                  {isProduct && products?.map(p => (
+                                    <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          {/* Professional field ... */}
+                          <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
+                            <FormItem>
+                              {/* ... existing profesional logic ... */}
+                              <div className="flex items-center gap-2">
+                                <FormLabel>Profesional</FormLabel>
+                                {/* ... lock logic ... */}
+                                {isEditMode && (initialData?.canal_reserva?.startsWith('web_publica') || initialData?.origen?.startsWith('web_publica')) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 p-0 hover:bg-transparent"
+                                    onClick={() => setIsProfessionalLocked(!isProfessionalLocked)}
+                                    title={isProfessionalLocked ? "Desbloquear selección" : "Bloquear selección"}
+                                  >
+                                    {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
+                                  </Button>
+                                )}
+                              </div>
+                              <Select onValueChange={field.onChange} value={field.value} disabled={isProfessionalLocked}>
+                                <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
+                                <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                              </Select>
+                              {availabilityErrors[index] && <p className="text-sm font-medium text-destructive">{availabilityErrors[index]}</p>}
+                            </FormItem>
+                          )} />
+                        </div>
+                        {fields.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </Card>
+                    )
+                  })}
                   <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '' })} className="w-full">
                     <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
                   </Button>

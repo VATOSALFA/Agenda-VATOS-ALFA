@@ -932,26 +932,36 @@ export default function AgendaView() {
                                   <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event.customer?.nombre || 'Cliente Eliminado') : event.motivo}</p>
                                 </div>
 
-                                {(event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) && (
-                                  <div className={cn("absolute top-0 right-0 h-full w-auto min-w-[24px] px-1 flex items-center justify-center gap-0.5", event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500')}>
-                                    {event.pago_estado === 'deposit_paid' ? (
-                                      <>
-                                        <span className="text-black font-bold text-[10px]">A</span>
-                                        {event.items?.some((i: SaleItem) => i.tipo === 'producto') && (
-                                          <span className="text-black font-bold text-[10px]">P</span>
+                                {(event.type === 'appointment') && (
+                                  <div className="absolute top-0 right-0 h-full flex">
+                                    {/* Product Indicator (Blue) - Left of A */}
+                                    {event.items?.some((i: SaleItem) => i.tipo === 'producto') && (
+                                      <div className="h-full px-1 flex items-center justify-center bg-blue-600">
+                                        <span className="text-white font-bold text-[10px]">P</span>
+                                      </div>
+                                    )}
+
+                                    {/* Payment Status Indicator (A/$) - Right */}
+                                    {(event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') && (
+                                      <div className={cn(
+                                        "h-full px-1 flex items-center justify-center min-w-[20px]",
+                                        event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500'
+                                      )}>
+                                        {event.pago_estado === 'deposit_paid' ? (
+                                          <span className="text-black font-bold text-[10px]">A</span>
+                                        ) : (
+                                          <DollarSign className="h-3 w-3 text-black font-bold" />
                                         )}
-                                      </>
-                                    ) : (
-                                      <DollarSign className="h-3 w-3 text-black font-bold" />
+                                      </div>
                                     )}
                                   </div>
                                 )}
 
-                                <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-10" : "right-1")}>
+                                <div className={cn("absolute top-0 h-full flex items-center gap-0.5", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-12" : "right-1")}>
                                   {event.type === 'appointment' && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
-                                    <div className="flex items-center gap-0.5 bg-white/50 rounded px-0.5">
-                                      <Globe className="w-3 h-3 text-primary" />
-                                      <Lock className="w-3 h-3 text-muted-foreground" />
+                                    <div className="flex items-center gap-0.5 h-full px-1">
+                                      <Globe className="w-3.5 h-3.5 text-primary" />
+                                      <Lock className="w-3.5 h-3.5 text-muted-foreground" />
                                     </div>
                                   )}
                                 </div>

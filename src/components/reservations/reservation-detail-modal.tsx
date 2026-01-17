@@ -27,6 +27,7 @@ import {
   Save,
   Trash2,
   Eye,
+  Lock,
 } from 'lucide-react';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
@@ -208,8 +209,22 @@ export function ReservationDetailModal({
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-start">
               <div>
-                <p className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</p>
-                <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
+                <h4 className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</h4>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
+                  {reservation.canal_reserva === 'web_publica' && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Lock className="w-3 h-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Profesional seleccionado por el cliente</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
               </div>
               <Badge variant={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid' ? 'default' : 'secondary'} className={cn(
                 reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' :

@@ -909,6 +909,7 @@ export default function AgendaView() {
                                 <div className="flex-grow overflow-hidden pr-1">
                                   <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event.customer?.nombre || 'Cliente Eliminado') : event.motivo}</p>
                                 </div>
+
                                 {(event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) && (
                                   <div className={cn("absolute top-0 right-0 h-full w-6 flex items-center justify-center", event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500')}>
                                     {event.pago_estado === 'deposit_paid' ? (
@@ -918,14 +919,13 @@ export default function AgendaView() {
                                     )}
                                   </div>
                                 )}
-                                <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && event.pago_estado === 'Pagado') ? "right-7" : "right-1")}>
-                                  {event.type === 'appointment' && event.canal_reserva === 'web_publica' && (
-                                    <>
-                                      <Globe className="w-3 h-3 text-primary" />
-                                      <Lock className="w-3 h-3 text-muted-foreground" />
-                                    </>
-                                  )}
-                                </div>
+
+                                {event.type === 'appointment' && event.canal_reserva === 'web_publica' && (
+                                  <div className={cn("absolute flex items-center gap-0.5", (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') ? "right-7" : "right-1")}>
+                                    <Globe className="w-3 h-3 text-primary" />
+                                    <Lock className="w-3 h-3 text-muted-foreground" />
+                                  </div>
+                                )}
                               </div>
                             </TooltipTrigger>
                             {event.type === 'appointment' ? (

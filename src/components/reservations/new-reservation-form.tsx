@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
@@ -169,6 +169,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
+  const [isProfessionalLocked, setIsProfessionalLocked] = useState(false);
   const { db } = useAuth();
 
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
@@ -353,6 +354,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         },
         local_id: initialData.local_id
       });
+      setIsProfessionalLocked(isEditMode && initialData.canal_reserva === 'web_publica');
     } else if (isOpen) {
       form.reset({
         notas: '',
@@ -726,9 +728,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           <FormItem>
                             <div className="flex items-center gap-2">
                               <FormLabel>Profesional</FormLabel>
-                              {isEditMode && initialData?.canal_reserva === 'web_publica' && <Lock className="w-3 h-3 text-muted-foreground" />}
+                              {isEditMode && initialData?.canal_reserva === 'web_publica' && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 p-0 hover:bg-transparent"
+                                  onClick={() => setIsProfessionalLocked(!isProfessionalLocked)}
+                                  title={isProfessionalLocked ? "Desbloquear selección" : "Bloquear selección"}
+                                >
+                                  {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
+                                </Button>
+                              )}
                             </div>
-                            <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode && initialData?.canal_reserva === 'web_publica'}>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isProfessionalLocked}>
                               <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
                               <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                             </Select>

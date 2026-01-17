@@ -525,33 +525,48 @@ export default function LandingPage() {
 
             {/* Product Details Modal */}
             <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto max-h-[600px] flex flex-col sm:flex-row">
-                    <div className="w-full sm:w-1/2 bg-slate-50 flex items-center justify-center p-6 lg:p-10 relative">
-                        <div className="relative w-full aspect-square max-w-[350px] bg-white shadow-xl rounded-xl overflow-hidden border p-4 flex items-center justify-center">
+                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
+                    <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
+                        <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {selectedProduct?.images && selectedProduct.images.length > 0 ? (
-                                <img src={selectedProduct.images[0]} alt={selectedProduct.nombre} className="max-h-full max-w-full object-contain" />
+                                <img src={selectedProduct.images[0]} alt={selectedProduct.nombre} className="h-full w-full object-contain p-4" />
                             ) : (
-                                <ShoppingBag className="h-24 w-24 text-muted-foreground/30" />
+                                <div className="h-full w-full flex items-center justify-center bg-slate-200">
+                                    <ShoppingBag className="h-24 w-24 text-muted-foreground/30" />
+                                </div>
                             )}
                         </div>
                     </div>
 
-                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-center text-center sm:text-left overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight text-center sm:text-left">{selectedProduct?.nombre}</DialogTitle>
-                        </DialogHeader>
-                        <p className="text-2xl font-bold text-primary mb-6">{selectedProduct ? formatPrice(selectedProduct.public_price) : ''}</p>
+                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto flex-1 sm:flex-none">
+                        <div>
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight">{selectedProduct?.nombre}</DialogTitle>
+                            </DialogHeader>
 
-                        <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
-                            {selectedProduct?.description || "Sin descripción disponible."}
+                            <div className="flex items-baseline justify-between mb-4 border-b pb-4">
+                                <span className="text-3xl font-bold text-primary">{selectedProduct ? formatPrice(selectedProduct.public_price) : ''}</span>
+                            </div>
+
+                            <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
+                                <h4 className="font-semibold text-foreground mb-2">Descripción del producto</h4>
+                                {selectedProduct?.description ? (
+                                    <p className="whitespace-pre-line">{selectedProduct.description}</p>
+                                ) : (
+                                    <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="mt-auto pt-4">
-                            <Button className="w-full shadow-lg hover:shadow-xl transition-all h-12 text-lg" onClick={() => {
+                        <div className="mt-4 pt-4 border-t">
+                            <Button className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
                                 addToProductCart(selectedProduct.id);
                                 setSelectedProduct(null);
                             }}>
                                 <ShoppingBag className="mr-2 h-5 w-5" /> Agregar al Pedido
+                            </Button>
+                            <Button variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedProduct(null)}>
+                                Volver a Productos
                             </Button>
                         </div>
                     </div>

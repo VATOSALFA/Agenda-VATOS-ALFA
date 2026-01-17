@@ -548,6 +548,24 @@ export default function LandingPage() {
                                 <span className="text-3xl font-bold text-primary">{selectedProduct ? formatPrice(selectedProduct.public_price) : ''}</span>
                             </div>
 
+                            {selectedProduct?.payment_type === 'deposit' && (
+                                <div className="mb-6">
+                                    <span className="text-sm text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 flex items-center w-full justify-center gap-2">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                        </span>
+                                        {(() => {
+                                            const type = selectedProduct.payment_amount_type || '%';
+                                            const val = selectedProduct.payment_amount_value;
+                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                            return 'Requiere anticipo';
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+
                             <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
                                 <h4 className="font-semibold text-foreground mb-2">Descripción del producto</h4>
                                 {selectedProduct?.description ? (

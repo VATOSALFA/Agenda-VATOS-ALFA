@@ -307,17 +307,35 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
     } else {
       const fullData: any = { ...dataToSave, creado_en: Timestamp.now() };
 
-      if (clientSettings?.autoClientNumber) {
-        const q = query(collection(db, 'clientes'), orderBy('numero_cliente', 'desc'), limit(1));
-        const querySnapshot = await getDocs(q);
-        let lastClientNumber = 0;
-        if (!querySnapshot.empty) {
-          const lastClient = querySnapshot.docs[0].data();
-          if (lastClient.numero_cliente && !isNaN(Number(lastClient.numero_cliente))) {
-            lastClientNumber = Number(lastClient.numero_cliente);
-          }
+      // Auto-generate Client Number (Always enforced)
+      try {
+        const clientsCol = collection(db, 'clientes');
+
+        // 1. Max String
+        const qString = query(clientsCol, orderBy('numero_cliente', 'desc'), limit(1));
+        const snapString = await getDocs(qString);
+
+        // 2. Max Number
+        const qNumber = query(clientsCol, where('numero_cliente', '>=', 0), orderBy('numero_cliente', 'desc'), limit(1));
+        const snapNumber = await getDocs(qNumber);
+
+        let maxVal = 0;
+
+        if (!snapString.empty) {
+          const d = snapString.docs[0].data();
+          const v = Number(d.numero_cliente);
+          if (!isNaN(v)) maxVal = Math.max(maxVal, v);
         }
-        fullData.numero_cliente = String(lastClientNumber + 1);
+
+        if (!snapNumber.empty) {
+          const d = snapNumber.docs[0].data();
+          const v = Number(d.numero_cliente);
+          if (!isNaN(v)) maxVal = Math.max(maxVal, v);
+        }
+
+        fullData.numero_cliente = maxVal + 1; // Store as Number
+      } catch (err) {
+        console.warn("Failed to generate client number:", err);
       }
 
       const newClientRef = doc(collection(db, 'clientes'));

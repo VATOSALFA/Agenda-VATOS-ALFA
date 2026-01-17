@@ -221,12 +221,34 @@ export default function BookingPage() {
             return sum;
         }, 0);
 
-        // Add Product Prices to Upfront (Products require 100% payment usually)
+        // Calculate Product Totals with Deposit Logic
         const productTotal = productCart.reduce((sum, p) => sum + Number(p.public_price || 0), 0);
+
+        const productUpfront = productCart.reduce((sum, p) => {
+            const price = Number(p.public_price || 0);
+            const pType = p.payment_type || 'full'; // Default to full for products normally
+
+            // Check for 'deposit' type used in NewProductModal
+            if (pType === 'deposit') {
+                const amountType = p.payment_amount_type || '%';
+                const amountValue = Number(p.payment_amount_value || 0);
+
+                if (amountType === '$' && amountValue > 0) {
+                    return sum + amountValue;
+                } else if (amountType === '%' && amountValue > 0) {
+                    return sum + (price * (amountValue / 100));
+                } else {
+                    return sum + (price * 0.5); // Fallback 50%
+                }
+            }
+
+            // If full payment (or default for products traditionally)
+            return sum + price;
+        }, 0);
 
         return {
             totalPrice: total + productTotal,
-            upfrontTotal: upfront + productTotal // Products are fully paid upfront
+            upfrontTotal: upfront + productUpfront
         };
     }, [cart, productCart]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
@@ -247,6 +269,23 @@ export default function BookingPage() {
     };
 
     const getCount = (serviceId: string) => cart.filter(x => x.serviceId === serviceId).length;
+
+    // --- PRODUCT CART ACTIONS ---
+    const addToProductCart = (product: any) => {
+        setProductCart(prev => [...prev, product]);
+    };
+
+    const removeFromProductCart = (productId: string) => {
+        setProductCart(prev => {
+            const idx = prev.findIndex(p => p.id === productId);
+            if (idx === -1) return prev;
+            const newC = [...prev];
+            newC.splice(idx, 1);
+            return newC;
+        });
+    };
+
+    const getProductCount = (productId: string) => productCart.filter(p => p.id === productId).length;
 
     // --- FLOW ACTIONS ---
     const handleServicesConfirmed = () => {
@@ -688,112 +727,185 @@ export default function BookingPage() {
 
                         {/* STEP 0: SERVICE SELECTION (CART) */}
                         {step === 0 && (
-                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 flex flex-col h-full">
-                                <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
-                                    <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
-                                </Button>
-                                {/* Pre-selected Pro Banner */}
-                                {preSelectedProId && (() => {
-                                    const pro = professionals.find(p => p.id === preSelectedProId);
-                                    return pro ? (
-                                        <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                                            <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">
-                                                {pro.avatarUrl ? (
-                                                    <img src={pro.avatarUrl} alt={pro.name} className="h-full w-full object-cover" />
-                                                ) : (
-                                                    <User className="h-full w-full p-2 text-primary" />
-                                                )}
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-muted-foreground">Reservando con:</p>
-                                                <p className="font-bold text-lg leading-tight">{pro.name}</p>
-                                            </div>
-                                            <Button variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
-                                                setPreSelectedProId(null);
-                                                const url = new URL(window.location.href);
-                                                url.searchParams.delete('professionalId');
-                                                window.history.replaceState({}, '', url.toString());
-                                            }}>
-                                                Cambiar
-                                            </Button>
-                                        </div>
-                                    ) : null;
-                                })()}
+                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative">
 
-                                <h2 className="text-xl font-semibold mb-2">Selecciona tus servicios</h2>
-                                <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[400px] mb-16 px-1">
-                                    {services.filter((s: any) => {
-                                        if (!s.active) return false;
-                                        // Filter by Pre-selected Pro
-                                        if (preSelectedProId) {
-                                            const pro = professionals.find(p => p.id === preSelectedProId);
-                                            if (pro && pro.services && Array.isArray(pro.services)) {
-                                                return pro.services.includes(s.id);
-                                            }
-                                            return false;
-                                        }
-                                        return true;
-                                    }).map((service: any) => {
-                                        const count = getCount(service.id);
-                                        return (
-                                            <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
-                                                <CardContent className="p-4 flex items-center gap-4">
-                                                    {(service.images && service.images.length > 0) && (
-                                                        <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
-                                                            <img src={service.images[0]} alt={service.name} className="h-full w-full object-cover" />
-                                                        </div>
+                                <div className="flex-1 overflow-y-auto pb-32 px-1">
+                                    <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
+                                        <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
+                                    </Button>
+                                    {/* Pre-selected Pro Banner */}
+                                    {preSelectedProId && (() => {
+                                        const pro = professionals.find(p => p.id === preSelectedProId);
+                                        return pro ? (
+                                            <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">
+                                                    {pro.avatarUrl ? (
+                                                        <img src={pro.avatarUrl} alt={pro.name} className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        <User className="h-full w-full p-2 text-primary" />
                                                     )}
-                                                    <div className="flex-1">
-                                                        <h3 className="font-bold text-base">{service.name}</h3>
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex gap-2 text-sm text-muted-foreground">
-                                                                <span>{formatPrice(service.price)}</span>
-                                                                <span>•</span>
-                                                                <span>{service.duration} min</span>
-                                                            </div>
-                                                            {service.payment_type === 'online-deposit' && (
-                                                                <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
-                                                                    {(() => {
-                                                                        const type = service.payment_amount_type || '%';
-                                                                        const val = service.payment_amount_value;
-                                                                        if (type === '$' && val) return `Requiere anticipo de $${val}`;
-                                                                        if (type === '%' && val) return `Requiere anticipo del ${val}%`;
-                                                                        return 'Requiere anticipo del 50%';
-                                                                    })()}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        {count > 0 && (
-                                                            <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
-                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromCart(service.id)}>
-                                                                    {count === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
-                                                                </Button>
-                                                                <span className="font-bold w-4 text-center">{count}</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-muted-foreground">Reservando con:</p>
+                                                    <p className="font-bold text-lg leading-tight">{pro.name}</p>
+                                                </div>
+                                                <Button variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
+                                                    setPreSelectedProId(null);
+                                                    const url = new URL(window.location.href);
+                                                    url.searchParams.delete('professionalId');
+                                                    window.history.replaceState({}, '', url.toString());
+                                                }}>
+                                                    Cambiar
+                                                </Button>
+                                            </div>
+                                        ) : null;
+                                    })()}
+
+                                    <h2 className="text-xl font-semibold mb-2">Selecciona tus servicios</h2>
+                                    <div className="grid grid-cols-1 gap-4 mb-4">
+                                        {services.filter((s: any) => {
+                                            if (!s.active) return false;
+                                            // Filter by Pre-selected Pro
+                                            if (preSelectedProId) {
+                                                const pro = professionals.find(p => p.id === preSelectedProId);
+                                                if (pro && pro.services && Array.isArray(pro.services)) {
+                                                    return pro.services.includes(s.id);
+                                                }
+                                                return false;
+                                            }
+                                            return true;
+                                        }).map((service: any) => {
+                                            const count = getCount(service.id);
+                                            return (
+                                                <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
+                                                    <CardContent className="p-4 flex items-center gap-4">
+                                                        {(service.images && service.images.length > 0) && (
+                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
+                                                                <img src={service.images[0]} alt={service.name} className="h-full w-full object-cover" />
                                                             </div>
                                                         )}
-                                                        <Button
-                                                            variant={count > 0 ? "default" : "outline"}
-                                                            size="icon"
-                                                            className="h-10 w-10 rounded-lg"
-                                                            onClick={() => addToCart(service)}
-                                                        >
-                                                            <Plus className="h-5 w-5" />
-                                                        </Button>
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        );
-                                    })}
+                                                        <div className="flex-1">
+                                                            <h3 className="font-bold text-base">{service.name}</h3>
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex gap-2 text-sm text-muted-foreground">
+                                                                    <span>{formatPrice(service.price)}</span>
+                                                                    <span>•</span>
+                                                                    <span>{service.duration} min</span>
+                                                                </div>
+                                                                {service.payment_type === 'online-deposit' && (
+                                                                    <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                        {(() => {
+                                                                            const type = service.payment_amount_type || '%';
+                                                                            const val = service.payment_amount_value;
+                                                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                                                            return 'Requiere anticipo del 50%';
+                                                                        })()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            {count > 0 && (
+                                                                <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromCart(service.id)}>
+                                                                        {count === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                                                                    </Button>
+                                                                    <span className="font-bold w-4 text-center">{count}</span>
+                                                                </div>
+                                                            )}
+                                                            <Button
+                                                                variant={count > 0 ? "default" : "outline"}
+                                                                size="icon"
+                                                                className="h-10 w-10 rounded-lg"
+                                                                onClick={() => addToCart(service)}
+                                                            >
+                                                                <Plus className="h-5 w-5" />
+                                                            </Button>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* PRODUCTS SECTION */}
+                                    <h2 className="text-xl font-semibold mb-2 mt-8 pt-4 border-t">Selecciona tus productos</h2>
+                                    <div className="grid grid-cols-1 gap-4 mb-4">
+                                        {productsData && productsData.length > 0 ? (
+                                            productsData.filter((p: any) => p.active && p.stock > 0).map((product: any) => {
+                                                const count = getProductCount(product.id);
+                                                return (
+                                                    <Card key={product.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-indigo-500" : "border-l-transparent")}>
+                                                        <CardContent className="p-4 flex items-center gap-4">
+                                                            {(product.images && product.images.length > 0) ? (
+                                                                <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
+                                                                    <img src={product.images[0]} alt={product.nombre} className="h-full w-full object-cover" />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="h-16 w-16 rounded-md bg-slate-100 flex items-center justify-center border text-muted-foreground">
+                                                                    <ShoppingBag className="h-6 w-6" />
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1">
+                                                                <h3 className="font-bold text-base">{product.nombre}</h3>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <div className="text-sm text-muted-foreground">
+                                                                        <span>{formatPrice(product.public_price)}</span>
+                                                                    </div>
+                                                                    {product.payment_type === 'deposit' && (
+                                                                        <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                            {(() => {
+                                                                                const type = product.payment_amount_type || '%';
+                                                                                const val = product.payment_amount_value;
+                                                                                if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                                                                if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                                                                return 'Requiere anticipo';
+                                                                            })()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                {count > 0 && (
+                                                                    <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
+                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromProductCart(product.id)}>
+                                                                            <Minus className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <span className="font-bold w-4 text-center">{count}</span>
+                                                                    </div>
+                                                                )}
+                                                                <Button
+                                                                    variant={count > 0 ? "default" : "outline"}
+                                                                    size="icon"
+                                                                    className={cn("h-10 w-10 rounded-lg", count > 0 ? "bg-indigo-600 hover:bg-indigo-700" : "")}
+                                                                    onClick={() => addToProductCart(product)}
+                                                                >
+                                                                    <Plus className="h-5 w-5" />
+                                                                </Button>
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No hay productos disponibles.</p>
+                                        )}
+                                    </div>
+
                                 </div>
-                                <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t flex justify-between items-center shadow-lg transform translate-y-0">
+                                <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t flex justify-between items-center shadow-lg pointer-events-auto">
                                     <div>
-                                        <p className="text-sm text-muted-foreground">{cart.length} servicios</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {cart.length > 0 ? `${cart.length} servicio${cart.length !== 1 ? 's' : ''}` : ''}
+                                            {cart.length > 0 && productCart.length > 0 ? ', ' : ''}
+                                            {productCart.length > 0 ? `${productCart.length} producto${productCart.length !== 1 ? 's' : ''}` : ''}
+                                            {cart.length === 0 && productCart.length === 0 ? 'Nada seleccionado' : ''}
+                                        </p>
                                         <p className="font-bold text-lg">{formatPrice(totalPrice)}</p>
                                     </div>
                                     <Button onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg">
-                                        Continuar ({cart.length}) <ChevronRight className="ml-2 h-4 w-4" />
+                                        Continuar <ChevronRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </div>
                             </motion.div>

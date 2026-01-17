@@ -53,7 +53,7 @@ import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
-import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser } from '@/lib/types';
+import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser, Product } from '@/lib/types';
 
 interface EmpresaSettings {
   receipt_logo_url?: string;
@@ -160,6 +160,7 @@ export default function AgendaView() {
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
+  const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa', 'main', where('__name__', '==', 'main'));
   const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios', queryKey);
@@ -226,7 +227,7 @@ export default function AgendaView() {
   const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
   const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
 
-  const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading || usersLoading;
+  const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading || usersLoading || productsLoading;
 
   const filteredProfessionals = useMemo(() => {
     const professionalsOfLocal = professionals.filter(p => p.local_id === selectedLocalId);
@@ -477,17 +478,38 @@ export default function AgendaView() {
   }
 
   const handlePayFromDetail = () => {
-    if (!selectedReservation || !clients || !services) return;
+    if (!selectedReservation || !clients || !services || !products) return;
     const client = clients.find(c => c.id === selectedReservation.cliente_id);
     if (client && selectedReservation.items) {
       const cartItems = selectedReservation.items.map(item => {
-        const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
-        return service ? { ...service, barbero_id: item.barbero_id } : null;
-      }).filter((i): i is (ServiceType & { barbero_id: string }) => !!i);
+        if (item.tipo === 'producto') {
+          const product = products.find(p => p.nombre === item.nombre || p.id === item.id);
+          return product ? {
+            ...product,
+            id: product.id,
+            nombre: product.nombre,
+            precio: product.public_price,
+            cantidad: item.cantidad,
+            tipo: 'producto' as const
+          } : null;
+        } else {
+          // Default to service
+          const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
+          return service ? {
+            ...service,
+            id: service.id,
+            nombre: service.name,
+            precio: service.price,
+            cantidad: 1,
+            tipo: 'servicio' as const,
+            barbero_id: item.barbero_id
+          } : null;
+        }
+      }).filter((i): i is any => !!i);
 
       setSaleInitialData({
         client,
-        items: cartItems.map(i => ({ ...i, nombre: i.name })),
+        items: cartItems,
         reservationId: selectedReservation.id,
         local_id: selectedReservation.local_id,
         anticipoPagado: selectedReservation.anticipo_pagado || selectedReservation.monto_pagado || 0
@@ -911,18 +933,23 @@ export default function AgendaView() {
                                 </div>
 
                                 {(event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) && (
-                                  <div className={cn("absolute top-0 right-0 h-full w-6 flex items-center justify-center", event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500')}>
+                                  <div className={cn("absolute top-0 right-0 h-full w-auto min-w-[24px] px-1 flex items-center justify-center gap-0.5", event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500')}>
                                     {event.pago_estado === 'deposit_paid' ? (
-                                      <span className="text-black font-bold text-xs">A</span>
+                                      <>
+                                        <span className="text-black font-bold text-[10px]">A</span>
+                                        {event.items?.some((i: SaleItem) => i.tipo === 'producto') && (
+                                          <span className="text-black font-bold text-[10px]">P</span>
+                                        )}
+                                      </>
                                     ) : (
-                                      <DollarSign className="h-4 w-4 text-black font-bold" />
+                                      <DollarSign className="h-3 w-3 text-black font-bold" />
                                     )}
                                   </div>
                                 )}
 
-                                <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && event.pago_estado === 'Pagado') ? "right-7" : "right-1")}>
-                                  {event.type === 'appointment' && (event.canal_reserva === 'web_publica' || event.origen === 'web_publica') && (
-                                    <div className={cn("absolute flex items-center gap-0.5", (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') ? "right-7" : "right-1")}>
+                                <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-10" : "right-1")}>
+                                  {event.type === 'appointment' && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
+                                    <div className="flex items-center gap-0.5 bg-white/50 rounded px-0.5">
                                       <Globe className="w-3 h-3 text-primary" />
                                       <Lock className="w-3 h-3 text-muted-foreground" />
                                     </div>

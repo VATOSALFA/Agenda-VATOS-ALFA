@@ -588,8 +588,21 @@ exports.mercadoPagoWebhook = onRequest(
                 // CLIENTE ENCONTRADO - USAMOS EL EXISTENTE
                 clientId = clientQuery.docs[0].id;
                 console.log(`[vFinal] Cliente existente encontrado por coincidencias: ${clientId}`);
-              } else {
                 // CLIENTE NO EXISTE - CREAMOS UNO NUEVO
+
+                // Buscamos el numero de cliente maximo actual para autoincrementar
+                let nextClientNumber = 1;
+                try {
+                  const maxQuery = clientsRef.orderBy('numero_cliente', 'desc').limit(1);
+                  const maxSnap = await t.get(maxQuery);
+                  if (!maxSnap.empty) {
+                    const maxVal = Number(maxSnap.docs[0].data().numero_cliente);
+                    if (!isNaN(maxVal)) nextClientNumber = maxVal + 1;
+                  }
+                } catch (e) {
+                  console.warn("[vFinal] Error auto-generating client number:", e);
+                }
+
                 const newClientRef = clientsRef.doc();
                 clientId = newClientRef.id;
                 t.set(newClientRef, {
@@ -598,9 +611,10 @@ exports.mercadoPagoWebhook = onRequest(
                   correo: clientData.email,
                   telefono: clientData.phone,
                   creado_en: admin.firestore.FieldValue.serverTimestamp(),
-                  origen: 'web_publica'
+                  origen: 'web_publica',
+                  numero_cliente: nextClientNumber
                 });
-                console.log(`[vFinal] Creando nuevo cliente: ${clientId}`);
+                console.log(`[vFinal] Creando nuevo cliente: ${clientId} con # ${nextClientNumber}`);
               }
 
 
@@ -926,3 +940,77 @@ exports.checkAutomatedMessages = onSchedule({
     }
   }
 });
+
+exports.backfillClientNumbers = onRequest(
+  {
+    cors: true,
+    invoker: 'public',
+  },
+  async (request, response) => {
+    try {
+      const db = admin.firestore();
+      const clientsRef = db.collection('clientes');
+
+      // 1. Find Max Current Number
+      let currentMax = 0;
+      const maxQuery = await clientsRef.orderBy('numero_cliente', 'desc').limit(1).get();
+      if (!maxQuery.empty) {
+        const val = Number(maxQuery.docs[0].data().numero_cliente);
+        if (!isNaN(val)) currentMax = val;
+      }
+
+      console.log(`[Backfill] Current Max Number: ${currentMax}`);
+
+      // 2. Find Clients without number
+      // Note: Firestore doesn't easily support "where field is missing".
+      // We process in batches or just get all (if dataset is small < 1000). 
+      // Assuming small business, get all is safe.
+      const allClients = await clientsRef.get();
+      let updates = 0;
+      let batch = db.batch();
+      let batchCount = 0;
+
+      // Sort by creation date to assign numbers chronologically
+      const clientsToUpdate = [];
+      allClients.forEach(doc => {
+        const data = doc.data();
+        if (!data.numero_cliente || data.numero_cliente === 0 || data.numero_cliente === 'N/A') {
+          clientsToUpdate.push({ id: doc.id, ...data });
+        }
+      });
+
+      // Sort: Oldest first
+      clientsToUpdate.sort((a, b) => {
+        const tA = a.creado_en?.toMillis?.() || 0;
+        const tB = b.creado_en?.toMillis?.() || 0;
+        return tA - tB;
+      });
+
+      console.log(`[Backfill] Found ${clientsToUpdate.length} clients to update.`);
+
+      for (const client of clientsToUpdate) {
+        currentMax++;
+        const ref = clientsRef.doc(client.id);
+        batch.update(ref, { numero_cliente: currentMax });
+        batchCount++;
+        updates++;
+
+        if (batchCount >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          batchCount = 0;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      response.status(200).send(`Backfill Complete. Updated ${updates} clients. New Max: ${currentMax}`);
+
+    } catch (error) {
+      console.error("Backfill Error:", error);
+      response.status(500).send(error.message);
+    }
+  }
+);

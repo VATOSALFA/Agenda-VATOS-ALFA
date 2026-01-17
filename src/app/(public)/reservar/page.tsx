@@ -494,13 +494,34 @@ export default function BookingPage() {
                 const endTime = format(endDate, 'HH:mm');
                 const serviceNames = cart.map(c => c.service.name);
 
+                // Prepare Items (Services + Products)
+                const itemsPayload = [
+                    ...cart.map(c => ({
+                        id: c.serviceId,
+                        nombre: c.service.name,
+                        tipo: 'servicio',
+                        precio: Number(c.service.price || 0),
+                        barbero_id: cfg.professionalId,
+                        duracion: Number(c.service.duration || 0)
+                    })),
+                    ...productCart.map(p => ({
+                        id: p.id,
+                        nombre: p.nombre,
+                        tipo: 'producto',
+                        precio: Number(p.public_price || 0),
+                        barbero_id: null,
+                        duracion: 0
+                    }))
+                ];
+
                 bookingsPayload.push({
-                    id: generateId(), // Pre-generate ID for idempotency
-                    canal_reserva: 'web_publica', // Triggers Globe/Lock icons
+                    id: generateId(),
+                    canal_reserva: 'web_publica',
                     client: clientDetails,
                     serviceIds: cart.map(c => c.serviceId),
                     serviceNames: serviceNames,
                     servicePrices: cart.map(c => Number(c.service.price || 0)),
+                    items: itemsPayload, // <--- NEW: Explicit items array
                     professionalId: cfg.professionalId,
                     date: format(cfg.date, 'yyyy-MM-dd'),
                     time: cfg.time,
@@ -526,12 +547,20 @@ export default function BookingPage() {
                     const endTime = format(endDate, 'HH:mm');
 
                     bookingsPayload.push({
-                        id: generateId(), // Pre-generate ID
-                        canal_reserva: 'web_publica', // Triggers Globe/Lock icons
+                        id: generateId(),
+                        canal_reserva: 'web_publica',
                         client: clientDetails,
                         serviceIds: [item.serviceId],
                         serviceNames: [item.service.name],
                         servicePrices: [Number(item.service.price || 0)],
+                        items: [{
+                            id: item.serviceId,
+                            nombre: item.service.name,
+                            tipo: 'servicio',
+                            precio: Number(item.service.price || 0),
+                            barbero_id: cfg.professionalId,
+                            duracion: duration
+                        }],
                         professionalId: cfg.professionalId,
                         date: format(cfg.date, 'yyyy-MM-dd'),
                         time: cfg.time,

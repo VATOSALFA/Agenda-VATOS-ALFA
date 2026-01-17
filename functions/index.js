@@ -629,15 +629,31 @@ exports.mercadoPagoWebhook = onRequest(
 
               const newResRef = admin.firestore().collection('reservas').doc(resId);
 
-              // Items Mapping (Frontend sends serviceNames, serviceIds)
-              const resItems = booking.serviceIds.map((sid, idx) => ({
-                id: sid,
-                servicio: booking.serviceNames[idx],
-                barbero_id: booking.professionalId,
-                nombre: booking.serviceNames[idx],
-                tipo: 'servicio',
-                precio: Number(booking.servicePrices?.[idx] || 0)
-              }));
+              // Items Mapping
+              let resItems = [];
+              if (booking.items && Array.isArray(booking.items) && booking.items.length > 0) {
+                // New Format: Explicit Items (Services + Products)
+                resItems = booking.items.map(i => ({
+                  id: i.id,
+                  // Legacy 'servicio' string: Only for services, or use name for products?
+                  // Best to concat names in main 'servicio' field later. Here keep clean.
+                  servicio: i.tipo === 'servicio' ? i.nombre : null,
+                  barbero_id: i.barbero_id || booking.professionalId, // Use specific pro or booking pro
+                  nombre: i.nombre,
+                  tipo: i.tipo || 'servicio',
+                  precio: Number(i.precio || 0)
+                }));
+              } else {
+                // Legacy Format: Implicit Services Only
+                resItems = booking.serviceIds.map((sid, idx) => ({
+                  id: sid,
+                  servicio: booking.serviceNames[idx],
+                  barbero_id: booking.professionalId,
+                  nombre: booking.serviceNames[idx],
+                  tipo: 'servicio',
+                  precio: Number(booking.servicePrices?.[idx] || 0)
+                }));
+              }
 
               saleItems.push(...resItems);
 
@@ -666,6 +682,14 @@ exports.mercadoPagoWebhook = onRequest(
 
               console.log(`[vFinal] Status Logic: Type=${paymentType}, Final=${finalStatus}`);
 
+              // Final Client Validity Check
+              if (!clientId) {
+                console.error('[vFinal] CRITICAL: Client ID missing after lookup/create logic. Generating fallback.');
+                const fallbackRef = admin.firestore().collection('clientes').doc();
+                clientId = fallbackRef.id;
+                t.set(fallbackRef, { nombre: 'Cliente', apellido: 'Desconocido', origen: 'error_webhook', creado_en: admin.firestore.FieldValue.serverTimestamp() });
+              }
+
               const reservaToCreate = {
                 cliente_id: clientId,
                 local_id: booking.locationId,
@@ -679,7 +703,7 @@ exports.mercadoPagoWebhook = onRequest(
                 pago_estado: finalStatus,
 
                 items: resItems,
-                servicio: resItems.map(i => i.servicio).join(', '), // Legacy field
+                servicio: resItems.map(i => i.nombre).join(', '), // Use 'nombre' for all items so products also appear in summary, OR use 'servicio' if you only want services. User probably wants to see what they bought. Let's use names.
 
                 total: bTotal,
                 anticipo_pagado: Number(transaction_amount || 0),

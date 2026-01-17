@@ -1087,10 +1087,14 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
     }
 
     // Logo
-    const logoUrl = empresaConfig.logo_url || empresaConfig.logo || 'https://vatosalfa.com/logo.png';
+    // Try logo_url, then icon_url, then fallback
+    const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
 
-    // Phones
-    const localPhone = localData.telefono || 'el número de contacto';
+    // Phones & Address (Local)
+    // Note: Local object uses keys: name, address, phone (English) based on local-modal.tsx
+    const localName = localData.name || 'Nuestra Barbería';
+    const localAddress = localData.address || localData.direccion || '';
+    const localPhone = localData.phone || localData.telefono || 'el número de contacto';
 
     // Formatting
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -1125,7 +1129,7 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; line-height: 1.6;">
         <div style="text-align: center; padding: 20px 0;">
-          <img src="${logoUrl}" alt="${senderName}" style="max-height: 80px; object-fit: contain;" />
+          <img src="${logoUrl}" alt="${senderName}" style="max-height: 100px; max-width: 200px; object-fit: contain;" />
         </div>
         
         <h2 style="color: #1a1a1a; text-align: center; margin-bottom: 20px;">¡Tu reserva está confirmada!</h2>
@@ -1136,8 +1140,11 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
         <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #eee;">
           <p style="margin: 5px 0;"><strong>Fecha:</strong> ${dateStr}</p>
           <p style="margin: 5px 0;"><strong>Hora:</strong> ${timeStr}</p>
-          <p style="margin: 5px 0;"><strong>Lugar:</strong> ${localData.nombre || 'Nuestra Barbería'}</p>
-          ${localData.direccion ? `<p style="margin: 5px 0; font-size: 0.9em; color: #666;">${localData.direccion}</p>` : ''}
+          
+          <div style="margin: 10px 0;">
+             <p style="margin: 5px 0;"><strong>Lugar:</strong> ${localName}</p>
+             ${localAddress ? `<p style="margin: 0; font-size: 0.95em; color: #555;">${localAddress}</p>` : ''}
+          </div>
           
           <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
             <p style="margin-bottom: 5px;"><strong>Servicios:</strong></p>
@@ -1165,7 +1172,7 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
         
         <div style="text-align: center; font-size: 0.8em; color: #999;">
           <p style="margin: 5px 0;">${senderName}</p>
-          <p style="margin: 5px 0;">${localData.direccion || ''}</p>
+          <p style="margin: 5px 0;">${localAddress}</p>
         </div>
       </div>
     `;

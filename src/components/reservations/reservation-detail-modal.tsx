@@ -212,7 +212,7 @@ export function ReservationDetailModal({
                 <h4 className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</h4>
                 <div className="flex items-center gap-2">
                   <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
-                  {reservation.canal_reserva === 'web_publica' && (
+                  {(reservation.canal_reserva === 'web_publica' || reservation.origen === 'web_publica') && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>

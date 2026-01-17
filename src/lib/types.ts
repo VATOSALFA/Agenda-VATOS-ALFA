@@ -77,6 +77,7 @@ export interface Reservation {
   nota_interna?: string;
   creado_en: Timestamp; // Firestore Timestamp
   canal_reserva?: string;
+  origen?: string;
   local_id?: string; // Added local_id to reservations
   notifications?: {
     whatsapp_notification: boolean;

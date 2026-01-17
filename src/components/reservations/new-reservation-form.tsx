@@ -354,7 +354,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         },
         local_id: initialData.local_id
       });
-      setIsProfessionalLocked(isEditMode && initialData.canal_reserva === 'web_publica');
+      setIsProfessionalLocked(isEditMode && (initialData.canal_reserva === 'web_publica' || initialData.origen === 'web_publica'));
     } else if (isOpen) {
       form.reset({
         notas: '',
@@ -728,7 +728,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           <FormItem>
                             <div className="flex items-center gap-2">
                               <FormLabel>Profesional</FormLabel>
-                              {isEditMode && initialData?.canal_reserva === 'web_publica' && (
+                              {isEditMode && (initialData?.canal_reserva === 'web_publica' || initialData?.origen === 'web_publica') && (
                                 <Button
                                   type="button"
                                   variant="ghost"

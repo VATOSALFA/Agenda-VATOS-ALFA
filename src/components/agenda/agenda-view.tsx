@@ -920,12 +920,14 @@ export default function AgendaView() {
                                   </div>
                                 )}
 
-                                {event.type === 'appointment' && event.canal_reserva === 'web_publica' && (
-                                  <div className={cn("absolute flex items-center gap-0.5", (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') ? "right-7" : "right-1")}>
-                                    <Globe className="w-3 h-3 text-primary" />
-                                    <Lock className="w-3 h-3 text-muted-foreground" />
-                                  </div>
-                                )}
+                                <div className={cn("absolute bottom-1 flex gap-1", (event.type === 'appointment' && event.pago_estado === 'Pagado') ? "right-7" : "right-1")}>
+                                  {event.type === 'appointment' && (event.canal_reserva === 'web_publica' || event.origen === 'web_publica') && (
+                                    <div className={cn("absolute flex items-center gap-0.5", (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') ? "right-7" : "right-1")}>
+                                      <Globe className="w-3 h-3 text-primary" />
+                                      <Lock className="w-3 h-3 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </TooltipTrigger>
                             {event.type === 'appointment' ? (

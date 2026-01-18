@@ -982,9 +982,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
 
                 const uniqueProductIds = Array.from(productQuantities.keys());
+
+                // 1. READ: Obtener documentos de productos
                 const productDocs = await Promise.all(
                     uniqueProductIds.map(id => transaction.get(productRefsMap.get(id)!))
                 );
+
+                // Validar Stock (pero NO actualizar todavía para respetar All Reads Before Writes)
+                const pendingStockUpdates: { ref: DocumentReference; newStock: number; productData: Product }[] = [];
 
                 for (const [index, productDoc] of productDocs.entries()) {
                     const productId = uniqueProductIds[index];
@@ -1003,28 +1008,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     if (newStock < 0) {
                         throw new Error(`Stock insuficiente para ${itemInfo.nombre}. Requerido: ${qtyNeeded}, Disponible: ${currentStock}`);
                     }
-                    transaction.update(ref, { stock: newStock });
 
-                    if (productData.stock_alarm_threshold && newStock <= productData.stock_alarm_threshold && productData.notification_email) {
-                        sendStockAlert({
-                            productName: productData.nombre,
-                            currentStock: newStock,
-                            recipientEmail: productData.notification_email,
-                        }).catch(console.error);
-                    }
+                    // DEFER WRITE: Guardamos la actualización para ejecutarla DESPUÉS de todos los reads (como buscar la venta existente)
+                    pendingStockUpdates.push({ ref, newStock, productData });
                 }
 
-                // Determine if we are updating an existing online deposit sale
+                // 2. READ: Determinar si actualizamos una venta existente o creamos una nueva
                 let saleDocRef = doc(collection(db, "ventas")); // Default new
                 let isUpdate = false;
                 let existingSaleData: any = {};
 
                 if (preFoundSaleId) {
                     // PRIORITIZE the sale found via Query
-                    saleDocRef = doc(db, 'ventas', preFoundSaleId);
-                    // We must read it inside transaction to be atomic
-                    const saleCheck = await transaction.get(saleDocRef);
+                    const foundRef = doc(db, 'ventas', preFoundSaleId);
+                    // Read inside transaction
+                    const saleCheck = await transaction.get(foundRef);
                     if (saleCheck.exists()) {
+                        saleDocRef = foundRef;
                         const sData = saleCheck.data();
                         isUpdate = true;
                         existingSaleData = sData;
@@ -1042,9 +1042,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             existingSaleData = sData;
                         }
                     } else {
-                        // 2. Try query by field (fallback: ID differs) - We already did this via 'preFoundSaleId' outside transaction
-                        // but let's keep the reservation check just in case.
-
+                        // 2. Try query by field (fallback: ID differs) 
                         // We will try to fetch the reservation first to see if it has 'deposit_payment_id'
                         const resRef = doc(db, 'reservas', reservationId);
                         const resDoc = await transaction.get(resRef);
@@ -1072,14 +1070,42 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     console.log("Updating existing sale:", saleDocRef.id);
                 }
 
-                // If we still found nothing, we create a new one (default).
+                // --- WRITES START HERE ---
+                // 3. WRITES: Ejecutar actualizaciones de stock pendientes
+                // 3. WRITES: Ejecutar actualizaciones de stock pendientes
+                for (const update of pendingStockUpdates) {
+                    transaction.update(update.ref, { stock: update.newStock });
 
-                if (isUpdate) {
-                    // Log for debugging
-                    console.log("Updating existing sale:", saleDocRef.id);
+                    // Log movement
+                    const movementRef = doc(collection(db, 'movimientos_inventario'));
+                    const selectedClient = clients.find(c => c.id === data.cliente_id);
+                    const clientFullName = selectedClient ? `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim() : 'Cliente';
+                    const selectedLocal = locales.find(l => l.id === data.local_id);
+
+                    transaction.set(movementRef, {
+                        date: Timestamp.now(),
+                        local_id: data.local_id,
+                        product_id: update.productData.id,
+                        presentation_id: update.productData.presentation_id || 'default',
+                        from: update.productData.stock,
+                        to: update.newStock,
+                        cause: 'Venta',
+                        staff_id: user?.uid || 'unknown',
+                        comment: `Venta a ${clientFullName}`,
+                        product_name: update.productData.nombre,
+                        staff_name: user?.displayName || user?.email || 'Desconocido',
+                        local_name: selectedLocal?.name || 'Local',
+                        concepto: `Registrar venta: ${clientFullName}`
+                    });
+
+                    if (update.productData.stock_alarm_threshold && update.newStock <= update.productData.stock_alarm_threshold && update.productData.notification_email) {
+                        sendStockAlert({
+                            productName: update.productData.nombre,
+                            currentStock: update.newStock,
+                            recipientEmail: update.productData.notification_email,
+                        }).catch(console.error);
+                    }
                 }
-
-
 
                 const itemsToSave = cart.map(item => {
                     const itemSubtotal = (item.precio || 0) * item.cantidad;

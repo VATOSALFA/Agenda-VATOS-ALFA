@@ -157,7 +157,7 @@ export default function SitioWebPage() {
                     </CardContent>
                 </Card>
 
-                <Accordion type="multiple" defaultValue={["item-1"]} className="w-full space-y-4">
+                <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
                     <AccordionItem value="item-1" className="border rounded-lg bg-card">
                         <AccordionTrigger className="p-6">Reservas en el sitio web</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-4">
@@ -262,52 +262,47 @@ export default function SitioWebPage() {
                             )}
                         </AccordionContent>
                     </AccordionItem>
-                </Accordion>
 
-                <Card>
-                    <CardHeader><CardTitle>Configuración de Tiempos y Preferencias</CardTitle></CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                            <Label>Tiempo mínimo de reserva</Label>
-                            <p className="text-sm text-muted-foreground">
-                                Horas mínimas requeridas para que un cliente reserve. No se podrá reservar con menos anticipación.
-                            </p>
-                            <div className="flex w-full items-center gap-2">
-                                <Input
-                                    type="number"
-                                    min={0}
-                                    {...form.register('minReservationTime')}
-                                    className="flex-1"
-                                />
-                                <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
-                                    Horas
+                    <AccordionItem value="item-4" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Configuración de Tiempos y Preferencias</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-6">
+                            <div className="space-y-2">
+                                <Label>Tiempo mínimo de reserva</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Horas mínimas requeridas para que un cliente reserve. No se podrá reservar con menos anticipación.
+                                </p>
+                                <div className="flex w-full items-center gap-2">
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        {...form.register('minReservationTime')}
+                                        className="flex-1"
+                                    />
+                                    <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
+                                        Horas
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Tiempo máximo futuro</Label>
-                            <p className="text-sm text-muted-foreground">
-                                Tiempo máximo que una persona puede reservar a futuro. No se permiten citas para más de 365 días a futuro.
-                            </p>
-                            <div className="flex w-full items-center gap-2">
-                                <Input
-                                    type="number"
-                                    min={0}
-                                    max={365}
-                                    {...form.register('maxFutureTime')}
-                                    className="flex-1"
-                                />
-                                <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
-                                    Días
+                            <div className="space-y-2">
+                                <Label>Tiempo máximo futuro</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Tiempo máximo que una persona puede reservar a futuro. No se permiten citas para más de 365 días a futuro.
+                                </p>
+                                <div className="flex w-full items-center gap-2">
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={365}
+                                        {...form.register('maxFutureTime')}
+                                        className="flex-1"
+                                    />
+                                    <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
+                                        Días
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                    </CardContent>
-                </Card>
-
-                <Accordion type="multiple" className="w-full space-y-4">
-
+                        </AccordionContent>
+                    </AccordionItem>
 
                     <AccordionItem value="item-5" className="border rounded-lg bg-card">
                         <AccordionTrigger className="p-6">Configuración de campos adicionales</AccordionTrigger>

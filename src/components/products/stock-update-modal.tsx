@@ -6,9 +6,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, increment } from 'firebase/firestore';
+import { doc, updateDoc, increment, collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
+import { useAuth } from '@/contexts/firebase-auth-context';
+import { useLocal } from '@/contexts/local-context';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,10 +22,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2 } from 'lucide-react';
-import type { Product } from '@/lib/types';
+import type { Product, StockMovement } from '@/lib/types';
 
 interface StockUpdateModalProps {
   product: Product;
@@ -35,12 +38,15 @@ interface StockUpdateModalProps {
 const stockUpdateSchema = z.object({
   changeType: z.enum(['add', 'subtract']),
   quantity: z.coerce.number().min(1, 'La cantidad debe ser mayor a 0.'),
+  comment: z.string().optional(),
 });
 
 type StockUpdateFormData = z.infer<typeof stockUpdateSchema>;
 
 export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: StockUpdateModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { selectedLocalId } = useLocal();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<StockUpdateFormData>({
@@ -48,6 +54,7 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
     defaultValues: {
       changeType: 'add',
       quantity: 1,
+      comment: '',
     },
   });
 
@@ -56,17 +63,30 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
       form.reset({
         changeType: 'add',
         quantity: 1,
+        comment: '',
       });
     }
   }, [isOpen, form]);
 
   const onSubmit = async (data: StockUpdateFormData) => {
+    const activeLocalId = selectedLocalId || 'unknown_local';
+
+    if (!selectedLocalId) {
+      // Optional: Block if no local selected, or allow Global update. 
+      // For now, allow but log as 'unknown' if that fits business logic, 
+      // or block if strict. Given "Inventory" page might be global, we proceed with fallback.
+      // But warning is good.
+      console.warn("No local selected for stock update.");
+    }
+
     setIsSubmitting(true);
     try {
       const productRef = doc(db, 'productos', product.id);
       const stockChange = data.changeType === 'add' ? data.quantity : -data.quantity;
 
-      const newStock = (product.stock || 0) + stockChange;
+      const currentStock = product.stock || 0;
+      const newStock = currentStock + stockChange;
+
       if (newStock < 0) {
         toast({
           variant: 'destructive',
@@ -76,22 +96,44 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
         setIsSubmitting(false);
         return;
       }
-      
+
       await updateDoc(productRef, {
         stock: increment(stockChange),
       });
 
+      // Registrar movimiento de stock
+      const movement: Omit<StockMovement, 'id'> = {
+        date: Timestamp.now(),
+        local_id: activeLocalId,
+        product_id: product.id,
+        presentation_id: product.presentation_id || 'default',
+        from: currentStock,
+        to: newStock,
+        cause: 'Manual Adjustment',
+        staff_id: user?.uid || 'unknown',
+        comment: data.comment || '',
+      };
+
+      await addDoc(collection(db, 'movimientos_inventario'), {
+        ...movement,
+        product_name: product.nombre,
+        staff_name: user?.displayName || user?.email || 'Desconocido',
+        local_name: activeLocalId, // Fallback to ID
+        concepto: 'Cambio de stock',
+      });
+
+
       if (product.stock_alarm_threshold && newStock <= product.stock_alarm_threshold && product.notification_email) {
-          await sendStockAlert({
-              productName: product.nombre,
-              currentStock: newStock,
-              recipientEmail: product.notification_email,
-          });
-          toast({
-            variant: "destructive",
-            title: "Alerta de stock bajo",
-            description: `El producto ${product.nombre} tiene solo ${newStock} unidades.`,
-          });
+        await sendStockAlert({
+          productName: product.nombre,
+          currentStock: newStock,
+          recipientEmail: product.notification_email,
+        });
+        toast({
+          variant: "destructive",
+          title: "Alerta de stock bajo",
+          description: `El producto ${product.nombre} tiene solo ${newStock} unidades.`,
+        });
       }
 
 
@@ -99,7 +141,7 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
         title: 'Stock actualizado',
         description: `El stock de ${product.nombre} ha sido actualizado a ${newStock}.`,
       });
-      
+
       onStockUpdated();
       onClose();
 
@@ -159,6 +201,23 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
                     <FormLabel>Cantidad</FormLabel>
                     <FormControl>
                       <Input type="number" min="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="comment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Comentarios (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Razón del ajuste..."
+                        className="resize-none"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

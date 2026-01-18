@@ -14,31 +14,37 @@ import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provi
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export async function generateMetadata(): Promise<Metadata> {
+  const defaultTitle = 'VATOS ALFA - Barber Shop';
+  const defaultDesc = 'Agenda tu cita con los mejores profesionales.';
+  const defaultIcon = '/logo-vatos-alfa.png';
+
+  let title = defaultTitle;
+  let description = defaultDesc;
+  let icon = defaultIcon;
+
   try {
     const db = getDb();
     const docRef = await db.collection('empresa').doc('main').get();
-    const data = docRef.data();
 
-    if (data?.icon_url) {
-      return {
-        title: data.name || 'VATOS ALFA',
-        description: data.description || 'Agenda tu cita con los mejores profesionales.',
-        icons: {
-          icon: data.icon_url,
-          apple: data.icon_url,
-        }
-      };
+    if (docRef.exists) {
+      const data = docRef.data();
+      if (data) {
+        if (data.name) title = data.name;
+        if (data.description) description = data.description;
+        if (data.icon_url) icon = data.icon_url;
+      }
     }
   } catch (error) {
-    // Silently fail in dev/build if credentials aren't available, fallback to default
-    // console.warn('Metadata fetch failed (using default):', error); 
+    // Log error but don't crash, fallback to defaults
+    console.warn('Metadata fetch failed (using default):', error);
   }
 
   return {
-    title: 'VATOS ALFA - Barber Shop',
-    description: 'Agenda tu cita con los mejores profesionales.',
+    title: title,
+    description: description,
     icons: {
-      icon: '/logo-vatos-alfa.png',
+      icon: icon,
+      apple: icon,
     }
   };
 }

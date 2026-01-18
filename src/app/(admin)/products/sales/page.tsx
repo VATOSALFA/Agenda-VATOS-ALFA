@@ -24,14 +24,14 @@ import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-d
 import { ProductSaleDetailModal, type ProductSaleDetail } from "@/components/products/sales/product-sale-detail-modal";
 import { useToast } from "@/hooks/use-toast";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -86,29 +86,29 @@ export default function ProductSalesPage() {
         productStatus: 'active',
         product: 'todos'
     });
-    
+
     const [queryKey, setQueryKey] = useState(0);
 
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
-      'ventas',
-      `sales-${queryKey}`,
-      ...(activeFilters.dateRange?.from ? [where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from)))] : []),
-      ...(activeFilters.dateRange?.to ? [where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to)))] : [])
+        'ventas',
+        `sales-${queryKey}`,
+        ...(activeFilters.dateRange?.from ? [where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from)))] : []),
+        ...(activeFilters.dateRange?.to ? [where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to)))] : [])
     );
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: presentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos');
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-    
+
     const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading;
-    
+
     const formatDate = (date: any, formatString: string = 'PP') => {
         if (!date) return 'N/A';
         let dateObj: Date;
         if (date.seconds) { // Firestore Timestamp
-          dateObj = new Date(date.seconds * 1000);
+            dateObj = new Date(date.seconds * 1000);
         } else if (typeof date === 'string') { // ISO String
-          dateObj = parseISO(date);
+            dateObj = parseISO(date);
         } else {
             return 'Fecha inválida';
         }
@@ -118,9 +118,9 @@ export default function ProductSalesPage() {
 
     const filteredProductItems = useMemo(() => {
         if (isLoading) return [];
-        
+
         const activeProductIds = new Set(products.filter(p => activeFilters.productStatus === 'todos' || p.active === (activeFilters.productStatus === 'active')).map(p => p.id));
-        
+
         const allItems: (SaleItem & { saleId: string; cliente_id: string; fecha_hora_venta: any })[] = [];
         sales.forEach(sale => {
             sale.items?.forEach(item => {
@@ -133,7 +133,7 @@ export default function ProductSalesPage() {
         });
         return allItems;
     }, [sales, products, activeFilters, isLoading]);
-    
+
     const salesSummary = useMemo(() => {
         if (filteredProductItems.length === 0) {
             return {
@@ -157,8 +157,11 @@ export default function ProductSalesPage() {
         filteredProductItems.forEach(item => {
             const product = productMap.get(item.id);
             if (!product) return;
-            
-            const itemRevenue = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
+
+            const quantity = Number(item.cantidad) || 0;
+            const price = Number(item.precio) || 0;
+            const itemRevenue = Number(item.subtotal) || (price * quantity) || 0;
+
             if (!aggregated[item.id]) {
                 aggregated[item.id] = {
                     id: item.id,
@@ -170,19 +173,19 @@ export default function ProductSalesPage() {
                     details: []
                 };
             }
-            
+
             totalRevenue += itemRevenue;
 
-            aggregated[item.id].unitsSold += item.cantidad;
+            aggregated[item.id].unitsSold += quantity;
             aggregated[item.id].revenue += itemRevenue;
-            
+
             const sellerName = item.barbero_id ? (professionalMap.get(item.barbero_id) || 'Desconocido') : 'Desconocido';
 
             aggregated[item.id].details.push({
                 saleId: item.saleId,
                 clientName: clientMap.get(item.cliente_id) || 'Desconocido',
                 sellerName,
-                unitsSold: item.cantidad,
+                unitsSold: quantity,
                 revenue: itemRevenue,
                 date: formatDate(item.fecha_hora_venta)
             });
@@ -192,18 +195,18 @@ export default function ProductSalesPage() {
             }
         });
 
-        const aggregatedData = Object.values(aggregated).sort((a,b) => b.revenue - a.revenue);
+        const aggregatedData = Object.values(aggregated).sort((a, b) => b.revenue - a.revenue);
         const totalUnitsSold = aggregatedData.reduce((acc, item) => acc + item.unitsSold, 0);
-        
+
         let highestRevenueProduct = null;
         let lowestRevenueProduct = null;
-        
-        if(aggregatedData.length > 0) {
+
+        if (aggregatedData.length > 0) {
             const getTopSeller = (sellers: { [key: string]: number; }) => Object.keys(sellers).length > 0 ? Object.keys(sellers).reduce((a, b) => sellers[a] > sellers[b] ? a : b, '') : 'N/A';
-            
+
             const highest = aggregatedData[0];
             highestRevenueProduct = { name: highest.nombre, seller: getTopSeller(highest.sellers), amount: highest.revenue };
-            
+
             const lowest = aggregatedData[aggregatedData.length - 1];
             lowestRevenueProduct = { name: lowest.nombre, seller: getTopSeller(lowest.sellers), amount: lowest.revenue };
         }
@@ -235,22 +238,24 @@ export default function ProductSalesPage() {
                     details: []
                 };
             }
-            
-            const itemRevenue = item.subtotal || (item.precio * item.cantidad) || 0;
-            
-            aggregated[item.barbero_id].unitsSold += item.cantidad;
+
+            const quantity = Number(item.cantidad) || 0;
+            const price = Number(item.precio) || 0;
+            const itemRevenue = Number(item.subtotal) || (price * quantity) || 0;
+
+            aggregated[item.barbero_id].unitsSold += quantity;
             aggregated[item.barbero_id].revenue += itemRevenue;
             aggregated[item.barbero_id].details.push({
                 saleId: item.saleId,
                 clientName: clientMap.get(item.cliente_id) || 'Desconocido',
                 productName: productMap.get(item.id) || 'Desconocido',
-                unitsSold: item.cantidad,
+                unitsSold: quantity,
                 revenue: itemRevenue,
                 date: formatDate(item.fecha_hora_venta),
             });
         });
 
-        return Object.values(aggregated).sort((a,b) => b.revenue - a.revenue);
+        return Object.values(aggregated).sort((a, b) => b.revenue - a.revenue);
     }, [filteredProductItems, professionals, products, clients, isLoading]);
 
     const handleSearch = () => {
@@ -291,17 +296,17 @@ export default function ProductSalesPage() {
             const client = clientMap.get(item.cliente_id) || 'Desconocido';
             const salePrice = item.subtotal || (item.precio * item.cantidad);
             const purchaseCost = product?.purchase_cost || 0;
-            
+
             let commissionAmount = 0;
             if (product && professional) {
                 const commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                if(commissionConfig) {
+                if (commissionConfig) {
                     commissionAmount = commissionConfig.type === '%'
                         ? salePrice * (commissionConfig.value / 100)
                         : commissionConfig.value;
                 }
             }
-            
+
             const utility = salePrice - purchaseCost - commissionAmount;
 
 
@@ -352,224 +357,223 @@ export default function ProductSalesPage() {
             setAuthCode('');
         }
     };
-    
+
     return (
         <>
-        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-            <h2 className="text-3xl font-bold tracking-tight">Venta de Productos</h2>
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>Filtros</CardTitle>
-                    <CardDescription>Filtra las ventas por diferentes criterios.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                     <Popover>
-                        <PopoverTrigger asChild>
-                            <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {dateRange?.from ? (
-                                    dateRange.to ? (
-                                        <>{format(dateRange.from, "LLL dd, y", {locale: es})} - {format(dateRange.to, "LLL dd, y", {locale: es})}</>
-                                    ) : (
-                                        format(dateRange.from, "LLL dd, y", {locale: es})
-                                    )
-                                ) : (
-                                    <span>Periodo de tiempo</span>
-                                )}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
-                        </PopoverContent>
-                    </Popover>
-                    <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
-                        <SelectTrigger><SelectValue placeholder="Estado del producto" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="todos">Todos los estados</SelectItem>
-                            <SelectItem value="active">Activo</SelectItem>
-                            <SelectItem value="inactive">Inactivo</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Select value={productFilter} onValueChange={setProductFilter} disabled={productsLoading}>
-                        <SelectTrigger><SelectValue placeholder="Productos" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="todos">Todos los productos</SelectItem>
-                            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Button onClick={handleSearch} disabled={isLoading}>
-                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                      Buscar
-                    </Button>
-                </CardContent>
-            </Card>
+            <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+                <h2 className="text-3xl font-bold tracking-tight">Venta de Productos</h2>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">RECAUDACIÓN TOTAL</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <CardHeader>
+                        <CardTitle>Filtros</CardTitle>
+                        <CardDescription>Filtra las ventas por diferentes criterios.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${salesSummary.totalRevenue.toLocaleString('es-CL')}</div>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateRange?.from ? (
+                                        dateRange.to ? (
+                                            <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+                                        ) : (
+                                            format(dateRange.from, "LLL dd, y", { locale: es })
+                                        )
+                                    ) : (
+                                        <span>Periodo de tiempo</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                            </PopoverContent>
+                        </Popover>
+                        <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
+                            <SelectTrigger><SelectValue placeholder="Estado del producto" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos los estados</SelectItem>
+                                <SelectItem value="active">Activo</SelectItem>
+                                <SelectItem value="inactive">Inactivo</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={productFilter} onValueChange={setProductFilter} disabled={productsLoading}>
+                            <SelectTrigger><SelectValue placeholder="Productos" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todos los productos</SelectItem>
+                                {products.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Button onClick={handleSearch} disabled={isLoading}>
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                            Buscar
+                        </Button>
                     </CardContent>
                 </Card>
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">RECAUDACIÓN TOTAL</CardTitle>
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">${salesSummary.totalRevenue.toLocaleString('es-CL')}</div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">UNIDADES VENDIDAS</CardTitle>
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{salesSummary.totalUnitsSold}</div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Mayor ingreso</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-green-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-lg font-bold truncate">{salesSummary.highestRevenueProduct?.name || '-'}</div>
+                            <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.highestRevenueProduct?.seller || '-'}</p>
+                            <p className="text-sm font-semibold text-primary">${(salesSummary.highestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Menor ingreso</CardTitle>
+                            <TrendingDown className="h-4 w-4 text-red-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-lg font-bold truncate">{salesSummary.lowestRevenueProduct?.name || '-'}</div>
+                            <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.lowestRevenueProduct?.seller || '-'}</p>
+                            <p className="text-sm font-semibold text-primary">${(salesSummary.lowestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
+                        </CardContent>
+                    </Card>
+                </div>
+
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">UNIDADES VENDIDAS</CardTitle>
-                        <Package className="h-4 w-4 text-muted-foreground" />
+                    <CardHeader className="flex-row items-center justify-between">
+                        <div><CardTitle>Detalle de la venta</CardTitle></div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
+                                <Download className="mr-2 h-4 w-4" /> Descargar reporte
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{salesSummary.totalUnitsSold}</div>
+                        <Tabs defaultValue="por-productos" onValueChange={setActiveTab}>
+                            <TabsList className="mb-4">
+                                <TabsTrigger value="por-productos">Por productos</TabsTrigger>
+                                <TabsTrigger value="por-vendedor">Por vendedor</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="por-productos">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Producto</TableHead>
+                                            <TableHead>Formato/Presentación</TableHead>
+                                            <TableHead className="text-right">Unidades vendidas</TableHead>
+                                            <TableHead className="text-right">Recaudación</TableHead>
+                                            <TableHead className="text-right">Acciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        ) : salesSummary.aggregatedData.length === 0 ? (
+                                            <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas de productos para los filtros seleccionados.</TableCell></TableRow>
+                                        ) : salesSummary.aggregatedData.map((sale) => (
+                                            <TableRow key={sale.id}>
+                                                <TableCell className="font-medium">{sale.nombre}</TableCell>
+                                                <TableCell>{sale.presentation}</TableCell>
+                                                <TableCell className="text-right">{sale.unitsSold}</TableCell>
+                                                <TableCell className="text-right font-semibold text-primary">${sale.revenue.toLocaleString('es-CL')}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="outline" size="sm" onClick={() => handleViewProductDetails(sale)}>
+                                                        <Eye className="mr-2 h-4 w-4" />Ver detalles
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TabsContent>
+                            <TabsContent value="por-vendedor">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Vendedor</TableHead>
+                                            <TableHead>Tipo de usuario</TableHead>
+                                            <TableHead className="text-right">Unidades vendidas</TableHead>
+                                            <TableHead className="text-right">Recaudación</TableHead>
+                                            <TableHead className="text-right">Acciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        ) : sellerSummary.length === 0 ? (
+                                            <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas para los filtros seleccionados.</TableCell></TableRow>
+                                        ) : sellerSummary.map((seller) => (
+                                            <TableRow key={seller.sellerId}>
+                                                <TableCell className="font-medium">{seller.sellerName}</TableCell>
+                                                <TableCell>{seller.userType}</TableCell>
+                                                <TableCell className="text-right">{seller.unitsSold}</TableCell>
+                                                <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="outline" size="sm" onClick={() => handleViewSellerDetails(seller)}>
+                                                        <Eye className="mr-2 h-4 w-4" />Ver detalles
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Mayor ingreso</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-green-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-lg font-bold truncate">{salesSummary.highestRevenueProduct?.name || '-'}</div>
-                        <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.highestRevenueProduct?.seller || '-'}</p>
-                        <p className="text-sm font-semibold text-primary">${(salesSummary.highestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Menor ingreso</CardTitle>
-                        <TrendingDown className="h-4 w-4 text-red-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-lg font-bold truncate">{salesSummary.lowestRevenueProduct?.name || '-'}</div>
-                        <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.lowestRevenueProduct?.seller || '-'}</p>
-                         <p className="text-sm font-semibold text-primary">${(salesSummary.lowestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
-                    </CardContent>
-                </Card>
+
             </div>
 
-            <Card>
-                <CardHeader className="flex-row items-center justify-between">
-                    <div><CardTitle>Detalle de la venta</CardTitle></div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}>
-                            <Download className="mr-2 h-4 w-4" /> Descargar reporte
-                        </Button>
+            <SellerSaleDetailModal
+                isOpen={isSellerDetailModalOpen}
+                onOpenChange={setIsSellerDetailModalOpen}
+                summary={selectedSellerSummary}
+            />
+
+            <ProductSaleDetailModal
+                isOpen={isProductDetailModalOpen}
+                onOpenChange={setIsProductDetailModalOpen}
+                summary={selectedProductSummary}
+            />
+
+            <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                            Requiere Autorización
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-4">
+                        <Label htmlFor="auth-code">Código de Autorización</Label>
+                        <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <Tabs defaultValue="por-productos" onValueChange={setActiveTab}>
-                        <TabsList className="mb-4">
-                            <TabsTrigger value="por-productos">Por productos</TabsTrigger>
-                            <TabsTrigger value="por-vendedor">Por vendedor</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="por-productos">
-                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Producto</TableHead>
-                                        <TableHead>Formato/Presentación</TableHead>
-                                        <TableHead className="text-right">Unidades vendidas</TableHead>
-                                        <TableHead className="text-right">Recaudación</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLoading ? (
-                                        <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                                    ) : salesSummary.aggregatedData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas de productos para los filtros seleccionados.</TableCell></TableRow>
-                                    ) : salesSummary.aggregatedData.map((sale) => (
-                                        <TableRow key={sale.id}>
-                                            <TableCell className="font-medium">{sale.nombre}</TableCell>
-                                            <TableCell>{sale.presentation}</TableCell>
-                                            <TableCell className="text-right">{sale.unitsSold}</TableCell>
-                                            <TableCell className="text-right font-semibold text-primary">${sale.revenue.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="outline" size="sm" onClick={() => handleViewProductDetails(sale)}>
-                                                    <Eye className="mr-2 h-4 w-4" />Ver detalles
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TabsContent>
-                         <TabsContent value="por-vendedor">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Vendedor</TableHead>
-                                        <TableHead>Tipo de usuario</TableHead>
-                                        <TableHead className="text-right">Unidades vendidas</TableHead>
-                                        <TableHead className="text-right">Recaudación</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLoading ? (
-                                        <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                                    ) : sellerSummary.length === 0 ? (
-                                        <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas para los filtros seleccionados.</TableCell></TableRow>
-                                    ) : sellerSummary.map((seller) => (
-                                        <TableRow key={seller.sellerId}>
-                                            <TableCell className="font-medium">{seller.sellerName}</TableCell>
-                                            <TableCell>{seller.userType}</TableCell>
-                                            <TableCell className="text-right">{seller.unitsSold}</TableCell>
-                                            <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="outline" size="sm" onClick={() => handleViewSellerDetails(seller)}>
-                                                    <Eye className="mr-2 h-4 w-4" />Ver detalles
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
-
-        </div>
-
-        <SellerSaleDetailModal 
-            isOpen={isSellerDetailModalOpen}
-            onOpenChange={setIsSellerDetailModalOpen}
-            summary={selectedSellerSummary}
-        />
-        
-        <ProductSaleDetailModal
-            isOpen={isProductDetailModalOpen}
-            onOpenChange={setIsProductDetailModalOpen}
-            summary={selectedProductSummary}
-        />
-
-        <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2">
-                        <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                        Requiere Autorización
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="py-4">
-                    <Label htmlFor="auth-code">Código de Autorización</Label>
-                    <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
-                </div>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }
 
-    
 
-    
+

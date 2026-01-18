@@ -1,11 +1,10 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy } from "lucide-react";
+import { Copy, ChevronDown, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { useForm, Controller } from "react-hook-form";
@@ -13,9 +12,9 @@ import { doc, setDoc } from "firebase/firestore";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { useEffect, useState } from "react";
 import { ImageUploader } from "@/components/shared/image-uploader";
-import { Loader2 } from "lucide-react";
 import { ColorPicker } from '@/components/settings/empresa/color-picker';
 import { useTheme } from "@/components/layout/theme-provider";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface EmpresaSettings {
     id?: string;
@@ -33,6 +32,34 @@ interface EmpresaSettings {
         foreground?: string;
         cardColor?: string;
     }
+}
+
+function CollapsibleCard({ title, description, children, defaultOpen = false }: { title: string, description: React.ReactNode, children: React.ReactNode, defaultOpen?: boolean }) {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+
+    return (
+        <Card>
+            <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+                <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors flex flex-row items-center justify-between space-y-0">
+                        <div className="space-y-1.5 text-left pr-4">
+                            <CardTitle>{title}</CardTitle>
+                            <CardDescription>{description}</CardDescription>
+                        </div>
+                        <Button variant="ghost" size="sm" className="w-9 p-0 bg-transparent hover:bg-transparent" type="button">
+                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                            <span className="sr-only">Toggle</span>
+                        </Button>
+                    </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <CardContent className="pt-0">
+                        {children}
+                    </CardContent>
+                </CollapsibleContent>
+            </Collapsible>
+        </Card>
+    )
 }
 
 export default function EmpresaPage() {
@@ -151,159 +178,130 @@ export default function EmpresaPage() {
             </div>
 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Nombre de tu empresa</CardTitle>
-                        <CardDescription>
-                            El nombre que aparecerá en todos los lugares de VATOS ALFA, incluido tu sitio web.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Input {...form.register('name')} />
-                    </CardContent>
-                </Card>
+                <CollapsibleCard
+                    title="Nombre de tu empresa"
+                    description="El nombre que aparecerá en todos los lugares de VATOS ALFA, incluido tu sitio web."
+                >
+                    <Input {...form.register('name')} />
+                </CollapsibleCard>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Descripción</CardTitle>
-                        <CardDescription>
-                            Cuéntale a tus clientes sobre tu empresa, sobre los servicios que ofreces o tu propuesta de valor.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-2">
-                            <Textarea
-                                rows={6}
-                                maxLength={500}
-                                {...form.register('description')}
-                                onChange={(e) => {
-                                    form.setValue('description', e.target.value.slice(0, 500));
-                                }}
-                            />
-                            <div className="flex justify-end">
-                                <span className={`text-xs ${form.watch('description')?.length >= 500 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                                    {form.watch('description')?.length || 0}/500 caracteres
-                                </span>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Logo de la empresa</CardTitle>
-                        <CardDescription>Este logo aparecerá en el encabezado de la aplicación, el sitio de agendamiento y los comprobantes.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Controller
-                            name="logo_url"
-                            control={form.control}
-                            render={({ field }) => (
-                                <ImageUploader
-                                    folder="logos"
-                                    currentImageUrl={field.value}
-                                    onUpload={(url) => field.onChange(url)}
-                                    onRemove={() => field.onChange('')}
-                                />
-                            )}
+                <CollapsibleCard
+                    title="Descripción"
+                    description="Cuéntale a tus clientes sobre tu empresa, sobre los servicios que ofreces o tu propuesta de valor."
+                >
+                    <div className="space-y-2">
+                        <Textarea
+                            rows={6}
+                            maxLength={500}
+                            {...form.register('description')}
+                            onChange={(e) => {
+                                form.setValue('description', e.target.value.slice(0, 500));
+                            }}
                         />
-                    </CardContent>
-                </Card>
+                        <div className="flex justify-end">
+                            <span className={`text-xs ${form.watch('description')?.length >= 500 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                {form.watch('description')?.length || 0}/500 caracteres
+                            </span>
+                        </div>
+                    </div>
+                </CollapsibleCard>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Icono / Avatar (Opcional)</CardTitle>
-                        <CardDescription>
-                            Este icono se usará en el encabezado de tu sitio y como perfil predeterminado.
-                            Se recomienda una imagen cuadrada (ej. 500x500 px) para evitar recortes.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Controller
-                            name="icon_url"
-                            control={form.control}
-                            render={({ field }) => (
-                                <div className="flex flex-col items-center sm:flex-row gap-6">
-                                    <div className="h-24 w-24 rounded-full border overflow-hidden relative shrink-0">
-                                        {field.value ? (
-                                            <img src={field.value} alt="Icon preview" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs text-center p-2">
-                                                Sin icono
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 w-full">
-                                        <ImageUploader
-                                            folder="logos"
-                                            currentImageUrl={field.value}
-                                            onUpload={(url) => field.onChange(url)}
-                                            onRemove={() => field.onChange('')}
-                                        />
-                                    </div>
+                <CollapsibleCard
+                    title="Logo de la empresa"
+                    description="Este logo aparecerá en el encabezado de la aplicación, el sitio de agendamiento y los comprobantes."
+                >
+                    <Controller
+                        name="logo_url"
+                        control={form.control}
+                        render={({ field }) => (
+                            <ImageUploader
+                                folder="logos"
+                                currentImageUrl={field.value}
+                                onUpload={(url) => field.onChange(url)}
+                                onRemove={() => field.onChange('')}
+                            />
+                        )}
+                    />
+                </CollapsibleCard>
+
+                <CollapsibleCard
+                    title="Icono / Avatar (Opcional)"
+                    description="Este icono se usará en el encabezado de tu sitio y como perfil predeterminado. Se recomienda una imagen cuadrada (ej. 500x500 px)."
+                >
+                    <Controller
+                        name="icon_url"
+                        control={form.control}
+                        render={({ field }) => (
+                            <div className="flex flex-col items-center sm:flex-row gap-6">
+                                <div className="h-24 w-24 rounded-full border overflow-hidden relative shrink-0">
+                                    {field.value ? (
+                                        <img src={field.value} alt="Icon preview" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs text-center p-2">
+                                            Sin icono
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                                <div className="flex-1 w-full">
+                                    <ImageUploader
+                                        folder="logos"
+                                        currentImageUrl={field.value}
+                                        onUpload={(url) => field.onChange(url)}
+                                        onRemove={() => field.onChange('')}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    />
+                </CollapsibleCard>
+
+                <CollapsibleCard
+                    title="Dirección de tu sitio web de agendamiento"
+                    description="Destaca tu marca personalizando la dirección de tu sitio web."
+                >
+                    <div className="flex items-center space-x-2">
+                        <Input {...form.register('website_slug')} />
+                        <Button type="button" variant="outline" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
+                    </div>
+                </CollapsibleCard>
+
+                <CollapsibleCard
+                    title="Personalización"
+                    description="Configura los colores de tu sitio web, LinkPro y de los emails que recibirán tus clientes."
+                >
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <ColorPicker
+                            label="Color Primario"
+                            color={primaryColor}
+                            onChange={setPrimaryColor}
                         />
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Dirección de tu sitio web de agendamiento</CardTitle>
-                        <CardDescription>
-                            Destaca tu marca personalizando la dirección de tu sitio web. Una dirección única también mejora la visibilidad de tu sitio en Google.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center space-x-2">
-                            <Input {...form.register('website_slug')} />
-                            <Button type="button" variant="outline" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Personalización</CardTitle>
-                        <CardDescription>
-                            Configura los colores de tu sitio web, LinkPro y de los emails que recibirán tus clientes.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <ColorPicker
-                                label="Color Primario"
-                                color={primaryColor}
-                                onChange={setPrimaryColor}
-                            />
-                            <ColorPicker
-                                label="Color Secundario"
-                                color={secondaryColor}
-                                onChange={setSecondaryColor}
-                            />
-                            <ColorPicker
-                                label="Color de Acento"
-                                color={accentColor}
-                                onChange={setAccentColor}
-                            />
-                            <ColorPicker
-                                label="Color de Fondo"
-                                color={backgroundColor}
-                                onChange={setBackgroundColor}
-                            />
-                            <ColorPicker
-                                label="Color de Texto"
-                                color={foregroundColor}
-                                onChange={setForegroundColor}
-                            />
-                            <ColorPicker
-                                label="Color de Tarjetas"
-                                color={cardColor}
-                                onChange={setCardColor}
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
+                        <ColorPicker
+                            label="Color Secundario"
+                            color={secondaryColor}
+                            onChange={setSecondaryColor}
+                        />
+                        <ColorPicker
+                            label="Color de Acento"
+                            color={accentColor}
+                            onChange={setAccentColor}
+                        />
+                        <ColorPicker
+                            label="Color de Fondo"
+                            color={backgroundColor}
+                            onChange={setBackgroundColor}
+                        />
+                        <ColorPicker
+                            label="Color de Texto"
+                            color={foregroundColor}
+                            onChange={setForegroundColor}
+                        />
+                        <ColorPicker
+                            label="Color de Tarjetas"
+                            color={cardColor}
+                            onChange={setCardColor}
+                        />
+                    </div>
+                </CollapsibleCard>
 
                 <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
                     <Button type="submit" disabled={isSubmitting}>

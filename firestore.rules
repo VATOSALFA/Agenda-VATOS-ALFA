@@ -108,6 +108,7 @@ service cloud.firestore {
     match /categorias_productos/{document=**} { allow read, write: if isAuthenticated(); }
     match /formatos_productos/{document=**} { allow read, write: if isAuthenticated(); }
     match /marcas_productos/{document=**} { allow read, write: if isAuthenticated(); }
+    match /movimientos_inventario/{document=**} { allow read, write: if isAuthenticated(); }
     
     // Payments (Generic catch-all if needed, though usually covered by sales/caja)
     match /pagos/{document=**} { allow read, write: if isAuthenticated(); }

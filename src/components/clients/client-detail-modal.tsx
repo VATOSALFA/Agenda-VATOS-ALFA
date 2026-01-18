@@ -40,6 +40,7 @@ interface Sale {
   total: number;
   metodo_pago: string;
   items: { nombre: string; cantidad: number; precio_unitario: number }[];
+  pago_estado?: string;
 }
 
 const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: string | undefined | null }) => (
@@ -103,7 +104,14 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     return format(dateObj, includeTime ? 'PPP p' : 'PPP', { locale: es });
   };
 
-  const totalSpent = client.gasto_total || (salesLoading ? 0 : sales.reduce((acc, sale) => acc + (sale.total || 0), 0));
+  const validSales = useMemo(() => {
+    if (salesLoading || !sales) return [];
+    return sales.filter(sale => !['Pendiente', 'Anulado', 'Cancelado'].includes(sale.pago_estado || ''));
+  }, [sales, salesLoading]);
+
+  const totalSpent = salesLoading
+    ? 0
+    : validSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
 
   const attendedAppointments = client.citas_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length);
   const unattendedAppointments = client.citas_no_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length);
@@ -161,7 +169,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : attendedAppointments} icon={UserCheck} />
                     <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : unattendedAppointments} icon={UserX} />
                     <StatCard title="Citas canceladas" value={reservationsLoading ? '...' : cancelledAppointments} icon={XCircle} />
-                    <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-CL')}`} icon={PiggyBank} description={`${sales.length} compras`} />
+                    <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-CL')}`} icon={PiggyBank} description={`${validSales.length} compras`} />
                   </div>
                 </TabsContent>
                 <TabsContent value="reservations">

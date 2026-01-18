@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -21,6 +20,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Product, ProductCategory, ProductBrand, ProductPresentation } from '@/lib/types';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { ref, deleteObject } from 'firebase/storage';
+import { storage } from '@/lib/firebase-client';
 import { BrandModal } from './brand-modal';
 import { CategoryModal } from './category-modal';
 import { PresentationModal } from './presentation-modal';
@@ -71,6 +72,23 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
   const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
   const [queryKey, setQueryKey] = useState(0);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+
+  const handleCancel = async () => {
+    // Clean up any images uploaded during this session but not saved
+    if (uploadedImages.length > 0) {
+      await Promise.all(uploadedImages.map(async (url) => {
+        try {
+          const imageRef = ref(storage, url);
+          await deleteObject(imageRef);
+        } catch (error) {
+          console.warn("Error cleaning up image:", error);
+        }
+      }));
+    }
+    setUploadedImages([]);
+    onClose();
+  };
 
   const { data: categories } = useFirestoreQuery<ProductCategory>('categorias_productos', queryKey);
   const { data: brands } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
@@ -185,6 +203,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
         });
       }
 
+      setUploadedImages([]);
       onDataSaved();
       onClose();
     } catch (error: any) {
@@ -221,7 +240,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
         <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{product ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>
@@ -255,6 +274,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                             folder="productos"
                             currentImageUrl={fields[index]?.value}
                             onUpload={(url) => {
+                              setUploadedImages(prev => [...prev, url]);
                               if (fields[index]) {
                                 update(index, { value: url });
                               } else {
@@ -367,7 +387,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                 </div>
               </ScrollArea>
               <DialogFooter className="pt-6 border-t mt-4 flex-shrink-0">
-                <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button type="button" variant="outline" onClick={handleCancel}>Cancelar</Button>
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {product ? 'Guardar Cambios' : 'Agregar'}

@@ -290,6 +290,10 @@ export interface StockMovement {
   cause: string;
   staff_id: string;
   comment: string;
+  local_name?: string;
+  product_name?: string;
+  staff_name?: string;
+  concepto?: string;
 }
 
 export interface User {

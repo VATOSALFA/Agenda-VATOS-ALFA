@@ -19,6 +19,7 @@ import { Loader2, Copy, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { ref, deleteObject } from 'firebase/storage';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -31,7 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { db, auth } from '@/lib/firebase-client';
+import { db, auth, storage } from '@/lib/firebase-client';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 
@@ -69,6 +70,22 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+
+    const handleCloseModal = async () => {
+        if (uploadedImages.length > 0) {
+            await Promise.all(uploadedImages.map(async (url) => {
+                try {
+                    const imageRef = ref(storage, url);
+                    await deleteObject(imageRef);
+                } catch (error) {
+                    console.warn("Error cleaning up image:", error);
+                }
+            }));
+        }
+        setUploadedImages([]);
+        onClose();
+    };
 
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
@@ -214,6 +231,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
                 toast({ title: "Profesional creado con éxito" });
             }
+            setUploadedImages([]);
             onDataSaved();
         } catch (error) {
             console.error("Error saving professional:", error);
@@ -231,9 +249,29 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         if (!profesional || !db) return;
         setIsDeleting(true);
         try {
+            // Delete avatar from storage if it exists
+            if (profesional.avatarUrl) {
+                try {
+                    const imageRef = ref(storage, profesional.avatarUrl);
+                    await deleteObject(imageRef);
+                } catch (error: any) {
+                    console.warn("Could not delete avatar image:", error);
+                }
+            }
+
             await deleteDoc(doc(db, 'profesionales', profesional.id));
             if (profesional.userId) {
                 await deleteDoc(doc(db, 'usuarios', profesional.userId));
+            }
+            if (uploadedImages.length > 0) {
+                await Promise.all(uploadedImages.map(async (url) => {
+                    try {
+                        const imageRef = ref(storage, url);
+                        await deleteObject(imageRef);
+                    } catch (error) {
+                        console.warn("Error cleaning up image:", error);
+                    }
+                }));
             }
             toast({ title: "Profesional eliminado con éxito" });
             onDataSaved();
@@ -288,7 +326,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
     return (
         <>
-            <Dialog open={isOpen} onOpenChange={onClose}>
+            <Dialog open={isOpen} onOpenChange={(open) => !open && handleCloseModal()}>
                 <DialogContent className="max-w-5xl h-[95vh] flex flex-col">
                     <DialogHeader>
                         <DialogTitle>{profesional ? `Editando ${profesional.name}` : 'Nuevo Profesional'}</DialogTitle>
@@ -506,6 +544,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                     currentImageUrl={field.value}
                                                     onUploadStateChange={setIsUploading}
                                                     onUpload={(url) => {
+                                                        setUploadedImages(prev => [...prev, url]);
                                                         form.setValue('avatarUrl', url, { shouldDirty: true });
                                                     }}
                                                     onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}
@@ -532,7 +571,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                             </ScrollArea>
                         </Tabs>
                         <DialogFooter className="pt-6 border-t flex-shrink-0">
-                            <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
+                            <Button variant="ghost" type="button" onClick={handleCloseModal}>Cerrar</Button>
                             <Button type="submit" disabled={isSubmitting || isUploading}>
                                 {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Guardar

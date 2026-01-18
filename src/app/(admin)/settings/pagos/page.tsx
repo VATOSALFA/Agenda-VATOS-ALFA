@@ -215,7 +215,7 @@ export default function PagosAgendaProPage() {
                     </CardContent>
                 </Card>
 
-                <Accordion type="multiple" defaultValue={['item-1', 'item-2', 'item-3', 'item-4']} className="w-full space-y-4">
+                <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
                     <AccordionItem value="item-1" className="border rounded-lg bg-card">
                         <AccordionTrigger className="p-6 font-semibold text-base">Pagos en línea</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-6">

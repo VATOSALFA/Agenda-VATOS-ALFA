@@ -751,12 +751,12 @@ export default function BookingPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 relative flex flex-col">
+                <div className="flex-1 p-6 relative flex flex-col overflow-hidden">
                     <AnimatePresence mode="wait">
 
                         {/* STEP 0: SERVICE SELECTION (CART) */}
                         {step === 0 && (
-                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative">
+                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative overflow-hidden">
 
                                 <div className="flex-1 overflow-y-auto pb-32 px-1">
                                     <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">

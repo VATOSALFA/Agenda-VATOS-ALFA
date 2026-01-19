@@ -101,12 +101,20 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
 
         // Fetch settings once (outside loop)
         let minReservationBuffer = 60; // Default 1 hour
+        let GRID_INTERVAL = 30; // Default 30 mins
+
         try {
             const settingsSnap = await db.collection('settings').doc('website').get();
             if (settingsSnap.exists) {
                 const data = settingsSnap.data();
                 if (data) {
                     minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+                    if (data.slotInterval) {
+                        const parsedInterval = Number(data.slotInterval);
+                        if (!isNaN(parsedInterval) && parsedInterval > 0) {
+                            GRID_INTERVAL = parsedInterval;
+                        }
+                    }
                 }
             }
         } catch (e) {
@@ -115,9 +123,6 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
 
         const availableSlots: string[] = [];
         let current = startObj;
-
-        // Slot interval (e.g., every 30 mins)
-        const GRID_INTERVAL = 30; // Could be dynamic from settings too
 
         // Helper to check against current time if it's today
         // FIX: Ensure we use the Business Timezone (Mexico City) instead of Server Time (UTC)

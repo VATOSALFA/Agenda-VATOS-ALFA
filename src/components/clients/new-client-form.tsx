@@ -307,35 +307,37 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
     } else {
       const fullData: any = { ...dataToSave, creado_en: Timestamp.now() };
 
-      // Auto-generate Client Number (Always enforced)
-      try {
-        const clientsCol = collection(db, 'clientes');
+      // Auto-generate Client Number (If enabled)
+      if (clientSettings?.autoClientNumber) {
+        try {
+          const clientsCol = collection(db, 'clientes');
 
-        // 1. Max String
-        const qString = query(clientsCol, orderBy('numero_cliente', 'desc'), limit(1));
-        const snapString = await getDocs(qString);
+          // 1. Max String
+          const qString = query(clientsCol, orderBy('numero_cliente', 'desc'), limit(1));
+          const snapString = await getDocs(qString);
 
-        // 2. Max Number
-        const qNumber = query(clientsCol, where('numero_cliente', '>=', 0), orderBy('numero_cliente', 'desc'), limit(1));
-        const snapNumber = await getDocs(qNumber);
+          // 2. Max Number
+          const qNumber = query(clientsCol, where('numero_cliente', '>=', 0), orderBy('numero_cliente', 'desc'), limit(1));
+          const snapNumber = await getDocs(qNumber);
 
-        let maxVal = 0;
+          let maxVal = 0;
 
-        if (!snapString.empty) {
-          const d = snapString.docs[0].data();
-          const v = Number(d.numero_cliente);
-          if (!isNaN(v)) maxVal = Math.max(maxVal, v);
+          if (!snapString.empty) {
+            const d = snapString.docs[0].data();
+            const v = Number(d.numero_cliente);
+            if (!isNaN(v)) maxVal = Math.max(maxVal, v);
+          }
+
+          if (!snapNumber.empty) {
+            const d = snapNumber.docs[0].data();
+            const v = Number(d.numero_cliente);
+            if (!isNaN(v)) maxVal = Math.max(maxVal, v);
+          }
+
+          fullData.numero_cliente = maxVal + 1; // Store as Number
+        } catch (err) {
+          console.warn("Failed to generate client number:", err);
         }
-
-        if (!snapNumber.empty) {
-          const d = snapNumber.docs[0].data();
-          const v = Number(d.numero_cliente);
-          if (!isNaN(v)) maxVal = Math.max(maxVal, v);
-        }
-
-        fullData.numero_cliente = maxVal + 1; // Store as Number
-      } catch (err) {
-        console.warn("Failed to generate client number:", err);
       }
 
       const newClientRef = doc(collection(db, 'clientes'));

@@ -204,6 +204,7 @@ export async function createPublicReservation(data: any) {
         // Fetch Checking Settings
         let validateEmail = true;
         let validatePhone = true;
+        let autoClientNumber = true; // Default true
         try {
             const settingsSnap = await db.collection('configuracion').doc('clientes').get();
             if (settingsSnap.exists) {
@@ -211,6 +212,7 @@ export async function createPublicReservation(data: any) {
                 if (s) {
                     validateEmail = s.validateEmail !== false; // Default true
                     validatePhone = s.validatePhone !== false; // Default true
+                    autoClientNumber = s.autoClientNumber !== false; // Default true
                 }
             }
         } catch (e) { console.warn("Could not read client settings, defaulting to validation on"); }
@@ -235,35 +237,39 @@ export async function createPublicReservation(data: any) {
             // Optional: Update info if missing? For now, just link.
         } else {
             // Determine Custom Client ID (Auto-increment)
-            let nextClientNumber = 1;
-            try {
-                // Strategy: Check both Strings (legacy) and Numbers to find the true max
-                // 1. Check for max String (default orderBy sorts Strings > Numbers)
-                const maxStringQuery = clientsRef.orderBy('numero_cliente', 'desc').limit(1);
-                const maxStringSnap = await maxStringQuery.get();
+            let nextClientNumber = undefined;
 
-                // 2. Check for max Number (explicitly filter for numbers)
-                const maxNumberQuery = clientsRef.where('numero_cliente', '>=', 0).orderBy('numero_cliente', 'desc').limit(1);
-                const maxNumberSnap = await maxNumberQuery.get();
+            if (autoClientNumber) {
+                nextClientNumber = 1;
+                try {
+                    // Strategy: Check both Strings (legacy) and Numbers to find the true max
+                    // 1. Check for max String (default orderBy sorts Strings > Numbers)
+                    const maxStringQuery = clientsRef.orderBy('numero_cliente', 'desc').limit(1);
+                    const maxStringSnap = await maxStringQuery.get();
 
-                let maxVal = 0;
+                    // 2. Check for max Number (explicitly filter for numbers)
+                    const maxNumberQuery = clientsRef.where('numero_cliente', '>=', 0).orderBy('numero_cliente', 'desc').limit(1);
+                    const maxNumberSnap = await maxNumberQuery.get();
 
-                if (!maxStringSnap.empty) {
-                    const data = maxStringSnap.docs[0].data();
-                    const val = Number(data.numero_cliente);
-                    if (!isNaN(val)) maxVal = Math.max(maxVal, val);
+                    let maxVal = 0;
+
+                    if (!maxStringSnap.empty) {
+                        const data = maxStringSnap.docs[0].data();
+                        const val = Number(data.numero_cliente);
+                        if (!isNaN(val)) maxVal = Math.max(maxVal, val);
+                    }
+
+                    if (!maxNumberSnap.empty) {
+                        const data = maxNumberSnap.docs[0].data();
+                        const val = Number(data.numero_cliente);
+                        if (!isNaN(val)) maxVal = Math.max(maxVal, val);
+                    }
+
+                    nextClientNumber = maxVal + 1;
+                } catch (e) {
+                    console.warn("Could not auto-generate client number:", e);
+                    // Fallback: leave as undefined or handle error? Proceeding without number is safer than failing booking.
                 }
-
-                if (!maxNumberSnap.empty) {
-                    const data = maxNumberSnap.docs[0].data();
-                    const val = Number(data.numero_cliente);
-                    if (!isNaN(val)) maxVal = Math.max(maxVal, val);
-                }
-
-                nextClientNumber = maxVal + 1;
-            } catch (e) {
-                console.warn("Could not auto-generate client number:", e);
-                // Fallback: leave as undefined or handle error? Proceeding without number is safer than failing booking.
             }
 
             const newClientData: any = {
@@ -275,8 +281,11 @@ export async function createPublicReservation(data: any) {
                 notas: data.client.notes || '',
                 createdAt: FieldValue.serverTimestamp(),
                 origen: 'web_publica',
-                numero_cliente: nextClientNumber // Save as Number
             };
+
+            if (nextClientNumber !== undefined) {
+                newClientData.numero_cliente = nextClientNumber;
+            }
 
             const newClientRef = await clientsRef.add(newClientData);
             clientId = newClientRef.id;

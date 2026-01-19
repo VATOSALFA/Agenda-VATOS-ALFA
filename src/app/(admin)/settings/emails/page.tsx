@@ -8,13 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake, ChevronDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AddSenderModal } from '@/components/settings/emails/add-sender-modal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const initialSenders = [
@@ -57,6 +59,7 @@ function CollapsibleCard({ title, description, children, defaultOpen = false, ac
 
 export default function EmailsSettingsPage() {
     const { toast } = useToast();
+    const { db } = useAuth(); // Get db
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSenderModalOpen, setIsSenderModalOpen] = useState(false);
     const [senders, setSenders] = useState<Sender[]>(initialSenders);
@@ -68,20 +71,117 @@ export default function EmailsSettingsPage() {
             signature: 'Saludos, El equipo de VATOS ALFA Barber Shop',
             enableBirthdayEmail: true,
             birthdayEmailBody: '¡Feliz cumpleaños, [Nombre Cliente]! Esperamos que tengas un día increíble. ¡Te esperamos pronto para celebrar!',
-            birthdayButtonLink: '/book'
+            birthdayButtonLink: '/book',
+            confirmationEmailNote: '', // Added field
+            // New visibility flags
+            showDate: true,
+            showTime: true,
+            showLocation: true,
+            showServices: true,
+            showProfessional: true,
+            enableConfirmationEmail: true,
+            // Professional Email Settings
+            enableProfessionalConfirmationEmail: true,
+            profConfirmationEmailNote: '',
+            profShowDate: true,
+            profShowTime: true,
+            profShowLocation: true,
+            profShowServices: true,
+            profShowClientName: true,
         }
     });
 
-    const onSubmit = (data: any) => {
+    useEffect(() => {
+        const loadSettings = async () => {
+            if (!db) return;
+            try {
+                // 1. Load Website Settings (Confirmation Note + Visibility Flags)
+                const websiteDoc = await getDoc(doc(db, 'settings', 'website'));
+                if (websiteDoc.exists()) {
+                    const data = websiteDoc.data();
+                    form.setValue('confirmationEmailNote', data.predefinedNotes || '');
+
+                    // Load visibility flags if they exist, otherwise default to true
+                    if (data.confirmationEmailConfig) {
+                        form.setValue('showDate', data.confirmationEmailConfig.showDate ?? true);
+                        form.setValue('showTime', data.confirmationEmailConfig.showTime ?? true);
+                        form.setValue('showLocation', data.confirmationEmailConfig.showLocation ?? true);
+                        form.setValue('showServices', data.confirmationEmailConfig.showServices ?? true);
+                        form.setValue('showProfessional', data.confirmationEmailConfig.showProfessional ?? true);
+                        form.setValue('enableConfirmationEmail', data.confirmationEmailConfig.enabled ?? true);
+                    }
+
+                    if (data.professionalConfirmationEmailConfig) {
+                        form.setValue('enableProfessionalConfirmationEmail', data.professionalConfirmationEmailConfig.enabled ?? true);
+                        form.setValue('profConfirmationEmailNote', data.professionalConfirmationEmailConfig.note ?? '');
+                        form.setValue('profShowDate', data.professionalConfirmationEmailConfig.showDate ?? true);
+                        form.setValue('profShowTime', data.professionalConfirmationEmailConfig.showTime ?? true);
+                        form.setValue('profShowLocation', data.professionalConfirmationEmailConfig.showLocation ?? true);
+                        form.setValue('profShowServices', data.professionalConfirmationEmailConfig.showServices ?? true);
+                        form.setValue('profShowClientName', data.professionalConfirmationEmailConfig.showClientName ?? true);
+                    }
+                }
+
+                // 2. Load Email Config (Signature)
+                const emailConfigDoc = await getDoc(doc(db, 'configuracion', 'emails'));
+                if (emailConfigDoc.exists()) {
+                    form.setValue('signature', emailConfigDoc.data().signature || '');
+                }
+
+            } catch (error) {
+                console.error("Error loading settings:", error);
+            }
+        };
+        loadSettings();
+    }, [db, form]);
+
+    const onSubmit = async (data: any) => {
+        if (!db) return;
         setIsSubmitting(true);
-        console.log("Email settings saved:", data);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            // 1. Save Website Settings
+            await setDoc(doc(db, 'settings', 'website'), {
+                predefinedNotes: data.confirmationEmailNote,
+                confirmationEmailConfig: {
+                    showDate: data.showDate,
+                    showTime: data.showTime,
+                    showLocation: data.showLocation,
+                    showServices: data.showServices,
+                    showProfessional: data.showProfessional,
+                    enabled: data.enableConfirmationEmail
+                },
+                professionalConfirmationEmailConfig: {
+                    enabled: data.enableProfessionalConfirmationEmail,
+                    note: data.profConfirmationEmailNote,
+                    showDate: data.profShowDate,
+                    showTime: data.profShowTime,
+                    showLocation: data.profShowLocation,
+                    showServices: data.profShowServices,
+                    showClientName: data.profShowClientName
+                }
+            }, { merge: true });
+
+            // 2. Save Email Config
+            await setDoc(doc(db, 'configuracion', 'emails'), {
+                signature: data.signature
+            }, { merge: true });
+
+            console.log("Email settings saved:", data);
+
             toast({
                 title: "Configuración guardada con éxito",
                 description: "Los cambios en la configuración de tus emails han sido guardados."
-            })
-        }, 1500);
+            });
+        } catch (error) {
+            console.error("Error saving settings:", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Hubo un problema al guardar la configuración."
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     const handleSaveSender = (newEmail: string) => {
@@ -204,6 +304,188 @@ export default function EmailsSettingsPage() {
                     </CollapsibleCard>
 
                     <CollapsibleCard
+                        title="Correo para confirmar cita (Cliente)"
+                        description="Personaliza el correo que reciben tus clientes al confirmar una reserva."
+                    >
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <Label htmlFor="enable-confirmation-email" className="font-medium">Activar correos de confirmación</Label>
+                                <Controller
+                                    name="enableConfirmationEmail"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch id="enable-confirmation-email" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
+
+                            {form.watch('enableConfirmationEmail') && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="confirmationEmailNote">Notas predefinidas</Label>
+                                        <Textarea
+                                            id="confirmationEmailNote"
+                                            placeholder="Ej: Favor de llegar 5 minutos antes de la hora de tu cita."
+                                            maxLength={75}
+                                            {...form.register('confirmationEmailNote')}
+                                        />
+                                        <p className="text-[0.8rem] text-muted-foreground">
+                                            Este mensaje aparecerá en la pantalla de confirmación. Máximo 75 caracteres.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <h4 className="font-medium text-sm text-muted-foreground">Datos visibles en el correo</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="showDate" className="cursor-pointer">Mostrar Fecha</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="showDate"
+                                                    render={({ field }) => (
+                                                        <Switch id="showDate" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="showTime" className="cursor-pointer">Mostrar Hora</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="showTime"
+                                                    render={({ field }) => (
+                                                        <Switch id="showTime" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="showLocation" className="cursor-pointer">Mostrar Lugar</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="showLocation"
+                                                    render={({ field }) => (
+                                                        <Switch id="showLocation" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="showServices" className="cursor-pointer">Mostrar Servicios</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="showServices"
+                                                    render={({ field }) => (
+                                                        <Switch id="showServices" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="showProfessional" className="cursor-pointer">Mostrar Profesional</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="showProfessional"
+                                                    render={({ field }) => (
+                                                        <Switch id="showProfessional" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </CollapsibleCard>
+
+                    <CollapsibleCard
+                        title="Correo para confirmar cita (Profesional)"
+                        description="Personaliza el correo que reciben los profesionales al confirmar una reserva."
+                    >
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <Label htmlFor="enable-prof-confirmation-email" className="font-medium">Activar correos de confirmación</Label>
+                                <Controller
+                                    name="enableProfessionalConfirmationEmail"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch id="enable-prof-confirmation-email" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
+
+                            {form.watch('enableProfessionalConfirmationEmail') && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="profConfirmationEmailNote">Notas predefinidas</Label>
+                                        <Textarea
+                                            id="profConfirmationEmailNote"
+                                            placeholder="Mensaje para el profesional..."
+                                            maxLength={75}
+                                            {...form.register('profConfirmationEmailNote')}
+                                        />
+                                        <p className="text-[0.8rem] text-muted-foreground">
+                                            Este mensaje aparecerá en el correo. Máximo 75 caracteres.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <h4 className="font-medium text-sm text-muted-foreground">Datos visibles en el correo</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="profShowDate" className="cursor-pointer">Mostrar Fecha</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="profShowDate"
+                                                    render={({ field }) => (
+                                                        <Switch id="profShowDate" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="profShowTime" className="cursor-pointer">Mostrar Hora</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="profShowTime"
+                                                    render={({ field }) => (
+                                                        <Switch id="profShowTime" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="profShowLocation" className="cursor-pointer">Mostrar Lugar</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="profShowLocation"
+                                                    render={({ field }) => (
+                                                        <Switch id="profShowLocation" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="profShowServices" className="cursor-pointer">Mostrar Servicios</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="profShowServices"
+                                                    render={({ field }) => (
+                                                        <Switch id="profShowServices" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="profShowClientName" className="cursor-pointer">Nombre del cliente</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="profShowClientName"
+                                                    render={({ field }) => (
+                                                        <Switch id="profShowClientName" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </CollapsibleCard>
+
+                    <CollapsibleCard
                         title="Email de cumpleaños"
                     >
                         <div className="space-y-6">
@@ -269,8 +551,8 @@ export default function EmailsSettingsPage() {
                             Guardar Cambios
                         </Button>
                     </div>
-                </form>
-            </div>
+                </form >
+            </div >
 
             <AddSenderModal
                 isOpen={isSenderModalOpen}
@@ -279,24 +561,26 @@ export default function EmailsSettingsPage() {
                 sender={editingSender}
             />
 
-            {senderToDelete && (
-                <AlertDialog open={!!senderToDelete} onOpenChange={() => setSenderToDelete(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta acción no se puede deshacer. El correo "{senderToDelete.email}" será eliminado permanentemente.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteSender} className="bg-destructive hover:bg-destructive/90">
-                                Sí, eliminar
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            {
+                senderToDelete && (
+                    <AlertDialog open={!!senderToDelete} onOpenChange={() => setSenderToDelete(null)}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. El correo "{senderToDelete.email}" será eliminado permanentemente.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteSender} className="bg-destructive hover:bg-destructive/90">
+                                    Sí, eliminar
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )
+            }
         </>
     );
 }

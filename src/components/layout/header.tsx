@@ -48,6 +48,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ExternalLink } from 'lucide-react';
 
@@ -102,6 +103,11 @@ export default function Header() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
+  const { data: empresaData } = useFirestoreQuery<any>('empresa');
+
+  // Get website URL from settings or fallback to current origin
+  const configuredWebsiteUrl = empresaData?.[0]?.website_slug;
+  const displayUrl = configuredWebsiteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
 
   const isAuthPage = pathname === '/login';
   const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos';
@@ -364,18 +370,18 @@ export default function Header() {
                   <div className="space-y-2">
                     <h4 className="font-semibold leading-none">¡Comparte tu link y recibe citas!</h4>
                     <p className="text-xs text-muted-foreground break-all">
-                      {typeof window !== 'undefined' ? window.location.origin : ''}
+                      {displayUrl}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" className="w-full" onClick={() => {
-                      window.open(window.location.origin, '_blank');
+                      if (displayUrl) window.open(displayUrl, '_blank');
                     }}>
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Ir a mi sitio web
                     </Button>
                     <Button variant="outline" size="icon" onClick={() => {
-                      navigator.clipboard.writeText(window.location.origin);
+                      navigator.clipboard.writeText(displayUrl);
                       toast({ title: "Link copiado", description: "El enlace se ha copiado al portapapeles." });
                     }}>
                       <Copy className="h-4 w-4" />

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useMemo } from 'react';
@@ -41,6 +40,7 @@ interface Sale {
   metodo_pago: string;
   items: { nombre: string; cantidad: number; precio_unitario: number }[];
   pago_estado?: string;
+  monto_pagado_real?: number;
 }
 
 const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: string | undefined | null }) => (
@@ -111,7 +111,12 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
   const totalSpent = salesLoading
     ? 0
-    : validSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+    : validSales.reduce((acc, sale) => {
+      const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real !== null)
+        ? sale.monto_pagado_real
+        : (sale.total || 0);
+      return acc + amount;
+    }, 0);
 
   const attendedAppointments = client.citas_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length);
   const unattendedAppointments = client.citas_no_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length);

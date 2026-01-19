@@ -737,7 +737,7 @@ export default function BookingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center">
-            <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px] flex flex-col">
+            <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden h-[95vh] md:h-[90vh] flex flex-col">
 
                 {/* HEADERS */}
                 <div className="bg-primary p-6 text-primary-foreground">

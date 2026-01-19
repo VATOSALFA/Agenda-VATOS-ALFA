@@ -24,10 +24,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
   try {
     const db = getDb();
-    const docRef = await db.collection('empresa').doc('main').get();
+    const snapshot = await db.collection('empresa').limit(1).get();
 
-    if (docRef.exists) {
-      const data = docRef.data();
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data();
       if (data) {
         if (data.name) title = data.name;
         if (data.description) description = data.description;

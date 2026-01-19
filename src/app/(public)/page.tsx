@@ -75,6 +75,7 @@ export default function LandingPage() {
     }
     const companyName = empresa?.[0]?.name || 'Vatos Alfa';
     const companySlogan = websiteSettings.slogan || empresa?.[0]?.slogan || 'Estilo y profesionalismo para el hombre moderno.';
+    const heroDescription = websiteSettings.heroDescription || 'Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional.';
     const companyDescription = empresa?.[0]?.description || '';
     const logoUrl = empresa?.[0]?.logo_url;
     const iconUrl = empresa?.[0]?.icon_url;
@@ -200,7 +201,7 @@ export default function LandingPage() {
                     {companySlogan}
                 </h1>
                 <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
-                    Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional.
+                    {heroDescription}
                 </p>
                 <div className="relative flex flex-col sm:flex-row gap-4 animate-in fade-in duration-1000 delay-300 z-10">
                     <Link href="#servicios">

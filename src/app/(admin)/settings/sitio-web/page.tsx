@@ -38,6 +38,8 @@ export default function SitioWebPage() {
             showHoursBy: 'professional',
             exclusiveForCreatedClients: false,
             allowClientNotes: true,
+            heroDescription: '', // Added hero description
+            slotInterval: 30, // New default for slot interval
             predefinedNotes: '',
             cancellableReservations: true,
             editableReservations: true,
@@ -83,6 +85,8 @@ export default function SitioWebPage() {
                     form.reset({
                         ...form.getValues(),
                         ...data,
+                        heroDescription: data.heroDescription || '', // Load hero description
+                        slotInterval: data.slotInterval || 30, // Load slot interval
                         customerFields: normalizedFields
                     });
                 }
@@ -159,7 +163,7 @@ export default function SitioWebPage() {
 
                 <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
                     <AccordionItem value="item-1" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Reservas en el sitio web</AccordionTrigger>
+                        <AccordionTrigger className="p-6">Título y Subtítulo</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-4">
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
@@ -175,57 +179,29 @@ export default function SitioWebPage() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="allowClientNotes">Permitir notas del cliente</Label>
-                                <Controller
-                                    control={form.control}
-                                    name="allowClientNotes"
-                                    render={({ field }) => (
-                                        <Switch
-                                            id="allowClientNotes"
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                        />
-                                    )}
-                                />
-                            </div>
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <Label>Notas predefinidas</Label>
+                                    <Label>Subtítulo (Descripción)</Label>
                                     <span className="text-xs text-muted-foreground">
-                                        {(form.watch('predefinedNotes') || '').length}/75
+                                        {(form.watch('heroDescription') || '').length}/50
                                     </span>
                                 </div>
                                 <Textarea
-                                    placeholder="Ej: Por favor, llega 5 minutos antes de tu cita."
-                                    maxLength={75}
-                                    {...form.register('predefinedNotes')}
+                                    placeholder="Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional."
+                                    maxLength={50}
+                                    {...form.register('heroDescription')}
                                 />
                                 <p className="text-[0.8rem] text-muted-foreground">
-                                    Este mensaje aparecerá en la pantalla de confirmación. Máximo 75 caracteres.
+                                    Texto que aparece debajo del título principal. Máximo 50 caracteres.
                                 </p>
                             </div>
                         </AccordionContent>
                     </AccordionItem>
 
-                    <AccordionItem value="item-2" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Edición y cancelación de reservas en línea</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <div className="flex items-center justify-between"><Label htmlFor="cancellableReservations">Reservas cancelables</Label><Switch id="cancellableReservations" defaultChecked /></div>
-                            <div className="flex items-center justify-between"><Label htmlFor="editableReservations">Reservas editables</Label><Switch id="editableReservations" defaultChecked /></div>
-                            <div className="space-y-2">
-                                <Label>Política de edición de reservas</Label>
-                                <Textarea defaultValue={form.getValues('editPolicy')} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Ediciones máximas</Label>
-                                <Input type="number" defaultValue={form.getValues('maxEdits')} />
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
+
 
                     <AccordionItem value="item-3" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Reservas y privacidad</AccordionTrigger>
+                        <AccordionTrigger className="p-6">Términos y condiciones</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="privacyPolicyEnabled">Políticas de Reserva y Privacidad</Label>
@@ -301,11 +277,39 @@ export default function SitioWebPage() {
                                     </div>
                                 </div>
                             </div>
+                            <div className="space-y-2">
+                                <Label>Intervalo de horarios de cita</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Elige la separación entre los horarios disponibles.
+                                </p>
+                                <Controller
+                                    control={form.control}
+                                    name="slotInterval"
+                                    render={({ field }) => (
+                                        <Select
+                                            value={String(field.value)}
+                                            onValueChange={(val) => field.onChange(Number(val))}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecciona un intervalo" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="15">15 minutos</SelectItem>
+                                                <SelectItem value="30">30 minutos</SelectItem>
+                                                <SelectItem value="45">45 minutos</SelectItem>
+                                                <SelectItem value="60">1 hora</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            </div>
+
+
                         </AccordionContent>
                     </AccordionItem>
 
                     <AccordionItem value="item-5" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Configuración de campos adicionales</AccordionTrigger>
+                        <AccordionTrigger className="p-6">Datos requeridos para agendar</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0">
                             <Table>
                                 <TableHeader>

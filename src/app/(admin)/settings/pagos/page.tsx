@@ -18,6 +18,11 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 
 import { BluetoothPrinter } from '@/lib/printer';
+import { httpsCallable, functions } from '@/lib/firebase-client';
+import { writeBatch } from 'firebase/firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface PagosSettings {
     showTips: boolean;
@@ -39,6 +44,14 @@ export default function PagosAgendaProPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isConnectingPrinter, setIsConnectingPrinter] = useState(false);
+
+    // Terminal Settings State
+    const { user } = useAuth();
+    const [cashboxSettings, setCashboxSettings] = useState<any>(null);
+    const [isFetchingTerminals, setIsFetchingTerminals] = useState(false);
+    const [queryKey, setQueryKey] = useState(0);
+
+    const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales', queryKey);
 
     const form = useForm<PagosSettings>({
         defaultValues: {
@@ -96,6 +109,67 @@ export default function PagosAgendaProPage() {
         };
         fetchSettings();
     }, [form]);
+
+    useEffect(() => {
+        const fetchCashboxSettings = async () => {
+            if (!user) return;
+            const settingsRef = doc(db, 'configuracion', 'caja');
+            const docSnap = await getDoc(settingsRef);
+            if (docSnap.exists()) {
+                setCashboxSettings(docSnap.data());
+            }
+        }
+        fetchCashboxSettings();
+    }, [user, queryKey]);
+
+    const handleFetchAndSaveTerminals = async () => {
+        setIsFetchingTerminals(true);
+        try {
+            const getTerminalsFunction = httpsCallable(functions, 'getPointTerminals');
+            const result: any = await getTerminalsFunction();
+
+            if (result.data.success) {
+                const fetchedTerminals = result.data.devices.filter((d: any) => d.operating_mode === 'PDV');
+
+                const batch = writeBatch(db);
+                fetchedTerminals.forEach((terminal: any) => {
+                    const terminalRef = doc(db, 'terminales', terminal.id);
+                    batch.set(terminalRef, terminal, { merge: true });
+                });
+                await batch.commit();
+
+                setQueryKey(prev => prev + 1); // Trigger refetch from our DB
+                toast({
+                    title: 'Terminales actualizadas',
+                    description: `Se encontraron y guardaron ${fetchedTerminals.length} terminales en modo PDV.`,
+                });
+            } else {
+                throw new Error(result.data.error || 'Error desconocido al obtener terminales.');
+            }
+        } catch (error: any) {
+            console.error("Error al buscar terminales:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error al buscar terminales',
+                description: error.message,
+            });
+        } finally {
+            setIsFetchingTerminals(false);
+        }
+    }
+
+    const handleSetMainTerminal = async (terminalId: string, isChecked: boolean) => {
+        const newTerminalId = isChecked ? terminalId : null;
+        try {
+            const settingsRef = doc(db, 'configuracion', 'caja');
+            await setDoc(settingsRef, { mercadoPagoTerminalId: newTerminalId }, { merge: true });
+            setCashboxSettings((prev: any) => ({ ...prev, mercadoPagoTerminalId: newTerminalId }));
+            toast({ title: "Terminal principal actualizada." });
+        } catch (error) {
+            console.error("Error setting main terminal:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar la terminal principal.' });
+        }
+    }
 
     // Helper functionality
     const collectionUrl = 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app/link-cobro';
@@ -216,72 +290,10 @@ export default function PagosAgendaProPage() {
                 </Card>
 
                 <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
-                    <AccordionItem value="item-1" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6 font-semibold text-base">Pagos en línea</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-6">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="online-payments">Pagos en línea</Label>
-                                <Controller name="onlinePayments" control={form.control} render={({ field }) => (
-                                    <Switch id="online-payments" checked={field.value} onCheckedChange={field.onChange} />
-                                )} />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex-grow pr-4">
-                                    <Label htmlFor="collection-link">Link de cobro</Label>
-                                    <div className="flex items-center space-x-2 mt-2">
-                                        <Input readOnly value={collectionUrl} className="flex-1 text-xs h-9" />
-                                        <Button size="sm" type="button" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
-                                    </div>
-                                </div>
-                                <Controller name="collectionLink" control={form.control} render={({ field }) => (
-                                    <Switch id="collection-link" checked={field.value} onCheckedChange={field.onChange} />
-                                )} />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="edit-reservation-status">Editar estado de las reservas</Label>
-                                <Controller name="editReservationStatus" control={form.control} render={({ field }) => (
-                                    <Switch id="edit-reservation-status" checked={field.value} onCheckedChange={field.onChange} />
-                                )} />
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
 
-                    <AccordionItem value="item-2" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6 font-semibold text-base">Datos bancarios</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <Alert>
-                                <Info className="h-4 w-4" />
-                                <AlertTitle>Información importante</AlertTitle>
-                                <AlertDescription>
-                                    Para realizar el pago de tus ventas online, necesitamos que completes tus datos bancarios.
-                                </AlertDescription>
-                            </Alert>
-                            <div className="space-y-2">
-                                <Label>Institución bancaria</Label>
-                                <Controller name="bank" control={form.control} render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger><SelectValue placeholder="Selecciona un banco" /></SelectTrigger>
-                                        <SelectContent><SelectItem value="bbva">BBVA</SelectItem><SelectItem value="santander">Santander</SelectItem><SelectItem value="banamex">Citibanamex</SelectItem></SelectContent>
-                                    </Select>
-                                )} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="account-holder">Nombre</Label>
-                                <Controller name="accountHolder" control={form.control} render={({ field }) => (
-                                    <Input id="account-holder" {...field} placeholder="Nombre del titular de la cuenta" />
-                                )} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="clabe">CLABE interbancaria</Label>
-                                <Controller name="clabe" control={form.control} render={({ field }) => (
-                                    <Input id="clabe" {...field} placeholder="Número de CLABE de 18 dígitos" />
-                                )} />
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
 
                     <AccordionItem value="item-3" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6 font-semibold text-base">Proveedores de pago externos</AccordionTrigger>
+                        <AccordionTrigger className="p-6 font-semibold text-base">Proveedores de pago externos (Mercado pago)</AccordionTrigger>
                         <AccordionContent className="p-6 pt-0 space-y-4">
                             <p className="text-sm text-muted-foreground">
                                 Si tienes una cuenta de MercadoPago puedes agregar tus propias credenciales para que las ventas se procesen a través de tu cuenta.
@@ -339,6 +351,56 @@ export default function PagosAgendaProPage() {
                                 <p className="text-xs text-muted-foreground mt-1">
                                     Esto creará la sucursal y caja vía API para cumplir con los estándares de calidad de Mercado Pago.
                                 </p>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="item-terminal" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6 font-semibold text-base">Terminal de pagos</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-4">
+                            <div className="flex flex-col space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Conecta y gestiona tus terminales de pago de Mercado Pago.
+                                </p>
+                                <div className="flex items-center gap-4">
+                                    <Button type="button" onClick={handleFetchAndSaveTerminals} disabled={isFetchingTerminals}>
+                                        {isFetchingTerminals && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Refrescar Terminales
+                                    </Button>
+                                </div>
+                                <div className="mt-4 border rounded-md">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Nombre</TableHead>
+                                                <TableHead>ID</TableHead>
+                                                <TableHead>Modo de Operación</TableHead>
+                                                <TableHead>Principal</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {terminalsLoading ? (
+                                                <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="animate-spin h-6 w-6" /></TableCell></TableRow>
+                                            ) : terminals?.length === 0 ? (
+                                                <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales. Haz clic en "Refrescar Terminales".</TableCell></TableRow>
+                                            ) : (
+                                                terminals?.map((terminal: any) => (
+                                                    <TableRow key={terminal.id}>
+                                                        <TableCell className="font-medium">{terminal.display_name || 'Terminal sin nombre'}</TableCell>
+                                                        <TableCell>{terminal.id}</TableCell>
+                                                        <TableCell>{terminal.operating_mode}</TableCell>
+                                                        <TableCell>
+                                                            <Switch
+                                                                checked={cashboxSettings?.mercadoPagoTerminalId === terminal.id}
+                                                                onCheckedChange={(checked) => handleSetMainTerminal(terminal.id, checked)}
+                                                            />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </div>
                         </AccordionContent>
                     </AccordionItem>

@@ -226,9 +226,18 @@ export async function createPublicReservation(data: any) {
         let existingDoc;
 
         if (validateEmail && data.client.email) {
-            const q = clientsRef.where('email', '==', data.client.email).limit(1);
-            const snap = await q.get();
-            if (!snap.empty) existingDoc = snap.docs[0];
+            // 1. Check 'correo' (Standard)
+            let q = clientsRef.where('correo', '==', data.client.email).limit(1);
+            let snap = await q.get();
+
+            if (!snap.empty) {
+                existingDoc = snap.docs[0];
+            } else {
+                // 2. Fallback: Check 'email' (Legacy)
+                q = clientsRef.where('email', '==', data.client.email).limit(1);
+                snap = await q.get();
+                if (!snap.empty) existingDoc = snap.docs[0];
+            }
         }
 
         if (!existingDoc && validatePhone && data.client.phone) {
@@ -281,10 +290,10 @@ export async function createPublicReservation(data: any) {
                 nombre: data.client.name,
                 apellido: data.client.lastName,
                 telefono: data.client.phone,
-                email: data.client.email || '',
+                correo: data.client.email || '',
                 fecha_nacimiento: data.client.birthday || null,
                 notas: data.client.notes || '',
-                createdAt: FieldValue.serverTimestamp(),
+                creado_en: FieldValue.serverTimestamp(),
                 origen: 'web_publica',
             };
 

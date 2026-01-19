@@ -1165,7 +1165,7 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
         const htmlContent = `
             <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; line-height: 1.6;">
                 <div style="text-align: center; padding: 20px 0;">
-                <img src="${logoUrl}" alt="${senderName}" style="max-height: 100px; max-width: 200px; object-fit: contain;" />
+                <img src="${logoUrl}" alt="${senderName}" style="max-height: 150px; max-width: 300px; object-fit: contain;" />
                 </div>
                 
                 <h2 style="color: #1a1a1a; text-align: center; margin-bottom: 20px;">¡Tu reserva está confirmada!</h2>

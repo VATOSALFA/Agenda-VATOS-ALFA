@@ -92,6 +92,7 @@ service cloud.firestore {
     match /clients/{document=**} { allow read, write: if isAuthenticated(); } 
 
     match /finanzas/{document=**} { allow read, write: if isAuthenticated(); }
+    match /finanzas_mensuales/{document=**} { allow read, write: if isAuthenticated(); }
 
     // 7. Communications
     match /conversations/{document=**} { allow read, write: if isAuthenticated(); }

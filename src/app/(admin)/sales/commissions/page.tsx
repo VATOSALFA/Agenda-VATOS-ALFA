@@ -344,7 +344,7 @@ export default function CommissionsPage() {
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
                 <div className="flex items-center justify-between space-y-2">
-                    <h2 className="text-3xl font-bold tracking-tight">Reporte de Comisiones</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">Reporte de comisiones</h2>
                 </div>
 
                 <Card>
@@ -447,7 +447,7 @@ export default function CommissionsPage() {
                 <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <div>
-                            <CardTitle>Comisiones por Profesional</CardTitle>
+                            <CardTitle>Comisiones por profesional</CardTitle>
                             <CardDescription>Resumen de comisiones generadas en el período seleccionado.</CardDescription>
                         </div>
                         <Button variant="outline" onClick={() => setIsDownloadModalOpen(true)}><Download className="mr-2 h-4 w-4" /> Descargar comisiones</Button>

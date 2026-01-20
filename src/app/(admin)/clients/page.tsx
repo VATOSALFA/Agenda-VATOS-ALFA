@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Client, Local, Reservation, Sale } from "@/lib/types";
+import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
@@ -59,12 +59,31 @@ const FiltersSidebar = ({
   dateRange, setDateRange,
   localFilter, setLocalFilter,
   birthdayMonthFilter, setBirthdayMonthFilter,
+  professionalFilter, setProfessionalFilter,
   locales,
+  professionals,
   isLoading,
   isLocalAdmin,
   logoUrl,
   empresaLoading
-}: { onApply: () => void, onReset: () => void, dateRange: DateRange | undefined, setDateRange: (range: DateRange | undefined) => void, localFilter: string, setLocalFilter: (val: string) => void, birthdayMonthFilter: string, setBirthdayMonthFilter: (val: string) => void, locales: Local[], isLoading: boolean, isLocalAdmin: boolean, logoUrl?: string, empresaLoading: boolean }) => {
+}: {
+  onApply: () => void,
+  onReset: () => void,
+  dateRange: DateRange | undefined,
+  setDateRange: (range: DateRange | undefined) => void,
+  localFilter: string,
+  setLocalFilter: (val: string) => void,
+  birthdayMonthFilter: string,
+  setBirthdayMonthFilter: (val: string) => void,
+  professionalFilter: string,
+  setProfessionalFilter: (val: string) => void,
+  locales: Local[],
+  professionals: Profesional[],
+  isLoading: boolean,
+  isLocalAdmin: boolean,
+  logoUrl?: string,
+  empresaLoading: boolean
+}) => {
 
   return (
     <div className="space-y-4 flex flex-col h-full">
@@ -118,6 +137,16 @@ const FiltersSidebar = ({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <Label>Profesional</Label>
+            <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={isLoading}>
+              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {professionals.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="space-y-2 pt-4 border-t">
           <Button className="w-full" onClick={onApply}>Buscar</Button>
@@ -156,17 +185,20 @@ export default function ClientsPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [localFilter, setLocalFilter] = useState('todos');
   const [birthdayMonthFilter, setBirthdayMonthFilter] = useState('todos');
+  const [professionalFilter, setProfessionalFilter] = useState('todos');
 
   const [activeFilters, setActiveFilters] = useState({
     dateRange: dateRange,
     local: 'todos',
-    birthdayMonth: 'todos'
+    birthdayMonth: 'todos',
+    professional: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
 
   const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
   const { data: empresaData, loading: empresaLoading } = useFirestoreQuery<EmpresaSettings>('empresa', 'main', where('__name__', '==', 'main'));
   const logoUrl = empresaData?.[0]?.receipt_logo_url;
 
@@ -186,7 +218,7 @@ export default function ClientsPage() {
   const { data: allReservations, loading: allReservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
 
-  const isLoading = clientsLoading || localesLoading || salesLoading;
+  const isLoading = clientsLoading || localesLoading || salesLoading || professionalsLoading;
 
   const canViewPhone = useMemo(() => {
     if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
@@ -205,6 +237,7 @@ export default function ClientsPage() {
       dateRange,
       local: localFilter,
       birthdayMonth: birthdayMonthFilter,
+      professional: professionalFilter,
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -215,10 +248,12 @@ export default function ClientsPage() {
     setDateRange(undefined);
     setLocalFilter(user?.local_id || 'todos');
     setBirthdayMonthFilter('todos');
+    setProfessionalFilter('todos');
     setActiveFilters({
       dateRange: undefined,
       local: user?.local_id || 'todos',
       birthdayMonth: 'todos',
+      professional: 'todos',
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -231,18 +266,80 @@ export default function ClientsPage() {
     const hasAdvancedFilters =
       activeFilters.local !== 'todos' ||
       activeFilters.dateRange !== undefined ||
-      activeFilters.birthdayMonth !== 'todos';
+      activeFilters.birthdayMonth !== 'todos' ||
+      activeFilters.professional !== 'todos';
 
     if (hasAdvancedFilters) {
-      if (activeFilters.dateRange) {
-        const clientIdsFromSales = new Set<string>();
+      if (activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.dateRange) {
+        const clientIdsFromHistory = new Set<string>();
+        let hasHistoryFilter = false;
 
-        const filteredSales = sales.filter(s => {
-          return activeFilters.local === 'todos' || s.local_id === activeFilters.local;
+        // Determine which sales to check: filtered by date if date range active, otherwise all (or optimize)
+        // If queryConstraints handles date, 'sales' is already filtered by date.
+        // If NO date range, 'sales' contains what? line 184 uses historyQueryConstraints.
+        // If dateRange defined, 'sales' has filtered sales. If undefined, historyQueryConstraints is empty -> 'sales' has all sales.
+        // So 'sales' variable is always the relevant set of sales for date filtering.
+
+        const salesToCheck = sales;
+        // Filter sales by Local and Professional if needed
+        salesToCheck.forEach(s => {
+          if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
+
+          let matchesProfessional = true;
+          if (activeFilters.professional !== 'todos') {
+            // Check items for professional
+            matchesProfessional = s.items.some(item => item.barbero_id === activeFilters.professional);
+          }
+
+          if (matchesProfessional) {
+            clientIdsFromHistory.add(s.cliente_id);
+            hasHistoryFilter = true;
+          }
         });
-        filteredSales.forEach(s => clientIdsFromSales.add(s.cliente_id));
 
-        filtered = filtered.filter(client => clientIdsFromSales.has(client.id));
+        // Also check reservations if Professional filter is active (Sales might not cover future or unpaid bookings, but user asks for "atendidos" -> typically past/sales, but let's include booked?)
+        // "busar clientes que se han sido atendidos" -> implies past. But reservations also track history.
+        // Let's verify against allReservations for professional match as well.
+        if (activeFilters.professional !== 'todos') {
+          allReservations.forEach(r => {
+            if (r.estado === 'Cancelado') return;
+            // Apply local filter to reservations too? Yes.
+            if (activeFilters.local !== 'todos' && r.local_id !== activeFilters.local) return;
+
+            // Date filter? If date range is active, we should strictly filter reservations by date too?
+            // The current code for 'sales' handles date via query. 'allReservations' is raw.
+            // If the user selects a date range, they probably expect filtering within that range.
+            if (activeFilters.dateRange) {
+              const resDate = parseISO(r.fecha); // simplified
+              if (resDate < activeFilters.dateRange.from! || (activeFilters.dateRange.to && resDate > activeFilters.dateRange.to)) return;
+            }
+
+            const matchesProf = r.items?.some(i => i.barbero_id === activeFilters.professional) || r.barbero_id === activeFilters.professional;
+            if (matchesProf) {
+              clientIdsFromHistory.add(r.cliente_id);
+              hasHistoryFilter = true;
+            }
+          });
+        }
+
+        // If we strictly filtered by sales/reservations, use the set. 
+        // Note: The original code logic for dateRange was: filteredSales.forEach... filtered = filtered.filter(...)
+        // We need to allow passing if ANY history match found.
+
+        // Apply filtering based on collected history IDs
+        // If professional filter is active, we MUST filter by clientIdsFromHistory (even if empty)
+        if (activeFilters.professional !== 'todos') {
+          filtered = filtered.filter(c => clientIdsFromHistory.has(c.id));
+        } else if (activeFilters.dateRange && hasHistoryFilter) {
+          // If only date range is active (and possibly local), use the generic 'hasHistoryFilter' check or logic
+          // Re-using original date logic just to be safe if no professional filter
+          const dateFilteredIds = new Set<string>();
+          sales.forEach(s => {
+            if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
+            dateFilteredIds.add(s.cliente_id);
+          });
+          filtered = filtered.filter(c => dateFilteredIds.has(c.id));
+        }
       }
 
       if (activeFilters.birthdayMonth !== 'todos') {
@@ -424,7 +521,7 @@ export default function ClientsPage() {
     <>
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Base de Clientes</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Base de clientes</h2>
           <div className="flex items-center space-x-2">
             <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}>
               <Upload className="mr-2 h-4 w-4" /> Cargar clientes
@@ -443,9 +540,12 @@ export default function ClientsPage() {
               dateRange={dateRange} setDateRange={setDateRange}
               localFilter={localFilter} setLocalFilter={setLocalFilter}
               birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
+              professionalFilter={professionalFilter}
+              setProfessionalFilter={setProfessionalFilter}
+              professionals={professionals}
               locales={locales}
               isLoading={isLoading}
-              isLocalAdmin={isLocalAdmin}
+              isLocalAdmin={user?.role === 'Administrador local' || Boolean(user?.local_id)}
               logoUrl={logoUrl}
               empresaLoading={empresaLoading}
             />

@@ -16,6 +16,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
+import { useAuth } from "@/contexts/firebase-auth-context";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function StockMovementPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -23,6 +26,20 @@ export default function StockMovementPage() {
     const [categoryFilter, setCategoryFilter] = useState('todos');
     const [productFilter, setProductFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0);
+
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            const hasPermission = user.role === 'Administrador general' || user.permissions?.includes('ver_movimiento_stock');
+            if (!hasPermission) {
+                router.push('/dashboard'); // Or some fallback
+            }
+        }
+    }, [user, authLoading, router]);
+
+    if (authLoading) return <div className="flex items-center justify-center p-8"><Loader2 className="w-8 h-8 animate-spin" /></div>;
 
     // Queries
     const { data: movements, loading: movementsLoading } = useFirestoreQuery<StockMovement>(
@@ -87,7 +104,7 @@ export default function StockMovementPage() {
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Movimientos de Stock</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">Movimientos de stock</h2>
                     <p className="text-muted-foreground">
                         Historial de cambios y ajustes en el inventario.
                     </p>
@@ -158,7 +175,7 @@ export default function StockMovementPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Historial de Movimientos</CardTitle>
+                    <CardTitle>Historial de movimientos</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Table>

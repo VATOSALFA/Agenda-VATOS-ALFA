@@ -35,7 +35,6 @@ export async function generateMetadata(): Promise<Metadata> {
       }
     }
   } catch (error) {
-    // Log error but don't crash, fallback to defaults
     console.warn('Metadata fetch failed (using default):', error);
   }
 

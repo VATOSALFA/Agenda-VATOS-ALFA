@@ -66,7 +66,7 @@ const salesNavLinks = [
 
 const productsNavLinks = [
   { href: '/products', label: 'Inventario', icon: Archive, permission: 'ver_inventario' },
-  { href: '/products/stock-movement', label: 'Movimiento de Stock', icon: LineChart, permission: 'ver_inventario' },
+  { href: '/products/stock-movement', label: 'Movimiento de Stock', icon: LineChart, permission: 'ver_movimiento_stock' },
   { href: '/products/sales', label: 'Venta de productos', icon: ShoppingCart, permission: 'ver_venta_productos' },
 ];
 

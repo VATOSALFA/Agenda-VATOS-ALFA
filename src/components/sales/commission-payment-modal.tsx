@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { where, Timestamp, writeBatch, collection, doc, getDocs } from 'firebase/firestore';
+import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -56,6 +56,7 @@ interface CommissionRowData {
 
 export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dateRange, localId }: CommissionPaymentModalProps) {
     const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
+    const [discountsAffectCommissions, setDiscountsAffectCommissions] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
     const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([]);
@@ -152,7 +153,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
                 const itemPrice = item.subtotal || item.precio || 0;
                 const itemDiscount = item.descuento?.monto || 0;
-                const finalItemPrice = itemPrice - itemDiscount;
+                // If discounts affect commissions (default), subtract discount. Otherwise use gross price.
+                const finalItemPrice = discountsAffectCommissions ? (itemPrice - itemDiscount) : itemPrice;
 
                 let commissionConfig = null;
 
@@ -193,7 +195,22 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setCommissionData(commissionList);
         setSelectedProfessionals(commissionList.map(c => c.professionalId));
 
-    }, [isOpen, sales, professionals, services, products, isLoading]);
+    }, [isOpen, sales, professionals, services, products, isLoading, discountsAffectCommissions]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchSettings = async () => {
+            try {
+                const d = await getDoc(doc(db, 'settings', 'commissions'));
+                if (d.exists()) {
+                    setDiscountsAffectCommissions(d.data().discountsAffectCommissions ?? true);
+                }
+            } catch (e) {
+                console.error("Error loading commission settings", e);
+            }
+        };
+        fetchSettings();
+    }, [isOpen]);
 
 
     const handlePayCommissions = async () => {

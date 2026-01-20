@@ -1085,7 +1085,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     transaction.set(movementRef, {
                         date: Timestamp.now(),
                         local_id: data.local_id,
-                        product_id: update.productData.id,
+                        product_id: update.ref.id,
                         presentation_id: update.productData.presentation_id || 'default',
                         from: update.productData.stock,
                         to: update.newStock,
@@ -1247,7 +1247,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         <>
             <Sheet open={isOpen} onOpenChange={handleOpenChange}>
                 <SheetContent
-                    className="w-full sm:max-w-4xl flex flex-col p-0"
+                    className="w-full sm:max-w-[1100px] flex flex-col p-0 gap-0"
+                    hideCloseButton
                     onCloseAutoFocus={(e) => e.preventDefault()}
                 >
                     <SheetHeader className="p-6 border-b">
@@ -1375,10 +1376,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-1">
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                                                        </div>
+
                                                     </div>
                                                 </CardContent>
                                             </Card>
@@ -1671,22 +1669,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         )}
                     </Form>
 
-                    <SheetFooter className="p-6 bg-background border-t flex justify-between">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleClose}
-                        >
-                            Cancelar
-                        </Button>
+                    <SheetFooter className="p-6 bg-background border-t flex justify-end gap-4">
                         {step === 1 && (
-                            <Button
-                                type="button"
-                                onClick={handleNextStep}
-                                disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
-                            >
-                                Continuar
-                            </Button>
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleClose}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={handleNextStep}
+                                    disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
+                                >
+                                    Continuar
+                                </Button>
+                            </>
                         )}
                     </SheetFooter>
                 </SheetContent>

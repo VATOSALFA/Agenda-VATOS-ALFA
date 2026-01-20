@@ -69,9 +69,7 @@ export default function EmailsSettingsPage() {
     const form = useForm({
         defaultValues: {
             signature: 'Saludos, El equipo de VATOS ALFA Barber Shop',
-            enableBirthdayEmail: true,
-            birthdayEmailBody: '¡Feliz cumpleaños, [Nombre Cliente]! Esperamos que tengas un día increíble. ¡Te esperamos pronto para celebrar!',
-            birthdayButtonLink: '/book',
+
             confirmationEmailNote: '', // Added field
             // New visibility flags
             showDate: true,
@@ -326,11 +324,11 @@ export default function EmailsSettingsPage() {
                                         <Textarea
                                             id="confirmationEmailNote"
                                             placeholder="Ej: Favor de llegar 5 minutos antes de la hora de tu cita."
-                                            maxLength={75}
+                                            maxLength={150}
                                             {...form.register('confirmationEmailNote')}
                                         />
                                         <p className="text-[0.8rem] text-muted-foreground">
-                                            Este mensaje aparecerá en la pantalla de confirmación. Máximo 75 caracteres.
+                                            Este mensaje aparecerá en la pantalla de confirmación. Máximo 150 caracteres.
                                         </p>
                                     </div>
 
@@ -417,11 +415,11 @@ export default function EmailsSettingsPage() {
                                         <Textarea
                                             id="profConfirmationEmailNote"
                                             placeholder="Mensaje para el profesional..."
-                                            maxLength={75}
+                                            maxLength={150}
                                             {...form.register('profConfirmationEmailNote')}
                                         />
                                         <p className="text-[0.8rem] text-muted-foreground">
-                                            Este mensaje aparecerá en el correo. Máximo 75 caracteres.
+                                            Este mensaje aparecerá en el correo. Máximo 150 caracteres.
                                         </p>
                                     </div>
 
@@ -485,65 +483,7 @@ export default function EmailsSettingsPage() {
                         </div>
                     </CollapsibleCard>
 
-                    <CollapsibleCard
-                        title="Email de cumpleaños"
-                    >
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between rounded-lg border p-4">
-                                <Label htmlFor="enable-birthday-email" className="font-medium">Activar cumpleaños</Label>
-                                <Controller
-                                    name="enableBirthdayEmail"
-                                    control={form.control}
-                                    render={({ field }) => (
-                                        <Switch id="enable-birthday-email" checked={field.value} onCheckedChange={field.onChange} />
-                                    )}
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-4">
-                                    <h4 className="font-semibold text-center">Previsualización</h4>
-                                    <div className="border rounded-lg p-4 bg-muted/30">
-                                        <div className="w-full max-w-sm mx-auto bg-background p-6 rounded-md shadow-md">
-                                            <div className="flex justify-center mb-4">
-                                                <Mail className="h-10 w-10 text-primary" />
-                                            </div>
-                                            <div className="w-full h-32 bg-muted rounded-md flex items-center justify-center mb-4">
-                                                <Cake className="h-16 w-16 text-muted-foreground" />
-                                            </div>
-                                            <p className="text-center text-sm mb-4">{form.watch('birthdayEmailBody')}</p>
-                                            <Button className="w-full" disabled>
-                                                {form.watch('birthdayButtonLink') ? 'Visitar Enlace' : 'Botón'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    <h4 className="font-semibold">Contenido del email</h4>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="birthday-email-body">Cuerpo del email</Label>
-                                        <Controller
-                                            name="birthdayEmailBody"
-                                            control={form.control}
-                                            render={({ field }) => (
-                                                <Textarea id="birthday-email-body" {...field} rows={6} />
-                                            )}
-                                        />
-                                        <p className="text-xs text-muted-foreground">Usa `[Nombre Cliente]` para personalizar el saludo.</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="birthday-button-link">Enlace web del botón</Label>
-                                        <Controller
-                                            name="birthdayButtonLink"
-                                            control={form.control}
-                                            render={({ field }) => (
-                                                <Input id="birthday-button-link" {...field} placeholder="/book" />
-                                            )}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </CollapsibleCard>
+
 
                     <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
                         <Button type="submit" disabled={isSubmitting}>

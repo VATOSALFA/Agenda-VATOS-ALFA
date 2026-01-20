@@ -1114,7 +1114,13 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
 
     // 3. Fetch Professional
     let professionalName = 'Un profesional de VATOS ALFA';
-    const proId = resData.barbero_id || resData.professional_id;
+    let proId = resData.barbero_id || resData.professional_id;
+
+    // Fallback: Check items array if top-level ID is missing
+    if (!proId && resData.items && resData.items.length > 0) {
+      proId = resData.items[0].barbero_id || resData.items[0].professional_id;
+    }
+
     if (proId) {
       const proSnap = await db.collection('profesionales').doc(proId).get();
       if (proSnap.exists) professionalName = proSnap.data().name;
@@ -1155,7 +1161,7 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
         const timeStr = resData.hora_inicio || '00:00';
 
         const itemsListHtml = (resData.items || []).map(i =>
-          `<div style="margin-bottom: 8px; font-weight: 500;">${i.nombre || i.servicio || 'Servicio'}<br><span style="font-weight: normal; font-size: 0.9em; opacity: 0.9;">$${i.precio}</span></div>`
+          `<div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">${i.nombre || i.servicio || 'Servicio'}</div>`
         ).join('');
 
         const signature = emailConfig.signature
@@ -1171,43 +1177,74 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
         const resend = new Resend(apiKey);
 
         const htmlContent = `
-            <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; line-height: 1.6; background-color: #ffffff;">
+               <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+                <!-- Font Import -->
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
                 
-                <div style="text-align: center; padding: 30px 0;">
-                   <img src="${logoUrl}" alt="${senderName}" style="max-height: 100px; width: auto; object-fit: contain;" />
-                </div>
-                
-                <h2 style="color: ${secondaryColor}; text-align: center; margin-bottom: 10px; font-size: 24px;">¡${clientData.nombre || 'Hola'}, tu cita está confirmada!</h2>
-                <p style="text-align: center; color: #666; font-size: 0.9em; margin-top: 0;">Reserva #${resData.id || reservationId.substring(0, 8)}</p>
-                
-                <div style="background-color: #f9f9f9; padding: 25px; border-radius: 12px; margin: 20px 0;">
-                   ${showServices ? `<h3 style="color: ${secondaryColor}; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 10px;">Servicios Solicitados</h3>
-                   <div style="margin-bottom: 20px;">${itemsListHtml}</div>` : ''}
+                <!-- Main Card Container -->
+                <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    
+                   <!-- Logo Header inside Card -->
+                   <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                       <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
+                   </div>
 
-                   <table style="width: 100%; border-collapse: collapse;">
-                     ${showDate ? `<tr><td style="padding: 8px 0; color: #666;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" height="16" style="vertical-align: middle; margin-right: 8px; opacity: 0.6;">Fecha</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${dateStr}</td></tr>` : ''}
-                     ${showTime ? `<tr><td style="padding: 8px 0; color: #666;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" height="16" style="vertical-align: middle; margin-right: 8px; opacity: 0.6;">Hora</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${timeStr}</td></tr>` : ''}
-                     ${showProfessional ? `<tr><td style="padding: 8px 0; color: #666;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" height="16" style="vertical-align: middle; margin-right: 8px; opacity: 0.6;">Profesional</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${professionalName}</td></tr>` : ''}
-                     ${showLocation ? `<tr><td style="padding: 8px 0; color: #666;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" height="16" style="vertical-align: middle; margin-right: 8px; opacity: 0.6;">Ubicación</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${localAddress}</td></tr>` : ''}
-                   </table>
-                </div>
-                
-                <div style="border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">Políticas de la Reserva</h4>
-                    <p style="font-size: 0.9em; color: #666; margin: 0;">${yellowNote}</p>
-                </div>
+                   <div style="padding: 25px;">
+                        <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡${clientData.nombre || 'Hola'}, tu cita está confirmada!</h2>
+                        <p style="text-align: center; color: #999; font-size: 0.9em; margin-bottom: 25px;">Reserva #${resData.id || reservationId.substring(0, 8)}</p>
+                        
+                        <!-- Services Section -->
+                        ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
 
-                <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-                    <p style="margin-bottom: 10px; font-weight: bold; color: #333;">${localPhone}</p>
-                    <a href="${whatsappLink}" style="display: inline-block; background-color: #25D366; color: white; padding: 10px 20px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 0.9em;">
-                       Contáctanos por WhatsApp
-                    </a>
-                </div>
+                        <!-- Details Table -->
+                        <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                             ${showDate ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                             </tr>` : ''}
+                             
+                             ${showTime ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                             </tr>` : ''}
 
-                <div style="text-align: center; font-size: 0.8em; color: #999; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-                   <img src="${logoUrl}" alt="Logo" style="height: 30px; opacity: 0.5; margin-bottom: 10px;" />
-                   <br>
-                   ${signature}
+                             ${showProfessional ? `<tr>
+                                 <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                 <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${professionalName}</td>
+                             </tr>` : ''}
+
+                             ${showLocation ? `<tr>
+                                 <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                 <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                             </tr>` : ''}
+                        </table>
+
+                        <!-- Note Inside Card -->
+                        <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
+                           ${yellowNote}
+                        </div>
+
+                        <!-- Contact Section -->
+                        <div style="margin-top: 25px; text-align: left;">
+                            <!-- WhatsApp -->
+                            <div style="margin-bottom: 12px; padding-left: 2px;">
+                                <a href="${whatsappLink}" style="text-decoration: none; color: #333; display: inline-flex; align-items: center;">
+                                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" style="margin-right: 12px;" alt="WhatsApp" />
+                                    <span style="font-weight: 700; font-size: 1em;">Contáctanos por WhatsApp</span>
+                                </a>
+                            </div>
+                            <!-- Phone -->
+                            <div style="display: flex; align-items: center; color: #333; padding-left: 2px;">
+                                 <img src="https://cdn-icons-png.flaticon.com/512/724/724664.png" width="20" style="margin-right: 12px; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);" alt="Teléfono" />
+                                 <span style="font-weight: 700; font-size: 1em;">${localPhone}</span>
+                            </div>
+                        </div>
+                   </div>
+                   
+                   <div style="background-color: #ffffff; padding: 20px; text-align: center; font-size: 0.75em; color: #bbb; border-top: 1px solid #f9f9f9;">
+                        ${senderName}
+                        <div style="display:none; opacity:0; font-size:1px; color:transparent;">${new Date().getTime()}</div> <!-- Anti-clipping -->
+                   </div>
                 </div>
             </div>
             `;
@@ -1225,9 +1262,58 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
     }
 
     // --- SEND TO PROFESSIONAL ---
+    // --- SEND TO PROFESSIONAL ---
     const profConfig = websiteSettings.professionalConfirmationEmailConfig || {};
     if (profConfig.enabled !== false) {
-      await sendProfessionalConfirmationEmail(reservationId, clientId, localId, resData, clientData, professionalName, empresaConfig, localData, profConfig, websiteSettings, resendApiKey);
+      let shouldSendNow = true;
+
+      // Logic: Respect Operating Hours (Quiet Hours)
+      // If booking is made OUTSIDE of operating hours, don't send immediate email.
+      // The Daily Summary will cover it.
+      if (localData && localData.schedule && localData.timezone) {
+        try {
+          const tz = localData.timezone || 'America/Mexico_City';
+          const now = new Date();
+
+          const formatter = new Intl.DateTimeFormat('es-MX', {
+            timeZone: tz,
+            weekday: 'long',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: false
+          });
+
+          const parts = formatter.formatToParts(now);
+          const rawDayName = parts.find(p => p.type === 'weekday').value.toLowerCase();
+          const dayName = rawDayName.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove accents
+
+          const hour = parseInt(parts.find(p => p.type === 'hour').value);
+          const minute = parseInt(parts.find(p => p.type === 'minute').value);
+          const currentTimeVal = hour * 60 + minute;
+
+          const scheduleDay = localData.schedule[dayName];
+
+          if (scheduleDay && scheduleDay.enabled && scheduleDay.start && scheduleDay.end) {
+            const [startH, startM] = scheduleDay.start.split(':').map(Number);
+            const [endH, endM] = scheduleDay.end.split(':').map(Number);
+
+            const startTimeVal = startH * 60 + startM;
+            const endTimeVal = endH * 60 + endM;
+
+            // If NOW is NOT between start and end (inclusive), skip immediate email
+            if (currentTimeVal < startTimeVal || currentTimeVal > endTimeVal) {
+              console.log(`[Email-Pro] Quiet Hours enforced. Skipped immediate email. (Time: ${hour}:${minute}, Hours: ${scheduleDay.start}-${scheduleDay.end})`);
+              shouldSendNow = false;
+            }
+          }
+        } catch (e) {
+          console.error("[Email-Pro] Error checking operating hours:", e);
+        }
+      }
+
+      if (shouldSendNow) {
+        await sendProfessionalConfirmationEmail(reservationId, clientId, localId, resData, clientData, professionalName, empresaConfig, localData, profConfig, websiteSettings, resendApiKey);
+      }
     }
 
   } catch (err) {
@@ -1271,7 +1357,7 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
     const timeStr = resData.hora_inicio || '00:00';
 
     const itemsListHtml = (resData.items || []).map(i =>
-      `<div style="margin-bottom: 5px; font-weight: 500;">${i.nombre || i.servicio || 'Servicio'}</div>`
+      `<div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">${i.nombre || i.servicio || 'Servicio'}</div>`
     ).join('');
 
     let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
@@ -1279,46 +1365,63 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
     const resend = new Resend(apiKey);
 
     const htmlContent = `
-         <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; line-height: 1.6;">
-            <div style="text-align: center; padding: 20px 0;">
-                 <img src="${logoUrl}" alt="${senderName}" style="max-height: 80px; width: auto; object-fit: contain;" />
-            </div>
-            
-            <h2 style="color: ${secondaryColor}; text-align: center; margin-bottom: 15px;">¡${professionalName}, hicieron una cita contigo!</h2>
-            <p style="text-align: center; color: #999; font-size: 0.9em; margin-top: 0;">Cita #${resData.id || reservationId.substring(0, 8)}</p>
-            
-            <div style="padding: 0 20px;">
-                ${showServices ? `<h3 style="color: #333; font-size: 1.2em; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">${itemsListHtml}</h3>` : ''}
+         <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+            <!-- Font Import -->
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
 
-                <div style="margin-bottom: 15px; display: flex; align-items: center;">
-                    <img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" style="height: 18px; margin-right: 10px; opacity: 0.6;">
-                    <span style="font-size: 1.0em; color: #555;">${dateStr}</span>
-                </div>
-                <div style="margin-bottom: 15px; display: flex; align-items: center;">
-                     <img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" style="height: 18px; margin-right: 10px; opacity: 0.6;">
-                    <span style="font-size: 1.0em; color: #555;">${timeStr}</span>
-                </div>
-                ${showClientName ? `
-                <div style="margin-bottom: 15px; display: flex; align-items: center;">
-                     <img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" style="height: 18px; margin-right: 10px; opacity: 0.6;">
-                    <span style="font-size: 1.0em; color: #555;">${clientData.nombre} ${clientData.apellido || ''}</span>
-                </div>` : ''}
-                ${showLocation ? `
-                <div style="margin-bottom: 15px; display: flex; align-items: center;">
-                    <img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" style="height: 18px; margin-right: 10px; opacity: 0.6;">
-                    <span style="font-size: 1.0em; color: #555;">${localData.address || localData.direccion}</span>
-                </div>` : ''}
-            </div>
+            <!-- Main Card Container -->
+            <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                
+               <!-- Logo Header inside Card -->
+               <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                   <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
+               </div>
 
-            ${note ? `
-            <div style="background-color: #f7f7f7; color: #555; padding: 15px; border-radius: 8px; margin: 20px; font-size: 0.9em; border: 1px solid #eee;">
-                <strong>Nota:</strong> ${note}
-            </div>` : ''}
+               <div style="padding: 25px;">
+                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡${professionalName}, tienes una nueva cita!</h2>
+                    <p style="text-align: center; color: #999; font-size: 0.9em; margin-bottom: 25px;">Cita #${resData.id || reservationId.substring(0, 8)}</p>
+                    
+                    <!-- Services Section -->
+                    ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
 
-             <div style="text-align: center; font-size: 0.8em; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-                 <img src="${logoUrl}" alt="Logo" style="height: 25px; opacity: 0.5; margin-bottom: 5px;" />
-                 <br>
-                ${senderName}
+                    <!-- Details Table -->
+                    <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                        ${showDate ? `<tr>
+                           <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                           <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                        </tr>` : ''}
+                        
+                        ${showTime ? `<tr>
+                           <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                           <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                        </tr>` : ''}
+
+                       ${showClientName ? `<tr>
+                            <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                            <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${clientData.nombre} ${clientData.apellido || ''}</td>
+                        </tr>` : ''}
+
+                       ${showLocation ? `<tr>
+                            <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                            <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${localData.name || 'Local'}</td>
+                        </tr>` : ''}
+                    </table>
+
+                    <!-- Note Inside Card -->
+                    ${note ? `
+                    <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
+                        ${note}
+                    </div>` : ''}
+
+                    <!-- Contact Section (Hidden for Pro but keeping signature) -->
+                    <!-- Usually pros don't need to contact themselves, but we keep signature -->
+
+               </div>
+               
+               <div style="background-color: #ffffff; padding: 20px; text-align: center; font-size: 0.75em; color: #bbb; border-top: 1px solid #f9f9f9;">
+                    ${senderName}
+                    <div style="display:none; opacity:0; font-size:1px; color:transparent;">${new Date().getTime()}</div>
+               </div>
             </div>
          </div>
          `;
@@ -1336,3 +1439,478 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
   }
 }
 
+
+/**
+ * Scheduled Job: Send Daily Agenda Summary
+ * Runs every day at 8:00 AM Mexico City time.
+ * Sends an email to each professional with their appointments for the day.
+ */
+exports.sendDailyAgendaSummary = onSchedule({
+  schedule: "every day 08:00",
+  timezone: "America/Mexico_City",
+  secrets: [resendApiKey]
+}, async (event) => {
+  console.log("[DailySummary] Starting daily agenda summary job...");
+  const db = admin.firestore();
+
+  // 1. Determine "Today" in Mexico City
+  // We use the same timezone as the scheduler to ensure alignment
+  const today = new Date();
+  const options = { timeZone: "America/Mexico_City", year: 'numeric', month: '2-digit', day: '2-digit' };
+  // Format: DD/MM/YYYY -> we need YYYY-MM-DD for firestore query if that's how it's stored
+  const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(today);
+  const day = parts.find(p => p.type === 'day').value;
+  const month = parts.find(p => p.type === 'month').value;
+  const year = parts.find(p => p.type === 'year').value;
+  const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
+
+  console.log(`[DailySummary] Processing for date: ${dateStr}`);
+
+  try {
+    // 2. Query Reservations for Today
+    // Indexing: 'fecha' ASC/DESC is usually indexed.
+    const resQuery = await db.collection('reservas')
+      .where('fecha', '==', dateStr)
+      .where('estado', '!=', 'Cancelado')
+      .get();
+
+    if (resQuery.empty) {
+      console.log("[DailySummary] No reservations found for today.");
+      return;
+    }
+
+    // 3. Group by Professional
+    const reservationsByPro = {};
+    resQuery.forEach(doc => {
+      const d = doc.data();
+      // Only active reservations
+      if (d.status === 'cancelled' || d.estado === 'Cancelado') return;
+
+      const proId = d.barbero_id || d.professional_id;
+      if (proId) {
+        if (!reservationsByPro[proId]) reservationsByPro[proId] = [];
+        reservationsByPro[proId].push(d);
+      }
+    });
+
+    // 4. Send Emails
+    // Fetch Company Config once
+    const empresaConfigSnap = await db.collection('empresa').limit(1).get();
+    const empresaConfig = !empresaConfigSnap.empty ? empresaConfigSnap.docs[0].data() : {};
+    const senderName = empresaConfig.name || 'VATOS ALFA';
+    const senderEmail = 'contacto@vatosalfa.com'; // Verify sender domain in Resend
+
+    // Init Resend
+    let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+    try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
+    const resend = new Resend(apiKey);
+
+    const proIds = Object.keys(reservationsByPro);
+    console.log(`[DailySummary] Assiging summaries for ${proIds.length} professionals.`);
+
+    for (const proId of proIds) {
+      try {
+        const proDoc = await db.collection('profesionales').doc(proId).get();
+        if (!proDoc.exists) continue;
+        const proData = proDoc.data();
+
+        if (!proData.email || !proData.active) continue;
+
+        const appointments = reservationsByPro[proId];
+        // Sort appointments by start time
+        appointments.sort((a, b) => (a.hora_inicio || '').localeCompare(b.hora_inicio || ''));
+
+        // Build HTML Table Rows
+        const rows = await Promise.all(appointments.map(async (res) => {
+          let clientName = "Cliente";
+          try {
+            if (res.cliente_id) {
+              const cSnap = await db.collection('clientes').doc(res.cliente_id).get();
+              if (cSnap.exists) {
+                const c = cSnap.data();
+                clientName = `${c.nombre} ${c.apellido || ''}`;
+              }
+            } else if (res.customer && res.customer.nombre) {
+              clientName = `${res.customer.nombre} ${res.customer.apellido || ''}`;
+            }
+          } catch (e) { }
+
+          let localName = "Local"; // Could fetch if needed, but keeping it simple for now or using cached
+          if (res.local_id) {
+            // Optimization: Cache locales if needed, but for now individual read is acceptable daily
+            const lSnap = await db.collection('locales').doc(res.local_id).get();
+            if (lSnap.exists) localName = lSnap.data().name;
+          }
+
+          return `
+               <tr style="border-bottom: 1px solid #333;">
+                   <td style="padding: 12px; color: #ccc;">${clientName}</td>
+                   <td style="padding: 12px; color: #ccc;">${res.servicio || 'Servicio'}</td>
+                   <td style="padding: 12px; color: #ccc;">${res.hora_inicio}</td>
+                   <td style="padding: 12px; color: #ccc;">${localName}</td>
+                   <td style="padding: 12px; color: #ccc;">${res.estado}</td>
+               </tr>
+            `;
+        }));
+
+        const htmlContent = `
+         <div style="font-family: 'Roboto', sans-serif; background-color: #1a1a1a; color: #e0e0e0; padding: 20px;">
+             <div style="text-align: center; margin-bottom: 20px;">
+                 <h2 style="color: #ffffff;">${senderName}</h2>
+                 <p>Hola ${proData.name}, esta es tu agenda para hoy (${dateStr}).</p>
+             </div>
+             
+             <div style="background-color: #2a2a2a; padding: 20px; border-radius: 8px;">
+                 <h3 style="color: #ffffff; border-bottom: 1px solid #444; padding-bottom: 10px;">📅 Agenda de hoy</h3>
+                 
+                 <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em;">
+                     <thead>
+                         <tr style="background-color: #333; color: #fff;">
+                             <th style="padding: 12px; text-align: left;">Cliente</th>
+                             <th style="padding: 12px; text-align: left;">Servicio</th>
+                             <th style="padding: 12px; text-align: left;">Hora</th>
+                             <th style="padding: 12px; text-align: left;">Lugar</th>
+                             <th style="padding: 12px; text-align: left;">Estado</th>
+                         </tr>
+                     </thead>
+                     <tbody>
+                         ${rows.join('')}
+                     </tbody>
+                 </table>
+             </div>
+             
+             <div style="margin-top: 20px; font-size: 0.8em; color: #666; text-align: center;">
+                Autogenerado por ${senderName}.
+             </div>
+         </div>
+         `;
+
+        await resend.emails.send({
+          from: `${senderName} <${senderEmail}>`,
+          to: [proData.email],
+          subject: `📅 Tu Agenda de Hoy (${dateStr})`,
+          html: htmlContent
+        });
+
+        console.log(`[DailySummary] Email sent to ${proData.email}`);
+
+      } catch (err) {
+        console.error(`[DailySummary] Error processing pro ${proId}:`, err);
+      }
+    }
+
+  } catch (error) {
+    console.error("[DailySummary] Job failed:", error);
+  }
+});
+
+/**
+ * Callable: Send Sale Receipt Email
+ */
+exports.sendSaleReceipt = onCall(
+  {
+    cors: true,
+    secrets: [resendApiKey],
+    region: "us-central1"
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    }
+
+    const { saleId } = request.data;
+    if (!saleId) {
+      throw new HttpsError('invalid-argument', 'Falta el ID de la venta.');
+    }
+
+    const db = admin.firestore();
+    try {
+      // 1. Fetch Sale
+      const saleDoc = await db.collection('ventas').doc(saleId).get();
+      if (!saleDoc.exists) {
+        throw new HttpsError('not-found', 'Venta no encontrada.');
+      }
+      const saleData = saleDoc.data();
+
+      // 2. Fetch Client
+      let clientData = {};
+      if (saleData.cliente_id) {
+        const clientSnap = await db.collection('clientes').doc(saleData.cliente_id).get();
+        if (clientSnap.exists) clientData = clientSnap.data();
+      }
+
+      // Check Email
+      const recipientEmail = clientData.email || clientData.correo;
+      if (!recipientEmail || !recipientEmail.includes('@')) {
+        return { success: false, message: 'El cliente no tiene un email válido.' };
+      }
+
+      // 3. Fetch Local & Company
+      const [empresaSnap, localSnap] = await Promise.all([
+        db.collection('empresa').limit(1).get(),
+        saleData.local_id ? db.collection('locales').doc(saleData.local_id).get() : Promise.resolve(null)
+      ]);
+
+      const empresaConfig = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
+      const localData = localSnap && localSnap.exists ? localSnap.data() : {};
+
+      const senderName = empresaConfig.name || 'VATOS ALFA';
+      const senderEmail = 'contacto@vatosalfa.com';
+      const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
+      const localAddress = localData.address || '';
+
+      // 4. Build HTML
+      const dateObj = saleData.fecha_hora_venta ? (saleData.fecha_hora_venta.toDate ? saleData.fecha_hora_venta.toDate() : new Date(saleData.fecha_hora_venta)) : new Date();
+      const dateStr = dateObj.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+      // Build Items HTML
+      const itemsHtml = (saleData.items || []).map(item => `
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 10px; color: #333;">${item.nombre}</td>
+          <td style="padding: 10px; text-align: right; color: #333;">$${(item.precio_unitario || item.precio || 0).toLocaleString('es-MX')} x ${item.cantidad}</td>
+          <td style="padding: 10px; text-align: right; font-weight: bold; color: #333;">$${((item.precio_unitario || item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</td>
+        </tr>
+      `).join('');
+
+      const subtotal = saleData.subtotal || 0;
+      const discount = saleData.descuento?.monto || 0;
+      const total = saleData.total || 0;
+
+      const htmlContent = `
+        <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            
+            <div style="text-align: center; margin-bottom: 20px;">
+              <img src="${logoUrl}" alt="${senderName}" style="max-width: 150px; height: auto;" />
+              <h2 style="margin-top: 10px; color: #333;">Comprobante de Pago</h2>
+              <p style="color: #666; font-size: 0.9em;">ID: ${saleId}</p>
+            </div>
+
+            <div style="margin-bottom: 30px; border-top: 1px solid #eee; border-bottom: 1px solid #eee; padding: 15px 0;">
+               <p style="margin: 5px 0;"><strong>Fecha:</strong> ${dateStr}</p>
+               <p style="margin: 5px 0;"><strong>Cliente:</strong> ${clientData.nombre} ${clientData.apellido || ''}</p>
+               <p style="margin: 5px 0;"><strong>Local:</strong> ${localData.name || 'Sucursal'}</p>
+               ${localAddress ? `<p style="margin: 5px 0;"><strong>Dirección:</strong> ${localAddress}</p>` : ''}
+               <p style="margin: 5px 0;"><strong>Método de Pago:</strong> ${saleData.metodo_pago}</p>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+              <thead>
+                <tr style="background-color: #f4f4f4;">
+                  <th style="padding: 10px; text-align: left;">Descripción</th>
+                  <th style="padding: 10px; text-align: right;">Precio</th>
+                  <th style="padding: 10px; text-align: right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+              <tfoot>
+                 <tr>
+                   <td colspan="2" style="padding: 10px; text-align: right;">Subtotal:</td>
+                   <td style="padding: 10px; text-align: right;">$${subtotal.toLocaleString('es-MX')}</td>
+                 </tr>
+                 ${discount > 0 ? `
+                 <tr>
+                   <td colspan="2" style="padding: 10px; text-align: right; color: #e11d48;">Descuento:</td>
+                   <td style="padding: 10px; text-align: right; color: #e11d48;">-$${discount.toLocaleString('es-MX')}</td>
+                 </tr>` : ''}
+                 <tr>
+                   <td colspan="2" style="padding: 10px; text-align: right; font-weight: bold; font-size: 1.2em;">Total:</td>
+                   <td style="padding: 10px; text-align: right; font-weight: bold; font-size: 1.2em;">$${total.toLocaleString('es-MX')}</td>
+                 </tr>
+              </tfoot>
+            </table>
+
+            <div style="text-align: center; font-size: 0.8em; color: #999; margin-top: 30px;">
+              <p>Gracias por tu preferencia.</p>
+              <p>${senderName}</p>
+            </div>
+
+          </div>
+        </div>
+      `;
+
+      // 5. Send Email
+      let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv"; // Fallback
+      try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
+      const resend = new Resend(apiKey);
+
+      await resend.emails.send({
+        from: `${senderName} <${senderEmail}>`,
+        to: [recipientEmail],
+        subject: `Tu Comprobante de Pago - ${senderName}`,
+        html: htmlContent
+      });
+
+      return { success: true };
+
+    } catch (error) {
+      console.error("Error sending receipt email:", error);
+      throw new HttpsError('internal', error.message);
+    }
+  }
+);
+
+/**
+ * Callable: Send Commission Report Email
+ */
+exports.sendCommissionReport = onCall(
+  {
+    cors: true,
+    secrets: [resendApiKey],
+    region: "us-central1"
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    }
+
+    const { professionalId, details, dateRangeStr } = request.data;
+    if (!professionalId || !details) {
+      throw new HttpsError('invalid-argument', 'Faltan datos requeridos (professionalId, details).');
+    }
+
+    const db = admin.firestore();
+    try {
+      // 1. Fetch Professional to get Email
+      const proDoc = await db.collection('profesionales').doc(professionalId).get();
+      if (!proDoc.exists) {
+        throw new HttpsError('not-found', 'Profesional no encontrado.');
+      }
+      const proData = proDoc.data();
+      const recipientEmail = proData.email;
+
+      if (!recipientEmail || !recipientEmail.includes('@')) {
+        return { success: false, message: 'El profesional no tiene un email válido.' };
+      }
+
+      // 2. Fetch Company Info
+      const empresaSnap = await db.collection('empresa').limit(1).get();
+      const empresaConfig = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
+      const senderName = empresaConfig.name || 'VATOS ALFA';
+      const senderEmail = 'contacto@vatosalfa.com';
+      const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
+
+      // 3. Build HTML Table
+      const rowsHtml = details.map(item => `
+          <tr style="border-bottom: 1px solid #f0f0f0;">
+             <td style="padding: 10px; color: #333;">${item.itemName}</td>
+             <td style="padding: 10px; color: #666; font-size: 0.9em;">${item.clientName}</td>
+             <td style="padding: 10px; color: #666; font-size: 0.9em; text-transform: capitalize;">${item.itemType}</td>
+             <td style="padding: 10px; text-align: right; color: #333;">$${item.saleAmount.toLocaleString('es-MX')}</td>
+             <td style="padding: 10px; text-align: right; color: #666; font-size: 0.9em;">${item.commissionPercentage.toFixed(2)}%</td>
+             <td style="padding: 10px; text-align: right; font-weight: bold; color: #333;">$${item.commissionAmount.toLocaleString('es-MX')}</td>
+          </tr>
+      `).join('');
+
+      const totalSales = details.reduce((acc, item) => acc + item.saleAmount, 0);
+      const totalCommission = details.reduce((acc, item) => acc + item.commissionAmount, 0);
+
+      const htmlContent = `
+        <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            
+            <div style="text-align: center; margin-bottom: 20px;">
+              <img src="${logoUrl}" alt="${senderName}" style="max-width: 150px; height: auto;" />
+              <h2 style="margin-top: 10px; color: #333;">Reporte de Comisiones</h2>
+              <p style="color: #666; font-size: 0.9em;">Hola ${proData.name}, aquí tienes tu desglose de comisiones.</p>
+              ${dateRangeStr ? `<p style="color: #888; font-size: 0.8em; margin-top: 5px;">Periodo: ${dateRangeStr}</p>` : ''}
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+              <thead>
+                <tr style="background-color: #f4f4f4;">
+                  <th style="padding: 10px; text-align: left;">Concepto</th>
+                  <th style="padding: 10px; text-align: left;">Cliente</th>
+                  <th style="padding: 10px; text-align: left;">Tipo</th>
+                  <th style="padding: 10px; text-align: right;">Venta</th>
+                  <th style="padding: 10px; text-align: right;">% Com.</th>
+                  <th style="padding: 10px; text-align: right;">Comisión</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+              <tfoot>
+                 <tr style="border-top: 2px solid #ddd;">
+                   <td colspan="3" style="padding: 10px; text-align: right; font-weight: bold;">Totales:</td>
+                   <td style="padding: 10px; text-align: right; font-weight: bold;">$${totalSales.toLocaleString('es-MX')}</td>
+                   <td></td>
+                   <td style="padding: 10px; text-align: right; font-weight: bold; color: #2563eb;">$${totalCommission.toLocaleString('es-MX')}</td>
+                 </tr>
+              </tfoot>
+            </table>
+
+            <div style="text-align: center; font-size: 0.8em; color: #999; margin-top: 30px;">
+              <p>${senderName}</p>
+            </div>
+
+          </div>
+        </div>
+      `;
+
+      // 4. Send Email
+      let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv"; // Fallback
+      try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
+      const resend = new Resend(apiKey);
+
+      await resend.emails.send({
+        from: `${senderName} <${senderEmail}>`,
+        to: [recipientEmail],
+        subject: `Tu Reporte de Comisiones - ${senderName}`,
+        html: htmlContent
+      });
+
+      return { success: true };
+
+    } catch (error) {
+      console.error("Error sending commission report:", error);
+      throw new HttpsError('internal', error.message);
+    }
+  }
+);
+
+/**
+ * Callable: Resend Reservation Confirmation Email manually
+ */
+exports.resendReservationConfirmation = onCall(
+  {
+    cors: true,
+    secrets: [resendApiKey],
+    region: "us-central1"
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    }
+
+    const { reservationId } = request.data;
+    if (!reservationId) {
+      throw new HttpsError('invalid-argument', 'Falta el ID de la reserva.');
+    }
+
+    const db = admin.firestore();
+    try {
+      const resDoc = await db.collection('reservas').doc(reservationId).get();
+      if (!resDoc.exists) {
+        throw new HttpsError('not-found', 'Reserva no encontrada.');
+      }
+      const resData = resDoc.data();
+      const clientId = resData.cliente_id;
+      const localId = resData.local_id;
+
+      if (!clientId) {
+        throw new HttpsError('failed-precondition', 'La reserva no tiene cliente asociado.');
+      }
+
+      // Reuse the existing helper function
+      await sendReservationConfirmationEmail(reservationId, clientId, localId);
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error resending reservation confirmation:", error);
+      throw new HttpsError('internal', error.message);
+    }
+  }
+);

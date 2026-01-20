@@ -20,6 +20,7 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { BluetoothPrinter } from '@/lib/printer';
 import { useToast } from '@/hooks/use-toast';
+import { functions, httpsCallable } from '@/lib/firebase-client';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -48,6 +49,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
     const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
     const empresa = empresaData?.[0];
     const [isPrinting, setIsPrinting] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
 
     const localData = useMemo(() => {
         if (!sale || !sale.local_id || !locales) return null;
@@ -137,14 +139,36 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         }
     };
 
+    const handleSendEmail = async () => {
+        if (!sale) return;
+        setIsSendingEmail(true);
+        try {
+            const sendReceipt = httpsCallable(functions, 'sendSaleReceipt');
+            const result: any = await sendReceipt({ saleId: sale.id });
+
+            if (result.data.success) {
+                toast({ title: "Correo enviado", description: "El comprobante se ha enviado al cliente." });
+            } else {
+                toast({ variant: "destructive", title: "Atención", description: result.data.message || "No se pudo enviar el correo." });
+            }
+        } catch (error: any) {
+            console.error("Email error:", error);
+            toast({ variant: "destructive", title: "Error", description: error.message || "Error al enviar el correo." });
+        } finally {
+            setIsSendingEmail(false);
+        }
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl p-0">
+            <DialogContent className="max-w-2xl p-0" hideCloseButton>
                 <DialogHeader className="p-4 border-b flex-row items-center justify-between">
                     <DialogTitle>Comprobante de pago ID: {sale.id.slice(0, 8)}</DialogTitle>
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon"><Mail className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={handlePrintTicket} disabled={isPrinting}>
+                        <Button variant="ghost" size="icon" onClick={handleSendEmail} disabled={isSendingEmail || isPrinting}>
+                            <Mail className={`h-4 w-4 ${isSendingEmail ? 'animate-pulse text-primary' : ''}`} />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={handlePrintTicket} disabled={isPrinting || isSendingEmail}>
                             <Printer className={`h-4 w-4 ${isPrinting ? 'animate-pulse text-blue-500' : ''}`} />
                         </Button>
                     </div>

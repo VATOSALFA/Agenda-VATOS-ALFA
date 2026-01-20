@@ -17,7 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Eye, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where, Timestamp, doc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
+import { where, Timestamp, doc, getDocs, getDoc, collection, query as firestoreQuery } from "firebase/firestore";
 import type { Local, Profesional, Service, Product, Sale, SaleItem, Client, AuthCode } from "@/lib/types";
 import { CommissionDetailModal } from "@/components/sales/commission-detail-modal";
 import { useAuth } from "@/contexts/firebase-auth-context";
@@ -63,7 +63,9 @@ export default function CommissionsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
+
     const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
+    const [discountsAffectCommissions, setDiscountsAffectCommissions] = useState(true);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -88,6 +90,20 @@ export default function CommissionsPage() {
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
+
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const d = await getDoc(doc(db, 'settings', 'commissions'));
+                if (d.exists()) {
+                    setDiscountsAffectCommissions(d.data().discountsAffectCommissions ?? true);
+                }
+            } catch (e) {
+                console.error("Error loading commission settings", e);
+            }
+        };
+        fetchSettings();
+    }, []);
 
     useEffect(() => {
         const today = new Date();
@@ -171,7 +187,8 @@ export default function CommissionsPage() {
 
                 const itemPrice = item.subtotal || item.precio || 0;
                 const itemDiscount = item.descuento?.monto || 0;
-                const finalItemPrice = itemPrice - itemDiscount;
+                // If discounts affect commissions (default), subtract discount. Otherwise use gross price.
+                const finalItemPrice = discountsAffectCommissions ? (itemPrice - itemDiscount) : itemPrice;
 
                 let commissionConfig = null;
                 let itemName = item.nombre;
@@ -211,7 +228,7 @@ export default function CommissionsPage() {
 
         setCommissionData(commissionRows);
 
-    }, [sales, professionals, services, products, clients, salesLoading, professionalsLoading, servicesLoading, productsLoading, clientsLoading, activeFilters]);
+    }, [sales, professionals, services, products, clients, salesLoading, professionalsLoading, servicesLoading, productsLoading, clientsLoading, activeFilters, discountsAffectCommissions]);
 
     const handleSearch = () => {
         setActiveFilters({
@@ -481,6 +498,7 @@ export default function CommissionsPage() {
                     isOpen={isDetailModalOpen}
                     onOpenChange={setIsDetailModalOpen}
                     summary={selectedProfessionalSummary}
+                    dateRangeStr={dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yyyy", { locale: es })} - ${format(dateRange.to, "dd/MM/yyyy", { locale: es })}` : format(dateRange.from, "dd/MM/yyyy", { locale: es })) : "Periodo no definido"}
                 />
             )}
 

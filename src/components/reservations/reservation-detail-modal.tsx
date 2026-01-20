@@ -41,6 +41,7 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
+import { functions, httpsCallable } from '@/lib/firebase-client';
 
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 
@@ -76,8 +77,11 @@ export function ReservationDetailModal({
   const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
 
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   const { toast } = useToast();
   const { db } = useAuth();
+
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
   const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
@@ -192,6 +196,21 @@ export function ReservationDetailModal({
     }
   };
 
+  const handleResendEmail = async () => {
+    if (!reservation.id) return;
+    setIsSendingEmail(true);
+    try {
+      const resendFn = httpsCallable(functions, 'resendReservationConfirmation');
+      await resendFn({ reservationId: reservation.id });
+      toast({ title: "Correo enviado", description: "Se ha enviado la confirmación al cliente." });
+    } catch (error: any) {
+      console.error("Error sending email:", error);
+      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo enviar el correo." });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
 
 
   return (
@@ -203,6 +222,10 @@ export function ReservationDetailModal({
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={onEdit} disabled={reservation.pago_estado === 'Pagado'}>
                 <Pencil className="mr-2 h-4 w-4" /> Editar
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleResendEmail} disabled={isSendingEmail}>
+                {isSendingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                Notificar
               </Button>
             </div>
           </DialogHeader>

@@ -12,26 +12,36 @@ interface GetAvailabilityParams {
 }
 
 export async function getAvailableSlots({ date, professionalId, durationMinutes }: GetAvailabilityParams) {
-    try {
-        let db;
-        try {
-            db = getDb();
-        } catch (e: any) {
-            console.error("Database connection error:", e);
-            return { error: 'Error de conexión con la base de datos. Contacte al administrador.' };
-        }
+    // 0. Strict Input Validation
+    if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return { error: 'Formato de fecha inválido. Se requiere AAAA-MM-DD.' };
+    }
+    if (!professionalId || typeof professionalId !== 'string') {
+        return { error: 'ID de profesional inválido.' };
+    }
+    if (typeof durationMinutes !== 'number' || durationMinutes <= 0) {
+        return { slots: [] }; // No slots for invalid duration
+    }
 
+    try {
+        const db = getDb();
         if (!db) return { error: 'No database connection' };
 
         // 1. Get Professional Schedule
+        // Optimized: Parallelize initial independent fetches if possible, but here we need prof schedule first to know if we even need to check others.
         const profDoc = await db.collection('profesionales').doc(professionalId).get();
-        if (!profDoc.exists) return { error: 'Professional not found' };
+        if (!profDoc.exists) return { error: 'Profesional no encontrado.' };
 
         const profData = profDoc.data();
-        if (!profData) return { error: 'No data for professional' };
+        if (!profData) return { error: 'Datos del profesional no disponibles.' };
 
-        const dayName = format(parse(date, 'yyyy-MM-dd', new Date()), 'eeee', { locale: es }).toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
+        // Safe Date Parsing
+        let dayName = '';
+        const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
+        if (isNaN(parsedDate.getTime())) return { error: 'Fecha inválida.' };
+
+        dayName = format(parsedDate, 'eeee', { locale: es }).toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
         const scheduleDay = profData.schedule?.[dayName];
 
@@ -39,19 +49,35 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             return { slots: [] }; // Day is closed
         }
 
-        const { start: startStr, end: endStr } = scheduleDay; // HH:mm
+        // Safe Time Parsing Helper
+        const parseTimeSafe = (timeStr: any) => {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const parts = timeStr.split(':');
+            if (parts.length < 2) return null;
+            const h = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return null;
+            return { h, m };
+        };
+
+        const startT = parseTimeSafe(scheduleDay.start);
+        const endT = parseTimeSafe(scheduleDay.end);
+
+        if (!startT || !endT) return { slots: [] }; // Invalid schedule configuration
 
         // 1.1 Add Breaks to Busy Intervals
         const busyIntervals: { start: number, end: number }[] = [];
 
         if (scheduleDay.breaks && Array.isArray(scheduleDay.breaks)) {
             scheduleDay.breaks.forEach((brk: any) => {
-                const [sH, sM] = brk.start.split(':').map(Number);
-                const [eH, eM] = brk.end.split(':').map(Number);
-                busyIntervals.push({
-                    start: sH * 60 + sM,
-                    end: eH * 60 + eM
-                });
+                const s = parseTimeSafe(brk.start);
+                const e = parseTimeSafe(brk.end);
+                if (s && e) {
+                    busyIntervals.push({
+                        start: s.h * 60 + s.m,
+                        end: e.h * 60 + e.m
+                    });
+                }
             });
         }
 
@@ -64,16 +90,21 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             const data = doc.data();
             if (data.estado === 'Cancelado') return;
 
-            // Filter by professional (items array or direct barbero_id)
-            const isForProf = data.barbero_id === professionalId || (data.items && data.items.some((i: any) => i.barbero_id === professionalId));
+            // Robust check for professional match
+            let isForProf = data.barbero_id === professionalId;
+            if (!isForProf && Array.isArray(data.items)) {
+                isForProf = data.items.some((i: any) => i && i.barbero_id === professionalId);
+            }
 
             if (isForProf) {
-                const [sH, sM] = data.hora_inicio.split(':').map(Number);
-                const [eH, eM] = data.hora_fin.split(':').map(Number);
-                busyIntervals.push({
-                    start: sH * 60 + sM,
-                    end: eH * 60 + eM
-                });
+                const s = parseTimeSafe(data.hora_inicio);
+                const e = parseTimeSafe(data.hora_fin);
+                if (s && e) {
+                    busyIntervals.push({
+                        start: s.h * 60 + s.m,
+                        end: e.h * 60 + e.m
+                    });
+                }
             }
         });
 
@@ -85,52 +116,48 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
 
         blocksSnapshot.forEach(doc => {
             const data = doc.data();
-            const [sH, sM] = data.hora_inicio.split(':').map(Number);
-            const [eH, eM] = data.hora_fin.split(':').map(Number);
-            busyIntervals.push({
-                start: sH * 60 + sM,
-                end: eH * 60 + eM
-            });
+            const s = parseTimeSafe(data.hora_inicio);
+            const e = parseTimeSafe(data.hora_fin);
+            if (s && e) {
+                busyIntervals.push({
+                    start: s.h * 60 + s.m,
+                    end: e.h * 60 + e.m
+                });
+            }
         });
 
         // 4. Calculate Available Slots
-        const [startH, startM] = startStr.split(':').map(Number);
-        const [endH, endM] = endStr.split(':').map(Number);
-        const startObj = set(new Date(), { hours: startH, minutes: startM, seconds: 0, milliseconds: 0 });
-        const endObj = set(new Date(), { hours: endH, minutes: endM, seconds: 0, milliseconds: 0 });
+        const startObj = set(parsedDate, { hours: startT.h, minutes: startT.m, seconds: 0, milliseconds: 0 });
+        const endObj = set(parsedDate, { hours: endT.h, minutes: endT.m, seconds: 0, milliseconds: 0 });
 
-        // Fetch settings once (outside loop)
-        let minReservationBuffer = 60; // Default 1 hour
-        let GRID_INTERVAL = 30; // Default 30 mins
+        // Fetch settings
+        let minReservationBuffer = 60; // Minutes
+        let GRID_INTERVAL = 30; // Minutes
 
         try {
             const settingsSnap = await db.collection('settings').doc('website').get();
             if (settingsSnap.exists) {
                 const data = settingsSnap.data();
                 if (data) {
-                    minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+                    if (data.minReservationTime !== undefined) minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
                     if (data.slotInterval) {
                         const parsedInterval = Number(data.slotInterval);
-                        if (!isNaN(parsedInterval) && parsedInterval > 0) {
-                            GRID_INTERVAL = parsedInterval;
-                        }
+                        if (!isNaN(parsedInterval) && parsedInterval > 0) GRID_INTERVAL = parsedInterval;
                     }
                 }
             }
-        } catch (e) {
-            console.error("Error fetching reservation settings:", e);
+        } catch (settingsError) {
+            console.warn("Could not load waiting settings, using defaults.", settingsError);
         }
 
         const availableSlots: string[] = [];
         let current = startObj;
 
-        // Helper to check against current time if it's today
-        // FIX: Ensure we use the Business Timezone (Mexico City) instead of Server Time (UTC)
+        // Timezone Logic
+        // We need to compare against "Now" in Mexico City time to block past slots + buffer
         const timeZone = 'America/Mexico_City';
         const nowRaw = new Date();
-
-        // Get current date in Mexico: YYYY-MM-DD
-        const mexicoDateStr = new Intl.DateTimeFormat('en-CA', {
+        const mexicoDateStr = new Intl.DateTimeFormat('en-CA', { // YYYY-MM-DD
             timeZone,
             year: 'numeric',
             month: '2-digit',
@@ -138,33 +165,44 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         }).format(nowRaw);
 
         const isQueryDateToday = (date === mexicoDateStr);
+        let currentMinutes = -1;
 
-        // Get current time in Mexico: HH:mm
-        const mexicoTimeParts = new Intl.DateTimeFormat('en-GB', {
-            timeZone,
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        }).formatToParts(nowRaw);
+        if (isQueryDateToday) {
+            const mexicoTimeParts = new Intl.DateTimeFormat('en-GB', { // HH:mm
+                timeZone,
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).formatToParts(nowRaw);
+            const nowH = parseInt(mexicoTimeParts.find(p => p.type === 'hour')?.value || '0', 10);
+            const nowM = parseInt(mexicoTimeParts.find(p => p.type === 'minute')?.value || '0', 10);
+            currentMinutes = nowH * 60 + nowM;
+        }
 
-        const nowH = parseInt(mexicoTimeParts.find(p => p.type === 'hour')?.value || '0', 10);
-        const nowM = parseInt(mexicoTimeParts.find(p => p.type === 'minute')?.value || '0', 10);
+        // Loop generation
+        // Limit iterations to prevent infinite loops (e.g. if start > end)
+        let iterations = 0;
+        const MAX_ITERATIONS = 200; // 24 hours / 15 mins = 96 slots max typically
 
-        const currentMinutes = nowH * 60 + nowM;
+        while (addMinutes(current, durationMinutes) <= endObj && iterations < MAX_ITERATIONS) {
+            iterations++;
 
-        while (addMinutes(current, durationMinutes) <= endObj) {
-            const slotStart = current.getHours() * 60 + current.getMinutes();
+            const currentH = current.getHours();
+            const currentM = current.getMinutes();
+            const slotStart = currentH * 60 + currentM;
             const slotEnd = slotStart + durationMinutes;
 
-            // Check if slot is in the past or within minimum reservation time buffer
+            // Check Buffer for Today
             if (isQueryDateToday && slotStart < (currentMinutes + minReservationBuffer)) {
                 current = addMinutes(current, GRID_INTERVAL);
                 continue;
             }
 
-            // Check if overlaps with any busy interval
+            // Check Overlaps
             const isBusy = busyIntervals.some(busy => {
-                // Interval intersection: (StartA < EndB) and (EndA > StartB)
+                // Returns true if overlap exists
+                // Overlap condition: Not (EndA <= StartB OR StartA >= EndB)
+                // Simplified: StartA < EndB AND EndA > StartB
                 return (slotStart < busy.end && slotEnd > busy.start);
             });
 
@@ -178,8 +216,9 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         return { slots: availableSlots };
 
     } catch (error: any) {
-        console.error('Error fetching availability:', error);
-        return { error: error.message };
+        console.error('CRITICAL Error fetching availability:', error);
+        // Important: Return a serializable object, NOT an Error instance
+        return { error: 'Error interno verificando horarios. Intente nuevamente.' };
     }
 }
 

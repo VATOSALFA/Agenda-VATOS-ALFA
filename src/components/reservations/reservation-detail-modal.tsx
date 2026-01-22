@@ -52,7 +52,7 @@ interface ReservationDetailModalProps {
   onOpenChange: (isOpen: boolean) => void;
   onPay: () => void;
   onUpdateStatus: (reservationId: string, status: string) => void;
-  onEdit: () => void;
+  onEdit?: () => void;
 }
 
 const statusOptions = [
@@ -220,9 +220,11 @@ export function ReservationDetailModal({
           <DialogHeader className="p-6 flex-row justify-between items-center border-b">
             <DialogTitle>Detalle de la Reserva</DialogTitle>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={onEdit} disabled={reservation.pago_estado === 'Pagado'}>
-                <Pencil className="mr-2 h-4 w-4" /> Editar
-              </Button>
+              {onEdit && (
+                <Button variant="outline" size="sm" onClick={onEdit} disabled={reservation.pago_estado === 'Pagado'}>
+                  <Pencil className="mr-2 h-4 w-4" /> Editar
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleResendEmail} disabled={isSendingEmail}>
                 {isSendingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
                 Notificar

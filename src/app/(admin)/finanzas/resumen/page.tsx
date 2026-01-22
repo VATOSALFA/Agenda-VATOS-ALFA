@@ -11,9 +11,11 @@ import { Edit, Save, Loader2, TrendingDown } from 'lucide-react';
 import { AddDepositoModal } from '@/components/finanzas/add-deposito-modal';
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Egreso, Profesional, Service, Product } from '@/lib/types';
+import type { Sale, Egreso, Profesional, Service, Product, User } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, where, getDocs, collection, query, orderBy, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
+import { useEffect } from 'react';
 
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
@@ -28,16 +30,61 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
 
 export default function FinanzasResumenPage() {
     const [isDepositoModalOpen, setIsDepositoModalOpen] = useState(false);
-    const [beatrizCommissionPercent, setBeatrizCommissionPercent] = useState(20);
-    const [isEditingCommission, setIsEditingCommission] = useState(false);
+    const [monthlyAdjustments, setMonthlyAdjustments] = useState<Record<string, { adminCommissions?: Record<string, { type: 'fixed' | 'percentage', value: number }> }>>({});
+    const currentYear = new Date().getFullYear();
+
 
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas');
     const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+    const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
 
-    const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading;
+
+
+    // Fetch monthly adjustments for the year
+    useEffect(() => {
+        if (!db) return;
+        const fetchAdjustments = async () => {
+            // We can't query by field easily since we didn't add 'year' field explicitly, 
+            // but we can query by ID range or just fetch all since it's small.
+            // Best to just fetch all for now, the collection won't be huge yet.
+            // Or construct IDs.
+            const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+            const adjustments: Record<string, any> = {};
+
+            for (const m of monthNames) {
+                const docId = `${m}_${currentYear}`;
+                // We could do a Promise.all getDoc but let's see. 
+                // Actually onSnapshot is nice for realtime but maybe overkill for annual summary? 
+                // User wants accuracy. Let's do getDocs(collection) and filter client side for matches.
+                // Actually better:
+            }
+
+            try {
+                const q = query(collection(db, 'finanzas_mensuales')); // Fetch all for now
+                const snapshot = await getDocs(q);
+                const data: Record<string, any> = {};
+                snapshot.forEach(doc => {
+                    if (doc.id.includes(String(currentYear))) {
+                        // Map 'enero_2026' -> 'enero'? No, we need to key by month name.
+                        // doc.id is like 'enero_2026'
+                        // Extract month name part
+                        const [mName] = doc.id.split('_');
+                        // Map to Index? Or just keep key 'enero'.
+                        data[mName] = doc.data();
+                    }
+                });
+                setMonthlyAdjustments(data);
+            } catch (e) {
+                console.error("Error fetching adjustments", e);
+            }
+        };
+        fetchAdjustments();
+    }, [currentYear]);
+
+    const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading || usersLoading;
 
     const yearlyData = useMemo(() => {
         if (isLoading) return [];
@@ -47,7 +94,17 @@ export default function FinanzasResumenPage() {
         const productMap = new Map(products.map(p => [p.id, p]));
 
         const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-        const monthlyData: Record<string, { month: string, monthFullName: string, ingresos: number, egresos: number, utilidad: number, subtotalUtilidad: number, rendimiento: number }> = {};
+        // Enhanced type to track admin commissions per month
+        const monthlyData: Record<string, {
+            month: string,
+            monthFullName: string,
+            ingresos: number,
+            egresos: number,
+            utilidad: number,
+            subtotalUtilidad: number,
+            rendimiento: number,
+            adminCommissions: Record<string, { name: string, amount: number, type: string, value: number }>
+        }> = {};
 
         monthNames.forEach((name, index) => {
             monthlyData[name] = {
@@ -58,6 +115,7 @@ export default function FinanzasResumenPage() {
                 utilidad: 0,
                 subtotalUtilidad: 0,
                 rendimiento: 0,
+                adminCommissions: {}
             };
         });
 
@@ -72,36 +130,7 @@ export default function FinanzasResumenPage() {
 
         const allEgresos: { fecha: Date; monto: number }[] = [
             ...egresos.map(e => ({ ...e, fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : e.fecha })),
-            ...sales.flatMap(sale => {
-                const saleDate = sale.fecha_hora_venta.toDate();
-                return sale.items?.map(item => {
-                    if (!item.barbero_id) return null;
-                    const professional = professionalMap.get(item.barbero_id);
-                    if (!professional) return null;
-
-                    let commissionConfig = null;
-                    if (item.tipo === 'servicio') {
-                        const service = services.find(s => s.name === item.nombre);
-                        if (service) commissionConfig = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
-                    } else if (item.tipo === 'producto') {
-                        const product = productMap.get(item.id);
-                        if (product) commissionConfig = professional.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                    }
-
-                    if (commissionConfig) {
-                        const itemSubtotal = item.subtotal || item.precio || 0;
-                        const itemDiscount = item.descuento?.monto || 0;
-                        const finalItemPrice = itemSubtotal - itemDiscount;
-
-                        const commissionAmount = commissionConfig.type === '%'
-                            ? finalItemPrice * (commissionConfig.value / 100)
-                            : commissionConfig.value;
-
-                        return { fecha: saleDate, monto: commissionAmount };
-                    }
-                    return null;
-                }).filter(e => e !== null) as { fecha: Date, monto: number }[]
-            })
+            // Removed automatic commission calculation here to rely purely on recorded 'egresos' (payouts)
         ];
 
         allEgresos.forEach(egreso => {
@@ -131,14 +160,52 @@ export default function FinanzasResumenPage() {
             }, 0);
 
             const subtotalUtilidad = data.ingresos - data.egresos - ventaProductos;
-            const comisionBeatriz = subtotalUtilidad * (beatrizCommissionPercent / 100);
+
+
+            // Calculate admin commissions for this month
+            // Calculate admin commissions for this month
+            // We need to use ALL "Local Admins" not just those with config, because an override might exist.
+            const admins = users.filter(u => u.role === 'Administrador local');
+            let monthlyAdminCommissionsTotal = 0;
+
+            admins.forEach(admin => {
+                // Check overrides
+                const monthKey = data.month.toLowerCase(); // 'enero', etc
+                const adjustment = monthlyAdjustments[monthKey]?.adminCommissions?.[admin.id];
+
+                const baseType = admin.commissionType || 'none';
+                const baseValue = admin.commissionValue || 0;
+
+                const type = adjustment ? adjustment.type : baseType;
+                const value = adjustment ? adjustment.value : baseValue;
+
+                let amount = 0;
+                if (!type || type === 'none') {
+                    amount = 0;
+                } else if (type === 'fixed') {
+                    amount = value || 0;
+                } else if (type === 'percentage') {
+                    amount = subtotalUtilidad * ((value || 0) / 100);
+                }
+
+                if (type && type !== 'none') {
+                    data.adminCommissions[admin.id] = {
+                        name: admin.name,
+                        amount,
+                        type,
+                        value
+                    };
+                    monthlyAdminCommissionsTotal += amount;
+                }
+            });
+
             data.subtotalUtilidad = subtotalUtilidad;
-            data.utilidad = subtotalUtilidad - comisionBeatriz;
+            data.utilidad = subtotalUtilidad - monthlyAdminCommissionsTotal;
             data.rendimiento = data.ingresos > 0 ? (subtotalUtilidad / data.ingresos) * 100 : 0;
         });
 
         return Object.values(monthlyData);
-    }, [isLoading, sales, egresos, professionals, services, products, beatrizCommissionPercent]);
+    }, [isLoading, sales, egresos, professionals, services, products, users, monthlyAdjustments]);
 
     const { totalIngresosAnual, totalEgresosAnual } = useMemo(() => {
         return yearlyData.reduce((acc, month) => {
@@ -199,8 +266,49 @@ export default function FinanzasResumenPage() {
     }, [isLoading, sales, products, professionals]);
 
     const subtotalUtilidadAnual = totalIngresosAnual - totalEgresosAnual - ventaProductosAnual;
-    const comisionBeatrizAnual = subtotalUtilidadAnual * (beatrizCommissionPercent / 100);
-    const utilidadNetaAnual = subtotalUtilidadAnual - comisionBeatrizAnual;
+
+    // Calculate total annual admin commissions by aggregation
+    const annualAdminCommissions = useMemo(() => {
+        const totals: Record<string, { name: string, amount: number, type: string, value: number }> = {};
+        yearlyData.forEach(month => {
+            Object.values(month.adminCommissions).forEach(comm => {
+                // Use Name as key? Or ID? Better ID but we don't have it easily accessible in the loop below if we don't store it.
+                // We stored it in adminCommissions keyed by ID.
+                // Actually we can just iterate the users and sum up from yearlyData.
+            });
+        });
+
+        // Re-calculate based on calculated monthly data (which includes overrides)
+        if (!users) return [];
+        return users
+            .filter(u => u.role === 'Administrador local')
+            .map(u => {
+                const totalAmount = yearlyData.reduce((sum, month) => {
+                    return sum + (month.adminCommissions[u.id]?.amount || 0);
+                }, 0);
+
+                if (totalAmount === 0 && (!u.commissionType || u.commissionType === 'none')) return null;
+
+                // Calculate effective annual percentage
+                // If subtotalUtilidadAnual is 0, percentage is 0 to avoid NaN
+                const effectivePercentage = subtotalUtilidadAnual !== 0
+                    ? (totalAmount / subtotalUtilidadAnual) * 100
+                    : 0;
+
+                return {
+                    id: u.id,
+                    name: u.name,
+                    amount: totalAmount,
+                    type: u.commissionType,
+                    value: effectivePercentage // Use effective percentage for display
+                };
+            })
+            .filter((u): u is NonNullable<typeof u> => u !== null);
+    }, [yearlyData, users, subtotalUtilidadAnual]);
+
+    const totalAnnualAdminCommissions = annualAdminCommissions.reduce((acc, curr) => acc + curr.amount, 0);
+
+    const utilidadNetaAnual = subtotalUtilidadAnual - totalAnnualAdminCommissions;
 
     const firstHalfYear = yearlyData.slice(0, 6);
     const secondHalfYear = yearlyData.slice(6, 12);
@@ -208,7 +316,7 @@ export default function FinanzasResumenPage() {
     return (
         <>
             <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-                <h2 className="text-3xl font-bold tracking-tight">Resumen Anual</h2>
+                <h2 className="text-3xl font-bold tracking-tight">Resumen anual</h2>
 
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     <Card className="lg:col-span-1">
@@ -218,28 +326,20 @@ export default function FinanzasResumenPage() {
                         <CardContent className="space-y-1 text-sm">
                             {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
                                 <>
-                                    <ResumenGeneralItem label="Ingreso Total" amount={totalIngresosAnual} fractionDigits={2} />
-                                    <ResumenGeneralItem label="Egreso Total" amount={totalEgresosAnual} fractionDigits={2} />
+                                    <ResumenGeneralItem label="Ingreso total" amount={totalIngresosAnual} fractionDigits={2} />
+                                    <ResumenGeneralItem label="Egreso total" amount={totalEgresosAnual} fractionDigits={2} />
                                     <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidadAnual} isBold fractionDigits={2} />
-                                    <ResumenGeneralItem label={`Comisión de Beatriz (${beatrizCommissionPercent}%)`} amount={comisionBeatrizAnual} fractionDigits={2}>
-                                        {isEditingCommission ? (
-                                            <div className="flex items-center gap-1">
-                                                <Input
-                                                    type="number"
-                                                    value={beatrizCommissionPercent}
-                                                    onChange={(e) => setBeatrizCommissionPercent(Number(e.target.value))}
-                                                    className="w-20 h-7 text-sm"
-                                                    autoFocus
-                                                />
-                                                <Button size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(false)}><Save className="h-4 w-4" /></Button>
-                                            </div>
-                                        ) : (
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingCommission(true)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </ResumenGeneralItem>
-                                    <ResumenGeneralItem label="Utilidad Neta" amount={utilidadNetaAnual} isPrimary isBold className="text-xl" fractionDigits={2} />
+
+                                    {annualAdminCommissions.map(admin => (
+                                        <ResumenGeneralItem
+                                            key={admin.id}
+                                            label={`Comisión ${admin.name} (${admin.value.toLocaleString('es-MX', { maximumFractionDigits: 1 })}%)`}
+                                            amount={admin.amount}
+                                            fractionDigits={2}
+                                        />
+                                    ))}
+
+                                    <ResumenGeneralItem label="Utilidad neta" amount={utilidadNetaAnual} isPrimary isBold className="text-xl" fractionDigits={2} />
                                 </>
                             )}
                         </CardContent>
@@ -273,7 +373,7 @@ export default function FinanzasResumenPage() {
                     </Card>
                     <Card className="lg:col-span-1">
                         <CardHeader>
-                            <CardTitle>Rendimiento Mensual</CardTitle>
+                            <CardTitle>Rendimiento mensual</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -306,7 +406,7 @@ export default function FinanzasResumenPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Tendencia Mensual: Ingresos, Egresos y Utilidad</CardTitle>
+                        <CardTitle>Tendencia mensual: Ingresos, egresos y utilidad</CardTitle>
                     </CardHeader>
                     <CardContent className="h-96">
                         {isLoading ? <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
@@ -319,7 +419,7 @@ export default function FinanzasResumenPage() {
                                     <Legend />
                                     <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-2))" name="Ingresos" />
                                     <Line type="monotone" dataKey="egresos" stroke="hsl(var(--destructive))" name="Egresos" />
-                                    <Line type="monotone" dataKey="utilidad" stroke="#22c55e" name="Utilidad Neta" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="utilidad" stroke="#22c55e" name="Utilidad neta" strokeWidth={2} />
                                 </LineChart>
                             </ResponsiveContainer>
                         )}

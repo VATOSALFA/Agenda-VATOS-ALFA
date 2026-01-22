@@ -11,6 +11,8 @@ import { getDb } from '@/lib/firebase-server';
 import { Metadata } from 'next';
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 
+export const revalidate = 60; // Revalidate every 60 seconds
+
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -35,7 +37,6 @@ export async function generateMetadata(): Promise<Metadata> {
       }
     }
   } catch (error) {
-    // Log error but don't crash, fallback to defaults
     console.warn('Metadata fetch failed (using default):', error);
   }
 

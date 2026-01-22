@@ -20,32 +20,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const defaultDesc = 'Agenda tu cita con los mejores profesionales.';
   const defaultIcon = '/logo-vatos-alfa.png';
 
-  let title = defaultTitle;
-  let description = defaultDesc;
-  let icon = defaultIcon;
-
-  try {
-    const db = getDb();
-    const snapshot = await db.collection('empresa').limit(1).get();
-
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      if (data) {
-        if (data.name) title = data.name;
-        if (data.description) description = data.description;
-        if (data.icon_url) icon = data.icon_url;
-      }
-    }
-  } catch (error) {
-    console.warn('Metadata fetch failed (using default):', error);
-  }
-
+  // Using static metadata for stability and performance
   return {
-    title: title,
-    description: description,
+    title: defaultTitle,
+    description: defaultDesc,
     icons: {
-      icon: icon,
-      apple: icon,
+      icon: defaultIcon,
+      apple: defaultIcon,
     }
   };
 }

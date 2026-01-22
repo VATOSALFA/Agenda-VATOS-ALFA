@@ -474,7 +474,7 @@ export default function InvoicedSalesPage() {
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-                <h2 className="text-3xl font-bold tracking-tight">Ventas facturadas</h2>
+                <h2 className="text-3xl font-bold tracking-tight">Ventas Facturadas</h2>
 
                 <Card>
                     <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -541,7 +541,7 @@ export default function InvoicedSalesPage() {
                     ) : (
                         <>
                             <DonutChartCard
-                                title="Ventas facturadas totales"
+                                title="Ventas Facturadas Totales"
                                 data={salesData.totalSales.data}
                                 total={salesData.totalSales.total}
                                 dataLabels={salesData.totalSales.dataLabels}

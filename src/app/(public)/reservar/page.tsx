@@ -12,7 +12,7 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
@@ -1404,12 +1404,7 @@ export default function BookingPage() {
                                         (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday)
                                     }
                                 >
-                                    {isSubmitting ? (
-                                        <div className="flex items-center gap-2">
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                            <span>Procesando...</span>
-                                        </div>
-                                    ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
+                                    {isSubmitting ? <CustomLoader size={20} /> : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
                                 </Button>
                                 {upfrontTotal > 0 && (
                                     <p className="text-xs text-center text-muted-foreground mt-2">

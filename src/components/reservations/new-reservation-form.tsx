@@ -75,8 +75,8 @@ const createReservationSchema = (isEditMode: boolean) => z.object({
   notas: z.string().optional(),
   nota_interna: z.string().optional(),
   notifications: z.object({
-    whatsapp_notification: z.boolean().default(false),
-    whatsapp_reminder: z.boolean().default(false),
+    whatsapp_notification: z.boolean().default(true),
+    whatsapp_reminder: z.boolean().default(true),
   }).optional(),
   local_id: z.string().min(1, 'Se requiere un local.')
 }).refine(data => {
@@ -170,7 +170,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
   const [isProfessionalLocked, setIsProfessionalLocked] = useState(false);
-  const { user, db } = useAuth();
+  const { db } = useAuth();
 
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
@@ -186,26 +186,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const reminderSettings = reminderSettingsData?.[0];
   const agendaSettings = agendaSettingsData?.[0];
 
-  // Helper for checking permissions
-  const canSee = useCallback((permission: string) => {
-    if (!user || !user.permissions) return false;
-    if (user.role === 'Administrador general') return true;
-    return user.permissions.includes(permission);
-  }, [user]);
-
-  const filteredProfessionals = useMemo(() => {
-    let pros = professionals;
-    if (!canSee('ver_agenda_global')) {
-      const myProf = pros.find(p => p.email === user?.email);
-      if (myProf) {
-        pros = [myProf];
-      } else {
-        pros = [];
-      }
-    }
-    return pros;
-  }, [professionals, canSee, user]);
-
 
   const form = useForm<ReservationFormData>({
     resolver: zodResolver(createReservationSchema(isEditMode)),
@@ -217,8 +197,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       precio: 0,
       items: [{ servicio: '', barbero_id: '' }],
       notifications: {
-        whatsapp_notification: false,
-        whatsapp_reminder: false,
+        whatsapp_notification: true,
+        whatsapp_reminder: true,
       }
     },
   });
@@ -276,9 +256,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     items.forEach((item, index) => {
       if (!item.barbero_id) return;
 
-      if (!item.barbero_id) return;
-
-      const professional = filteredProfessionals.find(p => p.id === item.barbero_id);
+      const professional = professionals.find(p => p.id === item.barbero_id);
       if (!professional) return;
 
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -333,7 +311,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     });
     setAvailabilityErrors(errors);
     return allItemsValid;
-  }, [filteredProfessionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
+  }, [professionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {
@@ -395,11 +373,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         },
         local_id: initialData.local_id
       });
-      setIsProfessionalLocked(
-        initialData.professional_lock !== undefined
-          ? initialData.professional_lock
-          : (isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false))
-      );
+      setIsProfessionalLocked(isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false));
     } else if (isOpen) {
       form.reset({
         notas: '',
@@ -541,8 +515,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
-        local_id: data.local_id,
-        professional_lock: isProfessionalLocked,
+        local_id: data.local_id
       };
 
       if (isEditMode && initialData?.id) {
@@ -563,7 +536,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       // Notification logic after successful save
       if (data.notifications?.whatsapp_notification && !isEditMode) {
         const client = clients.find(c => c.id === data.cliente_id);
-        const professional = filteredProfessionals.find(p => p.id === data.items[0]?.barbero_id);
+        const professional = professionals.find(p => p.id === data.items[0]?.barbero_id);
         if (client?.telefono && professional) {
           const fullDateStr = `${format(data.fecha, "dd 'de' MMMM", { locale: es })} a las ${hora_inicio}`;
           // No need to await this, it can run in the background
@@ -616,7 +589,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const isAppointmentNotificationEnabled = reminderSettings?.notifications?.['appointment_notification']?.enabled ?? false;
   const isReminderNotificationEnabled = reminderSettings?.notifications?.['appointment_reminder']?.enabled ?? false;
 
-
+  useEffect(() => {
+    if (!isEditMode) {
+      form.setValue('notifications.whatsapp_notification', isAppointmentNotificationEnabled);
+      form.setValue('notifications.whatsapp_reminder', isReminderNotificationEnabled);
+    }
+  }, [isAppointmentNotificationEnabled, isReminderNotificationEnabled, form, isEditMode]);
 
   const FormContent = () => (
     <>
@@ -750,12 +728,48 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   )} />
                 )}
 
-
+                {selectedClient && (
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="notificaciones">
+                      <AccordionTrigger>Notificaciones Adicionales</AccordionTrigger>
+                      <AccordionContent className="space-y-3 pt-2">
+                        <FormField control={form.control} name="notifications.whatsapp_notification" render={({ field }) => (
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={!selectedClient?.telefono || !isAppointmentNotificationEnabled}
+                              />
+                            </FormControl>
+                            <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de notificación de reserva</FormLabel>
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="notifications.whatsapp_reminder" render={({ field }) => (
+                          <FormItem className="flex items-center space-x-2">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={!selectedClient?.telefono || !isReminderNotificationEnabled}
+                              />
+                            </FormControl>
+                            <FormLabel className="!mt-0 font-normal">Enviar WhatsApp de recordatorio de cita</FormLabel>
+                          </FormItem>
+                        )} />
+                        {!selectedClient?.telefono && <p className="text-xs text-muted-foreground pl-6">El cliente no tiene un teléfono para enviar notificaciones de WhatsApp.</p>}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                )}
 
 
                 <div className="space-y-4">
                   {fields.map((field, index) => {
-                    const currentItemId = form.getValues(`items.${index}.servicio`);
+                    // Determine if the current item is a service or product
+                    // We need to access the current value of this field to know what is selected
+                    const currentItemId = form.getValues(`items.${index}.servicio`); // The field is named 'servicio' in schema but holds ID
+                    // Check if it matches a product
                     const isProduct = products?.some(p => p.id === currentItemId) ||
                       (initialData?.items?.[index] && (initialData.items[index] as any).tipo === 'producto');
 
@@ -764,13 +778,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center gap-2">
-                                <FormLabel>{isProduct ? 'Producto' : 'Servicios'}</FormLabel>
-                              </div>
+                              <FormLabel>{isProduct ? 'Producto' : 'Servicios'}</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value} disabled={isProduct}>
+                                {/* Disable changing product to service here if it's a product? Or allow mixed? 
+                                  User said it was a product. Usually products are read-only in this edit view unless we add full product support.
+                                  Let's just show it. If it's a product ID, we need to ensure the SelectItem exists or it shows up.
+                              */}
                                 <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
                                 <SelectContent>
                                   {services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                  {/* If it is a product, we must render an item for it so the SelectValue can display the name, 
+                                    otherwise it shows the ID or empty. */}
                                   {isProduct && products?.map(p => (
                                     <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
                                   ))}
@@ -779,12 +797,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                               <FormMessage />
                             </FormItem>
                           )} />
-
+                          {/* Professional field ... */}
                           <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
                             <FormItem>
+                              {/* ... existing profesional logic ... */}
                               <div className="flex items-center gap-2">
                                 <FormLabel>Profesional</FormLabel>
-                                {isEditMode && (
+                                {/* ... lock logic ... */}
+                                {isEditMode && (initialData?.canal_reserva?.startsWith('web_publica') || initialData?.origen?.startsWith('web_publica')) && (
                                   <Button
                                     type="button"
                                     variant="ghost"
@@ -798,21 +818,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                 )}
                               </div>
                               <Select onValueChange={field.onChange} value={field.value} disabled={isProfessionalLocked}>
-                                <FormControl>
-                                  <SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}>
-                                    <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {filteredProfessionals.map((barber) => (
-                                    <SelectItem key={barber.id} value={barber.id}>
-                                      {barber.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
+                                <FormControl><SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}><SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} /></SelectTrigger></FormControl>
+                                <SelectContent>{professionals?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                               </Select>
-                              <FormMessage />
-                              {availabilityErrors[index] && <p className="text-destructive text-sm mt-1">{availabilityErrors[index]}</p>}
+                              {availabilityErrors[index] && <p className="text-sm font-medium text-destructive">{availabilityErrors[index]}</p>}
                             </FormItem>
                           )} />
                         </div>
@@ -822,7 +831,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           </Button>
                         )}
                       </Card>
-                    );
+                    )
                   })}
                   <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '' })} className="w-full">
                     <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio

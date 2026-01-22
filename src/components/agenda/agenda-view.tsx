@@ -152,13 +152,6 @@ export default function AgendaView() {
   const [queryKey, setQueryKey] = useState(0);
   const onDataRefresh = () => setQueryKey(prev => prev + 1);
 
-  // Helper for checking permissions
-  const canSee = (permission: string) => {
-    if (!user || !user.permissions) return false;
-    if (user.role === 'Administrador general') return true;
-    return user.permissions.includes(permission);
-  }
-
   useEffect(() => {
     setIsClientMounted(true)
     setDate(new Date());
@@ -237,25 +230,12 @@ export default function AgendaView() {
   const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading || usersLoading || productsLoading;
 
   const filteredProfessionals = useMemo(() => {
-    let professionalsOfLocal = professionals.filter(p => p.local_id === selectedLocalId);
-
-    // If user cannot see global agenda, filter to only show themselves
-    const canViewAll = canSee('ver_agenda_global');
-    if (!canViewAll) {
-      // Fix: Match by email to avoid type errors with 'id' on CustomUser
-      const myProf = professionals.find(p => p.email === user?.email);
-      if (myProf) {
-        professionalsOfLocal = [myProf];
-      } else {
-        professionalsOfLocal = [];
-      }
-    }
-
+    const professionalsOfLocal = professionals.filter(p => p.local_id === selectedLocalId);
     if (selectedProfessionalFilter === 'todos') {
       return professionalsOfLocal;
     }
     return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
-  }, [professionals, selectedProfessionalFilter, selectedLocalId, user]);
+  }, [professionals, selectedProfessionalFilter, selectedLocalId]);
 
   const allEvents: AgendaEvent[] = useMemo(() => {
     if (!reservations || !timeBlocks || !clients || !professionals) return [];
@@ -277,7 +257,7 @@ export default function AgendaView() {
           professionalNames: res.items?.map((i: SaleItem) => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
           start: start,
           end: end,
-          duration: Math.max(0.0833, end - start),
+          duration: Math.max(0.5, end - start),
           color: getStatusColor(res.estado),
           type: 'appointment' as const,
           layout: { width: 100, left: 0, col: 0, totalCols: 1 }
@@ -297,7 +277,7 @@ export default function AgendaView() {
         service: 'Bloqueado',
         start: start,
         end: end,
-        duration: Math.max(0.0833, end - start),
+        duration: Math.max(0.5, end - start),
         color: 'bg-striped-gray border-gray-400 text-gray-600',
         type: 'block' as const,
         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
@@ -366,8 +346,6 @@ export default function AgendaView() {
   const handleNextDay = () => setDate(d => dateFnsAddDays(d || new Date(), 1));
 
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
-    if (!canSee('crear_reservas') && !canSee('bloquear_horarios')) return;
-
     const gridEl = gridRefs.current[barberId];
     if (!gridEl) return;
     const rect = gridEl.getBoundingClientRect();
@@ -461,7 +439,6 @@ export default function AgendaView() {
   }
 
   const handleOpenReservationModal = () => {
-    if (!canSee('crear_reservas')) return;
     if (popoverState && date) {
       setReservationInitialData({
         barbero_id: popoverState.barberId,
@@ -475,7 +452,6 @@ export default function AgendaView() {
   };
 
   const handleOpenBlockModal = () => {
-    if (!canSee('bloquear_horarios')) return;
     if (popoverState && date) {
       setBlockInitialData({
         barbero_id: popoverState.barberId,
@@ -996,7 +972,7 @@ export default function AgendaView() {
                                 <div className="space-y-2">
                                   <div className="flex justify-between items-start">
                                     <p className="font-bold text-base text-foreground">{(event.customer?.nombre || 'Cliente Eliminado')}</p>
-                                    {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
+                                    {event.canal_reserva === 'web_publica' && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
                                   </div>
                                   <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : event.servicio}</p>
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1063,7 +1039,7 @@ export default function AgendaView() {
           }}
           onPay={handlePayFromDetail}
           onUpdateStatus={handleUpdateStatus}
-          onEdit={canSee('editar_reservas') ? handleEditFromDetail : undefined}
+          onEdit={handleEditFromDetail}
         />
       )}
 

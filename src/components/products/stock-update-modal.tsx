@@ -128,7 +128,6 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
           productName: product.nombre,
           currentStock: newStock,
           recipientEmail: product.notification_email,
-          productImage: product.images?.[0], // Pass the first image URL if available
         });
         toast({
           variant: "destructive",

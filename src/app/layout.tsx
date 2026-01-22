@@ -11,8 +11,6 @@ import { getDb } from '@/lib/firebase-server';
 import { Metadata } from 'next';
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 
-export const revalidate = 60; // Revalidate every 60 seconds
-
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -20,13 +18,33 @@ export async function generateMetadata(): Promise<Metadata> {
   const defaultDesc = 'Agenda tu cita con los mejores profesionales.';
   const defaultIcon = '/logo-vatos-alfa.png';
 
-  // Using static metadata for stability and performance
+  let title = defaultTitle;
+  let description = defaultDesc;
+  let icon = defaultIcon;
+
+  try {
+    const db = getDb();
+    const snapshot = await db.collection('empresa').limit(1).get();
+
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data();
+      if (data) {
+        if (data.name) title = data.name;
+        if (data.description) description = data.description;
+        if (data.icon_url) icon = data.icon_url;
+      }
+    }
+  } catch (error) {
+    // Log error but don't crash, fallback to defaults
+    console.warn('Metadata fetch failed (using default):', error);
+  }
+
   return {
-    title: defaultTitle,
-    description: defaultDesc,
+    title: title,
+    description: description,
     icons: {
-      icon: defaultIcon,
-      apple: defaultIcon,
+      icon: icon,
+      apple: icon,
     }
   };
 }

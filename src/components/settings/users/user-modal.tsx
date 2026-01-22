@@ -27,6 +27,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { createUserWithEmailAndPassword, updateProfile, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { ImageUploader } from '@/components/shared/image-uploader';
+import { spellCheck, type SpellCheckOutput } from '@/ai/flows/spell-check-flow';
 import { useDebounce } from 'use-debounce';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { firebaseConfig } from '@/lib/firebase-client';
@@ -42,13 +43,20 @@ const userSchema = (isEditMode: boolean, isGeneralAdmin: boolean) => z.object({
   role: isEditMode && isGeneralAdmin ? z.string().optional() : z.string().min(1, 'El rol es requerido.'),
   local_id: z.string().optional(),
   avatarUrl: z.string().optional(),
-  commissionType: z.enum(['fixed', 'percentage', 'none']).optional(),
-  commissionValue: z.string().optional(), // We'll parse to number on submit
 });
 
 
 type UserFormData = z.infer<ReturnType<typeof userSchema>>;
 
+const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOutput, onAccept: (text: string) => void }) => {
+  if (!suggestion.hasCorrection) return null;
+  return (
+    <button type="button" onClick={() => onAccept(suggestion.correctedText)} className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 transition-colors p-1 rounded-md bg-blue-50 hover:bg-blue-100">
+      <Sparkles className="h-3 w-3" />
+      ¿Quisiste decir: <span className="font-semibold">{suggestion.correctedText}</span>?
+    </button>
+  )
+}
 interface UserModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -64,7 +72,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const isEditMode = !!user;
   const { toast } = useToast();
 
-
+  const [nombreSuggestion, setNombreSuggestion] = useState<SpellCheckOutput | null>(null);
+  const [apellidoSuggestion, setApellidoSuggestion] = useState<SpellCheckOutput | null>(null);
+  const [isCheckingNombre, setIsCheckingNombre] = useState(false);
+  const [isCheckingApellido, setIsCheckingApellido] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -74,7 +85,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema(isEditMode, isEditingGeneralAdmin)),
-    defaultValues: { nombre: '', apellido: '', email: '', celular: '', role: '', password: '', avatarUrl: '', commissionType: 'none', commissionValue: '' },
+    defaultValues: { nombre: '', apellido: '', email: '', celular: '', role: '', password: '', avatarUrl: '' },
   });
 
   const selectedRoleName = form.watch('role');
@@ -84,7 +95,42 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const [debouncedNombre] = useDebounce(nombreValue, 750);
   const [debouncedApellido] = useDebounce(apellidoValue, 750);
 
+  const checkSpelling = useCallback(async (text: string, type: 'nombre' | 'apellido') => {
+    if (!text || text.trim().length <= 2) return;
 
+    if (type === 'nombre') {
+      setIsCheckingNombre(true);
+      setNombreSuggestion(null);
+    } else {
+      setIsCheckingApellido(true);
+      setApellidoSuggestion(null);
+    }
+
+    try {
+      const result = await spellCheck(text);
+      if (result.hasCorrection) {
+        if (type === 'nombre') setNombreSuggestion(result);
+        else setApellidoSuggestion(result);
+      }
+    } catch (error) {
+      console.error("Spell check failed:", error);
+    } finally {
+      if (type === 'nombre') setIsCheckingNombre(false);
+      else setIsCheckingApellido(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (debouncedNombre) {
+      checkSpelling(debouncedNombre, 'nombre');
+    }
+  }, [debouncedNombre, checkSpelling]);
+
+  useEffect(() => {
+    if (debouncedApellido) {
+      checkSpelling(debouncedApellido, 'apellido');
+    }
+  }, [debouncedApellido, checkSpelling]);
 
   useEffect(() => {
     if (isOpen) {
@@ -99,12 +145,10 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
           local_id: user.local_id,
           celular: user.celular || '',
           password: '',
-          avatarUrl: user.avatarUrl || '',
-          commissionType: user.commissionType || 'none',
-          commissionValue: user.commissionValue ? user.commissionValue.toString() : ''
+          avatarUrl: user.avatarUrl || ''
         });
       } else {
-        form.reset({ nombre: '', apellido: '', email: '', celular: '', role: '', password: '', avatarUrl: '', commissionType: 'none', commissionValue: '' });
+        form.reset({ nombre: '', apellido: '', email: '', celular: '', role: '', password: '', avatarUrl: '' });
       }
     }
   }, [user, isOpen, form]);
@@ -125,8 +169,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         role: roleToSave,
         permissions: permissionsForRole,
         avatarUrl: data.avatarUrl,
-        commissionType: data.commissionType,
-        commissionValue: data.commissionValue ? Number(data.commissionValue) : 0,
       };
 
       dataToSave.local_id = data.local_id || null;
@@ -235,52 +277,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     </FormItem>
                   )}
                 />
-
-                {selectedRoleName === 'Administrador local' && (
-                  <div className="bg-slate-50 p-4 rounded-md border text-sm space-y-3">
-                    <h4 className="font-semibold text-slate-900">Configuración de Utilidad</h4>
-                    <FormField
-                      control={form.control}
-                      name="commissionType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de comisión</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue="none">
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione tipo" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">Sin utilidad</SelectItem>
-                              <SelectItem value="fixed">Monto fijo mensual</SelectItem>
-                              <SelectItem value="percentage">Porcentaje utilidad mensual</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
-
-                    {form.watch('commissionType') !== 'none' && (
-                      <FormField
-                        control={form.control}
-                        name="commissionValue"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {form.watch('commissionType') === 'fixed' ? 'Monto ($)' : 'Porcentaje (%)'}
-                            </FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} placeholder="0" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  </div>
-                )}
-
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -289,6 +285,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       <FormItem>
                         <FormLabel>Nombres <span className="text-destructive">*</span></FormLabel>
                         <FormControl><Input {...field} /></FormControl>
+                        {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
+                        {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -300,6 +298,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       <FormItem>
                         <FormLabel>Apellidos <span className="text-destructive">*</span></FormLabel>
                         <FormControl><Input {...field} /></FormControl>
+                        {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
+                        {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -396,51 +396,6 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                       </FormItem>
                     )}
                   />
-                )}
-
-                {selectedRoleName === 'Administrador local' && (
-                  <div className="bg-slate-50 p-4 rounded-md border text-sm space-y-3 mt-4">
-                    <h4 className="font-semibold text-slate-900">Configuración de Utilidad</h4>
-                    <FormField
-                      control={form.control}
-                      name="commissionType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de comisión</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue="none">
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione tipo" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">Sin utilidad</SelectItem>
-                              <SelectItem value="fixed">Monto fijo mensual</SelectItem>
-                              <SelectItem value="percentage">Porcentaje utilidad mensual</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
-
-                    {form.watch('commissionType') !== 'none' && (
-                      <FormField
-                        control={form.control}
-                        name="commissionValue"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {form.watch('commissionType') === 'fixed' ? 'Monto ($)' : 'Porcentaje (%)'}
-                            </FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} placeholder="0" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  </div>
                 )}
 
                 {selectedRoleName !== 'Administrador general' && (

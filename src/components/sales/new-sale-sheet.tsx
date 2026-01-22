@@ -10,7 +10,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
 import type { Client, Product, Service as ServiceType, Profesional, Local, User } from '@/lib/types';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
-
+import { sendGoogleReviewRequest } from '@/ai/flows/send-google-review-flow';
 import { functions, httpsCallable, db } from '@/lib/firebase-client';
 import { BluetoothPrinter } from '@/lib/printer';
 
@@ -63,7 +63,13 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
 import { Skeleton } from '../ui/skeleton';
 
-
+interface ReminderSettings {
+    notifications: {
+        google_review?: {
+            enabled: boolean;
+        };
+    };
+}
 
 
 interface CartItem {
@@ -650,7 +656,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
 
                 // ... existing Google Review logic ...
+                const settingsRef = doc(db, 'configuracion', 'recordatorios');
+                const settingsSnap = await getDoc(settingsRef);
+                const settings = settingsSnap.data() as ReminderSettings | undefined;
+                const isReviewEnabled = settings?.notifications?.google_review?.enabled ?? false;
 
+                if (isReviewEnabled) {
+                    const client = clients.find(c => c.id === clientId);
+                    const local = locales.find(l => l.id === localId);
+                    if (client?.telefono && local) {
+                        setTimeout(() => {
+                            sendGoogleReviewRequest({
+                                clientId: client.id,
+                                clientName: client.nombre,
+                                clientPhone: client.telefono,
+                                localName: local.name,
+                            }).catch(err => {
+                                console.error("Failed to send Google review request:", err);
+                            });
+                        }, 30 * 60 * 1000);
+                    }
+                }
             }
         } catch (e) {
             console.error("Error en flujo de post-venta:", e);
@@ -1077,12 +1103,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             productName: update.productData.nombre,
                             currentStock: update.newStock,
                             recipientEmail: update.productData.notification_email,
-                            productImage: update.productData.images?.[0], // Pass image if available
-                        }).then(() => {
-                            toast({
-                                title: "Alerta de Stock Enviada",
-                                description: `El producto ${update.productData.nombre} tiene stock bajo (${update.newStock}). Se ha enviado un correo.`,
-                            });
                         }).catch(console.error);
                     }
                 }

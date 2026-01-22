@@ -86,7 +86,6 @@ export interface Reservation {
   monto_pagado?: number;
   anticipo_pagado?: number;
   deposit_payment_id?: string;
-  professional_lock?: boolean;
 }
 
 export interface TimeBlock {
@@ -306,8 +305,6 @@ export interface User {
   permissions?: string[];
   local_id?: string;
   avatarUrl?: string;
-  commissionType?: 'fixed' | 'percentage' | 'none';
-  commissionValue?: number;
 }
 
 export interface Role {

@@ -24,12 +24,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { Product, ProductCategory, ProductBrand, ProductPresentation } from '@/lib/types';
 import { NewProductModal } from '@/components/products/new-product-modal';
@@ -43,14 +43,14 @@ import { PresentationModal } from '@/components/products/presentation-modal';
 export default function InventoryPage() {
   const [queryKey, setQueryKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-
+  
   const { data: allProducts, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
   const { data: allCategories, loading: categoriesLoading } = useFirestoreQuery<ProductCategory>('categorias_productos', `cat-${queryKey}`);
   const { data: allBrands, loading: brandsLoading } = useFirestoreQuery<ProductBrand>('marcas_productos', `brand-${queryKey}`);
   const { data: allPresentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos', `pres-${queryKey}`);
-
+  
   const { toast } = useToast();
-
+  
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -70,18 +70,18 @@ export default function InventoryPage() {
     };
   }, [allCategories, allBrands, allPresentations, categoriesLoading, brandsLoading, presentationsLoading]);
 
-
+  
   const filteredProducts = useMemo(() => {
-    const sortedProducts = [...allProducts].sort((a, b) => (a.order || 99) - (b.order || 99));
-    if (!searchTerm) return sortedProducts;
+    const sortedProducts = [...allProducts].sort((a,b) => (a.order || 99) - (b.order || 99));
+    if(!searchTerm) return sortedProducts;
     return sortedProducts.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [allProducts, searchTerm]);
 
-
+  
   const handleDataUpdated = (newEntityId?: string) => {
     setQueryKey(prev => prev + 1);
   };
-
+  
   const handleOpenNewProduct = () => {
     setEditingProduct(null);
     setIsProductModalOpen(true);
@@ -91,7 +91,7 @@ export default function InventoryPage() {
     setEditingProduct(product);
     setIsProductModalOpen(true);
   };
-
+  
   const handleStockUpdate = (product: Product) => {
     setStockUpdateProduct(product);
     setIsStockModalOpen(true);
@@ -104,24 +104,24 @@ export default function InventoryPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Inventario de productos</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Inventario de Productos</h2>
             <p className="text-muted-foreground">
               Administra los productos de tu negocio.
             </p>
           </div>
           <div className="flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Administrar Catálogos</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => setIsCategoryModalOpen(true)}>Categorías</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setIsBrandModalOpen(true)}>Marcas</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setIsPresentationModalOpen(true)}>Formatos/Presentaciones</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}><Upload className="mr-2 h-4 w-4" /> Importar</Button>
-            <Button onClick={handleOpenNewProduct}><Plus className="mr-2 h-4 w-4" />Nuevo Producto</Button>
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="outline"><Settings className="mr-2 h-4 w-4" />Administrar Catálogos</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setIsCategoryModalOpen(true)}>Categorías</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsBrandModalOpen(true)}>Marcas</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsPresentationModalOpen(true)}>Formatos/Presentaciones</DropdownMenuItem>
+                  </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}><Upload className="mr-2 h-4 w-4"/> Importar</Button>
+              <Button onClick={handleOpenNewProduct}><Plus className="mr-2 h-4 w-4" />Nuevo Producto</Button>
           </div>
         </div>
         <Card>
@@ -129,8 +129,8 @@ export default function InventoryPage() {
             <div className="flex justify-between items-center">
               <CardTitle>Listado de productos</CardTitle>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar producto..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Buscar producto..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
           </CardHeader>
@@ -148,16 +148,16 @@ export default function InventoryPage() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
+                  Array.from({length: 5}).map((_, i) => (
                     <TableRow key={i}>
                       <TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell>
                     </TableRow>
                   ))
                 ) : filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      {searchTerm ? "No se encontraron productos." : "No hay productos registrados."}
-                    </TableCell>
+                      <TableCell colSpan={6} className="h-24 text-center">
+                          {searchTerm ? "No se encontraron productos." : "No hay productos registrados."}
+                      </TableCell>
                   </TableRow>
                 ) : filteredProducts.map((product) => (
                   <TableRow key={product.id}>
@@ -171,11 +171,11 @@ export default function InventoryPage() {
                       </Button>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditProduct(product)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
+                       <div className="flex items-center justify-end gap-2">
+                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditProduct(product)}>
+                               <Edit className="h-4 w-4" />
+                           </Button>
+                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -184,23 +184,23 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
       </div>
-
+      
       {isProductModalOpen && (
-        <NewProductModal
-          isOpen={isProductModalOpen}
-          onClose={() => setIsProductModalOpen(false)}
-          onDataSaved={handleDataUpdated}
-          product={editingProduct}
-        />
+          <NewProductModal
+            isOpen={isProductModalOpen}
+            onClose={() => setIsProductModalOpen(false)}
+            onDataSaved={handleDataUpdated}
+            product={editingProduct}
+          />
       )}
-
+      
       {stockUpdateProduct && (
-        <StockUpdateModal
-          isOpen={isStockModalOpen}
-          onClose={() => setIsStockModalOpen(false)}
-          onStockUpdated={handleDataUpdated}
-          product={stockUpdateProduct}
-        />
+          <StockUpdateModal
+            isOpen={isStockModalOpen}
+            onClose={() => setIsStockModalOpen(false)}
+            onStockUpdated={handleDataUpdated}
+            product={stockUpdateProduct}
+          />
       )}
 
       {isUploadModalOpen && (
@@ -212,28 +212,28 @@ export default function InventoryPage() {
       )}
 
       {isCategoryModalOpen && (
-        <CategoryModal
-          isOpen={isCategoryModalOpen}
-          onClose={() => setIsCategoryModalOpen(false)}
-          onDataSaved={(newId) => { handleDataUpdated(); }}
-          existingCategories={allCategories}
-        />
+          <CategoryModal
+            isOpen={isCategoryModalOpen}
+            onClose={() => setIsCategoryModalOpen(false)}
+            onDataSaved={(newId) => { handleDataUpdated(); }}
+            existingCategories={allCategories}
+          />
       )}
 
       {isBrandModalOpen && (
-        <BrandModal
-          isOpen={isBrandModalOpen}
-          onClose={() => setIsBrandModalOpen(false)}
-          onDataSaved={(newId) => { handleDataUpdated(); }}
-        />
+          <BrandModal
+            isOpen={isBrandModalOpen}
+            onClose={() => setIsBrandModalOpen(false)}
+            onDataSaved={(newId) => { handleDataUpdated(); }}
+          />
       )}
 
       {isPresentationModalOpen && (
-        <PresentationModal
-          isOpen={isPresentationModalOpen}
-          onClose={() => setIsPresentationModalOpen(false)}
-          onDataSaved={(newId) => { handleDataUpdated(); }}
-        />
+          <PresentationModal
+            isOpen={isPresentationModalOpen}
+            onClose={() => setIsPresentationModalOpen(false)}
+            onDataSaved={(newId) => { handleDataUpdated(); }}
+          />
       )}
 
     </>

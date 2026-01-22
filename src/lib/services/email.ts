@@ -7,7 +7,14 @@ if (!resendApiKey) {
     console.warn('Resend API Key is not configured.');
 }
 
-const resend = new Resend(resendApiKey);
+// Safe initialization
+const getResendClient = () => {
+    if (!resendApiKey) {
+        // Return a mock or throw ONLY when used, not on boot
+        return null;
+    }
+    return new Resend(resendApiKey);
+};
 
 export interface EmailOptions {
     to: string | string[];
@@ -24,6 +31,12 @@ export const sendEmail = async ({ to, subject, html, from, react, text }: EmailO
     }
 
     const fromEmail = from || process.env.RESEND_FROM_EMAIL || 'Agenda VATOS ALFA <noreply@resend.dev>';
+
+    const resend = getResendClient();
+    if (!resend) {
+        console.error('Resend API Key missing. Skipping email.');
+        return { success: false, error: 'Configuration Error: No Email Key' };
+    }
 
     try {
         const data = await resend.emails.send({

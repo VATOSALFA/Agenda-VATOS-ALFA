@@ -12,26 +12,39 @@ interface GetAvailabilityParams {
 }
 
 export async function getAvailableSlots({ date, professionalId, durationMinutes }: GetAvailabilityParams) {
+    if (!date || !professionalId) {
+        return { error: 'Datos incompletos para consultar disponibilidad.' };
+    }
+
     try {
         let db;
         try {
             db = getDb();
         } catch (e: any) {
-            console.error("Database connection error:", e);
-            return { error: 'Error de conexión con la base de datos. Contacte al administrador.' };
+            console.error("Database connection error in getAvailableSlots:", e);
+            return { error: 'Error de conexión con la base de datos.' };
         }
 
         if (!db) return { error: 'No database connection' };
 
         // 1. Get Professional Schedule
         const profDoc = await db.collection('profesionales').doc(professionalId).get();
-        if (!profDoc.exists) return { error: 'Professional not found' };
+        if (!profDoc.exists) return { error: 'El profesional no existe o no está disponible.' };
 
         const profData = profDoc.data();
-        if (!profData) return { error: 'No data for professional' };
+        if (!profData) return { error: 'No se encontraron datos del profesional.' };
 
-        const dayName = format(parse(date, 'yyyy-MM-dd', new Date()), 'eeee', { locale: es }).toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
+        // Safe Date Parsing
+        let dayName = '';
+        try {
+            const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
+            if (isNaN(parsedDate.getTime())) throw new Error("Fecha inválida");
+            dayName = format(parsedDate, 'eeee', { locale: es }).toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
+        } catch (dateError) {
+            console.error("Date parsing error:", dateError);
+            return { error: 'Formato de fecha incorrecto.' };
+        }
 
         const scheduleDay = profData.schedule?.[dayName];
 
@@ -40,6 +53,8 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         }
 
         const { start: startStr, end: endStr } = scheduleDay; // HH:mm
+
+        if (!startStr || !endStr) return { slots: [] };
 
         // 1.1 Add Breaks to Busy Intervals
         const busyIntervals: { start: number, end: number }[] = [];
@@ -178,8 +193,9 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         return { slots: availableSlots };
 
     } catch (error: any) {
-        console.error('Error fetching availability:', error);
-        return { error: error.message };
+        console.error('CRITICAL Error fetching availability:', error);
+        // Ensure we return a serializable error object to prevent "Server Component" generic error on client
+        return { error: error?.message || 'Error interno al cargar horarios.' };
     }
 }
 

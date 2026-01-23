@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -71,6 +70,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const handleCloseModal = async () => {
         if (uploadedImages.length > 0) {
@@ -279,8 +279,11 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (e: React.MouseEvent) => {
+        e.preventDefault(); // Prevent auto-close if triggered by Action
+        e.stopPropagation();
         if (!profesional || !db) return;
+
         setIsDeleting(true);
         try {
             // Delete avatar from storage if it exists
@@ -308,13 +311,14 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                 }));
             }
             toast({ title: "Profesional eliminado con éxito" });
+            setShowDeleteConfirm(false);
             onDataSaved();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error deleting professional:", error);
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: "No se pudo eliminar el profesional. Inténtalo de nuevo.",
+                description: `No se pudo eliminar el profesional: ${error.message}`,
             });
         } finally {
             setIsDeleting(false);
@@ -341,8 +345,6 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
     const addBreak = (dayId: string) => {
         const currentBreaks = form.getValues(`schedule.${dayId}.breaks` as any) || [];
-        // Prevent adding if one exists? User request implies "add *a* break", but typically multiple are possible.
-        // Let's allow adding.
         form.setValue(`schedule.${dayId}.breaks` as any, [
             ...currentBreaks,
             { start: '13:00', end: '14:00' }
@@ -594,7 +596,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                     <p className="font-medium">Eliminar profesional</p>
                                                     <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
                                                 </div>
-                                                <Button variant="destructive" type="button" onClick={() => setIsDeleting(true)}>
+                                                <Button variant="destructive" type="button" onClick={() => setShowDeleteConfirm(true)}>
                                                     <Trash2 className="mr-2 h-4 w-4" />
                                                     Eliminar
                                                 </Button>
@@ -615,24 +617,27 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                 </DialogContent>
             </Dialog>
 
-            {isDeleting && (
-                <AlertDialog open={isDeleting} onOpenChange={setIsDeleting}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta acción es irreversible. Se eliminará permanentemente al profesional "{profesional?.name}".
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-                                Sí, eliminar
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción es irreversible. Se eliminará permanentemente al profesional "{profesional?.name}".
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Sí, eliminar
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }

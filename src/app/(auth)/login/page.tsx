@@ -18,6 +18,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase-client";
 
+import { useFirestoreQuery } from "@/hooks/use-firestore";
+
+interface EmpresaSettings {
+    logo_url?: string;
+}
+
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -32,6 +38,9 @@ export default function LoginPage() {
     const { toast } = useToast();
     const { user, loading, signInAndSetup, signInWithGoogle } = useAuth();
     const router = useRouter();
+
+    const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
+    const logoUrl = empresaData?.[0]?.logo_url || '/logo-vatos-alfa.png';
 
     useEffect(() => {
         // Redirect to /agenda if user is already logged in
@@ -113,16 +122,15 @@ export default function LoginPage() {
 
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-muted/40">
-            <div className="flex flex-col items-center mb-0 animate-in fade-in zoom-in duration-700 slide-in-from-bottom-4">
+            <div className="w-full max-w-sm mb-6 flex justify-center animate-in fade-in zoom-in duration-700 slide-in-from-bottom-4">
                 <Image
-                    src="/logo-vatos-alfa.png"
-                    alt="Vatos Alfa Logo"
-                    width={100}
-                    height={100}
-                    className="mb-0 drop-shadow-md"
+                    src={logoUrl}
+                    alt="Logo Empresa"
+                    width={400}
+                    height={400}
+                    className="w-full h-auto drop-shadow-md object-contain"
                     priority
                 />
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">VATOS ALFA</h1>
             </div>
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">

@@ -174,8 +174,16 @@ export default function Header() {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
-          <Link href="/agenda" className="mr-6 flex items-center space-x-3">
-            <span className="font-bold text-lg text-primary-foreground whitespace-nowrap">VATOS ALFA</span>
+          <Link href="/agenda" className="mr-6 flex items-center">
+            <div className="relative h-14 w-64">
+              <Image
+                src="/logo-header-blanco.png"
+                alt="VATOS ALFA"
+                fill
+                className="object-contain object-left"
+                priority
+              />
+            </div>
           </Link>
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
             {mainNavLinks.map(({ href, label, permission }) => {

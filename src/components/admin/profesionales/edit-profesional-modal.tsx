@@ -189,7 +189,26 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         try {
             if (!db) throw new Error("Database not available");
 
-            const { ...profData } = data;
+            // Helper to remove undefined values recursively
+            const cleanData = (obj: any): any => {
+                if (Array.isArray(obj)) {
+                    return obj.map(v => cleanData(v));
+                } else if (obj !== null && typeof obj === 'object') {
+                    return Object.entries(obj).reduce((acc, [key, value]) => {
+                        if (value !== undefined) {
+                            acc[key] = cleanData(value);
+                        }
+                        return acc;
+                    }, {} as any);
+                }
+                return obj;
+            };
+
+            const { ...profDataRaw } = data;
+            // Remove id if present to avoid redundant update
+            delete profDataRaw.id;
+
+            const profData = cleanData(profDataRaw);
 
             if (profesional) { // EDIT MODE
                 const profRef = doc(db, 'profesionales', profesional.id);
@@ -197,8 +216,23 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
                 // Also update the user document with the new avatar and name
                 if (profesional.userId) {
-                    const userRef = doc(db, 'usuarios', profesional.userId);
-                    await updateDoc(userRef, { name: profData.name, avatarUrl: profData.avatarUrl });
+                    try {
+                        const userRef = doc(db, 'usuarios', profesional.userId);
+                        const userSnap = await getDoc(userRef);
+
+                        if (userSnap.exists()) {
+                            const userUpdates: any = { name: profData.name };
+                            if ('avatarUrl' in profData) {
+                                userUpdates.avatarUrl = profData.avatarUrl;
+                            }
+                            await updateDoc(userRef, userUpdates);
+                        } else {
+                            console.warn(`Linked user document ${profesional.userId} not found for professional ${profesional.id}. Skipping user update.`);
+                        }
+                    } catch (userUpdateError) {
+                        console.error("Error updating linked user document:", userUpdateError);
+                        // Don't fail the main operation if user update fails
+                    }
                 }
 
                 toast({ title: "Profesional actualizado con éxito" });
@@ -210,8 +244,8 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                     name: profData.name,
                     email: profData.email,
                     role: 'Staff',
-                    local_id: profData.local_id,
-                    avatarUrl: profData.avatarUrl,
+                    local_id: profData.local_id || '',
+                    avatarUrl: profData.avatarUrl || '',
                 };
 
                 const professionalData = {
@@ -233,12 +267,12 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             }
             setUploadedImages([]);
             onDataSaved();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving professional:", error);
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: "No se pudo guardar el profesional. Inténtalo de nuevo.",
+                description: `No se pudo guardar el profesional. ${error.message || ''}`,
             });
         } finally {
             setIsSubmitting(false);

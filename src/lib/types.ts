@@ -38,6 +38,7 @@ export interface Profesional {
   id: string;
   userId: string;
   name: string;
+  publicName?: string;
   email: string;
   avatarUrl: string;
   dataAiHint?: string;
@@ -51,6 +52,8 @@ export interface Profesional {
   defaultCommission?: Commission;
   comisionesPorServicio?: { [key: string]: Commission };
   comisionesPorProducto?: { [key: string]: Commission };
+  deleted?: boolean;
+  deletedAt?: Timestamp;
 }
 
 export interface Reservation {
@@ -347,4 +350,16 @@ export interface Template {
   name: string;
   body: string;
   contentSid: string;
+}
+
+export interface Promotion {
+  id: string;
+  name: string;
+  startDate: Timestamp | Date | string;
+  endDate: Timestamp | Date | string;
+  imageUrl?: string;
+  description: string;
+  termsAndConditions?: string;
+  active: boolean;
+  createdAt?: Timestamp;
 }

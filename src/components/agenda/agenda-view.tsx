@@ -237,13 +237,13 @@ export default function AgendaView() {
   const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading || usersLoading || productsLoading;
 
   const filteredProfessionals = useMemo(() => {
-    let professionalsOfLocal = professionals.filter(p => p.local_id === selectedLocalId);
+    let professionalsOfLocal = professionals.filter(p => !p.deleted && p.local_id === selectedLocalId);
 
     // If user cannot see global agenda, filter to only show themselves
     const canViewAll = canSee('ver_agenda_global');
     if (!canViewAll) {
       // Fix: Match by email to avoid type errors with 'id' on CustomUser
-      const myProf = professionals.find(p => p.email === user?.email);
+      const myProf = professionals.find(p => !p.deleted && p.email === user?.email);
       if (myProf) {
         professionalsOfLocal = [myProf];
       } else {
@@ -705,7 +705,7 @@ export default function AgendaView() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  {professionals.map(prof => (
+                  {professionals.filter(p => !p.deleted).map(prof => (
                     <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
                   ))}
                 </SelectContent>

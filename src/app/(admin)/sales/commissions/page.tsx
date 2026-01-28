@@ -399,7 +399,9 @@ export default function CommissionsPage() {
                                     <SelectContent>
                                         <SelectItem value="todos">Todos</SelectItem>
                                         {professionals.map(prof => (
-                                            <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                                            <SelectItem key={prof.id} value={prof.id}>
+                                                {prof.name}{prof.deleted ? ' (Eliminado)' : ''}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>

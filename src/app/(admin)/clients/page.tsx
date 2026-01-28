@@ -12,12 +12,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 import { NewReservationForm } from "@/components/reservations/new-reservation-form";
 import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
-import { format, startOfDay, endOfDay, parseISO, getMonth } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO, getMonth, subMonths } from "date-fns";
 import { es } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import {
@@ -60,6 +60,7 @@ const FiltersSidebar = ({
   localFilter, setLocalFilter,
   birthdayMonthFilter, setBirthdayMonthFilter,
   professionalFilter, setProfessionalFilter,
+  inactiveTimeFilter, setInactiveTimeFilter,
   locales,
   professionals,
   isLoading,
@@ -77,6 +78,8 @@ const FiltersSidebar = ({
   setBirthdayMonthFilter: (val: string) => void,
   professionalFilter: string,
   setProfessionalFilter: (val: string) => void,
+  inactiveTimeFilter: string,
+  setInactiveTimeFilter: (val: string) => void,
   locales: Local[],
   professionals: Profesional[],
   isLoading: boolean,
@@ -116,6 +119,20 @@ const FiltersSidebar = ({
                 <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={1} locale={es} />
               </PopoverContent>
             </Popover>
+          </div>
+          <div className="space-y-1">
+            <Label>Tiempo sin visita</Label>
+            <Select value={inactiveTimeFilter} onValueChange={setInactiveTimeFilter} disabled={isLoading}>
+              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="2">Más de 2 meses</SelectItem>
+                <SelectItem value="3">Más de 3 meses</SelectItem>
+                <SelectItem value="4">Más de 4 meses</SelectItem>
+                <SelectItem value="6">Más de 6 meses</SelectItem>
+                <SelectItem value="12">Más de 1 año</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label>Mes de cumpleaños</Label>
@@ -186,12 +203,14 @@ export default function ClientsPage() {
   const [localFilter, setLocalFilter] = useState('todos');
   const [birthdayMonthFilter, setBirthdayMonthFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
+  const [inactiveTimeFilter, setInactiveTimeFilter] = useState('todos');
 
   const [activeFilters, setActiveFilters] = useState({
     dateRange: dateRange,
     local: 'todos',
     birthdayMonth: 'todos',
-    professional: 'todos'
+    professional: 'todos',
+    inactiveTime: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
@@ -238,6 +257,7 @@ export default function ClientsPage() {
       local: localFilter,
       birthdayMonth: birthdayMonthFilter,
       professional: professionalFilter,
+      inactiveTime: inactiveTimeFilter
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -249,11 +269,13 @@ export default function ClientsPage() {
     setLocalFilter(user?.local_id || 'todos');
     setBirthdayMonthFilter('todos');
     setProfessionalFilter('todos');
+    setInactiveTimeFilter('todos');
     setActiveFilters({
       dateRange: undefined,
       local: user?.local_id || 'todos',
       birthdayMonth: 'todos',
       professional: 'todos',
+      inactiveTime: 'todos'
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -267,27 +289,75 @@ export default function ClientsPage() {
       activeFilters.local !== 'todos' ||
       activeFilters.dateRange !== undefined ||
       activeFilters.birthdayMonth !== 'todos' ||
-      activeFilters.professional !== 'todos';
+      activeFilters.professional !== 'todos' ||
+      activeFilters.inactiveTime !== 'todos';
 
     if (hasAdvancedFilters) {
+
+      // Filter by Inactive Time
+      if (activeFilters.inactiveTime !== 'todos') {
+        const monthsInactive = parseInt(activeFilters.inactiveTime, 10);
+        const thresholdDate = subMonths(new Date(), monthsInactive);
+
+        filtered = filtered.filter(client => {
+          // Find last visit date
+          let lastVisit: Date | null = null;
+
+          // Checks sales
+          allSales.forEach(s => {
+            if (s.cliente_id !== client.id) return;
+            let saleDate: Date | null = null;
+            if (s.fecha_hora_venta instanceof Timestamp) {
+              saleDate = s.fecha_hora_venta.toDate();
+            } else if (typeof s.fecha_hora_venta === 'string') {
+              saleDate = parseISO(s.fecha_hora_venta);
+            } else if (s.fecha_hora_venta && typeof (s.fecha_hora_venta as any).toDate === 'function') {
+              // Defensive check
+              saleDate = (s.fecha_hora_venta as any).toDate();
+            }
+
+            if (saleDate && (!lastVisit || saleDate > lastVisit)) {
+              lastVisit = saleDate;
+            }
+          });
+
+          // Check reservations (attended or paid)
+          allReservations.forEach(r => {
+            if (r.cliente_id !== client.id) return;
+            if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
+
+            const resDate = parseISO(r.fecha);
+            if (resDate && (!lastVisit || resDate > lastVisit)) {
+              lastVisit = resDate;
+            }
+          });
+
+          if (lastVisit) {
+            return (lastVisit as Date) < thresholdDate;
+          } else {
+            // Determine creation date safely
+            let createdDate: Date = new Date();
+            if (client.creado_en instanceof Timestamp) {
+              createdDate = client.creado_en.toDate();
+            } else if ((client.creado_en as any)?.seconds) {
+              createdDate = new Date((client.creado_en as any).seconds * 1000);
+            }
+            return createdDate < thresholdDate;
+          }
+        });
+      }
+
+
       if (activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.dateRange) {
         const clientIdsFromHistory = new Set<string>();
         let hasHistoryFilter = false;
 
-        // Determine which sales to check: filtered by date if date range active, otherwise all (or optimize)
-        // If queryConstraints handles date, 'sales' is already filtered by date.
-        // If NO date range, 'sales' contains what? line 184 uses historyQueryConstraints.
-        // If dateRange defined, 'sales' has filtered sales. If undefined, historyQueryConstraints is empty -> 'sales' has all sales.
-        // So 'sales' variable is always the relevant set of sales for date filtering.
-
         const salesToCheck = sales;
-        // Filter sales by Local and Professional if needed
         salesToCheck.forEach(s => {
           if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
 
           let matchesProfessional = true;
           if (activeFilters.professional !== 'todos') {
-            // Check items for professional
             matchesProfessional = s.items.some(item => item.barbero_id === activeFilters.professional);
           }
 
@@ -297,20 +367,12 @@ export default function ClientsPage() {
           }
         });
 
-        // Also check reservations if Professional filter is active (Sales might not cover future or unpaid bookings, but user asks for "atendidos" -> typically past/sales, but let's include booked?)
-        // "busar clientes que se han sido atendidos" -> implies past. But reservations also track history.
-        // Let's verify against allReservations for professional match as well.
         if (activeFilters.professional !== 'todos') {
           allReservations.forEach(r => {
             if (r.estado === 'Cancelado') return;
-            // Apply local filter to reservations too? Yes.
             if (activeFilters.local !== 'todos' && r.local_id !== activeFilters.local) return;
-
-            // Date filter? If date range is active, we should strictly filter reservations by date too?
-            // The current code for 'sales' handles date via query. 'allReservations' is raw.
-            // If the user selects a date range, they probably expect filtering within that range.
             if (activeFilters.dateRange) {
-              const resDate = parseISO(r.fecha); // simplified
+              const resDate = parseISO(r.fecha);
               if (resDate < activeFilters.dateRange.from! || (activeFilters.dateRange.to && resDate > activeFilters.dateRange.to)) return;
             }
 
@@ -322,17 +384,9 @@ export default function ClientsPage() {
           });
         }
 
-        // If we strictly filtered by sales/reservations, use the set. 
-        // Note: The original code logic for dateRange was: filteredSales.forEach... filtered = filtered.filter(...)
-        // We need to allow passing if ANY history match found.
-
-        // Apply filtering based on collected history IDs
-        // If professional filter is active, we MUST filter by clientIdsFromHistory (even if empty)
         if (activeFilters.professional !== 'todos') {
           filtered = filtered.filter(c => clientIdsFromHistory.has(c.id));
         } else if (activeFilters.dateRange && hasHistoryFilter) {
-          // If only date range is active (and possibly local), use the generic 'hasHistoryFilter' check or logic
-          // Re-using original date logic just to be safe if no professional filter
           const dateFilteredIds = new Set<string>();
           sales.forEach(s => {
             if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
@@ -371,7 +425,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, searchTerm, activeFilters]);
+  }, [clients, sales, searchTerm, activeFilters, allSales, allReservations]);
 
   const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
   const paginatedClients = filteredClients.slice(
@@ -542,6 +596,8 @@ export default function ClientsPage() {
               birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
               professionalFilter={professionalFilter}
               setProfessionalFilter={setProfessionalFilter}
+              inactiveTimeFilter={inactiveTimeFilter}
+              setInactiveTimeFilter={setInactiveTimeFilter}
               professionals={professionals}
               locales={locales}
               isLoading={isLoading}
@@ -574,7 +630,9 @@ export default function ClientsPage() {
                     <Combine className="mr-2 h-4 w-4" />
                     <span>Combinar clientes</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setIsDownloadModalOpen(true)}>
+                  <DropdownMenuItem onSelect={() => {
+                    setTimeout(() => setIsDownloadModalOpen(true), 150);
+                  }}>
                     <Download className="mr-2 h-4 w-4" />
                     <span>Descargar este listado</span>
                   </DropdownMenuItem>
@@ -592,6 +650,7 @@ export default function ClientsPage() {
                       <TableHead>Correo</TableHead>
                       <TableHead>Teléfono</TableHead>
                       <TableHead>Cliente desde</TableHead>
+                      <TableHead className="w-[50px]">Mensaje</TableHead>
                       <TableHead className="text-right">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -605,37 +664,62 @@ export default function ClientsPage() {
                           <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                           <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                         </TableRow>
                       ))
-                    ) : paginatedClients.map((client) => (
-                      <TableRow key={client.id}>
-                        <TableCell>{client.numero_cliente || 'N/A'}</TableCell>
-                        <TableCell className="font-medium">{client.nombre}</TableCell>
-                        <TableCell>{client.apellido}</TableCell>
-                        <TableCell>{client.correo}</TableCell>
-                        <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
-                        <TableCell>{formatDate(client.creado_en)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>
-                              <User className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditModal(client)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setClientToDelete(client)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    ) : paginatedClients.map((client) => {
+                      const hasPhone = client.telefono && client.telefono.trim().length > 0;
+                      // Simple formatting: remove non-digits. Assuming MX (+52) default if not provided, 
+                      // but usually local numbers are 10 digits.
+                      // Adjust based on your region's needs. For now, just strip non-digits.
+                      const cleanPhone = client.telefono?.replace(/\D/g, '') || '';
+                      const whatsappUrl = hasPhone
+                        ? `https://wa.me/${cleanPhone.length === 10 ? '52' + cleanPhone : cleanPhone}?text=Hola+${client.nombre},+te+extrañamos+en+VATOS+ALFA!`
+                        : '#';
+
+                      return (
+                        <TableRow key={client.id}>
+                          <TableCell>{client.numero_cliente || 'N/A'}</TableCell>
+                          <TableCell className="font-medium">{client.nombre}</TableCell>
+                          <TableCell>{client.apellido}</TableCell>
+                          <TableCell>{client.correo}</TableCell>
+                          <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
+                          <TableCell>{formatDate(client.creado_en)}</TableCell>
+                          <TableCell>
+                            {hasPhone && (
+                              <a
+                                href={whatsappUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                title="Enviar mensaje de WhatsApp"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></svg>
+                              </a>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>
+                                <User className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditModal(client)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setClientToDelete(client)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 {!isLoading && paginatedClients.length === 0 && (
                   <p className="text-center py-10 text-muted-foreground">
-                    {searchTerm ? "No se encontraron clientes." : "No hay clientes registrados."}
+                    {searchTerm ? "No se encontraron clientes." : "No hay clientes que coincidan con los filtros."}
                   </p>
                 )}
               </CardContent>
@@ -789,27 +873,36 @@ export default function ClientsPage() {
         </AlertDialog>
       )}
 
-      <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+      <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-6 w-6 text-yellow-500" />
               Requiere Autorización
-            </AlertDialogTitle>
-            <AlertDialogDescription>
+            </DialogTitle>
+            <DialogDescription>
               Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+            </DialogDescription>
+          </DialogHeader>
           <div className="py-4">
             <Label htmlFor="auth-code">Código de Autorización</Label>
             <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <DialogFooter>
+            <Button
+              type="button" // Agrega esto por seguridad
+              variant="outline"
+              onClick={() => {
+                setAuthCode('');
+                setIsDownloadModalOpen(false);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleDownloadRequest}>Aceptar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

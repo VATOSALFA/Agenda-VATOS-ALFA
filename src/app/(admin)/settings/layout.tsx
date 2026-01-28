@@ -21,6 +21,7 @@ const sidebarNavItems = [
   { title: "Clientes", href: "/settings/clients-settings" },
   { title: "Usuarios", href: "/settings/users" },
   { title: "Códigos de autorización", href: "/settings/auth-codes" },
+  { title: "Promociones", href: "/settings/promotions" },
 ];
 
 

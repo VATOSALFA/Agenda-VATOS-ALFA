@@ -54,11 +54,13 @@ export default function BookingPage() {
     // Data Queries
     const { data: services = [], loading: loadingServices } = useFirestoreQuery<any>('servicios');
     const { data: productsData = [], loading: loadingProducts } = useFirestoreQuery<any>('productos');
-    const { data: professionals = [], loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
+    const { data: rawProfessionals = [], loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
+    const professionals = useMemo(() => rawProfessionals.filter((p: any) => !p.deleted), [rawProfessionals]);
     const { data: settingsDocs = [], loading: loadingSettings } = useFirestoreQuery<any>('settings');
     const websiteSettings: any = settingsDocs.find((d: any) => d.id === 'website') || {};
     const { data: empresaData = [] } = useFirestoreQuery<any>('empresa');
     const { data: locales = [] } = useFirestoreQuery<any>('locales');
+    const { data: categories = [] } = useFirestoreQuery<any>('categorias_servicios');
 
 
 
@@ -252,6 +254,31 @@ export default function BookingPage() {
         };
     }, [cart, productCart]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
+
+    // --- SORTED SERVICES ---
+    const { visibleRegularServices, visiblePackageServices } = useMemo(() => {
+        let available = services.filter((s: any) => s.active && !s.deleted);
+
+        if (preSelectedProId) {
+            available = available.filter((s: any) => {
+                const pro = professionals.find(p => p.id === preSelectedProId);
+                return pro && pro.services ? pro.services.includes(s.id) : false;
+            });
+        }
+
+        // Sort by Order
+        available.sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999));
+
+        // Identify Package Categories
+        const packageCategoryIds = categories
+            .filter((c: any) => c.name.toLowerCase().includes('paquete') || c.name.toLowerCase().includes('package'))
+            .map((c: any) => c.id);
+
+        const regular = available.filter((s: any) => !packageCategoryIds.includes(s.category));
+        const pkgs = available.filter((s: any) => packageCategoryIds.includes(s.category));
+
+        return { visibleRegularServices: regular, visiblePackageServices: pkgs };
+    }, [services, professionals, categories, preSelectedProId]);
 
     // --- CART ACTIONS ---
     const addToCart = (service: any) => {
@@ -769,14 +796,14 @@ export default function BookingPage() {
                                             <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">
                                                     {pro.avatarUrl ? (
-                                                        <img src={pro.avatarUrl} alt={pro.name} className="h-full w-full object-cover" />
+                                                        <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="h-full w-full object-cover" />
                                                     ) : (
                                                         <User className="h-full w-full p-2 text-primary" />
                                                     )}
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-muted-foreground">Reservando con:</p>
-                                                    <p className="font-bold text-lg leading-tight">{pro.name}</p>
+                                                    <p className="font-bold text-lg leading-tight">{pro.publicName || pro.name}</p>
                                                 </div>
                                                 <Button variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
                                                     setPreSelectedProId(null);
@@ -789,21 +816,68 @@ export default function BookingPage() {
                                             </div>
                                         ) : null;
                                     })()}
-
                                     <h2 className="text-xl font-semibold mb-2">Selecciona tus servicios</h2>
                                     <div className="grid grid-cols-1 gap-4 mb-4">
-                                        {services.filter((s: any) => {
-                                            if (!s.active) return false;
-                                            // Filter by Pre-selected Pro
-                                            if (preSelectedProId) {
-                                                const pro = professionals.find(p => p.id === preSelectedProId);
-                                                if (pro && pro.services && Array.isArray(pro.services)) {
-                                                    return pro.services.includes(s.id);
-                                                }
-                                                return false;
-                                            }
-                                            return true;
-                                        }).map((service: any) => {
+                                        {/* Regular Services */}
+                                        {visibleRegularServices.map((service: any) => {
+                                            const count = getCount(service.id);
+                                            return (
+                                                <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
+                                                    <CardContent className="p-4 flex items-center gap-4">
+                                                        {(service.images && service.images.length > 0) && (
+                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
+                                                                <img src={service.images[0]} alt={service.name} className="h-full w-full object-cover" />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1">
+                                                            <h3 className="font-bold text-base">{service.name}</h3>
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex gap-2 text-sm text-muted-foreground">
+                                                                    <span>{formatPrice(service.price)}</span>
+                                                                    <span>•</span>
+                                                                    <span>{service.duration} min</span>
+                                                                </div>
+                                                                {service.payment_type === 'online-deposit' && (
+                                                                    <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                        {(() => {
+                                                                            const type = service.payment_amount_type || '%';
+                                                                            const val = service.payment_amount_value;
+                                                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                                                            return 'Requiere anticipo del 50%';
+                                                                        })()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            {count > 0 && (
+                                                                <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromCart(service.id)}>
+                                                                        {count === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                                                                    </Button>
+                                                                    <span className="font-bold w-4 text-center">{count}</span>
+                                                                </div>
+                                                            )}
+                                                            <Button
+                                                                variant={count > 0 ? "default" : "outline"}
+                                                                size="icon"
+                                                                className="h-10 w-10 rounded-lg"
+                                                                onClick={() => addToCart(service)}
+                                                            >
+                                                                <Plus className="h-5 w-5" />
+                                                            </Button>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
+
+                                        {/* Package Services */}
+                                        {visiblePackageServices.length > 0 && (
+                                            <h3 className="text-lg font-semibold mt-4 mb-2">Paquetes</h3>
+                                        )}
+                                        {visiblePackageServices.map((service: any) => {
                                             const count = getCount(service.id);
                                             return (
                                                 <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
@@ -1122,52 +1196,54 @@ export default function BookingPage() {
                                             <p className="text-sm text-muted-foreground">¿Con quién te gustaría?</p>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {/* OPTION: ANY PRO */}
-                                            <div
-                                                className="flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer border-dashed border-slate-300 hover:border-primary/50 hover:bg-slate-50 transition-all"
-                                                onClick={() => {
-                                                    const availableParams = tempSlotMap[tempTime || ''];
-                                                    if (availableParams && availableParams.length > 0) {
-                                                        // Auto-select the first one
-                                                        handleProSelected(availableParams[0]);
-                                                    }
-                                                }}
-                                            >
-                                                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-2 border overflow-hidden">
-                                                    {empresaData?.[0]?.icon_url ? (
-                                                        <img src={empresaData[0].icon_url} alt="Icon" className="w-full h-full object-cover" />
-                                                    ) : empresaData?.[0]?.logo_url ? (
-                                                        <img src={empresaData[0].logo_url} alt="Logo" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <Users className="h-8 w-8 text-slate-500" />
-                                                    )}
-                                                </div>
-                                                <h3 className="font-bold text-sm text-center">Primero disponible</h3>
-                                                <p className="text-xs text-muted-foreground text-center">Asignación automática</p>
-                                            </div>
-
-                                            {/* FILTER PROS available at this time */}
-                                            {tempSlotMap[tempTime || '']?.map((proId: string) => {
-                                                const pro = professionals.find(p => p.id === proId);
-                                                if (!pro) return null;
-                                                return (
-                                                    <div
-                                                        key={pro.id}
-                                                        className="flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all"
-                                                        onClick={() => handleProSelected(pro.id)}
-                                                    >
-                                                        <div className="h-16 w-16 rounded-full bg-muted overflow-hidden mb-2 border">
-                                                            {pro.avatarUrl ? (
-                                                                <img src={pro.avatarUrl} alt={pro.name} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <User className="w-full h-full p-3 text-muted-foreground" />
-                                                            )}
-                                                        </div>
-                                                        <h3 className="font-bold text-sm text-center">{pro.name}</h3>
+                                        <div className="flex-1 overflow-y-auto max-h-[50vh] pr-1">
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {/* OPTION: ANY PRO */}
+                                                <div
+                                                    className="flex flex-col items-center p-2 rounded-xl border-2 cursor-pointer border-dashed border-slate-300 hover:border-primary/50 hover:bg-slate-50 transition-all"
+                                                    onClick={() => {
+                                                        const availableParams = tempSlotMap[tempTime || ''];
+                                                        if (availableParams && availableParams.length > 0) {
+                                                            // Auto-select the first one
+                                                            handleProSelected(availableParams[0]);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="w-full aspect-square rounded-lg bg-slate-100 flex items-center justify-center mb-2 border overflow-hidden">
+                                                        {empresaData?.[0]?.icon_url ? (
+                                                            <img src={empresaData[0].icon_url} alt="Icon" className="w-full h-full object-cover" />
+                                                        ) : empresaData?.[0]?.logo_url ? (
+                                                            <img src={empresaData[0].logo_url} alt="Logo" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <Users className="h-8 w-8 text-slate-500" />
+                                                        )}
                                                     </div>
-                                                );
-                                            })}
+                                                    <h3 className="font-bold text-xs text-center leading-tight">Primero disponible</h3>
+                                                    <p className="text-[10px] text-muted-foreground text-center line-clamp-1">Automático</p>
+                                                </div>
+
+                                                {/* FILTER PROS available at this time */}
+                                                {tempSlotMap[tempTime || '']?.map((proId: string) => {
+                                                    const pro = professionals.find(p => p.id === proId);
+                                                    if (!pro) return null;
+                                                    return (
+                                                        <div
+                                                            key={pro.id}
+                                                            className="flex flex-col items-center p-2 rounded-xl border-2 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all"
+                                                            onClick={() => handleProSelected(pro.id)}
+                                                        >
+                                                            <div className="w-full aspect-square rounded-lg bg-muted overflow-hidden mb-2 border">
+                                                                {pro.avatarUrl ? (
+                                                                    <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <User className="w-full h-full p-3 text-muted-foreground" />
+                                                                )}
+                                                            </div>
+                                                            <h3 className="font-bold text-xs text-center leading-tight">{pro.publicName || pro.name}</h3>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 )}

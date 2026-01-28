@@ -39,6 +39,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
+    match /promociones/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
 
     // 2. User Profiles
     match /usuarios/{userId} {

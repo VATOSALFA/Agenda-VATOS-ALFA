@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -150,9 +149,9 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     useEffect(() => {
         if (isOpen) {
             const defaultValues = profesional ?
-                { ...profesional, schedule: profesional.schedule || defaultSchedule }
+                { ...profesional, schedule: profesional.schedule || defaultSchedule, publicName: profesional.publicName || '' }
                 : {
-                    name: '', email: '', active: true, acceptsOnline: true, services: [],
+                    name: '', publicName: '', email: '', active: true, acceptsOnline: true, services: [],
                     schedule: defaultSchedule,
                     biography: '', avatarUrl: '', order: 0,
                     local_id: locales.length > 0 ? locales[0].id : ''
@@ -280,39 +279,25 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     };
 
     const handleDelete = async (e: React.MouseEvent) => {
-        e.preventDefault(); // Prevent auto-close if triggered by Action
+        e.preventDefault();
         e.stopPropagation();
+
         if (!profesional || !db) return;
 
         setIsDeleting(true);
         try {
-            // Delete avatar from storage if it exists
-            if (profesional.avatarUrl) {
-                try {
-                    const imageRef = ref(storage, profesional.avatarUrl);
-                    await deleteObject(imageRef);
-                } catch (error: any) {
-                    console.warn("Could not delete avatar image:", error);
-                }
-            }
+            // Soft delete: Mark as deleted and inactive
+            const profRef = doc(db, 'profesionales', profesional.id);
+            await updateDoc(profRef, {
+                deleted: true,
+                active: false,
+                deletedAt: Timestamp.now()
+            });
 
-            await deleteDoc(doc(db, 'profesionales', profesional.id));
-            if (profesional.userId) {
-                await deleteDoc(doc(db, 'usuarios', profesional.userId));
-            }
-            if (uploadedImages.length > 0) {
-                await Promise.all(uploadedImages.map(async (url) => {
-                    try {
-                        const imageRef = ref(storage, url);
-                        await deleteObject(imageRef);
-                    } catch (error) {
-                        console.warn("Error cleaning up image:", error);
-                    }
-                }));
-            }
             toast({ title: "Profesional eliminado con éxito" });
             setShowDeleteConfirm(false);
             onDataSaved();
+            onClose();
         } catch (error: any) {
             console.error("Error deleting professional:", error);
             toast({
@@ -381,8 +366,13 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                 <TabsContent value="basic" className="space-y-6 mt-0">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <Label htmlFor="name">Nombre Público</Label>
-                                            <Input id="name" {...form.register('name')} />
+                                            <Label htmlFor="name">Nombre Completo (Interno)</Label>
+                                            <Input id="name" {...form.register('name')} placeholder="Juan Pérez" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="publicName">Nombre Público (Web)</Label>
+                                            <Input id="publicName" {...form.register('publicName')} placeholder="Juan P. (Opcional)" />
+                                            <p className="text-xs text-muted-foreground">Este nombre se mostrará en la página de reservas.</p>
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="email">Email</Label>
@@ -591,15 +581,49 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                     {profesional && (
                                         <div className="pt-6 border-t">
                                             <h4 className="text-lg font-semibold text-destructive">Zona de Peligro</h4>
-                                            <div className="flex justify-between items-center mt-2 p-4 border border-destructive/50 rounded-lg">
-                                                <div>
-                                                    <p className="font-medium">Eliminar profesional</p>
-                                                    <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
+                                            <div className="flex flex-col gap-4 mt-2 p-4 border border-destructive/50 rounded-lg bg-destructive/5">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <p className="font-medium text-destructive">Eliminar profesional</p>
+                                                        <p className="text-sm text-muted-foreground">Esta acción eliminará al profesional de listas y reservas futuras.</p>
+                                                    </div>
+
+                                                    {!showDeleteConfirm ? (
+                                                        <Button
+                                                            variant="destructive"
+                                                            type="button"
+                                                            onClick={() => setShowDeleteConfirm(true)}
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Eliminar
+                                                        </Button>
+                                                    ) : null}
                                                 </div>
-                                                <Button variant="destructive" type="button" onClick={() => setShowDeleteConfirm(true)}>
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Eliminar
-                                                </Button>
+
+                                                {showDeleteConfirm && (
+                                                    <div className="flex flex-col gap-2 p-3 bg-white rounded-md border border-destructive/30 animate-in fade-in slide-in-from-top-2">
+                                                        <p className="text-sm font-medium text-center mb-2">¿Estás seguro? Esta acción es irreversible.</p>
+                                                        <div className="flex gap-2 justify-end">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => setShowDeleteConfirm(false)}
+                                                                disabled={isDeleting}
+                                                            >
+                                                                Cancelar
+                                                            </Button>
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                onClick={handleDelete}
+                                                                disabled={isDeleting}
+                                                            >
+                                                                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                                Sí, eliminar definitivamente
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -616,28 +640,6 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                     </form>
                 </DialogContent>
             </Dialog>
-
-            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción es irreversible. Se eliminará permanentemente al profesional "{profesional?.name}".
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                        <Button
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={isDeleting}
-                        >
-                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Sí, eliminar
-                        </Button>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </>
     );
 }

@@ -12,6 +12,8 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils'; // Make sure this is imported
 
+// Hook moved inside component
+
 export default function LandingPage() {
     const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
     const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
@@ -19,6 +21,20 @@ export default function LandingPage() {
     const { data: empresa, loading: loadingEmpresa } = useFirestoreQuery<any>('empresa');
     const { data: locales, loading: loadingLocales } = useFirestoreQuery<any>('locales');
     const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
+    const { data: categories } = useFirestoreQuery<any>('categorias_servicios');
+    const { data: promotions } = useFirestoreQuery<any>('promociones');
+
+    // Filter active promotions
+    const activePromotions = promotions?.filter((p: any) => p.active) || [];
+
+    // Sort and filter services
+    const sortedServices = services?.filter((s: any) => s.active).sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999)) || [];
+
+    // Identify Package Categories
+    const packageCategoryIds = categories?.filter((c: any) => c.name.toLowerCase().includes('paquete') || c.name.toLowerCase().includes('package')).map((c: any) => c.id) || [];
+
+    const regularServices = sortedServices.filter((s: any) => !packageCategoryIds.includes(s.category));
+    const packageServices = sortedServices.filter((s: any) => packageCategoryIds.includes(s.category));
 
     const router = useRouter();
     // Cart stored as array of Service IDs to allow multiples
@@ -145,7 +161,7 @@ export default function LandingPage() {
     const totalItems = cart.length + productCart.length;
 
     // Filter Professionals by Selected Branch
-    const filteredProfessionals = professionals?.filter((p: any) => p.active && (!selectedBranch || p.local_id === selectedBranch)) || [];
+    const filteredProfessionals = professionals?.filter((p: any) => p.active && !p.deleted && (!selectedBranch || p.local_id === selectedBranch)) || [];
 
     return (
         <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
@@ -184,7 +200,7 @@ export default function LandingPage() {
                             </div>
                         )}
 
-                        <Link href="#servicios">
+                        <Link href="/reservar">
                             <Button size="sm">Reservar Cita</Button>
                         </Link>
                     </div>
@@ -203,78 +219,32 @@ export default function LandingPage() {
                 <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
                     {heroDescription}
                 </p>
-                <div className="relative flex flex-col sm:flex-row gap-4 animate-in fade-in duration-1000 delay-300 z-10">
+                <div className="relative flex flex-col sm:flex-row gap-3 animate-in fade-in duration-1000 delay-300 z-10 flex-wrap justify-center">
                     <Link href="#servicios">
-                        <Button size="lg" variant="secondary" className="h-12 px-8 text-lg w-full sm:w-auto">
-                            Ver Servicios <ArrowRight className="ml-2 h-5 w-5" />
+                        <Button size="lg" variant="outline" className="h-12 px-6 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
+                            Ver Servicios
                         </Button>
                     </Link>
+                    <Link href="#productos">
+                        <Button size="lg" variant="outline" className="h-12 px-6 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
+                            Ver Productos
+                        </Button>
+                    </Link>
+                    <Link href="#profesionales">
+                        <Button size="lg" variant="outline" className="h-12 px-6 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
+                            Ver Profesionales
+                        </Button>
+                    </Link>
+
+                    {activePromotions && activePromotions.length > 0 && (
+                        <Link href="#promociones">
+                            <Button variant="outline" className="h-12 px-8 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
+                                Ver Promociones
+                            </Button>
+                        </Link>
+                    )}
                 </div>
-            </section>
-
-            {/* Company Description & Logo Section */}
-            {(companyDescription || logoUrl) && (
-                <section className="py-12 bg-white relative overflow-hidden">
-                    <div className="container px-4 flex flex-col md:flex-row items-center gap-8 md:gap-16 relative z-10">
-                        {logoUrl && (
-                            <div className="w-full md:w-1/3 flex justify-center md:justify-end">
-                                <div className="relative w-full max-w-[280px] md:max-w-[350px] flex items-center justify-center">
-                                    <img src={logoUrl} alt="Company Logo" className="w-full h-auto object-contain max-h-[300px]" />
-                                </div>
-                            </div>
-                        )}
-                        <div className={cn("w-full text-center md:text-left", logoUrl ? "md:w-2/3" : "w-full max-w-3xl mx-auto")}>
-                            <h2 className="text-3xl font-bold mb-4 tracking-tight text-primary">Sobre Nosotros</h2>
-                            <p className="text-lg text-muted-foreground leading-relaxed">
-                                {companyDescription || "Somos una barbería dedicada a brindar el mejor servicio y estilo para el hombre moderno."}
-                            </p>
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            {/* Professionals */}
-            {filteredProfessionals && filteredProfessionals.length > 0 && (
-                <section id="profesionales" className="py-16 md:py-24 container px-4 md:px-6">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestro Equipo</h2>
-                        <p className="text-muted-foreground">Expertos a tu disposición en {locales?.find((l: any) => l.id === selectedBranch)?.name || 'nuestra sucursal'}.</p>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-center">
-                        {filteredProfessionals.map((barber: any) => (
-                            <Link href={`/reservar?professionalId=${barber.id}`} key={barber.id} className="group">
-                                <div className="flex flex-col items-center bg-card p-4 rounded-xl shadow-sm border group-hover:border-primary/50 transition-all duration-300 transform group-hover:-translate-y-1 h-full relative">
-                                    <div className="aspect-square w-full rounded-xl bg-muted flex items-center justify-center mb-4 overflow-hidden border-2 border-background shadow-md group-hover:ring-2 group-hover:ring-primary group-hover:shadow-lg transition-all relative">
-                                        {barber.avatarUrl ? (
-                                            <img src={barber.avatarUrl} alt={barber.name} className="h-full w-full object-cover" />
-                                        ) : (
-                                            <User className="h-20 w-20 text-muted-foreground" />
-                                        )}
-
-                                        {/* Eye Icon for Profile View */}
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                            <Button
-                                                variant="secondary"
-                                                size="icon"
-                                                className="h-10 w-10 rounded-full bg-white text-primary hover:bg-white hover:scale-110 transition-transform shadow-lg"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    setSelectedPro(barber);
-                                                }}
-                                            >
-                                                <Eye className="h-5 w-5" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <h3 className="font-bold text-lg text-center group-hover:text-primary transition-colors">{barber.name}</h3>
-                                    <p className="text-xs md:text-sm text-center text-muted-foreground mt-1 font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">Ver Disponibilidad</p>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </section>
-            )}
+            </section >
 
             {/* Professional Profile Dialog */}
             <Dialog open={!!selectedPro} onOpenChange={(open) => !open && setSelectedPro(null)}>
@@ -283,7 +253,7 @@ export default function LandingPage() {
                     <div className="w-full sm:w-1/2 bg-slate-100 flex items-center justify-center p-6 lg:p-10 relative">
                         <div className="relative w-full aspect-square max-w-[350px] shadow-xl rounded-lg overflow-hidden border-4 border-white transform transition-transform hover:scale-[1.02] duration-500">
                             {selectedPro?.avatarUrl ? (
-                                <img src={selectedPro.avatarUrl} alt={selectedPro.name} className="h-full w-full object-cover" />
+                                <img src={selectedPro.avatarUrl} alt={selectedPro.publicName || selectedPro.name} className="h-full w-full object-cover" />
                             ) : (
                                 <div className="h-full w-full bg-muted flex items-center justify-center">
                                     <User className="h-24 w-24 text-muted-foreground/50" />
@@ -295,7 +265,7 @@ export default function LandingPage() {
                     {/* Info Section */}
                     <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-center text-center sm:text-left overflow-y-auto flex-1 sm:flex-none">
                         <DialogHeader>
-                            <DialogTitle className="text-3xl lg:text-4xl font-extrabold mb-2 text-primary tracking-tight text-center sm:text-left">{selectedPro?.name}</DialogTitle>
+                            <DialogTitle className="text-3xl lg:text-4xl font-extrabold mb-2 text-primary tracking-tight text-center sm:text-left">{selectedPro?.publicName || selectedPro?.name}</DialogTitle>
                         </DialogHeader>
                         <div className="h-1 w-20 bg-primary/20 mx-auto sm:mx-0 mb-6 rounded-full shrink-0"></div>
 
@@ -313,10 +283,57 @@ export default function LandingPage() {
                         </div>
                     </div>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Services */}
-            <section id="servicios" className="py-16 md:py-24 bg-muted/30">
+
+
+
+            {/* Professionals Section */}
+            {filteredProfessionals && filteredProfessionals.length > 0 && (
+                <section id="profesionales" className="py-16 md:py-24 bg-white">
+                    <div className="container px-4 md:px-6">
+                        <div className="text-center mb-12">
+                            <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestro Equipo</h2>
+                            <p className="text-muted-foreground">Expertos listos para atenderte.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-center max-w-6xl mx-auto">
+                            {filteredProfessionals.map((pro: any) => (
+                                <Card key={pro.id} className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all text-center bg-slate-50">
+                                    <div className="relative w-full aspect-square overflow-hidden bg-slate-200 group">
+                                        {pro.avatarUrl ? (
+                                            <img
+                                                src={pro.avatarUrl}
+                                                alt={pro.publicName || pro.name}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                <User className="h-20 w-20" />
+                                            </div>
+                                        )}
+                                        {/* Overlay with Booking Action */}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                                            <Button variant="secondary" className="font-semibold" onClick={() => setSelectedPro(pro)}>
+                                                <Eye className="mr-2 h-4 w-4" /> Ver Perfil
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <CardFooter className="p-4 justify-center">
+                                        <Button className="w-full shadow-sm hover:shadow-md transition-all" onClick={() => router.push(`/reservar?professionalId=${pro.id}`)}>
+                                            Reservar
+                                        </Button>
+                                    </CardFooter>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            < section id="servicios" className="py-16 md:py-24 bg-muted/30" >
                 <div className="container px-4 md:px-6">
                     <div className="text-center mb-12">
                         <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestros Servicios</h2>
@@ -324,7 +341,7 @@ export default function LandingPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-                        {services?.filter((s: any) => s.active).map((service: any) => {
+                        {regularServices.map((service: any) => {
                             const count = getCount(service.id);
                             const isSelected = count > 0;
 
@@ -377,14 +394,81 @@ export default function LandingPage() {
                                 </Card>
                             );
                         })}
-                        {services?.length === 0 && !loadingServices && (
+                        {regularServices.length === 0 && !loadingServices && (
                             <div className="col-span-full text-center text-muted-foreground p-10 border rounded-lg border-dashed">
                                 No hay servicios disponibles en este momento.
                             </div>
                         )}
                     </div>
                 </div>
-            </section>
+            </section >
+
+            {/* Packages Section */}
+            {
+                packageServices.length > 0 && (
+                    <section id="paquetes" className="py-16 md:py-24 bg-white">
+                        <div className="container px-4 md:px-6">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">Paquetes</h2>
+                                <p className="text-muted-foreground">Las mejores combinaciones para ti.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+                                {packageServices.map((service: any) => {
+                                    const count = getCount(service.id);
+                                    const isSelected = count > 0;
+
+                                    return (
+                                        <Card
+                                            key={service.id}
+                                            className={cn(
+                                                "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-slate-50 overflow-hidden p-2",
+                                                isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-100"
+                                            )}
+                                            onClick={() => setSelectedService(service)}
+                                        >
+                                            <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative">
+                                                {service.images && service.images.length > 0 ? (
+                                                    <img
+                                                        src={service.images[0]}
+                                                        alt={service.name}
+                                                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    />
+                                                ) : (
+                                                    <div className="h-full w-full flex items-center justify-center text-slate-400">
+                                                        <Scissors className="h-8 w-8" />
+                                                    </div>
+                                                )}
+                                                {isSelected && (
+                                                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                        <div className="bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
+                                                            <Check className="h-4 w-4" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
+                                                <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
+                                                    {service.name}
+                                                </h3>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
+                                                    {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
+                                                </div>
+                                            </div>
+
+                                            <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                                                <ChevronRight className="h-6 w-6" />
+                                            </div>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </section>
+                )
+            }
 
             {/* Products Section */}
             {
@@ -447,6 +531,57 @@ export default function LandingPage() {
                                     </Card>
                                 )
                             })}
+                        </div>
+                    </section>
+                )
+            }
+
+            {/* Promotions Section */}
+            {
+                activePromotions && activePromotions.length > 0 && (
+                    <section id="promociones" className="py-16 md:py-24 bg-slate-50 border-t">
+                        <div className="container px-4 md:px-6">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestras Promociones</h2>
+                                <p className="text-muted-foreground">Aprovecha nuestras ofertas exclusivas.</p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+                                {activePromotions.map((promo: any) => (
+                                    <Card key={promo.id} className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-none group">
+                                        <div className="relative aspect-square w-full bg-slate-200 overflow-hidden">
+                                            {promo.imageUrl ? (
+                                                <img
+                                                    src={promo.imageUrl}
+                                                    alt={promo.name}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-slate-100">
+                                                    <ShoppingBag className="h-16 w-16 opacity-20" />
+                                                </div>
+                                            )}
+                                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                Oferta
+                                            </div>
+                                        </div>
+                                        <CardContent className="p-6">
+                                            <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{promo.name}</h3>
+                                            <div className="flex items-center text-sm text-muted-foreground mb-4">
+                                                <Clock className="w-4 h-4 mr-1" />
+                                                <span>Válido hasta: {promo.endDate}</span>
+                                            </div>
+                                            <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
+                                                {promo.description}
+                                            </p>
+                                        </CardContent>
+                                        <CardFooter className="p-6 pt-0">
+                                            <Button className="w-full" onClick={() => router.push('/reservar')}>
+                                                Reservar Ahora
+                                            </Button>
+                                        </CardFooter>
+                                    </Card>
+                                ))}
+                            </div>
                         </div>
                     </section>
                 )
@@ -616,43 +751,72 @@ export default function LandingPage() {
             }
 
             {/* Locations / Branches Section */}
-            {locales && locales.length > 0 && (
-                <section className="py-16 bg-slate-50 border-t">
-                    <div className="container px-4 md:px-6">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl font-bold tracking-tight mb-2">Visítanos</h2>
-                            <p className="text-muted-foreground">Encuentra tu sucursal más cercana.</p>
-                        </div>
+            {
+                locales && locales.length > 0 && (
+                    <section className="py-16 bg-slate-50 border-t">
+                        <div className="container px-4 md:px-6">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">Visítanos</h2>
+                                <p className="text-muted-foreground">Encuentra tu sucursal más cercana.</p>
+                            </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
-                            {locales.filter((l: any) => l.status === 'active').map((local: any) => (
-                                <Card key={local.id} className="border-none shadow-md hover:shadow-xl transition-all">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <MapPin className="h-5 w-5 text-primary" />
-                                            {local.name}
-                                        </CardTitle>
-                                        <CardDescription>{local.address}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-2 text-sm text-muted-foreground">
-                                            <p className="flex items-center gap-2"><span className="font-semibold text-foreground">Teléfono:</span> {local.phone}</p>
-                                            <p className="flex items-center gap-2"><span className="font-semibold text-foreground">Horario:</span> {local.schedule ? 'Consultar disponibilidad' : 'Lunes a Sábado'}</p>
-                                        </div>
-                                    </CardContent>
-                                    <CardFooter>
-                                        <Button variant="outline" className="w-full" asChild>
-                                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
-                                                Ver en Mapa
-                                            </a>
-                                        </Button>
-                                    </CardFooter>
-                                </Card>
-                            ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
+                                {locales.filter((l: any) => l.status === 'active').map((local: any) => (
+                                    <Card key={local.id} className="border-none shadow-md hover:shadow-xl transition-all">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <MapPin className="h-5 w-5 text-primary" />
+                                                {local.name}
+                                            </CardTitle>
+                                            <CardDescription>{local.address}</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-2 text-sm text-muted-foreground">
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-foreground">Teléfono:</span>
+                                                    <a
+                                                        href={`https://wa.me/52${local.phone.replace(/\D/g, '')}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-1.5 hover:text-green-600 hover:underline transition-colors"
+                                                    >
+                                                        <svg viewBox="0 0 24 24" className="h-4 w-4 text-green-500 fill-current" fill="currentColor" role="img" xmlns="http://www.w3.org/2000/svg"><title>WhatsApp</title><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1-5.106c0-5.445 4.406-9.885 9.885-9.885 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.444-4.437 9.884-9.886 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                                        {local.phone}
+                                                    </a>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-foreground">Horario:</span>
+                                                    {local.schedule ? (() => {
+                                                        const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                                                        const todayIndex = new Date().getDay();
+                                                        const todayKey = days[todayIndex];
+                                                        const schedule = local.schedule[todayKey];
+
+                                                        return (
+                                                            <span className="text-muted-foreground">
+                                                                {schedule?.enabled ? `${schedule.start} - ${schedule.end}` : 'Cerrado hoy'}
+                                                            </span>
+                                                        );
+                                                    })() : (
+                                                        <span className="text-muted-foreground">Lunes a Sábado: 10:00 - 20:00</span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </CardContent>
+                                        <CardFooter>
+                                            <Button variant="outline" className="w-full" asChild>
+                                                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
+                                                    Ver en Mapa
+                                                </a>
+                                            </Button>
+                                        </CardFooter>
+                                    </Card>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                </section>
-            )}
+                    </section>
+                )
+            }
 
             {/* Footer */}
             <footer className="py-12 border-t bg-card text-center text-sm text-muted-foreground">

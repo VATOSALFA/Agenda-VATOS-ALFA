@@ -59,7 +59,7 @@ export function useFirestoreQuery<T>(
       // Standard query handling
 
       // DEFENSA ZOMBIE: Si no hay usuario y la colección NO es pública, detenemos la consulta.
-      const publicCollections = ['empresa', 'servicios', 'profesionales', 'locales', 'ajustes_sitio', 'productos', 'settings'];
+      const publicCollections = ['empresa', 'servicios', 'profesionales', 'locales', 'ajustes_sitio', 'productos', 'settings', 'promociones', 'categorias_servicios'];
       if (!user && !publicCollections.includes(collectionName)) {
         if (loading) setLoading(false);
         setData([]);

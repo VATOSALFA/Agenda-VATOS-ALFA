@@ -71,7 +71,10 @@ service cloud.firestore {
     }
     
     // Lo demás de productos lo dejamos protegido
-    match /categorias_servicios/{document=**} { allow read, write: if isAuthenticated(); }
+    match /categorias_servicios/{document=**} { 
+      allow read: if true; 
+      allow write: if isAuthenticated(); 
+    }
     match /products/{document=**} { 
       allow read: if true;
       allow write: if isAuthenticated(); 

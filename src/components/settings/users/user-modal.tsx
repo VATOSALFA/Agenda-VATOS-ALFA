@@ -24,12 +24,11 @@ import { db, auth } from '@/lib/firebase-client';
 import { collection, doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { createUserWithEmailAndPassword, updateProfile, getAuth, sendPasswordResetEmail } from 'firebase/auth';
-import { initializeApp, deleteApp } from 'firebase/app';
+import { updateProfile } from 'firebase/auth';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { useDebounce } from 'use-debounce';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { firebaseConfig } from '@/lib/firebase-client';
+import { inviteUser } from '@/lib/actions/users';
 
 
 const userSchema = (isEditMode: boolean, isGeneralAdmin: boolean) => z.object({
@@ -148,45 +147,24 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
         toast({ title: "Cambios realizados con éxito" });
       } else {
-        const currentUser = auth.currentUser;
-        if (!currentUser) throw new Error("Admin not signed in");
+        // NEW USER FLOW VIA SERVER ACTION
+        const result = await inviteUser({
+          email: data.email,
+          name: fullName,
+          role: roleToSave || '',
+          permissions: permissionsForRole,
+          local_id: data.local_id || null,
+          avatarUrl: data.avatarUrl
+        });
 
-        // Generate a random temporary password
-        const tempPassword = crypto.randomUUID ? crypto.randomUUID().slice(0, 12) + "Aa1!" : Math.random().toString(36).slice(-10) + "Aa1!";
-
-        // USE SECONDARY APP TO AVOID LOGGING OUT ADMIN
-        const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-        const secondaryAuth = getAuth(secondaryApp);
-
-        try {
-          // 1. Create user with temp password
-          const tempUserCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPassword);
-          const newFirebaseUser = tempUserCredential.user;
-
-          // 2. Update profile
-          await updateProfile(newFirebaseUser, { displayName: fullName, photoURL: data.avatarUrl || null });
-
-          // 3. Write to Firestore using MAIN db
-          const userRef = doc(db, 'usuarios', newFirebaseUser.uid);
-          await setDoc(userRef, dataToSave);
-
-          // 4. Send Password Reset Email (Invitation) using MAIN auth to ensure domain/settings correctness
-          // Actually, standard practice is sending to the email.
-          // Note: sendPasswordResetEmail usually works on the instance that owns the user, but for invitation
-          // we are just triggering an email to that address.
-          await sendPasswordResetEmail(secondaryAuth, data.email);
-
-          toast({
-            title: "Usuario invitado con éxito",
-            description: `Se ha enviado un correo a ${data.email} para que establezca su contraseña.`
-          });
-
-          // Clean up secondary session
-          await secondaryAuth.signOut();
-        } finally {
-          // Remove secondary app instance
-          await deleteApp(secondaryApp);
+        if (!result.success) {
+          throw new Error(result.error);
         }
+
+        toast({
+          title: "Usuario invitado con éxito",
+          description: `Se ha enviado un correo personalizado a ${data.email} para que establezca su contraseña.`
+        });
       }
 
       onDataSaved();
@@ -195,9 +173,9 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
       console.error("Error saving user:", error);
       let description = "No se pudo guardar el usuario. Inténtalo de nuevo.";
       if (error.code === 'auth/email-already-in-use') {
-        description = "Este correo electrónico ya está registrado. Por favor, utiliza otro.";
-      } else if (error.code === 'auth/weak-password' || error.message.includes('at least 6 characters')) {
-        description = "La contraseña es demasiado débil. Debe tener al menos 6 caracteres.";
+        description = "Este correo electrónico ya está registrado.";
+      } else if (error.message) {
+        description = error.message;
       }
       toast({ variant: 'destructive', title: "Error", description });
     } finally {

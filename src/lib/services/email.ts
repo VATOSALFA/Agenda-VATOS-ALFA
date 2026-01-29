@@ -30,7 +30,7 @@ export const sendEmail = async ({ to, subject, html, from, react, text }: EmailO
         throw new Error('Resend API Key is not configured.');
     }
 
-    const fromEmail = from || process.env.RESEND_FROM_EMAIL || 'Agenda VATOS ALFA <noreply@resend.dev>';
+    const fromEmail = from || process.env.RESEND_FROM_EMAIL || 'Agenda VATOS ALFA <contacto@vatosalfa.com>';
 
     const resend = getResendClient();
     if (!resend) {

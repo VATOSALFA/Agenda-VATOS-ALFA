@@ -23,7 +23,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { doc, deleteDoc, setDoc } from 'firebase/firestore';
+import { deleteUser } from '@/lib/actions/delete-user';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { allPermissionCategories, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
@@ -152,11 +153,15 @@ export default function UsersPage() {
     const handleDeleteUser = async () => {
         if (!userToDelete) return;
         try {
-            await deleteDoc(doc(db, 'usuarios', userToDelete.id));
-            toast({ title: 'Usuario eliminado' });
+            const result = await deleteUser(userToDelete.id);
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+            toast({ title: 'Usuario eliminado correctamente' });
             handleDataUpdated();
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Error al eliminar' });
+            console.error("Error deleting user:", error);
+            toast({ variant: 'destructive', title: 'Error al eliminar', description: 'No se pudo eliminar el usuario de la autenticación.' });
         } finally {
             setUserToDelete(null);
         }

@@ -9,7 +9,7 @@ import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, Chev
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils'; // Make sure this is imported
@@ -48,6 +48,8 @@ export default function LandingPage() {
     const [selectedService, setSelectedService] = useState<any>(null); // New: Selected Service
     const [selectedBranch, setSelectedBranch] = useState<string>('');
     const [selectedPromotion, setSelectedPromotion] = useState<any>(null); // New: Selected Promotion for Terms
+    const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+    const [termsModalOpen, setTermsModalOpen] = useState(false);
 
     // Auto-select branch if only one exists or set default
     useEffect(() => {
@@ -856,14 +858,69 @@ export default function LandingPage() {
 
                     {websiteSettings.privacyPolicyEnabled !== false && (
                         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium">
-                            <Link href={websiteSettings.privacyUrl || "/privacidad"} className="hover:underline hover:text-primary transition-colors">
-                                Aviso de Privacidad
-                            </Link>
-                            <Link href={websiteSettings.termsUrl || "/terminos"} className="hover:underline hover:text-primary transition-colors">
-                                Términos y Condiciones
-                            </Link>
+                            {(websiteSettings.privacyText || websiteSettings.privacyUrl) && (
+                                <button
+                                    onClick={() => {
+                                        if (websiteSettings.privacyText) {
+                                            setPrivacyModalOpen(true);
+                                        } else if (websiteSettings.privacyUrl) {
+                                            window.open(websiteSettings.privacyUrl, '_blank');
+                                        }
+                                    }}
+                                    className="hover:underline hover:text-primary transition-colors"
+                                >
+                                    Aviso de Privacidad
+                                </button>
+                            )}
+                            {(websiteSettings.termsText || websiteSettings.termsUrl) && (
+                                <button
+                                    onClick={() => {
+                                        if (websiteSettings.termsText) {
+                                            setTermsModalOpen(true);
+                                        } else if (websiteSettings.termsUrl) {
+                                            window.open(websiteSettings.termsUrl, '_blank');
+                                        }
+                                    }}
+                                    className="hover:underline hover:text-primary transition-colors"
+                                >
+                                    Términos y Condiciones
+                                </button>
+                            )}
                         </div>
                     )}
+
+                    {/* Modals for Landing Page */}
+                    <Dialog open={privacyModalOpen} onOpenChange={setPrivacyModalOpen}>
+                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl font-bold">Aviso de Privacidad</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
+                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                                    {websiteSettings.privacyText || 'Sin contenido de privacidad.'}
+                                </div>
+                            </div>
+                            <DialogFooter className="mt-4">
+                                <Button onClick={() => setPrivacyModalOpen(false)}>Cerrar</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={termsModalOpen} onOpenChange={setTermsModalOpen}>
+                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl font-bold">Términos y Condiciones</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
+                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                                    {websiteSettings.termsText || 'Sin términos y condiciones definidos.'}
+                                </div>
+                            </div>
+                            <DialogFooter className="mt-4">
+                                <Button onClick={() => setTermsModalOpen(false)}>Cerrar</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
 
                     <Link href="/login" className="mt-2 inline-block text-xs hover:underline opacity-50 hover:opacity-100">Acceso Staff</Link>
                 </div>

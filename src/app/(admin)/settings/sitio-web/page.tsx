@@ -47,7 +47,9 @@ export default function SitioWebPage() {
             maxEdits: 2,
             privacyPolicyEnabled: false,
             privacyUrl: '',
+            privacyText: '',
             termsUrl: '',
+            termsText: '',
             minReservationTime: 2,
             maxFutureTime: 30,
             professionalPreference: 'client_choice',
@@ -220,19 +222,44 @@ export default function SitioWebPage() {
 
                             {form.watch('privacyPolicyEnabled') && (
                                 <>
-                                    <div className="space-y-2">
-                                        <Label>URL de Aviso de Privacidad</Label>
-                                        <Input
-                                            placeholder="https://vatosalfa.com/privacidad"
-                                            {...form.register('privacyUrl')}
-                                        />
+                                    <div className="space-y-4 border-l-2 pl-4 border-slate-200 my-4">
+                                        <h4 className="font-semibold text-sm">Aviso de Privacidad</h4>
+                                        <div className="space-y-2">
+                                            <Label>URL Externa (opcional)</Label>
+                                            <Input
+                                                placeholder="https://vatosalfa.com/privacidad"
+                                                {...form.register('privacyUrl')}
+                                            />
+                                            <p className="text-[0.8rem] text-muted-foreground">Si se llena, el enlace llevará a esta dirección.</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>O Texto del Aviso (para mostrar en ventana emergente)</Label>
+                                            <Textarea
+                                                placeholder="Escribe aquí tu aviso de privacidad..."
+                                                className="min-h-[100px]"
+                                                {...form.register('privacyText')}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>URL de Términos y Condiciones</Label>
-                                        <Input
-                                            placeholder="https://vatosalfa.com/terminos"
-                                            {...form.register('termsUrl')}
-                                        />
+
+                                    <div className="space-y-4 border-l-2 pl-4 border-slate-200 my-4">
+                                        <h4 className="font-semibold text-sm">Términos y Condiciones</h4>
+                                        <div className="space-y-2">
+                                            <Label>URL Externa (opcional)</Label>
+                                            <Input
+                                                placeholder="https://vatosalfa.com/terminos"
+                                                {...form.register('termsUrl')}
+                                            />
+                                            <p className="text-[0.8rem] text-muted-foreground">Si se llena, el enlace llevará a esta dirección.</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>O Texto de Términos (para mostrar en ventana emergente)</Label>
+                                            <Textarea
+                                                placeholder="Escribe aquí tus términos y condiciones..."
+                                                className="min-h-[100px]"
+                                                {...form.register('termsText')}
+                                            />
+                                        </div>
                                     </div>
                                 </>
                             )}

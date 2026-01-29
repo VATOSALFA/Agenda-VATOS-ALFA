@@ -6,6 +6,8 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
@@ -45,6 +47,7 @@ export default function LandingPage() {
     const [selectedProduct, setSelectedProduct] = useState<any>(null); // New: Selected Product
     const [selectedService, setSelectedService] = useState<any>(null); // New: Selected Service
     const [selectedBranch, setSelectedBranch] = useState<string>('');
+    const [selectedPromotion, setSelectedPromotion] = useState<any>(null); // New: Selected Promotion for Terms
 
     // Auto-select branch if only one exists or set default
     useEffect(() => {
@@ -219,31 +222,7 @@ export default function LandingPage() {
                 <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
                     {heroDescription}
                 </p>
-                <div className="relative flex flex-col sm:flex-row gap-3 animate-in fade-in duration-1000 delay-300 z-10 flex-wrap justify-center">
-                    <Link href="#servicios">
-                        <Button size="lg" variant="outline" className="h-12 px-6 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
-                            Ver Servicios
-                        </Button>
-                    </Link>
-                    <Link href="#productos">
-                        <Button size="lg" variant="outline" className="h-12 px-6 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
-                            Ver Productos
-                        </Button>
-                    </Link>
-                    <Link href="#profesionales">
-                        <Button size="lg" variant="outline" className="h-12 px-6 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
-                            Ver Profesionales
-                        </Button>
-                    </Link>
-
-                    {activePromotions && activePromotions.length > 0 && (
-                        <Link href="#promociones">
-                            <Button variant="outline" className="h-12 px-8 text-lg bg-transparent text-white border-white hover:bg-white hover:text-primary transition-colors shadow-sm">
-                                Ver Promociones
-                            </Button>
-                        </Link>
-                    )}
-                </div>
+                {/* Navigation Buttons moved to Floating Bar */}
             </section >
 
             {/* Professional Profile Dialog */}
@@ -568,11 +547,43 @@ export default function LandingPage() {
                                             <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{promo.name}</h3>
                                             <div className="flex items-center text-sm text-muted-foreground mb-4">
                                                 <Clock className="w-4 h-4 mr-1" />
-                                                <span>Válido hasta: {promo.endDate}</span>
+                                                <span>
+                                                    {(() => {
+                                                        const formatDate = (date: any) => {
+                                                            if (!date) return null;
+                                                            if (typeof date === 'string') return parseISO(date);
+                                                            if (date.toDate) return date.toDate();
+                                                            return date;
+                                                        };
+
+                                                        const start = formatDate(promo.startDate);
+                                                        const end = formatDate(promo.endDate);
+
+                                                        if (start && end) {
+                                                            return `Del ${format(start, "d 'de' MMMM", { locale: es })} al ${format(end, "d 'de' MMMM 'de' yyyy", { locale: es })}`;
+                                                        } else if (end) {
+                                                            return `Válido hasta: ${format(end, "d 'de' MMMM 'de' yyyy", { locale: es })}`;
+                                                        }
+                                                        return 'Tiempo limitado';
+                                                    })()}
+                                                </span>
                                             </div>
                                             <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
                                                 {promo.description}
                                             </p>
+                                            {promo.termsAndConditions && (
+                                                <div className="mb-4">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedPromotion(promo);
+                                                        }}
+                                                        className="text-xs text-primary underline hover:text-primary/80 transition-colors"
+                                                    >
+                                                        Ver términos y condiciones
+                                                    </button>
+                                                </div>
+                                            )}
                                         </CardContent>
                                         <CardFooter className="p-6 pt-0">
                                             <Button className="w-full" onClick={() => router.push('/reservar')}>
@@ -727,6 +738,26 @@ export default function LandingPage() {
                 </DialogContent>
             </Dialog>
 
+            {/* Promotion Terms Modal */}
+            <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
+                <DialogContent className="max-w-md bg-white p-6 rounded-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold">{selectedPromotion?.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="mt-4">
+                        <h4 className="font-semibold text-sm mb-2 text-primary">Términos y Condiciones:</h4>
+                        <div className="max-h-[60vh] overflow-y-auto whitespace-pre-line text-sm text-slate-700 bg-slate-50 p-4 rounded-lg border">
+                            {selectedPromotion?.termsAndConditions || 'No hay términos y condiciones específicos para esta promoción.'}
+                        </div>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                        <Button onClick={() => setSelectedPromotion(null)}>
+                            Cerrar
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Cart Sticky Footer */}
             {
                 totalItems > 0 && (
@@ -837,6 +868,34 @@ export default function LandingPage() {
                     <Link href="/login" className="mt-2 inline-block text-xs hover:underline opacity-50 hover:opacity-100">Acceso Staff</Link>
                 </div>
             </footer>
+
+            {/* Floating Navigation Bar */}
+            <div className={cn("fixed left-0 right-0 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300", totalItems > 0 ? "bottom-24" : "bottom-6")}>
+                <div className="flex items-center gap-1 sm:gap-2 bg-slate-900/90 backdrop-blur-md text-white border border-slate-700 shadow-2xl rounded-full p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar">
+                    <Link href="#servicios">
+                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                            Servicios
+                        </Button>
+                    </Link>
+                    <Link href="#productos">
+                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                            Productos
+                        </Button>
+                    </Link>
+                    <Link href="#profesionales">
+                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                            Profesionales
+                        </Button>
+                    </Link>
+                    {activePromotions && activePromotions.length > 0 && (
+                        <Link href="#promociones">
+                            <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                                Promociones
+                            </Button>
+                        </Link>
+                    )}
+                </div>
+            </div>
         </div >
     );
 }

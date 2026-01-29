@@ -764,7 +764,7 @@ export default function BookingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center">
-            <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden h-[95vh] md:h-[90vh] flex flex-col">
+            <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl flex flex-col min-h-[50vh] mb-24">
 
                 {/* HEADERS */}
                 <div className="bg-primary p-6 text-primary-foreground">
@@ -778,14 +778,14 @@ export default function BookingPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 relative flex flex-col overflow-hidden">
+                <div className="flex-1 p-6 relative flex flex-col">
                     <AnimatePresence mode="wait">
 
                         {/* STEP 0: SERVICE SELECTION (CART) */}
                         {step === 0 && (
-                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative overflow-hidden">
+                            <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative">
 
-                                <div className="flex-1 overflow-y-auto pb-32 px-1">
+                                <div className="flex-1 pb-32 px-1">
                                     <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
                                         <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
                                     </Button>
@@ -939,7 +939,7 @@ export default function BookingPage() {
                                             productsData.filter((p: any) => p.active && p.stock > 0).map((product: any) => {
                                                 const count = getProductCount(product.id);
                                                 return (
-                                                    <Card key={product.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-indigo-500" : "border-l-transparent")}>
+                                                    <Card key={product.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
                                                         <CardContent className="p-4 flex items-center gap-4">
                                                             {(product.images && product.images.length > 0) ? (
                                                                 <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
@@ -981,7 +981,7 @@ export default function BookingPage() {
                                                                 <Button
                                                                     variant={count > 0 ? "default" : "outline"}
                                                                     size="icon"
-                                                                    className={cn("h-10 w-10 rounded-lg", count > 0 ? "bg-indigo-600 hover:bg-indigo-700" : "")}
+                                                                    className={cn("h-10 w-10 rounded-lg", count > 0 ? "bg-primary hover:bg-primary/90" : "")}
                                                                     onClick={() => addToProductCart(product)}
                                                                 >
                                                                     <Plus className="h-5 w-5" />
@@ -995,9 +995,9 @@ export default function BookingPage() {
                                             <p className="text-sm text-muted-foreground italic">No hay productos disponibles.</p>
                                         )}
                                     </div>
-
+                                    <div className="h-24"></div> {/* Spacer for fixed footer */}
                                 </div>
-                                <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t flex justify-between items-center shadow-lg pointer-events-auto">
+                                <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t flex justify-between items-center shadow-upper z-50 animate-in slide-in-from-bottom-5">
                                     <div>
                                         <p className="text-sm text-muted-foreground">
                                             {cart.length > 0 ? `${cart.length} servicio${cart.length !== 1 ? 's' : ''}` : ''}
@@ -1007,7 +1007,7 @@ export default function BookingPage() {
                                         </p>
                                         <p className="font-bold text-lg">{formatPrice(totalPrice)}</p>
                                     </div>
-                                    <Button onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg">
+                                    <Button onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg" className="shadow-lg">
                                         Continuar <ChevronRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </div>
@@ -1025,7 +1025,7 @@ export default function BookingPage() {
                                         className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
                                         onClick={() => handleModeSelection('combined')}
                                     >
-                                        <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                                        <div className="h-16 w-16 bg-primary/10 text-primary rounded-full flex items-center justify-center">
                                             <Layers className="h-8 w-8" />
                                         </div>
                                         <div>
@@ -1040,7 +1040,7 @@ export default function BookingPage() {
                                         className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
                                         onClick={() => handleModeSelection('individual')}
                                     >
-                                        <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
+                                        <div className="h-16 w-16 bg-primary/10 text-primary rounded-full flex items-center justify-center">
                                             <CalendarDays className="h-8 w-8" />
                                         </div>
                                         <div>
@@ -1104,7 +1104,7 @@ export default function BookingPage() {
 
                         {/* SUB-FLOW: DATE / TIME / PRO */}
                         {step === 2 && activeConfigId && (
-                            <motion.div key="subflow" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full flex flex-col">
+                            <motion.div key="subflow" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col min-h-[400px]">
                                 <div className="flex items-center mb-4">
                                     <Button variant="ghost" size="icon" onClick={() => {
                                         if (configStep > 0) {
@@ -1196,7 +1196,7 @@ export default function BookingPage() {
                                             <p className="text-sm text-muted-foreground">¿Con quién te gustaría?</p>
                                         </div>
 
-                                        <div className="flex-1 overflow-y-auto max-h-[50vh] pr-1">
+                                        <div className="flex-1 pr-1">
                                             <div className="grid grid-cols-3 gap-3">
                                                 {/* OPTION: ANY PRO */}
                                                 <div
@@ -1302,7 +1302,7 @@ export default function BookingPage() {
                                 <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                                     <h3 className="font-bold text-lg border-b pb-2">Resumen de Compra</h3>
 
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                                         {/* Services */}
                                         {cart.map((item) => (
                                             <div key={item.uniqueId} className="flex justify-between text-sm text-slate-700">
@@ -1465,52 +1465,59 @@ export default function BookingPage() {
                                     )}
                                 </div>
 
-                                <Button
-                                    className="w-full mt-4"
-                                    size="lg"
-                                    onClick={confirmBooking}
-                                    disabled={
-                                        !clientDetails.name ||
-                                        !clientDetails.lastName ||
-                                        isSubmitting ||
-                                        (getFieldConfig('phone').use && getFieldConfig('phone').required && (clientDetails.phone.length !== 10 || /^(\d)\1{9}$/.test(clientDetails.phone))) ||
-                                        (getFieldConfig('email').use && getFieldConfig('email').required && (!clientDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email))) ||
-                                        (getFieldConfig('address').use && getFieldConfig('address').required && !clientDetails.address) ||
-                                        (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes) ||
-                                        (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday)
-                                    }
-                                >
-                                    {isSubmitting ? (
-                                        <div className="flex items-center gap-2">
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                            <span>Procesando...</span>
-                                        </div>
-                                    ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
-                                </Button>
-                                {upfrontTotal > 0 && (
-                                    <p className="text-xs text-center text-muted-foreground mt-2">
-                                        Tu pago será procesado de forma segura por Mercado Pago.
-                                    </p>
-                                )}
+                                <div className="h-24"></div> {/* Spacer for fixed button */}
+
+                                <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t z-50 shadow-upper flex flex-col items-center justify-center animate-in slide-in-from-bottom-5">
+                                    <div className="w-full max-w-md">
+                                        <Button
+                                            className="w-full shadow-lg h-12 text-lg"
+                                            onClick={confirmBooking}
+                                            disabled={
+                                                !clientDetails.name ||
+                                                !clientDetails.lastName ||
+                                                isSubmitting ||
+                                                (getFieldConfig('phone').use && getFieldConfig('phone').required && (clientDetails.phone.length !== 10 || /^(\d)\1{9}$/.test(clientDetails.phone))) ||
+                                                (getFieldConfig('email').use && getFieldConfig('email').required && (!clientDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email))) ||
+                                                (getFieldConfig('address').use && getFieldConfig('address').required && !clientDetails.address) ||
+                                                (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes) ||
+                                                (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday)
+                                            }
+                                        >
+                                            {isSubmitting ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                    <span>Procesando...</span>
+                                                </div>
+                                            ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
+                                        </Button>
+                                    </div>
+                                    {upfrontTotal > 0 && (
+                                        <p className="text-[10px] text-center text-muted-foreground mt-2">
+                                            Tu pago será procesado de forma segura por Mercado Pago.
+                                        </p>
+                                    )}
+                                </div>
                             </motion.div>
                         )}
 
                         {/* STEP 4: SUCCESS */}
                         {step === 4 && (
                             <motion.div key="step4" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-10 text-center space-y-4">
-                                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-4 animate-in zoom-in duration-500">
-                                    <Check className="w-10 h-10" />
+                                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4 animate-in zoom-in duration-500 shadow-xl shadow-primary/20 ring-1 ring-primary/20">
+                                    <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center text-white shadow-inner">
+                                        <Check className="w-8 h-8" />
+                                    </div>
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">¡Reserva Confirmada!</h2>
                                 <p className="text-muted-foreground max-w-sm">
                                     Gracias <strong>{clientDetails.name}</strong>, tus citas han sido agendadas con éxito.
                                 </p>
                                 {websiteSettings.predefinedNotes && (
-                                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg mt-4 max-w-md text-sm">
-                                        {websiteSettings.predefinedNotes}
+                                    <div className="bg-muted border border-slate-200 text-foreground p-4 rounded-xl mt-4 max-w-md text-sm shadow-sm whitespace-pre-line">
+                                        {websiteSettings.predefinedNotes.replace('3 horas antes. ', '3 horas antes.\n')}
                                     </div>
                                 )}
-                                <Button className="mt-8" onClick={() => router.push('/')}>
+                                <Button className="mt-8 shadow-lg" size="lg" onClick={() => router.push('/')}>
                                     Volver al Inicio
                                 </Button>
                             </motion.div>
@@ -1526,7 +1533,7 @@ export default function BookingPage() {
 
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 

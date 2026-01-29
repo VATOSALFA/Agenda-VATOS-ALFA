@@ -117,7 +117,7 @@ export async function inviteUser(userData: {
         await sendEmail({
             to: userData.email,
             from: 'Agenda VATOS ALFA <contacto@vatosalfa.com>',
-            subject: `Invitación para unirte a ${companyName}`,
+            subject: `¡Bienvenido a VATOS ALFA! - Tu Invitación Oficial`,
             html: htmlContent,
             text: `Hola ${userData.name}, has sido invitado a unirte a ${companyName}. Usa este enlace para configurar tu contraseña: ${link}`
         });

@@ -189,7 +189,7 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Editar Usuario' : 'Nuevo Usuario (Actualizado)'}</DialogTitle>
+              <DialogTitle>{isEditMode ? 'Editar Usuario' : 'Nuevo Usuario'}</DialogTitle>
             </DialogHeader>
             <div className="py-6 px-1 max-h-[70vh] overflow-y-auto">
               <div className="px-4 space-y-4">

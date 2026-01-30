@@ -60,7 +60,8 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
-  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+  const { data: allProfessionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+  const professionals = allProfessionals.filter(p => !p.deleted);
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),

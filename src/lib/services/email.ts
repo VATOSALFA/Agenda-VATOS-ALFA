@@ -1,7 +1,7 @@
 
 import { Resend } from 'resend';
 
-const resendApiKey = process.env.RESEND_API_KEY;
+const resendApiKey = process.env.RESEND_API_KEY || 're_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv';
 
 if (!resendApiKey) {
     console.warn('Resend API Key is not configured.');

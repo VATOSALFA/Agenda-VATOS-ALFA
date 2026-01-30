@@ -678,9 +678,9 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-[288px_1fr] h-[calc(100vh-4rem)] bg-muted/40 gap-2">
+      <div className="flex flex-col md:grid md:grid-cols-[288px_1fr] h-[calc(100vh-4rem)] bg-muted/40 gap-2">
         {/* Left Panel */}
-        <aside className="bg-white border-r flex flex-col">
+        <aside className="bg-white border-r flex flex-col flex-shrink-0">
           <div className="p-4 space-y-4">
             {user?.role === 'Administrador general' && (
               <div className="space-y-2">
@@ -713,7 +713,7 @@ export default function AgendaView() {
             </div>
           </div>
           {isClientMounted && (
-            <div className="flex justify-center">
+            <div className="hidden md:flex justify-center">
               <Calendar
                 mode="single"
                 selected={date}
@@ -723,7 +723,7 @@ export default function AgendaView() {
               />
             </div>
           )}
-          <div className="mt-8 p-4 flex justify-center">
+          <div className="mt-8 p-4 hidden md:flex justify-center">
             {empresaLoading ? (
               <Skeleton className="h-[200px] w-full" />
             ) : logoUrl ? (

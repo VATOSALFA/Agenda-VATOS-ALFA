@@ -31,11 +31,14 @@ import {
   Percent,
   Store,
   User,
+  Menu,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,6 +106,7 @@ export default function Header() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, signOut, db } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { data: empresaData } = useFirestoreQuery<any>('empresa');
 
   // Get website URL from settings or fallback to current origin
@@ -166,6 +170,11 @@ export default function Header() {
     document.dispatchEvent(new CustomEvent(eventName));
   }
 
+  // Helper to close menu when clicking a link
+  const handleLinkClick = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   if (!user || isAuthPage || isPublicPage) {
     return null;
   }
@@ -174,8 +183,181 @@ export default function Header() {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
+
+          {/* Mobile Menu Trigger */}
+          <div className="md:hidden mr-2">
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-white/10">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0">
+                <SheetHeader className="p-4 bg-primary text-primary-foreground">
+                  <SheetTitle className="text-white flex items-center gap-2">
+                    <img src="/logo-header-blanco.png" alt="VATOS ALFA" className="h-8 w-auto object-contain" />
+                  </SheetTitle>
+                </SheetHeader>
+                <ScrollArea className="h-[calc(100vh-64px)]">
+                  <div className="flex flex-col gap-1 p-4">
+                    <div className="mb-4">
+                      <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Menú Principal</h4>
+                      <div className="flex flex-col space-y-1">
+                        {mainNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                          canSee(permission) && (
+                            <Link
+                              key={href}
+                              href={href}
+                              onClick={handleLinkClick}
+                              className={cn(
+                                'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'))
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'text-foreground hover:bg-muted'
+                              )}
+                            >
+                              <Icon className="mr-3 h-4 w-4" />
+                              {label}
+                            </Link>
+                          )
+                        ))}
+                      </div>
+                    </div>
+
+                    {canSeeAny(salesNavLinks.map(l => l.permission)) && (
+                      <div className="mb-4">
+                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Ventas</h4>
+                        <div className="flex flex-col space-y-1">
+                          {salesNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                            canSee(permission!) && (
+                              <Link
+                                key={href}
+                                href={href!}
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === href
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <Icon className="mr-3 h-4 w-4" />
+                                {label}
+                              </Link>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {canSeeAny(productsNavLinks.map(l => l.permission)) && (
+                      <div className="mb-4">
+                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Productos</h4>
+                        <div className="flex flex-col space-y-1">
+                          {productsNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                            canSee(permission!) && (
+                              <Link
+                                key={href}
+                                href={href!}
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === href
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <Icon className="mr-3 h-4 w-4" />
+                                {label}
+                              </Link>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {canSeeAny(reportsNavLinks.map(l => l.permission)) && (
+                      <div className="mb-4">
+                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Reportes</h4>
+                        <div className="flex flex-col space-y-1">
+                          {reportsNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                            canSee(permission!) && (
+                              <Link
+                                key={href}
+                                href={href!}
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === href
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <Icon className="mr-3 h-4 w-4" />
+                                {label}
+                              </Link>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {canSee('ver_finanzas') && (
+                      <div className="mb-4">
+                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Finanzas</h4>
+                        <div className="flex flex-col space-y-1">
+                          {finanzasNavLinks.map((item, index) => (
+                            !item.isSeparator && canSee(item.permission!) && (
+                              <Link
+                                key={item.href}
+                                href={item.href!}
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === item.href
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <span className="ml-7">{item.label}</span>
+                              </Link>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {canSee('ver_administracion') && (
+                      <div className="mb-4">
+                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Administración</h4>
+                        <div className="flex flex-col space-y-1">
+                          {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                            <Link
+                              key={href}
+                              href={href!}
+                              onClick={handleLinkClick}
+                              className={cn(
+                                'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                pathname === href
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'text-foreground hover:bg-muted'
+                              )}
+                            >
+                              <Icon className="mr-3 h-4 w-4" />
+                              {label}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+          </div>
+
           <Link href="/agenda" className="mr-6 flex items-center">
-            <div className="relative h-14 w-64">
+            <div className="relative h-14 w-32 md:w-64">
               <Image
                 src="/logo-header-blanco.png"
                 alt="VATOS ALFA"

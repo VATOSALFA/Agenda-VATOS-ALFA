@@ -65,11 +65,11 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [isEditingFondo, setIsEditingFondo] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
-  
+
   const [fondoBase, setFondoBase] = useState(1000);
-  
+
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
-  
+
   const initialDenominations = useMemo(() => denominations.reduce((acc, d) => {
     acc[d.value] = '' as any;
     return acc;
@@ -92,55 +92,55 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
       return total + (count * d.value);
     }, 0);
   }, [denominationCounts, denominations]);
-  
+
   const diferencia = totalContado - fondoBase - initialCash;
 
   useEffect(() => {
     if (isOpen) {
-        form.reset({
-             monto_entregado: 0,
-             persona_recibe: '',
-             comentarios: '',
-        });
-        setDenominationCounts(initialDenominations);
+      form.reset({
+        monto_entregado: 0,
+        persona_recibe: '',
+        comentarios: '',
+      });
+      setDenominationCounts(initialDenominations);
     }
   }, [isOpen, form, initialDenominations]);
-  
-   useEffect(() => {
+
+  useEffect(() => {
     form.setValue('monto_entregado', totalContado);
   }, [totalContado, form]);
 
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
     try {
-        await addDoc(collection(db, 'cortes_caja'), {
-            fecha_corte: Timestamp.now(),
-            persona_entrega_id: user?.uid,
-            persona_entrega_nombre: user?.displayName,
-            persona_recibe: data.persona_recibe,
-            fondo_base: fondoBase,
-            monto_entregado: data.monto_entregado,
-            total_calculado: totalContado,
-            total_sistema: initialCash,
-            diferencia: diferencia,
-            comentarios: data.comentarios,
-            detalle_conteo: denominationCounts,
-        });
-        toast({ title: 'Corte de caja guardado con éxito.' });
-        onFormSubmit();
-        onOpenChange(false);
+      await addDoc(collection(db, 'cortes_caja'), {
+        fecha_corte: Timestamp.now(),
+        persona_entrega_id: user?.uid,
+        persona_entrega_nombre: user?.displayName,
+        persona_recibe: data.persona_recibe,
+        fondo_base: fondoBase,
+        monto_entregado: data.monto_entregado,
+        total_calculado: totalContado,
+        total_sistema: initialCash,
+        diferencia: diferencia,
+        comentarios: data.comentarios,
+        detalle_conteo: denominationCounts,
+      });
+      toast({ title: 'Corte de caja guardado con éxito.' });
+      onFormSubmit();
+      onOpenChange(false);
     } catch (error) {
-        console.error("Error guardando corte de caja:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el corte de caja.'});
+      console.error("Error guardando corte de caja:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el corte de caja.' });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
   const handleAuthRequest = () => {
     setIsAuthModalOpen(true);
   };
-  
+
   const handleAuthCodeSubmit = async () => {
     if (!authCode) {
       toast({ variant: 'destructive', title: 'Código requerido' });
@@ -165,9 +165,9 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
   const handleDenominationChange = (value: number, count: string) => {
     const newCount = parseInt(count, 10);
-    setDenominationCounts(prev => ({...prev, [value]: isNaN(newCount) ? 0 : newCount }));
+    setDenominationCounts(prev => ({ ...prev, [value]: isNaN(newCount) ? 0 : newCount }));
   }
-  
+
   const filteredUsers = useMemo(() => {
     return users.filter(u => u.role === 'Administrador local' || u.role === 'Recepcionista');
   }, [users]);
@@ -175,165 +175,165 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
   return (
     <>
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[95vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Realizar Corte de Caja</DialogTitle>
-           <DialogDescription>
-             {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex-grow overflow-hidden">
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-5xl max-h-[95vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Realizar Corte de Caja</DialogTitle>
+            <DialogDescription>
+              {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-grow overflow-y-auto md:overflow-hidden">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 h-full flex flex-col">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-grow overflow-hidden">
-                    {/* Left Column */}
-                    <div className="space-y-4 flex flex-col h-full">
-                        <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
-                         <div className="flex-grow border rounded-lg overflow-hidden flex flex-col">
-                            <ScrollArea>
-                                <div className="p-4 space-y-3">
-                                  {denominations.map(d => (
-                                    <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
-                                      <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
-                                      <Input 
-                                        id={`den-${d.value}`}
-                                        type="number"
-                                        placeholder="0" 
-                                        value={denominationCounts[d.value] || ''}
-                                        onChange={(e) => handleDenominationChange(d.value, e.target.value)}
-                                        className="h-8 text-center" 
-                                      />
-                                      <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                            </ScrollArea>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 md:h-full flex flex-col">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:flex-grow md:overflow-hidden">
+                  {/* Left Column */}
+                  <div className="space-y-4 flex flex-col md:h-full">
+                    <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
+                    <div className="h-[300px] md:h-auto md:flex-grow border rounded-lg overflow-hidden flex flex-col">
+                      <ScrollArea className="h-full">
+                        <div className="p-4 space-y-3">
+                          {denominations.map(d => (
+                            <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
+                              <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
+                              <Input
+                                id={`den-${d.value}`}
+                                type="number"
+                                placeholder="0"
+                                value={denominationCounts[d.value] || ''}
+                                onChange={(e) => handleDenominationChange(d.value, e.target.value)}
+                                className="h-8 text-center"
+                              />
+                              <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          ))}
                         </div>
+                      </ScrollArea>
                     </div>
+                  </div>
 
-                    {/* Right Column */}
-                    <div className="space-y-4 flex flex-col">
-                       <p className="text-sm text-right text-muted-foreground">{user?.displayName}</p>
-                        <div className="space-y-2">
-                            <FormLabel className="flex justify-between items-center">
-                                <span>Fondo base en caja</span>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
-                                    {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
-                                    {isEditingFondo ? 'Guardar' : 'Editar'}
-                                </Button>
-                            </FormLabel>
-                            {isEditingFondo ? (
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
-                                </div>
-                            ) : (
-                                <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                            )}
+                  {/* Right Column */}
+                  <div className="space-y-4 flex flex-col">
+                    <p className="text-sm text-right text-muted-foreground">{user?.displayName}</p>
+                    <div className="space-y-2">
+                      <FormLabel className="flex justify-between items-center">
+                        <span>Fondo base en caja</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
+                          {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
+                          {isEditingFondo ? 'Guardar' : 'Editar'}
+                        </Button>
+                      </FormLabel>
+                      {isEditingFondo ? (
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                          <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
                         </div>
-                        <FormField
-                            control={form.control}
-                            name="monto_entregado"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Monto entregado</FormLabel>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <FormControl><Input type="number" {...field} readOnly className="pl-6 font-bold" /></FormControl>
-                                </div>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="persona_recibe"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Nombre de quien recibe</FormLabel>
-                                 <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona un usuario'} />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {filteredUsers.map((u) => (
-                                            <SelectItem key={u.id} value={u.name}>
-                                                {u.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="comentarios"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Comentarios</FormLabel>
-                                <FormControl><Input {...field} placeholder="(Opcional)" /></FormControl>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <div className="space-y-2 pt-4 border-t flex-shrink-0">
-                          <div className="flex justify-between items-center text-sm font-semibold">
-                            <p>Total Contado</p>
-                            <p>${totalContado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <p>Efectivo en caja (Sistema)</p>
-                            <p>${initialCash.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <p>Fondo Base</p>
-                            <p>- ${fondoBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                          </div>
-                           <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
-                              <p>Diferencia</p>
-                              <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
-                          </div>
-                        </div>
+                      ) : (
+                        <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      )}
                     </div>
+                    <FormField
+                      control={form.control}
+                      name="monto_entregado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Monto entregado</FormLabel>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                            <FormControl><Input type="number" {...field} readOnly className="pl-6 font-bold" /></FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="persona_recibe"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre de quien recibe</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona un usuario'} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {filteredUsers.map((u) => (
+                                <SelectItem key={u.id} value={u.name}>
+                                  {u.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="comentarios"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Comentarios</FormLabel>
+                          <FormControl><Input {...field} placeholder="(Opcional)" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="space-y-2 pt-4 border-t flex-shrink-0">
+                      <div className="flex justify-between items-center text-sm font-semibold">
+                        <p>Total Contado</p>
+                        <p>${totalContado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <p>Efectivo en caja (Sistema)</p>
+                        <p>${initialCash.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <p>Fondo Base</p>
+                        <p>- ${fondoBase.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                        <p>Diferencia</p>
+                        <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter className="pt-8 border-t flex-shrink-0">
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Guardar Corte
-                    </Button>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar Corte
+                  </Button>
                 </DialogFooter>
               </form>
             </Form>
-        </div>
-      </DialogContent>
-    </Dialog>
-    <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
         <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                    Requiere Autorización
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                    Para editar el fondo de caja, es necesario un código con permisos de caja.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4">
-                <Label htmlFor="auth-code-fondo">Código de Autorización</Label>
-                <Input id="auth-code-fondo" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
-            </div>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
-            </AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6 text-yellow-500" />
+              Requiere Autorización
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Para editar el fondo de caja, es necesario un código con permisos de caja.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="auth-code-fondo">Código de Autorización</Label>
+            <Input id="auth-code-fondo" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
-    </AlertDialog>
+      </AlertDialog>
     </>
   );
 }

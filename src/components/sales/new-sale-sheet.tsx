@@ -156,7 +156,7 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 });
 ClientCombobox.displayName = 'ClientCombobox';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, sellers }: any) => (
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers }: any) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
@@ -183,7 +183,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                                         <SelectValue placeholder="Seleccionar vendedor" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {sellers.map((b: { id: string, name: string }) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                        {(item.tipo === 'servicio' ? serviceSellers : productSellers).map((b: { id: string, name: string }) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -353,21 +353,39 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', 'caja-settings', where('__name__', '==', 'caja'));
     const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
 
-    const sellers = useMemo(() => {
-        const allSellers = new Map<string, { id: string; name: string }>();
+    const serviceSellers = useMemo(() => {
+        if (!professionals) return [];
+        return professionals
+            .filter(p => p.active && !p.deleted)
+            .map(p => ({ id: p.id, name: p.name }));
+    }, [professionals]);
+
+    const productSellers = useMemo(() => {
+        const all = new Map<string, { id: string; name: string }>();
+
+        // 1. Add Active Professionals (Prioritized)
+        const professionalUserIds = new Set<string>();
         if (professionals) {
-            professionals.forEach(p => allSellers.set(p.id, { id: p.id, name: p.name }));
+            professionals.forEach(p => {
+                if (p.active && !p.deleted) {
+                    all.set(p.id, { id: p.id, name: p.name });
+                    if (p.userId) professionalUserIds.add(p.userId);
+                }
+            });
         }
+
+        // 2. Add Staff (Users) - ONLY if role is Recepcionista AND not already added as a Professional
         if (users) {
             users.forEach(u => {
-                if (u.role !== 'Administrador general' && u.role !== 'Administrador local') {
-                    if (!allSellers.has(u.id)) {
-                        allSellers.set(u.id, { id: u.id, name: u.name });
+                if (u.role === 'Recepcionista') {
+                    // Check if this user is already represented by a professional
+                    if (!professionalUserIds.has(u.id) && !all.has(u.id)) {
+                        all.set(u.id, { id: u.id, name: u.name });
                     }
                 }
             });
         }
-        return Array.from(allSellers.values());
+        return Array.from(all.values());
     }, [professionals, users]);
 
     const subtotal = useMemo(() =>
@@ -1331,7 +1349,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         </ScrollArea>
                                     </Tabs>
                                 </div>
-                                <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
+                                <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} serviceSellers={serviceSellers} productSellers={productSellers} />
                             </div>
                         )}
 
@@ -1613,7 +1631,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </FormItem>
                                         )} />
                                     </div>
-                                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} sellers={sellers} />
+                                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} serviceSellers={serviceSellers} productSellers={productSellers} />
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>

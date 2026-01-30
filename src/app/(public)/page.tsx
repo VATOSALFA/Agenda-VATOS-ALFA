@@ -930,23 +930,23 @@ export default function LandingPage() {
             <div className={cn("fixed left-0 right-0 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300", totalItems > 0 ? "bottom-24" : "bottom-6")}>
                 <div className="flex items-center gap-1 sm:gap-2 bg-slate-900/90 backdrop-blur-md text-white border border-slate-700 shadow-2xl rounded-full p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar">
                     <Link href="#servicios">
-                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
                             Servicios
                         </Button>
                     </Link>
                     <Link href="#productos">
-                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
                             Productos
                         </Button>
                     </Link>
                     <Link href="#profesionales">
-                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
                             Profesionales
                         </Button>
                     </Link>
                     {activePromotions && activePromotions.length > 0 && (
                         <Link href="#promociones">
-                            <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-3 sm:px-4 text-xs sm:text-sm font-medium transition-all">
+                            <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
                                 Promociones
                             </Button>
                         </Link>

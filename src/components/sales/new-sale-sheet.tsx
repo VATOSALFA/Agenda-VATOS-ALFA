@@ -85,6 +85,7 @@ const saleSchema = (total: number) => z.object({
     metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
     pago_efectivo: z.coerce.number().optional().default(0),
     pago_tarjeta: z.coerce.number().optional().default(0),
+    propina: z.coerce.number().optional().default(0),
     notas: z.string().optional(),
 }).refine(data => {
     if (data.metodo_pago === 'combinado') {
@@ -157,7 +158,7 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 ClientCombobox.displayName = 'ClientCombobox';
 
 const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers }: any) => (
-    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg">
+    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg h-[450px] md:h-full">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
             <Button variant="outline" size="sm" onClick={onOpenAddItem}><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
@@ -447,6 +448,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (targetId && targetId !== currentLocalId) {
             form.setValue('local_id', targetId);
         }
+
+        // Reset payment method on open to avoid persisting previous selection
+        form.setValue('metodo_pago', '');
     }, [isOpen, initialData, user, locales, form]);
 
     useEffect(() => {
@@ -1258,8 +1262,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                     <Form {...form}>
                         {step === 1 && (
-                            <div className="flex-grow grid grid-cols-3 gap-6 px-6 py-4 overflow-hidden">
-                                <div className="col-span-2 flex flex-col gap-4">
+                            <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-6 px-4 md:px-6 py-4 overflow-y-auto md:overflow-hidden">
+                                <div className="col-span-1 md:col-span-2 flex flex-col gap-4">
                                     <div className="flex-shrink-0">
                                         {selectedClient ? (
                                             <Card>
@@ -1303,7 +1307,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input placeholder="Buscar servicio o producto..." className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                                     </div>
-                                    <Tabs defaultValue="servicios" className="flex-grow flex flex-col">
+                                    <Tabs defaultValue="servicios" className="flex-grow flex flex-col min-h-[400px] md:min-h-0">
                                         <TabsList>
                                             <TabsTrigger value="servicios">Servicios</TabsTrigger>
                                             <TabsTrigger value="productos">Productos</TabsTrigger>
@@ -1457,6 +1461,39 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 </FormItem>
                                             )}
                                         />
+
+                                        {paymentMethod === 'transferencia' && (
+                                            <Card className="p-4 bg-muted/50 mt-2">
+                                                <FormField
+                                                    control={form.control}
+                                                    name="propina"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="flex items-center space-x-2">
+                                                                <span className="font-semibold">Propina (Opcional)</span>
+                                                            </FormLabel>
+                                                            <FormControl>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                                                    <Input
+                                                                        type="number"
+                                                                        placeholder="0.00"
+                                                                        className="pl-7"
+                                                                        min="0"
+                                                                        step="0.01"
+                                                                        {...field}
+                                                                    />
+                                                                </div>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                            <p className="text-xs text-muted-foreground mt-1">
+                                                                Si el cliente transfirió un monto extra como propina, ingrésalo aquí para considerarlo en las comisiones.
+                                                            </p>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </Card>
+                                        )}
 
                                         {paymentMethod === 'tarjeta' && (
                                             <Card className="p-4 bg-muted/50">

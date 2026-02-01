@@ -13,19 +13,19 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
 } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, Calendar as CalendarIcon, DollarSign, Edit, User, MessageSquare, Tag, Store } from 'lucide-react';
@@ -42,13 +42,13 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'];
 
 const egresoSchema = z.object({
-  fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  monto: z.coerce.number().min(1, 'El monto debe ser mayor a 0.'),
-  concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
-  concepto_otro: z.string().optional(),
-  aQuienId: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
-  local_id: z.string().min(1, 'Debes seleccionar un local.'),
-  comentarios: z.string().optional(),
+    fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
+    monto: z.coerce.number().min(1, 'El monto debe ser mayor a 0.'),
+    concepto: z.string().min(1, 'Debes seleccionar un concepto.'),
+    concepto_otro: z.string().optional(),
+    aQuienId: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
+    local_id: z.string().min(1, 'Debes seleccionar un local.'),
+    comentarios: z.string().optional(),
 }).refine(data => {
     if (data.concepto === 'Otro') {
         return data.concepto_otro && data.concepto_otro.trim().length > 0;
@@ -63,10 +63,10 @@ const egresoSchema = z.object({
 type EgresoFormData = z.infer<typeof egresoSchema>;
 
 interface AddEgresoModalProps {
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
-  onFormSubmit: () => void;
-  egreso?: Egreso | null;
+    isOpen: boolean;
+    onOpenChange: (isOpen: boolean) => void;
+    onFormSubmit: () => void;
+    egreso?: Egreso | null;
 }
 
 const adminConcepts = [
@@ -83,326 +83,333 @@ const cashierConcepts = [
 ];
 
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: AddEgresoModalProps) {
-  const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { selectedLocalId } = useLocal();
-  const { user } = useAuth();
-  const isEditMode = !!egreso;
-   
-  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
-  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
+    const { toast } = useToast();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { selectedLocalId } = useLocal();
+    const { user } = useAuth();
+    const isEditMode = !!egreso;
 
-  const isAdmin = user?.role === 'Administrador general' || user?.role === 'Administrador local';
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
 
-  const conceptosDisponibles = isAdmin ? adminConcepts : cashierConcepts;
+    const isAdmin = user?.role === 'Administrador general' || user?.role === 'Administrador local';
 
-  const form = useForm<EgresoFormData>({
-    resolver: zodResolver(egresoSchema),
-    defaultValues: {
-      fecha: new Date(),
-      monto: '' as any,
-      concepto: '',
-      aQuienId: '',
-      local_id: '',
-      comentarios: '',
-    },
-  });
+    const conceptosDisponibles = isAdmin ? adminConcepts : cashierConcepts;
 
-  const conceptoSeleccionado = form.watch('concepto');
-  const localSeleccionadoId = form.watch('local_id');
-
-  const destinatariosDisponibles = useMemo(() => {
-    if (usersLoading || professionalsLoading) return [];
-    
-    const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
-    
-    const allStaff = [...(users || []), ...(professionals || [])];
-    
-    allStaff.forEach(p => {
-        const userId = (p as AppUser).id || (p as Profesional).id;
-        if (!staffMap.has(userId) && p.name) {
-             staffMap.set(userId, { ...p, id: userId, name: p.name, role: (p as AppUser).role || 'Staff (Sin edición)' });
-        }
+    const form = useForm<EgresoFormData>({
+        resolver: zodResolver(egresoSchema),
+        defaultValues: {
+            fecha: new Date(),
+            monto: '' as any,
+            concepto: '',
+            aQuienId: '',
+            local_id: '',
+            comentarios: '',
+        },
     });
 
-    let personal = Array.from(staffMap.values())
-        .filter(p => p.local_id === localSeleccionadoId);
+    const conceptoSeleccionado = form.watch('concepto');
+    const localSeleccionadoId = form.watch('local_id');
 
-    if (isAdmin) return personal;
-    
-    return personal.filter(u => u.role === 'Administrador general' || u.role === 'Administrador local');
+    const destinatariosDisponibles = useMemo(() => {
+        if (usersLoading || professionalsLoading) return [];
 
-  }, [isAdmin, professionals, users, localSeleccionadoId, usersLoading, professionalsLoading]);
+        const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
 
- useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'concepto') {
-        const esCostoFijo = conceptosCostoFijo.includes(value.concepto!);
-        if (esCostoFijo) {
-            form.setValue('aQuienId', 'costos_fijos');
-        } else {
-            // Reset if it was previously set to costos_fijos or on any other change
-            if (form.getValues('aQuienId') === 'costos_fijos') {
-                form.setValue('aQuienId', '');
+        const allStaff = [...(users || []), ...(professionals || [])];
+
+        allStaff.forEach(p => {
+            const userId = (p as AppUser).id || (p as Profesional).id;
+            if (!staffMap.has(userId) && p.name) {
+                staffMap.set(userId, { ...p, id: userId, name: p.name, role: (p as AppUser).role || 'Staff (Sin edición)' });
+            }
+        });
+
+        let personal = Array.from(staffMap.values())
+            .filter(p => p.local_id === localSeleccionadoId);
+
+        if (isAdmin) return personal;
+
+        // Si NO es admin (es cajera/recepcionista), solo puede entregar dinero a:
+        // 1. Administradores Generales (sin importar su local)
+        // 2. Administradores Locales (que pertenezcan a este local)
+        const allEligible = Array.from(staffMap.values());
+        return allEligible.filter(u =>
+            (u.role === 'Administrador general') ||
+            (u.role === 'Administrador local' && u.local_id === localSeleccionadoId)
+        );
+
+    }, [isAdmin, professionals, users, localSeleccionadoId, usersLoading, professionalsLoading]);
+
+    useEffect(() => {
+        const subscription = form.watch((value, { name }) => {
+            if (name === 'concepto') {
+                const esCostoFijo = conceptosCostoFijo.includes(value.concepto!);
+                if (esCostoFijo) {
+                    form.setValue('aQuienId', 'costos_fijos');
+                } else {
+                    // Reset if it was previously set to costos_fijos or on any other change
+                    if (form.getValues('aQuienId') === 'costos_fijos') {
+                        form.setValue('aQuienId', '');
+                    }
+                }
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [form]);
+
+    useEffect(() => {
+        if (isOpen) {
+            if (isEditMode && egreso) {
+                const fechaEgreso = egreso.fecha instanceof Timestamp
+                    ? egreso.fecha.toDate()
+                    : (egreso.fecha instanceof Date ? egreso.fecha : new Date());
+
+                const isPredefinedConcept = conceptosDisponibles.some(c => c.label === egreso.concepto);
+
+                form.reset({
+                    ...egreso,
+                    monto: egreso.monto,
+                    fecha: fechaEgreso,
+                    concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
+                    concepto_otro: isPredefinedConcept ? '' : egreso.concepto,
+                    aQuienId: egreso.aQuienId || '',
+                });
+            } else {
+                form.reset({
+                    fecha: new Date(),
+                    monto: '' as any,
+                    concepto: !isAdmin ? 'Entrega de efectivo' : '',
+                    aQuienId: '',
+                    comentarios: '',
+                    concepto_otro: '',
+                    local_id: selectedLocalId || (locales && locales.length > 0 ? locales[0].id : ''),
+                });
             }
         }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
+    }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
 
-  useEffect(() => {
-    if (isOpen) {
-        if (isEditMode && egreso) {
-            const fechaEgreso = egreso.fecha instanceof Timestamp 
-                ? egreso.fecha.toDate() 
-                : (egreso.fecha instanceof Date ? egreso.fecha : new Date());
 
-            const isPredefinedConcept = conceptosDisponibles.some(c => c.label === egreso.concepto);
-            
-            form.reset({
-                ...egreso,
-                monto: egreso.monto,
-                fecha: fechaEgreso,
-                concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
-                concepto_otro: isPredefinedConcept ? '' : egreso.concepto,
-                aQuienId: egreso.aQuienId || '',
+    async function onSubmit(data: EgresoFormData) {
+        setIsSubmitting(true);
+        const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
+
+        const destinatarioSeleccionado = destinatariosDisponibles.find(d => d.id === data.aQuienId);
+
+        const aQuienValue = data.aQuienId === 'costos_fijos'
+            ? 'Costos fijos'
+            : (destinatarioSeleccionado ? destinatarioSeleccionado.name : 'Desconocido');
+
+        const dataToSave = {
+            fecha: Timestamp.fromDate(data.fecha),
+            monto: data.monto,
+            concepto: finalConcepto,
+            aQuien: aQuienValue, // Guardamos el nombre
+            aQuienId: data.aQuienId, // Guardamos el ID por referencia
+            local_id: data.local_id,
+            comentarios: data.comentarios,
+            persona_entrega_id: user?.uid,
+            persona_entrega_nombre: user?.displayName
+        };
+
+        try {
+            if (isEditMode && egreso) {
+                const egresoRef = doc(db, 'egresos', egreso.id);
+                await updateDoc(egresoRef, dataToSave);
+                toast({ title: 'Egreso actualizado' });
+            } else {
+                await addDoc(collection(db, 'egresos'), dataToSave);
+                toast({ title: 'Egreso guardado' });
+            }
+
+            onFormSubmit();
+        } catch (error) {
+            console.error('Error al registrar egreso:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'No se pudo guardar el egreso. Inténtalo de nuevo.',
             });
-        } else {
-            form.reset({
-                fecha: new Date(),
-                monto: '' as any,
-                concepto: !isAdmin ? 'Entrega de efectivo' : '',
-                aQuienId: '',
-                comentarios: '',
-                concepto_otro: '',
-                local_id: selectedLocalId || (locales && locales.length > 0 ? locales[0].id : ''),
-            });
+        } finally {
+            setIsSubmitting(false);
         }
     }
-  }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
 
+    const esCostoFijo = conceptosCostoFijo.includes(conceptoSeleccionado);
 
-  async function onSubmit(data: EgresoFormData) {
-    setIsSubmitting(true);
-    const finalConcepto = data.concepto === 'Otro' ? data.concepto_otro : data.concepto;
-    
-    const destinatarioSeleccionado = destinatariosDisponibles.find(d => d.id === data.aQuienId);
-    
-    const aQuienValue = data.aQuienId === 'costos_fijos'
-        ? 'Costos fijos' 
-        : (destinatarioSeleccionado ? destinatarioSeleccionado.name : 'Desconocido');
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-lg">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)}>
+                        <DialogHeader>
+                            <DialogTitle>{isEditMode ? "Editar Egreso" : "Registrar Salida de Dinero"}</DialogTitle>
+                            <DialogDescription>
+                                Registra gastos, pagos a proveedores, nóminas o retiros de caja.
+                            </DialogDescription>
+                        </DialogHeader>
 
-    const dataToSave = {
-        fecha: Timestamp.fromDate(data.fecha),
-        monto: data.monto,
-        concepto: finalConcepto,
-        aQuien: aQuienValue, // Guardamos el nombre
-        aQuienId: data.aQuienId, // Guardamos el ID por referencia
-        local_id: data.local_id,
-        comentarios: data.comentarios,
-        persona_entrega_id: user?.uid,
-        persona_entrega_nombre: user?.displayName
-    };
+                        <div className="space-y-5 px-1 py-6 max-h-[75vh] overflow-y-auto">
 
-    try {
-      if(isEditMode && egreso) {
-          const egresoRef = doc(db, 'egresos', egreso.id);
-          await updateDoc(egresoRef, dataToSave);
-          toast({ title: 'Egreso actualizado' });
-      } else {
-          await addDoc(collection(db, 'egresos'), dataToSave);
-          toast({ title: 'Egreso guardado' });
-      }
-      
-      onFormSubmit();
-    } catch (error) {
-      console.error('Error al registrar egreso:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo guardar el egreso. Inténtalo de nuevo.',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-   
-  const esCostoFijo = conceptosCostoFijo.includes(conceptoSeleccionado);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>{isEditMode ? "Editar Egreso" : "Registrar Salida de Dinero"}</DialogTitle>
-              <DialogDescription>
-                Registra gastos, pagos a proveedores, nóminas o retiros de caja.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-5 px-1 py-6 max-h-[75vh] overflow-y-auto">
-                
-                {/* Fila 1: Monto y Fecha */}
-                <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="monto"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Monto</FormLabel>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
-                                <FormControl>
-                                    <Input type="number" className="pl-7 font-semibold text-lg" placeholder="0.00" {...field} value={field.value || ''} />
-                                </FormControl>
+                            {/* Fila 1: Monto y Fecha */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="monto"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Monto</FormLabel>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
+                                                <FormControl>
+                                                    <Input type="number" className="pl-7 font-semibold text-lg" placeholder="0.00" {...field} value={field.value || ''} />
+                                                </FormControl>
+                                            </div>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="fecha"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-col">
+                                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
+                                            <Popover modal={true}>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                            {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona fecha</span>}
+                                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                    <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
                             </div>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="fecha"
-                        render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
-                            <Popover modal={true}>
-                            <PopoverTrigger asChild>
-                                <FormControl>
-                                <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                    {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona fecha</span>}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                                </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                            </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                </div>
 
-                {/* Fila 2: Local */}
-                <FormField
-                    control={form.control}
-                    name="local_id"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Store className="mr-1 h-3 w-3" /> Local / Sucursal</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading || !isAdmin}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Selecciona el local" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {locales?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
+                            {/* Fila 2: Local */}
+                            <FormField
+                                control={form.control}
+                                name="local_id"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Store className="mr-1 h-3 w-3" /> Local / Sucursal</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading || !isAdmin}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecciona el local" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {locales?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
-                {/* Fila 3: Concepto */}
-                <FormField
-                    control={form.control}
-                    name="concepto"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Tag className="mr-1 h-3 w-3" /> Concepto</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={!isAdmin}>
-                            <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona el motivo del egreso" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {conceptosDisponibles.map(c => (
-                                    <SelectItem key={c.id} value={c.label}>{c.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
+                            {/* Fila 3: Concepto */}
+                            <FormField
+                                control={form.control}
+                                name="concepto"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Tag className="mr-1 h-3 w-3" /> Concepto</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={!isAdmin}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecciona el motivo del egreso" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {conceptosDisponibles.map(c => (
+                                                    <SelectItem key={c.id} value={c.label}>{c.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
-                {/* Fila 3.5: Concepto Otro (Condicional) */}
-                {conceptoSeleccionado === 'Otro' && isAdmin && (
-                    <FormField
-                    control={form.control}
-                    name="concepto_otro"
-                    render={({ field }) => (
-                        <FormItem className="animate-in fade-in slide-in-from-top-2 duration-300">
-                        <FormControl>
-                            <Input placeholder="Especifique el concepto..." {...field} autoFocus />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                )}
+                            {/* Fila 3.5: Concepto Otro (Condicional) */}
+                            {conceptoSeleccionado === 'Otro' && isAdmin && (
+                                <FormField
+                                    control={form.control}
+                                    name="concepto_otro"
+                                    render={({ field }) => (
+                                        <FormItem className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <FormControl>
+                                                <Input placeholder="Especifique el concepto..." {...field} autoFocus />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
 
-                {/* Fila 4: Destinatario */}
-                <FormField
-                    control={form.control}
-                    name="aQuienId"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><User className="mr-1 h-3 w-3" /> Destinatario / Receptor</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo || usersLoading}>
-                        <FormControl>
-                            <SelectTrigger>
-                            <SelectValue placeholder={esCostoFijo ? 'N/A (Costo Fijo)' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega')} />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            {destinatariosDisponibles.map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
+                            {/* Fila 4: Destinatario */}
+                            <FormField
+                                control={form.control}
+                                name="aQuienId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><User className="mr-1 h-3 w-3" /> Destinatario / Receptor</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo || usersLoading}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder={esCostoFijo ? 'N/A (Costo Fijo)' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega')} />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {destinatariosDisponibles.map(p => (
+                                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
-                {/* Fila 5: Comentarios */}
-                <FormField
-                    control={form.control}
-                    name="comentarios"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><MessageSquare className="mr-1 h-3 w-3" /> Comentarios</FormLabel>
-                        <FormControl><Textarea className="resize-none" rows={2} placeholder="Detalles opcionales..." {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
+                            {/* Fila 5: Comentarios */}
+                            <FormField
+                                control={form.control}
+                                name="comentarios"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><MessageSquare className="mr-1 h-3 w-3" /> Comentarios</FormLabel>
+                                        <FormControl><Textarea className="resize-none" rows={2} placeholder="Detalles opcionales..." {...field} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
-                {/* Entrega (Solo lectura) */}
-                <div className="text-xs text-muted-foreground text-right pt-2 border-t mt-4">
-                    Registrado por: <span className="font-semibold">{user?.displayName || 'Usuario Actual'}</span>
-                </div>
-            </div>
+                            {/* Entrega (Solo lectura) */}
+                            <div className="text-xs text-muted-foreground text-right pt-2 border-t mt-4">
+                                Registrado por: <span className="font-semibold">{user?.displayName || 'Usuario Actual'}</span>
+                            </div>
+                        </div>
 
-            <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Egreso
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  );
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Guardar Egreso
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
 }

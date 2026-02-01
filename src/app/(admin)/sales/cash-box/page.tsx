@@ -74,7 +74,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing } from '@/lib/types';
-import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc } from 'firebase/firestore';
+import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc, orderBy, limit } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
@@ -236,17 +236,27 @@ export default function CashBoxPage() {
     );
 
     const egresos = useMemo(() => {
-        if (activeFilters.localId === 'todos') {
-            return allEgresos;
-        }
-        return allEgresos.filter(e => e.local_id === activeFilters.localId);
+        let filtered = activeFilters.localId === 'todos'
+            ? allEgresos
+            : allEgresos.filter(e => e.local_id === activeFilters.localId);
+
+        return [...filtered].sort((a, b) => {
+            const tA = a.fecha instanceof Timestamp ? a.fecha.toMillis() : 0;
+            const tB = b.fecha instanceof Timestamp ? b.fecha.toMillis() : 0;
+            return tB - tA;
+        });
     }, [allEgresos, activeFilters.localId]);
 
     const ingresos = useMemo(() => {
-        if (activeFilters.localId === 'todos') {
-            return allIngresos;
-        }
-        return allIngresos.filter(i => i.local_id === activeFilters.localId);
+        let filtered = activeFilters.localId === 'todos'
+            ? allIngresos
+            : allIngresos.filter(i => i.local_id === activeFilters.localId);
+
+        return [...filtered].sort((a, b) => {
+            const tA = a.fecha instanceof Timestamp ? a.fecha.toMillis() : 0;
+            const tB = b.fecha instanceof Timestamp ? b.fecha.toMillis() : 0;
+            return tB - tA;
+        });
     }, [allIngresos, activeFilters.localId]);
 
     const clientMap = useMemo(() => {
@@ -261,7 +271,12 @@ export default function CashBoxPage() {
 
     const salesWithClientData = useMemo(() => {
         if (salesLoading || clientsLoading) return [];
-        return sales.map(sale => ({
+        const sortedSales = [...sales].sort((a, b) => {
+            const tA = a.fecha_hora_venta instanceof Timestamp ? a.fecha_hora_venta.toMillis() : 0;
+            const tB = b.fecha_hora_venta instanceof Timestamp ? b.fecha_hora_venta.toMillis() : 0;
+            return tB - tA;
+        });
+        return sortedSales.map(sale => ({
             ...sale,
             client: clientMap.get(sale.cliente_id)
         }))
@@ -482,6 +497,70 @@ export default function CashBoxPage() {
 
     const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
+    // --- LIVE CASH LOGIC: Calculates current cash in box based on Last Cut + Transactions since then ---
+    const lastCutConstraints = useMemo(() => {
+        if (selectedLocalId === 'todos') return [orderBy('fecha_corte', 'desc'), limit(1)];
+        return [where('local_id', '==', selectedLocalId), orderBy('fecha_corte', 'desc'), limit(1)];
+    }, [selectedLocalId]);
+
+    const { data: lastCuts } = useFirestoreQuery<CashClosing>(
+        'cortes_caja',
+        `last-cut-${selectedLocalId}-${queryKey}`,
+        ...lastCutConstraints
+    );
+    const lastCut = lastCuts?.[0];
+
+    const liveStartDate = useMemo(() => {
+        if (lastCut) return lastCut.fecha_corte.toDate();
+        return new Date(0); // If no cut ever, start from beginning
+    }, [lastCut]);
+
+    const baseCash = lastCut?.fondo_base || 0;
+
+    // Queries for LIVE calculation (Everything > liveStartDate)
+    const { data: liveSales } = useFirestoreQuery<Sale>('ventas', `live-sales-${selectedLocalId}-${queryKey}`, ...useMemo(() => {
+        const c: QueryConstraint[] = [];
+        if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
+        c.push(where('fecha_hora_venta', '>', Timestamp.fromDate(liveStartDate)));
+        return c;
+    }, [selectedLocalId, liveStartDate]));
+
+    const { data: liveIngresos } = useFirestoreQuery<IngresoManual>('ingresos_manuales', `live-ingresos-${selectedLocalId}-${queryKey}`, ...useMemo(() => {
+        const c: QueryConstraint[] = [];
+        if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
+        c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
+        return c;
+    }, [selectedLocalId, liveStartDate]));
+
+    const { data: liveEgresos } = useFirestoreQuery<Egreso>('egresos', `live-egresos-${selectedLocalId}-${queryKey}`, ...useMemo(() => {
+        const c: QueryConstraint[] = [];
+        if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
+        c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
+        return c;
+    }, [selectedLocalId, liveStartDate]));
+
+
+    const liveCashInBox = useMemo(() => {
+        const salesCash = liveSales
+            .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
+            .reduce((sum, sale) => {
+                if (sale.metodo_pago === 'efectivo') {
+                    const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                        ? sale.monto_pagado_real
+                        : (sale.total || 0);
+                    return sum + amount;
+                }
+                return sum + (sale.detalle_pago_combinado?.efectivo || 0);
+            }, 0);
+
+        const ingresosCash = liveIngresos.reduce((sum, i) => sum + i.monto, 0);
+        const egresosCash = liveEgresos.reduce((sum, e) => sum + e.monto, 0);
+
+        return baseCash + salesCash + ingresosCash - egresosCash;
+    }, [baseCash, liveSales, liveIngresos, liveEgresos]);
+    // ----------------------
+
+
     const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado').reduce((sum, sale) => {
         if (sale.metodo_pago === 'efectivo') {
             const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
@@ -500,7 +579,7 @@ export default function CashBoxPage() {
         return sum + amount;
     }, 0) + ingresosManuales, [salesWithClientData, ingresosManuales]);
     const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-    const efectivoEnCaja = ingresosEfectivo + ingresosManuales - totalEgresos;
+    // Removed old efectivoEnCaja calculation
 
     const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
     const isLocalAdmin = user?.role !== 'Administrador general';
@@ -602,7 +681,7 @@ export default function CashBoxPage() {
                         <Card className="flex-shrink-0 w-full md:w-auto h-full">
                             <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
-                                <p className="text-3xl font-extrabold text-primary">${efectivoEnCaja.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-3xl font-extrabold text-primary">${liveCashInBox.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </CardContent>
                         </Card>
                     </div>
@@ -841,9 +920,7 @@ export default function CashBoxPage() {
                                                                         <DropdownMenuItem onSelect={() => handleOpenEditEgreso(egreso)}>
                                                                             <Pencil className="mr-2 h-4 w-4" /> Editar
                                                                         </DropdownMenuItem>
-                                                                        <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
-                                                                            <MessageCircle className="mr-2 h-4 w-4" /> Enviar WhatsApp
-                                                                        </DropdownMenuItem>
+
                                                                         <DropdownMenuItem onSelect={() => handleOpenDeleteEgresoModal(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                                                         </DropdownMenuItem>
@@ -914,7 +991,8 @@ export default function CashBoxPage() {
                     setIsClosingModalOpen(false);
                     handleSearch();
                 }}
-                initialCash={efectivoEnCaja}
+                initialCash={liveCashInBox}
+                localId={selectedLocalId}
             />
             <CommissionPaymentModal
                 isOpen={isCommissionModalOpen}

@@ -45,13 +45,13 @@ const ingresoSchema = z.object({
   comentarios: z.string().optional(),
   local_id: z.string().min(1, 'El local es requerido'),
 }).refine(data => {
-    if (data.concepto === 'Otro') {
-        return data.concepto_otro && data.concepto_otro.trim().length > 0;
-    }
-    return true;
+  if (data.concepto === 'Otro') {
+    return data.concepto_otro && data.concepto_otro.trim().length > 0;
+  }
+  return true;
 }, {
-    message: 'Por favor, especifica el concepto.',
-    path: ['concepto_otro'],
+  message: 'Por favor, especifica el concepto.',
+  path: ['concepto_otro'],
 });
 
 type IngresoFormData = z.infer<typeof ingresoSchema>;
@@ -68,7 +68,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { selectedLocalId } = useLocal();
   const isEditMode = !!ingreso;
-  
+
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
 
   const form = useForm<IngresoFormData>({
@@ -81,72 +81,85 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
     },
   });
 
-  const localAdmin = useMemo(() => {
-      if (usersLoading || !selectedLocalId) return null;
-      return users.find(u => u.role === 'Administrador local' && u.local_id === selectedLocalId);
+  const localAdmins = useMemo(() => {
+    if (usersLoading || !selectedLocalId) return [];
+    return users.filter(u => u.role === 'Administrador local' && u.local_id === selectedLocalId);
   }, [users, selectedLocalId, usersLoading]);
 
+  const generalAdmins = useMemo(() => {
+    if (usersLoading) return [];
+    return users.filter(u => u.role === 'Administrador general');
+  }, [users, usersLoading]);
+
   const conceptos = useMemo(() => {
-      const baseConcepts = [{ id: 'alejandro', label: 'Lo ingresó Alejandro' }];
-      if (localAdmin) {
-          baseConcepts.push({ id: 'local_admin', label: `Lo ingresó ${localAdmin.name}`});
-      }
-      baseConcepts.push({ id: 'otro', label: 'Otro' });
-      return baseConcepts;
-  }, [localAdmin]);
+    const baseConcepts: { id: string; label: string }[] = [];
+
+    // Add General Admins
+    generalAdmins.forEach(admin => {
+      baseConcepts.push({ id: `general_${admin.id}`, label: `Lo ingresó ${admin.name}` });
+    });
+
+    // Add Local Admins
+    localAdmins.forEach(admin => {
+      baseConcepts.push({ id: `local_${admin.id}`, label: `Lo ingresó ${admin.name}` });
+    });
+
+    baseConcepts.push({ id: 'otro', label: 'Otro' });
+    return baseConcepts;
+  }, [localAdmins, generalAdmins]);
 
   const conceptoSeleccionado = form.watch('concepto');
 
   useEffect(() => {
     if (isOpen) {
-        if(isEditMode && ingreso) {
-            const isPredefined = conceptos.some(c => c.label === ingreso.concepto);
-            form.reset({
-                ...ingreso,
-                fecha: ingreso.fecha.toDate(),
-                concepto: isPredefined ? ingreso.concepto : 'Otro',
-                concepto_otro: isPredefined ? '' : ingreso.concepto,
-            });
-        } else {
-            form.reset({
-                fecha: new Date(),
-                monto: '' as any,
-                concepto: '',
-                concepto_otro: '',
-                comentarios: '',
-                local_id: selectedLocalId || '',
-            });
-        }
+      if (isEditMode && ingreso) {
+        const isPredefined = conceptos.some(c => c.label === ingreso.concepto);
+        form.reset({
+          ...ingreso,
+          fecha: ingreso.fecha.toDate(),
+          concepto: isPredefined ? ingreso.concepto : 'Otro',
+          concepto_otro: isPredefined ? '' : ingreso.concepto,
+        });
+      } else {
+        form.reset({
+          fecha: new Date(),
+          monto: '' as any,
+          concepto: '',
+          concepto_otro: '',
+          comentarios: '',
+          local_id: selectedLocalId || '',
+        });
+      }
     }
   }, [isOpen, ingreso, isEditMode, form, selectedLocalId, conceptos]);
 
 
   async function onSubmit(data: IngresoFormData) {
     setIsSubmitting(true);
-    
+
     let finalConcepto = data.concepto;
     // Lógica para asignar el concepto final
     if (data.concepto === 'Otro') {
-        finalConcepto = data.concepto_otro || 'Otro';
+      finalConcepto = data.concepto_otro || 'Otro';
     }
-    
+
     const dataToSave = {
-        ...data,
-        fecha: Timestamp.fromDate(data.fecha),
-        concepto: finalConcepto,
+      ...data,
+      fecha: Timestamp.fromDate(data.fecha),
+      concepto: finalConcepto,
     };
     delete (dataToSave as any).concepto_otro;
 
     try {
-      if(isEditMode && ingreso) {
-          const ingresoRef = doc(db, 'ingresos_manuales', ingreso.id);
-          await updateDoc(ingresoRef, dataToSave);
-          toast({ title: 'Ingreso actualizado' });
+      if (isEditMode && ingreso) {
+        const ingresoRef = doc(db, 'ingresos_manuales', ingreso.id);
+        await updateDoc(ingresoRef, dataToSave);
+        toast({ title: 'Ingreso actualizado' });
       } else {
-          await addDoc(collection(db, 'ingresos_manuales'), dataToSave);
-          toast({ title: 'Ingreso guardado' });
+        await addDoc(collection(db, 'ingresos_manuales'), dataToSave);
+        toast({ title: 'Ingreso guardado' });
       }
-      
+
       onFormSubmit();
       onOpenChange(false);
     } catch (error) {
@@ -160,7 +173,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
       setIsSubmitting(false);
     }
   }
-  
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -175,49 +188,49 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
             </DialogHeader>
 
             <div className="space-y-5 px-1 py-6">
-              
+
               {/* Fila 1: Monto y Fecha */}
               <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="monto"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Monto</FormLabel>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
-                            <FormControl>
-                                <Input type="number" className="pl-7 font-semibold text-lg" placeholder="0.00" {...field} value={field.value || ''} />
-                            </FormControl>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="monto"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Monto</FormLabel>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
+                        <FormControl>
+                          <Input type="number" className="pl-7 font-semibold text-lg" placeholder="0.00" {...field} value={field.value || ''} />
+                        </FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                  <FormField
-                    control={form.control}
-                    name="fecha"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
-                        <Popover modal={true}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona fecha</span>}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="fecha"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
+                      <Popover modal={true}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                              {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona fecha</span>}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               {/* Fila 2: Concepto (Select) */}
@@ -228,16 +241,16 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
                   <FormItem>
                     <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Tag className="mr-1 h-3 w-3" /> Concepto / Motivo</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona el origen del dinero" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            {conceptos.map((c) => (
-                                <SelectItem key={c.id} value={c.label}>{c.label}</SelectItem>
-                            ))}
-                        </SelectContent>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona el origen del dinero" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {conceptos.map((c) => (
+                          <SelectItem key={c.id} value={c.label}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -246,22 +259,22 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
 
               {/* Fila 3: Concepto Otro (Condicional) */}
               {conceptoSeleccionado === 'Otro' && (
-                  <FormField
-                    control={form.control}
-                    name="concepto_otro"
-                    render={({ field }) => (
-                      <FormItem className="animate-in fade-in slide-in-from-top-2 duration-300">
-                        <FormControl>
-                          <Input placeholder="Especifique el motivo (Ej: Fondo inicial de caja)" {...field} autoFocus />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="concepto_otro"
+                  render={({ field }) => (
+                    <FormItem className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <FormControl>
+                        <Input placeholder="Especifique el motivo (Ej: Fondo inicial de caja)" {...field} autoFocus />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
 
               {/* Fila 4: Comentarios */}
-               <FormField
+              <FormField
                 control={form.control}
                 name="comentarios"
                 render={({ field }) => (
@@ -275,11 +288,11 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
             </div>
 
             <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Ingreso
-                </Button>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar Ingreso
+              </Button>
             </DialogFooter>
           </form>
         </Form>

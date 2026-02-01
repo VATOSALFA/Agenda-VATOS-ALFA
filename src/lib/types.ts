@@ -241,6 +241,7 @@ export interface Sale {
   pago_estado?: string;
   monto_pagado_real?: number;
   anticipoPagado?: number;
+  propina?: number;
 }
 
 
@@ -342,6 +343,7 @@ export interface CashClosing {
   total_sistema: number;
   diferencia: number;
   comentarios?: string;
+  local_id: string;
   detalle_conteo: Record<string, number>;
 }
 

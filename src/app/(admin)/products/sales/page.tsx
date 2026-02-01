@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client, AuthCode } from "@/lib/types";
+import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client, AuthCode, User as AppUser } from "@/lib/types";
 import { where, Timestamp, collection, query, getDocs } from "firebase/firestore";
 import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-detail-modal";
 import { ProductSaleDetailModal, type ProductSaleDetail } from "@/components/products/sales/product-sale-detail-modal";
@@ -99,8 +99,9 @@ export default function ProductSalesPage() {
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: presentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos');
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+    const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
 
-    const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading;
+    const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading || usersLoading;
 
     const formatDate = (date: any, formatString: string = 'PP') => {
         if (!date) return 'N/A';
@@ -148,6 +149,7 @@ export default function ProductSalesPage() {
         const productMap = new Map(products.map(p => [p.id, p]));
         const presentationMap = new Map(presentations.map(p => [p.id, p.name]));
         const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const userMap = new Map(users.map(u => [u.id, u.name]));
         const clientMap = new Map(clients.map(c => [c.id, c.nombre + ' ' + c.apellido]));
 
         const aggregated: Record<string, AggregatedProductSale> = {};
@@ -179,7 +181,14 @@ export default function ProductSalesPage() {
             aggregated[item.id].unitsSold += quantity;
             aggregated[item.id].revenue += itemRevenue;
 
-            const sellerName = item.barbero_id ? (professionalMap.get(item.barbero_id) || 'Desconocido') : 'Desconocido';
+            let sellerName = 'Desconocido';
+            if (item.barbero_id) {
+                if (professionalMap.has(item.barbero_id)) {
+                    sellerName = professionalMap.get(item.barbero_id)!;
+                } else if (userMap.has(item.barbero_id)) {
+                    sellerName = userMap.get(item.barbero_id)!;
+                }
+            }
 
             aggregated[item.id].details.push({
                 saleId: item.saleId,
@@ -212,7 +221,7 @@ export default function ProductSalesPage() {
         }
 
         return { aggregatedData, totalRevenue, totalUnitsSold, highestRevenueProduct, lowestRevenueProduct };
-    }, [filteredProductItems, products, presentations, professionals, clients]);
+    }, [filteredProductItems, products, presentations, professionals, clients, users]);
 
     const sellerSummary = useMemo(() => {
         if (isLoading || filteredProductItems.length === 0) {
@@ -220,6 +229,7 @@ export default function ProductSalesPage() {
         }
 
         const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const userMap = new Map(users.map(u => [u.id, u]));
         const productMap = new Map(products.map(p => [p.id, p.nombre]));
         const clientMap = new Map(clients.map(c => [c.id, c.nombre + ' ' + c.apellido]));
 
@@ -229,12 +239,24 @@ export default function ProductSalesPage() {
             if (!item.barbero_id) return;
 
             if (!aggregated[item.barbero_id]) {
+                let sellerName = 'Desconocido';
+                let userType = 'Desconocido';
+
+                if (professionalMap.has(item.barbero_id)) {
+                    sellerName = professionalMap.get(item.barbero_id)!;
+                    userType = 'Profesional';
+                } else if (userMap.has(item.barbero_id)) {
+                    const user = userMap.get(item.barbero_id)!;
+                    sellerName = user.name || 'Usuario';
+                    userType = user.role || 'Usuario';
+                }
+
                 aggregated[item.barbero_id] = {
                     sellerId: item.barbero_id,
-                    sellerName: professionalMap.get(item.barbero_id) || 'Desconocido',
+                    sellerName,
                     unitsSold: 0,
                     revenue: 0,
-                    userType: 'Profesional',
+                    userType,
                     details: []
                 };
             }
@@ -256,7 +278,7 @@ export default function ProductSalesPage() {
         });
 
         return Object.values(aggregated).sort((a, b) => b.revenue - a.revenue);
-    }, [filteredProductItems, professionals, products, clients, isLoading]);
+    }, [filteredProductItems, professionals, products, clients, users, isLoading]);
 
     const handleSearch = () => {
         setActiveFilters({

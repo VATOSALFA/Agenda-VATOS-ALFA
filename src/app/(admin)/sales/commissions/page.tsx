@@ -42,7 +42,7 @@ interface CommissionRowData {
     professionalName: string;
     clientName: string;
     itemName: string;
-    itemType: 'servicio' | 'producto';
+    itemType: 'servicio' | 'producto' | 'propina';
     saleAmount: number;
     commissionAmount: number;
     commissionPercentage: number;
@@ -224,6 +224,46 @@ export default function CommissionsPage() {
                     });
                 }
             });
+
+            // Handle Transfer Tip
+            if (sale.propina && sale.propina > 0) {
+                // Determine who gets the tip. Default to the professional with the most revenue in this sale.
+                const professionalsInSale = new Map<string, number>();
+                sale.items.forEach(i => {
+                    const pid = i.barbero_id;
+                    if (pid) {
+                        professionalsInSale.set(pid, (professionalsInSale.get(pid) || 0) + (i.subtotal || 0));
+                    }
+                });
+
+                let topProfId = '';
+                let maxRev = -1;
+                professionalsInSale.forEach((rev, pid) => {
+                    if (rev > maxRev) {
+                        maxRev = rev;
+                        topProfId = pid;
+                    }
+                });
+
+                const professional = professionalMap.get(topProfId);
+
+                // Filter check
+                if (professional && (activeFilters.professional === 'todos' || activeFilters.professional === professional.id)) {
+                    const client = clientMap.get(sale.cliente_id);
+                    const clientName = client ? `${client.nombre} ${client.apellido}` : 'Cliente desconocido';
+
+                    commissionRows.push({
+                        professionalId: professional.id,
+                        professionalName: professional.name,
+                        clientName: clientName,
+                        itemName: 'Propina (Transferencia)',
+                        itemType: 'propina',
+                        saleAmount: sale.propina,
+                        commissionAmount: sale.propina, // Tip is 100% to the pro
+                        commissionPercentage: 100
+                    });
+                }
+            }
         });
 
         setCommissionData(commissionRows);

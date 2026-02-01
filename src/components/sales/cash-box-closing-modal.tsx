@@ -56,9 +56,10 @@ interface CashBoxClosingModalProps {
   onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
   initialCash: number;
+  localId: string;
 }
 
-export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash }: CashBoxClosingModalProps) {
+export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash, localId }: CashBoxClosingModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,6 +125,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         total_sistema: initialCash,
         diferencia: diferencia,
         comentarios: data.comentarios,
+        local_id: localId,
         detalle_conteo: denominationCounts,
       });
       toast({ title: 'Corte de caja guardado con éxito.' });

@@ -23,7 +23,7 @@ interface CommissionRowData {
   professionalName: string;
   clientName: string;
   itemName: string;
-  itemType: 'servicio' | 'producto';
+  itemType: 'servicio' | 'producto' | 'propina';
   saleAmount: number;
   commissionAmount: number;
   commissionPercentage: number;

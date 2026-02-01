@@ -21,6 +21,20 @@ const initializeFirebaseAdmin = () => {
       firebaseAdminApp = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.log("Inicializando Firebase Admin SDK con archivo de credenciales local...");
+      try {
+        const serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        firebaseAdminApp = admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+      } catch (err) {
+        console.warn("No se pudo cargar el archivo de credenciales, intentando con ADC...", err);
+        firebaseAdminApp = admin.initializeApp({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agenda-1ae08',
+          credential: admin.credential.applicationDefault()
+        });
+      }
     } else {
       console.log("Inicializando Firebase Admin SDK con Credenciales por Defecto (ADC)...");
       // En entornos de Google Cloud (App Hosting, Functions, Run), esto usa la cuenta de servicio por defecto automáticamente.

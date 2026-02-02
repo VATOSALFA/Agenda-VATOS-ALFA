@@ -158,7 +158,7 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
 ClientCombobox.displayName = 'ClientCombobox';
 
 const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers }: any) => (
-    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg h-[450px] md:h-full">
+    <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg h-[450px] md:h-full md:min-h-0">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
             <Button variant="outline" size="sm" onClick={onOpenAddItem}><Plus className="mr-2 h-4 w-4" /> Agregar</Button>
@@ -1255,7 +1255,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     <Form {...form}>
                         {step === 1 && (
                             <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-6 px-4 md:px-6 py-4 overflow-y-auto md:overflow-hidden">
-                                <div className="col-span-1 md:col-span-2 flex flex-col gap-4">
+                                <div className="col-span-1 md:col-span-2 flex flex-col gap-4 md:min-h-0">
                                     <div className="flex-shrink-0">
                                         {selectedClient ? (
                                             <Card>

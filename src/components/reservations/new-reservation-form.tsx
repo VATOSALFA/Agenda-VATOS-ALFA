@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2 } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType, Product } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
@@ -46,6 +46,15 @@ import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
 import { ScrollArea } from '../ui/scroll-area';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { ServiceInput } from './service-input';
 
 interface ReminderSettings {
   notifications: Record<string, { enabled: boolean }>;
@@ -151,7 +160,104 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clie
     />
   );
 });
+
 ClientCombobox.displayName = 'ClientCombobox';
+
+const ServiceCombobox = ({ value, onChange, groupedServices, products, isProduct, loading }: any) => {
+  const [open, setOpen] = useState(false);
+
+  // Helper to find label
+  const getLabel = () => {
+    if (!value) return null;
+    if (loading) return "Cargando...";
+
+    // Search in groups
+    for (const group of groupedServices) {
+      const found = group.items.find((s: ServiceType) => s.id === value);
+      if (found) return found.name;
+    }
+
+    // Search in products
+    if (products) {
+      const foundProduct = products.find((p: Product) => p.id === value);
+      if (foundProduct) return foundProduct.nombre;
+    }
+
+    return "Seleccionar servicio...";
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between disabled:opacity-50"
+          disabled={isProduct}
+        >
+          <span className="truncate">
+            {getLabel() || (loading ? "Cargando..." : "Buscar servicio...")}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar servicio..." />
+          <CommandList>
+            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+            {groupedServices.map((group: any) => (
+              <CommandGroup heading={group.name} key={group.name}>
+                {group.items.map((s: ServiceType) => (
+                  <CommandItem
+                    key={s.id}
+                    value={s.name}
+                    onSelect={() => {
+                      onChange(s.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === s.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {s.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+
+            {isProduct && products && products.length > 0 && (
+              <CommandGroup heading="Productos">
+                {products.map((p: Product) => (
+                  <CommandItem
+                    key={p.id}
+                    value={p.nombre}
+                    onSelect={() => {
+                      onChange(p.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === p.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {p.nombre}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 // Helper function to safely parse date from various formats
 const safeParseDate = (rawDate: any): Date | null => {
@@ -175,6 +281,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
+  const { data: serviceCategories } = useFirestoreQuery<any>('categorias_servicios');
   const { data: products } = useFirestoreQuery<Product>('productos'); // <--- Added products query
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
   const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
@@ -207,8 +314,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [professionals, canSee, user]);
 
 
+
+  const formSchema = useMemo(() => createReservationSchema(isEditMode), [isEditMode]);
+
   const form = useForm<ReservationFormData>({
-    resolver: zodResolver(createReservationSchema(isEditMode)),
+    resolver: zodResolver(formSchema),
     mode: 'onBlur',
     defaultValues: {
       notas: '',
@@ -238,6 +348,44 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     if (!services) return new Map<string, ServiceType>();
     return new Map(services.map(s => [s.id, s]));
   }, [services]);
+
+  const groupedServices = useMemo(() => {
+    if (!services || !serviceCategories) return [];
+
+    // 1. Create a map of category ID -> Services
+    const groups: Record<string, ServiceType[]> = {};
+    const uncategorized: ServiceType[] = [];
+
+    services.forEach(service => {
+      if (service.category) {
+        if (!groups[service.category]) {
+          groups[service.category] = [];
+        }
+        groups[service.category].push(service);
+      } else {
+        uncategorized.push(service);
+      }
+    });
+
+    // 2. Sort categories by order
+    const sortedCategories = [...serviceCategories].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    // 3. Build the result array
+    const result = sortedCategories.map(cat => ({
+      name: cat.name,
+      items: (groups[cat.id] || []).sort((a, b) => (a.order || 0) - (b.order || 0))
+    })).filter(group => group.items.length > 0);
+
+    // 4. Add uncategorized if any
+    if (uncategorized.length > 0) {
+      result.push({
+        name: 'Otros',
+        items: uncategorized.sort((a, b) => (a.order || 0) - (b.order || 0))
+      });
+    }
+
+    return result;
+  }, [services, serviceCategories]);
 
   const timeOptions = useMemo(() => {
     const hours = Array.from({ length: 12 }, (_, i) => 10 + i); // 10 AM to 9 PM
@@ -618,7 +766,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
 
 
-  const FormContent = () => (
+
+  const formContent = (
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
@@ -767,15 +916,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                               <div className="flex items-center gap-2">
                                 <FormLabel>{isProduct ? 'Producto' : 'Servicios'}</FormLabel>
                               </div>
-                              <Select onValueChange={field.onChange} value={field.value} disabled={isProduct}>
-                                <FormControl><SelectTrigger><SelectValue placeholder={servicesLoading ? 'Cargando...' : 'Busca un servicio'} /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  {services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                  {isProduct && products?.map(p => (
-                                    <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <ServiceInput
+                                value={field.value}
+                                onChange={field.onChange}
+                                groupedServices={groupedServices}
+                                products={products}
+                                isProduct={isProduct}
+                                loading={servicesLoading}
+                              />
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -830,10 +978,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </div>
               </div>
 
-              <Accordion type="single" collapsible className="px-6">
-                <AccordionItem value="item-1">
-                  <AccordionTrigger>Información adicional</AccordionTrigger>
-                  <AccordionContent className="space-y-4 pt-2">
+              <Accordion type="single" collapsible className="w-full border-t">
+                <AccordionItem value="info" className="border-none">
+                  <AccordionTrigger className="px-6 py-4 text-sm font-medium hover:no-underline">Información adicional</AccordionTrigger>
+                  <AccordionContent className="px-6 pb-4 space-y-4">
                     <FormField control={form.control} name="precio" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Precio</FormLabel>
@@ -844,13 +992,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <FormField control={form.control} name="notas" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Notas compartidas con el cliente</FormLabel>
-                        <FormControl><Textarea rows={4} placeholder="Estas notas serán visibles para el cliente" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+
                     <FormField control={form.control} name="nota_interna" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nota interna</FormLabel>
@@ -868,7 +1010,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Reserva'}
             </Button>
           </DialogFooter>
@@ -889,7 +1031,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   );
 
   if (isDialogChild) {
-    return <FormContent />;
+    return formContent;
   }
 
   return (
@@ -898,7 +1040,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         <DialogHeader className="sr-only">
           <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
         </DialogHeader>
-        <FormContent />
+        {formContent}
       </DialogContent>
     </Dialog>
   );

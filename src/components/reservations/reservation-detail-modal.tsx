@@ -299,6 +299,15 @@ export function ReservationDetailModal({
               </div>
             </div>
 
+            {reservation.nota_interna && (
+              <div className="space-y-3 pt-4 border-t">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-primary" /> Nota Interna
+                </h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{reservation.nota_interna}</p>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               {statusOptions.map(({ status, color, label }) => (
                 <TooltipProvider key={status}>

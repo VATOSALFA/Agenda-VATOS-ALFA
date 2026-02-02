@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Copy, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
-import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import {
     AlertDialog,
@@ -204,14 +204,49 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             };
 
             const { ...profDataRaw } = data;
-            // Remove id if present to avoid redundant update
             delete profDataRaw.id;
 
             const profData = cleanData(profDataRaw);
 
+            // Sync services logic
+            const syncServices = async (profId: string, newServices: string[]) => {
+                const oldServices = profesional?.services || [];
+                const addedServices = newServices.filter(s => !oldServices.includes(s));
+                const removedServices = oldServices.filter(s => !newServices.includes(s));
+
+                const batch = writeBatch(db);
+                let batchCount = 0;
+
+                // For added services, add professional ID to service.professionals
+                for (const serviceId of addedServices) {
+                    const serviceRef = doc(db, 'servicios', serviceId);
+                    batch.update(serviceRef, {
+                        professionals: arrayUnion(profId)
+                    });
+                    batchCount++;
+                }
+
+                // For removed services, remove professional ID from service.professionals
+                for (const serviceId of removedServices) {
+                    const serviceRef = doc(db, 'servicios', serviceId);
+                    batch.update(serviceRef, {
+                        professionals: arrayRemove(profId)
+                    });
+                    batchCount++;
+                }
+
+                if (batchCount > 0) {
+                    await batch.commit();
+                }
+            };
+
             if (profesional) { // EDIT MODE
-                const profRef = doc(db, 'profesionales', profesional.id);
+                const profId = profesional.id;
+                const profRef = doc(db, 'profesionales', profId);
                 await updateDoc(profRef, profData);
+
+                // Sync services
+                await syncServices(profId, profData.services || []);
 
                 // Also update the user document with the new avatar and name
                 if (profesional.userId) {
@@ -226,11 +261,10 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                             }
                             await updateDoc(userRef, userUpdates);
                         } else {
-                            console.warn(`Linked user document ${profesional.userId} not found for professional ${profesional.id}. Skipping user update.`);
+                            console.warn(`Linked user document ${profesional.userId} not found associated with professional ${profId}. Skipping user update.`);
                         }
                     } catch (userUpdateError) {
                         console.error("Error updating linked user document:", userUpdateError);
-                        // Don't fail the main operation if user update fails
                     }
                 }
 
@@ -261,6 +295,9 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                 batch.set(userRef, userData);
                 batch.set(profRef, professionalData);
                 await batch.commit();
+
+                // Sync services for new professional (all selected services are "added")
+                await syncServices(newProfessionalId, profData.services || []);
 
                 toast({ title: "Profesional creado con éxito" });
             }

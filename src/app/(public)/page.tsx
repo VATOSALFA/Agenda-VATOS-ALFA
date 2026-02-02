@@ -166,7 +166,7 @@ export default function LandingPage() {
     const totalItems = cart.length + productCart.length;
 
     // Filter Professionals by Selected Branch
-    const filteredProfessionals = professionals?.filter((p: any) => p.active && !p.deleted && (!selectedBranch || p.local_id === selectedBranch)) || [];
+    const filteredProfessionals = professionals?.filter((p: any) => p.active && !p.deleted && p.acceptsOnline && (!selectedBranch || p.local_id === selectedBranch)) || [];
 
     return (
         <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">

@@ -339,6 +339,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   });
 
   const selectedClientId = form.watch('cliente_id');
+  const watchedItems = form.watch('items');
 
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId)
@@ -432,7 +433,32 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
 
-      if (!agendaSettings?.resourceOverload && (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end)) {
+      // Check for 'available' blocks (overrides schedule)
+      const hasAvailableBlock = allTimeBlocks.some(b =>
+        b.barbero_id === item.barbero_id &&
+        b.fecha === formattedDate &&
+        (b as any).type === 'available' &&
+        b.hora_inicio <= hora_inicio &&
+        b.hora_fin >= hora_fin
+      );
+
+      // Check for 'block' blocks (overrides schedule)
+      const hasBlock = allTimeBlocks.some(b =>
+        b.barbero_id === item.barbero_id &&
+        b.fecha === formattedDate &&
+        (b as any).type !== 'available' &&
+        ((hora_inicio >= b.hora_inicio && hora_inicio < b.hora_fin) ||
+          (hora_fin > b.hora_inicio && hora_fin <= b.hora_fin) ||
+          (hora_inicio <= b.hora_inicio && hora_fin >= b.hora_fin))
+      );
+
+      if (hasBlock) {
+        errors[index] = `El profesional tiene el horario bloqueado.`;
+        allItemsValid = false;
+        return;
+      }
+
+      if (!hasAvailableBlock && !agendaSettings?.resourceOverload && (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end)) {
         errors[index] = `El profesional no está disponible en este horario.`;
         allItemsValid = false;
         return;
@@ -904,9 +930,32 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
                 <div className="space-y-4">
                   {fields.map((field, index) => {
-                    const currentItemId = form.getValues(`items.${index}.servicio`);
+                    const currentItem = watchedItems?.[index];
+                    const currentItemId = currentItem?.servicio || form.getValues(`items.${index}.servicio`);
                     const isProduct = products?.some(p => p.id === currentItemId) ||
                       (initialData?.items?.[index] && (initialData.items[index] as any).tipo === 'producto');
+
+                    const currentService = servicesMap.get(currentItemId);
+
+                    // Filter professionals based on the selected service
+                    const rowProfessionals = filteredProfessionals.filter(p => {
+                      if (isProduct) return true; // Professionals can generally sell products
+                      if (!currentItemId) return true; // If no service selected, show all available in this context
+
+                      // STRICT VALIDATION: Priority to Professional's list
+                      // If the professional has a defined 'services' list, we strictly check against it.
+                      if (Array.isArray(p.services)) {
+                        return p.services.includes(currentItemId);
+                      }
+
+                      // Fallback for legacy records without 'services' array: check the service's list of professionals
+                      if (currentService?.professionals && Array.isArray(currentService.professionals)) {
+                        return currentService.professionals.includes(p.id);
+                      }
+
+                      // If neither has explicit lists (highly unlikely in current version), default to allow to avoid blocking old data
+                      return true;
+                    });
 
                     return (
                       <Card key={field.id} className="p-4 relative bg-muted/50">
@@ -932,18 +981,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                             <FormItem>
                               <div className="flex items-center gap-2">
                                 <FormLabel>Profesional</FormLabel>
-                                {isEditMode && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 p-0 hover:bg-transparent"
-                                    onClick={() => setIsProfessionalLocked(!isProfessionalLocked)}
-                                    title={isProfessionalLocked ? "Desbloquear selección" : "Bloquear selección"}
-                                  >
-                                    {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
-                                  </Button>
-                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 p-0 hover:bg-transparent"
+                                  onClick={() => setIsProfessionalLocked(!isProfessionalLocked)}
+                                  title={isProfessionalLocked ? "Desbloquear selección" : "Bloquear selección"}
+                                >
+                                  {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
+                                </Button>
                               </div>
                               <Select onValueChange={field.onChange} value={field.value} disabled={isProfessionalLocked}>
                                 <FormControl>
@@ -952,11 +999,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {filteredProfessionals.map((barber) => (
-                                    <SelectItem key={barber.id} value={barber.id}>
-                                      {barber.name}
-                                    </SelectItem>
-                                  ))}
+                                  {rowProfessionals.length > 0 ? (
+                                    rowProfessionals.map((barber) => (
+                                      <SelectItem key={barber.id} value={barber.id}>
+                                        {barber.name}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <div className="p-2 text-sm text-muted-foreground text-center">
+                                      No hay profesionales disponibles para este servicio.
+                                    </div>
+                                  )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -1019,12 +1072,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+            <DialogTitle>{selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>
             <DialogDescription>
               Completa la información para registrar un nuevo cliente en el sistema.
             </DialogDescription>
           </DialogHeader>
-          <NewClientForm onFormSubmit={handleClientCreated} />
+          <NewClientForm onFormSubmit={handleClientCreated} client={selectedClient} />
         </DialogContent>
       </Dialog>
     </>

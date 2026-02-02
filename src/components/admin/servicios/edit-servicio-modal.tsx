@@ -20,7 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { collection, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, Timestamp, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import type { Service, ServiceCategory, Profesional } from '@/lib/types';
 import { ImageUploader } from '@/components/shared/image-uploader';
@@ -159,17 +159,55 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
       // @ts-ignore
       delete dataToSave.commission_type;
 
+      // Sync professionals logic
+      const syncProfessionals = async (serviceId: string, newProfessionals: string[]) => {
+        const oldProfessionals = service?.professionals || [];
+        const addedPros = newProfessionals.filter(p => !oldProfessionals.includes(p));
+        const removedPros = oldProfessionals.filter(p => !newProfessionals.includes(p));
+
+        const batch = writeBatch(db);
+        let batchCount = 0;
+
+        for (const profId of addedPros) {
+          const profRef = doc(db, 'profesionales', profId);
+          batch.update(profRef, {
+            services: arrayUnion(serviceId)
+          });
+          batchCount++;
+        }
+
+        for (const profId of removedPros) {
+          const profRef = doc(db, 'profesionales', profId);
+          batch.update(profRef, {
+            services: arrayRemove(serviceId)
+          });
+          batchCount++;
+        }
+
+        if (batchCount > 0) {
+          await batch.commit();
+        }
+      };
+
       if (service) {
         const serviceRef = doc(db, 'servicios', service.id);
         await updateDoc(serviceRef, dataToSave as any);
+
+        // Sync professionals
+        await syncProfessionals(service.id, data.professionals || []);
+
         toast({ title: "Servicio actualizado con éxito" });
       } else {
-        await addDoc(collection(db, 'servicios'), {
+        const newServiceRef = await addDoc(collection(db, 'servicios'), {
           ...dataToSave,
           active: true,
           order: 99,
           created_at: Timestamp.now(),
         });
+
+        // Sync professionals for new service
+        await syncProfessionals(newServiceRef.id, data.professionals || []);
+
         toast({ title: "Servicio guardado con éxito" });
       }
 

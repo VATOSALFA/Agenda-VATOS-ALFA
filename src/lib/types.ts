@@ -99,7 +99,7 @@ export interface TimeBlock {
   fecha: string;
   hora_inicio: string;
   hora_fin: string;
-  type?: 'block';
+  type?: 'block' | 'available';
   customer?: { nombre: string }; // For unified rendering
   start?: number; // transient
   duration?: number; // transient

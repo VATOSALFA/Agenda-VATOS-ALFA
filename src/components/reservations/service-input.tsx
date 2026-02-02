@@ -51,6 +51,12 @@ export const ServiceInput = ({ value, onChange, groupedServices, products, isPro
         if (foundName) setSearch(foundName);
     }, [value, groupedServices, products]);
 
+    const handleSelect = (id: string, name: string) => {
+        onChange(id);
+        setSearch(name);
+        setOpen(false);
+    };
+
     return (
         <Command className="h-auto overflow-visible bg-transparent">
             <Popover open={open} onOpenChange={setOpen} modal={false}>
@@ -71,7 +77,7 @@ export const ServiceInput = ({ value, onChange, groupedServices, products, isPro
                         {/* Optional: Clear button? */}
                     </div>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+                <PopoverContent className="w-[300px] p-0 z-[200]" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
                     <CommandList>
                         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
                         {groupedServices.map((group: any) => (
@@ -80,11 +86,13 @@ export const ServiceInput = ({ value, onChange, groupedServices, products, isPro
                                     <CommandItem
                                         key={s.id}
                                         value={s.name}
-                                        onSelect={() => {
-                                            onChange(s.id);
-                                            setSearch(s.name);
-                                            setOpen(false);
+                                        onSelect={() => handleSelect(s.id, s.name)}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
                                         }}
+                                        onClick={() => handleSelect(s.id, s.name)}
+                                        className="cursor-pointer !pointer-events-auto hover:bg-accent hover:text-accent-foreground"
                                     >
                                         <Check
                                             className={cn(
@@ -104,11 +112,13 @@ export const ServiceInput = ({ value, onChange, groupedServices, products, isPro
                                     <CommandItem
                                         key={p.id}
                                         value={p.nombre}
-                                        onSelect={() => {
-                                            onChange(p.id);
-                                            setSearch(p.nombre);
-                                            setOpen(false);
+                                        onSelect={() => handleSelect(p.id, p.nombre)}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
                                         }}
+                                        onClick={() => handleSelect(p.id, p.nombre)}
+                                        className="cursor-pointer !pointer-events-auto hover:bg-accent hover:text-accent-foreground"
                                     >
                                         <Check
                                             className={cn(

@@ -184,7 +184,10 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                                         <SelectValue placeholder="Seleccionar vendedor" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {(item.tipo === 'servicio' ? serviceSellers : productSellers).map((b: { id: string, name: string }) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                        {(item.tipo === 'servicio'
+                                            ? serviceSellers.filter(p => !p.services || p.services.includes(item.id))
+                                            : productSellers
+                                        ).map((b: { id: string, name: string }) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -358,7 +361,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (!professionals) return [];
         return professionals
             .filter(p => p.active && !p.deleted)
-            .map(p => ({ id: p.id, name: p.name }));
+            .map(p => ({ id: p.id, name: p.name, services: p.services }));
     }, [professionals]);
 
     const productSellers = useMemo(() => {

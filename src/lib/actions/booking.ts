@@ -372,6 +372,22 @@ export async function createPublicReservation(data: any) {
         const dayName = format(parse(data.date, 'yyyy-MM-dd', new Date()), 'eeee', { locale: es }).toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+        // 1.1 NEW VALIDATION: Check if professional performs these services
+        const profServices = (profData && Array.isArray(profData.services)) ? profData.services : [];
+        if (data.serviceIds && data.serviceIds.length > 0) {
+            const unsupportedServices = data.serviceIds.filter((id: string) => !profServices.includes(id));
+
+            if (unsupportedServices.length > 0) {
+                // Try to find names for better error message
+                const unsupportedNames = validServices
+                    .filter((s: any) => unsupportedServices.includes(s.id))
+                    .map((s: any) => s.name)
+                    .join(', ');
+
+                return { error: `El profesional no realiza los siguientes servicios: ${unsupportedNames || 'Servicios no válidos para este profesional'}` };
+            }
+        }
+
         const scheduleDay = profData?.schedule?.[dayName];
 
         if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };

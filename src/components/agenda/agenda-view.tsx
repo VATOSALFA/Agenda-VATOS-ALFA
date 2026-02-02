@@ -55,13 +55,15 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import Image from 'next/image';
 import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser, Product } from '@/lib/types';
 
+import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
+
 interface EmpresaSettings {
   receipt_logo_url?: string;
 }
 
 // Define a union type for events to be displayed on the agenda
 type AgendaEvent = (Reservation & { type: 'appointment', duration: number, start: number, end: number, color: string, layout: any }) |
-  (TimeBlock & { type: 'block', duration: number, start: number, end: number, color: string, layout: any });
+  (TimeBlock & { type: 'block', duration: number, start: number, end: number, color: string, layout: any, originalType?: string });
 
 
 const ROW_HEIGHT = 48; // This is the visual height of one time slot row in the agenda.
@@ -83,10 +85,11 @@ const useCurrentTime = () => {
   return time;
 };
 
-const NonWorkBlock = ({ top, height, text }: { top: number, height: number, text: string }) => (
+const NonWorkBlock = ({ top, height, text, onClick }: { top: number, height: number, text: string, onClick?: (e: MouseEvent<HTMLDivElement>) => void }) => (
   <div
-    className="absolute w-full bg-striped-gray flex items-center justify-center p-2 z-0"
+    className={cn("absolute w-full bg-striped-gray flex items-center justify-center p-2 z-0", onClick && "cursor-pointer hover:bg-gray-200/50 transition-colors")}
     style={{ top: `${top}px`, height: `${height}px` }}
+    onClick={onClick}
   >
     <p className="text-xs text-center font-medium text-gray-500">{text}</p>
   </div>
@@ -119,6 +122,25 @@ const getStatusColor = (status: string | undefined) => {
 }
 
 
+const subtractIntervals = (base: { start: number, end: number }, subtractions: { start: number, end: number }[]) => {
+  let result = [base];
+  for (const sub of subtractions) {
+    const nextResult = [];
+    for (const res of result) {
+      const start = Math.max(res.start, sub.start);
+      const end = Math.min(res.end, sub.end);
+      if (start < end) {
+        if (res.start < start) nextResult.push({ start: res.start, end: start });
+        if (end < res.end) nextResult.push({ start: end, end: res.end });
+      } else {
+        nextResult.push(res);
+      }
+    }
+    result = nextResult;
+  }
+  return result;
+};
+
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
@@ -142,6 +164,36 @@ export default function AgendaView() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
   const [blockToDelete, setBlockToDelete] = useState<TimeBlock | null>(null);
+
+  // New State for Enable Schedule
+  const [isEnableScheduleModalOpen, setIsEnableScheduleModalOpen] = useState(false);
+  const [enableScheduleInitialData, setEnableScheduleInitialData] = useState<any>(null);
+
+  const handleNonWorkClick = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
+    if (!canSee('bloquear_horarios')) return;
+    e.stopPropagation();
+
+    const gridEl = gridRefs.current[barberId];
+    if (!gridEl) return;
+    const rect = gridEl.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+
+    const totalGridHeight = (timeSlots.length - 1) * ROW_HEIGHT;
+    const minutesFromStart = (y / totalGridHeight) * (timeSlots.length - 1) * slotDurationMinutes;
+
+    const slotIndex = Math.floor(minutesFromStart / 15);
+    const time = format(addMinutes(set(new Date(), { hours: startHour, minutes: 0 }), slotIndex * 15), 'HH:mm');
+
+    const barber = professionals.find(p => p.id === barberId);
+
+    setEnableScheduleInitialData({
+      barbero_id: barberId,
+      barberName: barber?.name,
+      fecha: date,
+      hora_inicio: time
+    });
+    setIsEnableScheduleModalOpen(true);
+  }
 
   const gridRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const popoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -284,27 +336,44 @@ export default function AgendaView() {
         };
       });
 
-    const blockEvents: AgendaEvent[] = timeBlocks.map(block => {
+    const mappedBlockEvents: AgendaEvent[] = timeBlocks.map(block => {
       const [startH, startM] = block.hora_inicio.split(':').map(Number);
       const [endH, endM] = block.hora_fin.split(':').map(Number);
       const start = startH + startM / 60;
       const end = endH + endM / 60;
+      const isAvailable = (block as any).type === 'available';
       return {
         ...block,
         id: block.id,
         barbero_id: block.barbero_id,
         customer: { nombre: block.motivo } as any,
-        service: 'Bloqueado',
+        service: isAvailable ? 'Disponible' : 'Bloqueado',
         start: start,
         end: end,
         duration: Math.max(0.0833, end - start),
-        color: 'bg-striped-gray border-gray-400 text-gray-600',
+        color: isAvailable ? 'bg-background border-dashed border-green-500 z-10' : 'bg-striped-gray border-gray-400 text-gray-600',
         type: 'block' as const,
+        originalType: (block as any).type,
         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
       };
     });
 
-    return [...appointmentEvents, ...blockEvents];
+    // Valid blocks filtering: remove 'blocking' blocks if they are overlapped by an 'available' block
+    const validBlockEvents = mappedBlockEvents.filter(block => {
+      if ((block as any).originalType === 'available') return true;
+
+      // Check if this blocking block is overridden by an available block
+      const isOverridden = mappedBlockEvents.some(other =>
+        (other as any).originalType === 'available' &&
+        other.barbero_id === block.barbero_id &&
+        // Check overlap
+        (other.start < block.end && other.end > block.start)
+      );
+
+      return !isOverridden;
+    });
+
+    return [...appointmentEvents, ...validBlockEvents];
   }, [reservations, timeBlocks, clients, professionals]);
 
   const eventsWithLayout: AgendaEvent[] = useMemo(() => {
@@ -812,23 +881,35 @@ export default function AgendaView() {
 
                 const pixelsPerMinute = ROW_HEIGHT / slotDurationMinutes;
 
-                // Calculate Pre-Shift Block
-                let preShiftHeight = 0;
+                // Get Available Blocks for this barber
+                const availableIntervals = eventsWithLayout
+                  .filter(e => e.type === 'block' && e.originalType === 'available' && e.barbero_id === barber.id)
+                  .map(e => ({ start: e.start, end: e.end }));
+
+                // 1. Pre-Shift
+                let preShiftSegments: { start: number, end: number }[] = [];
                 if (isWorking && barberStartHour > startHour) {
-                  const diffMinutes = (barberStartHour - startHour) * 60;
-                  preShiftHeight = diffMinutes * pixelsPerMinute;
+                  preShiftSegments = subtractIntervals({ start: startHour, end: barberStartHour }, availableIntervals);
                 }
 
-                // Calculate Post-Shift Block
-                let postShiftTop = 0;
-                let postShiftHeight = 0;
+                // 2. Post-Shift
+                let postShiftSegments: { start: number, end: number }[] = [];
                 if (isWorking && barberEndHour < endHour) {
-                  const minutesFromStart = (barberEndHour - startHour) * 60;
-                  postShiftTop = minutesFromStart * pixelsPerMinute;
-
-                  const diffMinutes = (endHour - barberEndHour) * 60;
-                  postShiftHeight = diffMinutes * pixelsPerMinute;
+                  postShiftSegments = subtractIntervals({ start: barberEndHour, end: endHour }, availableIntervals);
                 }
+
+                // 3. Non-Working Day
+                let nonWorkingSegments: { start: number, end: number }[] = [];
+                if (!isWorking) {
+                  nonWorkingSegments = subtractIntervals({ start: startHour, end: endHour }, availableIntervals);
+                }
+
+                // 4. Breaks
+                const breakSegments = (isWorking && daySchedule?.breaks) ? daySchedule.breaks.flatMap((brk: any) => {
+                  const [sH, sM] = brk.start.split(':').map(Number);
+                  const [eH, eM] = brk.end.split(':').map(Number);
+                  return subtractIntervals({ start: sH + sM / 60, end: eH + eM / 60 }, availableIntervals);
+                }) : [];
 
                 return (
                   <div key={barber.id} className="relative">
@@ -847,54 +928,64 @@ export default function AgendaView() {
                       </div>
                       {currentTimeTop > -1 && <div className="absolute w-full h-0.5 bg-red-500 z-20" style={{ top: `${currentTimeTop}px` }}></div>}
 
-                      {!isWorking && (
-                        <NonWorkBlock
-                          top={0}
-                          height={(timeSlots.length || 24) * ROW_HEIGHT}
-                          text="Día no laboral"
-                        />
-                      )}
+                      {nonWorkingSegments.map((seg, i) => {
+                        const minutesFromStart = (seg.start - startHour) * 60;
+                        const top = minutesFromStart * pixelsPerMinute;
+                        const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
+                        return (
+                          <NonWorkBlock
+                            key={`nw-${i}`}
+                            top={top}
+                            height={height}
+                            text="Día no laboral"
+                            onClick={(e) => handleNonWorkClick(e, barber.id)}
+                          />
+                        );
+                      })}
 
                       {/* Working Day Limits (Before Start / After End) */}
-                      {isWorking && preShiftHeight > 0 && (
-                        <NonWorkBlock
-                          top={0}
-                          height={preShiftHeight}
-                          text="No disponible"
-                        />
-                      )}
+                      {preShiftSegments.map((seg, i) => {
+                        const minutesFromStart = (seg.start - startHour) * 60;
+                        const top = minutesFromStart * pixelsPerMinute;
+                        const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
+                        return (
+                          <NonWorkBlock
+                            key={`pre-${i}`}
+                            top={top}
+                            height={height}
+                            text="No disponible"
+                            onClick={(e) => handleNonWorkClick(e, barber.id)}
+                          />
+                        );
+                      })}
 
-                      {isWorking && postShiftHeight > 0 && (
-                        <NonWorkBlock
-                          top={postShiftTop}
-                          height={postShiftHeight}
-                          text="No disponible"
-                        />
-                      )}
+                      {postShiftSegments.map((seg, i) => {
+                        const minutesFromStart = (seg.start - startHour) * 60;
+                        const top = minutesFromStart * pixelsPerMinute;
+                        const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
+                        return (
+                          <NonWorkBlock
+                            key={`post-${i}`}
+                            top={top}
+                            height={height}
+                            text="No disponible"
+                            onClick={(e) => handleNonWorkClick(e, barber.id)}
+                          />
+                        );
+                      })}
 
                       {/* Breaks */}
-                      {isWorking && daySchedule?.breaks?.map((brk: any, i: number) => {
-                        const [startH, startM] = brk.start.split(':').map(Number);
-                        const [endH, endM] = brk.end.split(':').map(Number);
-
-                        const breakStartDecimal = startH + (startM / 60);
-                        const breakEndDecimal = endH + (endM / 60);
-
-                        const minutesFromStart = (breakStartDecimal - startHour) * 60;
+                      {breakSegments.map((seg, i) => {
+                        const minutesFromStart = (seg.start - startHour) * 60;
                         const top = minutesFromStart * pixelsPerMinute;
-
-                        const durationMinutes = (breakEndDecimal - breakStartDecimal) * 60;
-                        const height = durationMinutes * pixelsPerMinute;
-
-                        if (height <= 0) return null;
-
+                        const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
                         return (
                           <NonWorkBlock
                             key={`break-${i}`}
                             top={top}
                             height={height}
                             text="Descanso"
-                          // Add style to ensure it is visually blocking if needed, but logic check is better
+                            onClick={(e) => handleNonWorkClick(e, barber.id)}
                           />
                         );
                       })}
@@ -948,7 +1039,24 @@ export default function AgendaView() {
                           <Tooltip key={event.id}>
                             <TooltipTrigger asChild>
                               <div
-                                onClick={(e) => { e.stopPropagation(); if (event.type === 'appointment') { handleOpenDetailModal(event); } else if (event.type === 'block') { setBlockToDelete(event); } }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (event.type === 'appointment') {
+                                    handleOpenDetailModal(event);
+                                  } else if (event.type === 'block') {
+                                    if (event.originalType === 'available') {
+                                      setReservationInitialData({
+                                        barbero_id: event.barbero_id,
+                                        fecha: date,
+                                        hora_inicio: formatHour(event.start),
+                                        local_id: selectedLocalId,
+                                      });
+                                      setIsReservationModalOpen(true);
+                                    } else {
+                                      setBlockToDelete(event);
+                                    }
+                                  }
+                                }}
                                 className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", event.color)}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
@@ -982,10 +1090,14 @@ export default function AgendaView() {
                                 )}
 
                                 <div className={cn("absolute top-0 h-full flex items-center gap-0.5", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-12" : "right-1")}>
-                                  {event.type === 'appointment' && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
+                                  {event.type === 'appointment' && (
                                     <div className="flex items-center gap-0.5 h-full px-1">
-                                      <Globe className="w-3.5 h-3.5 text-primary" />
-                                      <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                                      {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
+                                        <Globe className="w-3.5 h-3.5 text-primary" />
+                                      )}
+                                      {((event.professional_lock === true) || (event.professional_lock === undefined && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')))) && (
+                                        <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -1099,6 +1211,12 @@ export default function AgendaView() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+      <EnableScheduleModal
+        isOpen={isEnableScheduleModalOpen}
+        onOpenChange={setIsEnableScheduleModalOpen}
+        onFormSubmit={onDataRefresh}
+        initialData={enableScheduleInitialData}
+      />
     </TooltipProvider>
   );
 }

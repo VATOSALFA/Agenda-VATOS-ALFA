@@ -423,35 +423,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         return clients.find(c => c.id === selectedClientId)
     }, [selectedClientId, clients]);
 
-    useEffect(() => {
-        if (!isOpen) return;
 
-        // Force check for the best local ID available
-        const currentLocalId = form.getValues('local_id');
-
-        let targetId = '';
-
-        // 1. Initial Data
-        if (initialData?.local_id) {
-            targetId = initialData.local_id;
-        }
-        // 2. User's Assigned Local (Primary Source for Manual Sales)
-        else if (user?.local_id && user.local_id !== 'todos') {
-            targetId = user.local_id;
-        }
-        // 3. Fallback: First available local
-        else if (locales.length > 0) {
-            targetId = locales[0].id;
-        }
-
-        // Set value if we found a target and it needs updating
-        if (targetId && targetId !== currentLocalId) {
-            form.setValue('local_id', targetId);
-        }
-
-        // Reset payment method on open to avoid persisting previous selection
-        form.setValue('metodo_pago', '');
-    }, [isOpen, initialData, user, locales, form]);
 
     useEffect(() => {
         if (mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -872,7 +844,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setCart([]);
         setSearchTerm('');
         setStep(1);
-        form.reset();
+
+        // Determine default local
+        let defaultLocalId = '';
+        if (user?.local_id && user.local_id !== 'todos') {
+            defaultLocalId = user.local_id;
+        } else if (selectedLocalId && selectedLocalId !== 'todos') {
+            defaultLocalId = selectedLocalId;
+        } else if (locales && locales.length > 0) {
+            defaultLocalId = locales[0].id;
+        }
+
+        form.reset({
+            cliente_id: '',
+            local_id: defaultLocalId,
+            metodo_pago: '',
+            pago_efectivo: 0,
+            pago_tarjeta: 0,
+            propina: 0,
+            notas: ''
+        });
+
         setIsSubmitting(false);
         setAmountPaid(0);
         setIsSendingToTerminal(false);
@@ -880,7 +872,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setIsClientModalOpen(false);
         setIsAddItemDialogOpen(false);
         saleIdRef.current = null;
-    }, [form]);
+    }, [form, user, selectedLocalId, locales]);
 
     useEffect(() => {
         if (isOpen && !initialData) {

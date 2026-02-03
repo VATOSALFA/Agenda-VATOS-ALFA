@@ -16,6 +16,7 @@ import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ClientInput } from './client-input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -143,19 +144,11 @@ const statusOptions = [
 ];
 
 const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
-  const clientOptions = useMemo(() => {
-    return clients.map(client => ({
-      value: client.id,
-      label: `${client.nombre} ${client.apellido}`,
-    }));
-  }, [clients]);
-
   return (
-    <Combobox
-      options={clientOptions}
+    <ClientInput
+      clients={clients}
       value={value}
       onChange={onChange}
-      placeholder="Busca o selecciona un cliente..."
       loading={loading}
     />
   );
@@ -276,6 +269,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
   const [isProfessionalLocked, setIsProfessionalLocked] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { user, db } = useAuth();
 
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
@@ -482,6 +476,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (!agendaSettings?.resourceOverload) {
         const blockConflict = allTimeBlocks.some(b => {
           if (b.barbero_id !== item.barbero_id || b.fecha !== formattedDate) return false;
+          if ((b as any).type === 'available') return false;
           return hora_inicio < b.hora_fin && hora_fin > b.hora_inicio;
         });
 
@@ -497,7 +492,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             return hora_inicio < brk.end && hora_fin > brk.start;
           });
 
-          if (breakConflict) {
+          if (breakConflict && !hasAvailableBlock) {
             errors[index] = `El profesional está en su horario de descanso.`;
             allItemsValid = false;
             return;
@@ -841,7 +836,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Fecha</FormLabel>
-                        <Popover>
+                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -851,7 +846,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-                            <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))} initialFocus />
+                            <Calendar
+                              locale={es}
+                              mode="single"
+                              selected={field.value}
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                setIsCalendarOpen(false);
+                              }}
+                              disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                              initialFocus
+                            />
                           </PopoverContent>
                         </Popover>
                         <FormMessage />

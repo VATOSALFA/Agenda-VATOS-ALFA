@@ -57,6 +57,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
+import { ClientInput } from '../reservations/client-input';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -138,19 +139,11 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
 }
 
 const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
-    const clientOptions = useMemo(() => {
-        return clients.map(client => ({
-            value: client.id,
-            label: `${client.nombre} ${client.apellido}`,
-        }));
-    }, [clients]);
-
     return (
-        <Combobox
-            options={clientOptions}
+        <ClientInput
             value={value}
             onChange={onChange}
-            placeholder="Busca o selecciona un cliente..."
+            clients={clients}
             loading={loading}
         />
     );

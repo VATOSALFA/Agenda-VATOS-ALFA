@@ -20,6 +20,7 @@ interface EnableScheduleModalProps {
         fecha: Date;
         hora_inicio?: string; // Estimated click time
         barberName?: string;
+        local_id?: string;
     } | null;
 }
 
@@ -69,6 +70,7 @@ export function EnableScheduleModal({ isOpen, onOpenChange, onFormSubmit, initia
         try {
             await addDoc(collection(db, 'bloqueos_horario'), {
                 barbero_id: initialData.barbero_id,
+                local_id: initialData.local_id, // Added local_id
                 fecha: format(initialData.fecha, 'yyyy-MM-dd'),
                 hora_inicio: start,
                 hora_fin: end,

@@ -31,9 +31,13 @@ interface ComboboxProps {
 export function Combobox({ options, value, onChange, placeholder = "Select an option...", loading = false, filter }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
+  const optionsMap = React.useMemo(() => {
+    return new Map(options.map(o => [o.value, o.label.toLowerCase()]));
+  }, [options]);
+
   const defaultFilter = (value: string, search: string) => {
-    const option = options.find(o => o.value === value);
-    if (option?.label.toLowerCase().includes(search.toLowerCase())) return 1;
+    const label = optionsMap.get(value);
+    if (label?.includes(search.toLowerCase())) return 1;
     return 0;
   }
 

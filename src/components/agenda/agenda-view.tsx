@@ -190,7 +190,8 @@ export default function AgendaView() {
       barbero_id: barberId,
       barberName: barber?.name,
       fecha: date,
-      hora_inicio: time
+      hora_inicio: time,
+      local_id: selectedLocalId
     });
     setIsEnableScheduleModalOpen(true);
   }
@@ -1045,6 +1046,7 @@ export default function AgendaView() {
                                     handleOpenDetailModal(event);
                                   } else if (event.type === 'block') {
                                     if (event.originalType === 'available') {
+                                      // Normal click on available block => Create Reservation
                                       setReservationInitialData({
                                         barbero_id: event.barbero_id,
                                         fecha: date,
@@ -1053,11 +1055,20 @@ export default function AgendaView() {
                                       });
                                       setIsReservationModalOpen(true);
                                     } else {
+                                      // Normal click on blockage => Confirm delete
                                       setBlockToDelete(event);
                                     }
                                   }
                                 }}
-                                className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden", event.color)}
+                                onContextMenu={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  // Right click to manage/delete any block (including available ones)
+                                  if (event.type === 'block') {
+                                    setBlockToDelete(event);
+                                  }
+                                }}
+                                className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden cursor-pointer select-none", event.color)}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
                                 <div className="flex-grow overflow-hidden pr-1">
@@ -1197,15 +1208,20 @@ export default function AgendaView() {
         <AlertDialog open={!!blockToDelete} onOpenChange={() => setBlockToDelete(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>¿Desbloquear Horario?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {(blockToDelete as any).originalType === 'available' ? '¿Deshabilitar Horario Especial?' : '¿Desbloquear Horario?'}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                Se eliminará el bloqueo "{blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?
+                {(blockToDelete as any).originalType === 'available'
+                  ? `Se eliminará el horario habilitado especial. El profesional volverá a tener este horario bloqueado según su configuración.`
+                  : `Se eliminará el bloqueo "${blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?`
+                }
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteBlock}>
-                Sí, desbloquear
+                {(blockToDelete as any).originalType === 'available' ? 'Sí, deshabilitar' : 'Sí, desbloquear'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

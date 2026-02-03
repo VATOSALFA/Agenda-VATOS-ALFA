@@ -30,6 +30,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import * as XLSX from 'xlsx';
@@ -66,8 +67,8 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                                 data={chartData}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={85}
-                                outerRadius={145}
+                                innerRadius={70}
+                                outerRadius={110}
                                 fill="#8884d8"
                                 paddingAngle={data.length > 0 ? 2 : 0}
                                 dataKey="value"
@@ -195,10 +196,16 @@ export default function InvoicedSalesPage() {
     const { data: users } = useFirestoreQuery<User>('usuarios');
 
     const sales = useMemo(() => {
-        return salesDataFromHook.filter(sale => {
+        const filtered = salesDataFromHook.filter(sale => {
             const localMatch = activeFilters.local === 'todos' || sale.local_id === activeFilters.local;
             const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || sale.metodo_pago === activeFilters.paymentMethod;
             return localMatch && paymentMethodMatch;
+        });
+
+        return filtered.sort((a, b) => {
+            const dateA = a.fecha_hora_venta?.seconds ? new Date(a.fecha_hora_venta.seconds * 1000) : new Date(a.fecha_hora_venta);
+            const dateB = b.fecha_hora_venta?.seconds ? new Date(b.fecha_hora_venta.seconds * 1000) : new Date(b.fecha_hora_venta);
+            return dateB.getTime() - dateA.getTime();
         });
     }, [salesDataFromHook, activeFilters.local, activeFilters.paymentMethod]);
 
@@ -718,19 +725,19 @@ export default function InvoicedSalesPage() {
             }
             {
                 saleToDelete && (
-                    <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
+                    <Dialog open={!!saleToDelete} onOpenChange={(open) => {
                         if (!open) {
                             setSaleToDelete(null);
                             setDeleteConfirmationText('');
                         }
                     }}>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</AlertDialogTitle>
-                                <AlertDialogDescription>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</DialogTitle>
+                                <DialogDescription>
                                     Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
+                                </DialogDescription>
+                            </DialogHeader>
                             <div className="space-y-2 py-2">
                                 <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
                                 <Input
@@ -740,18 +747,21 @@ export default function InvoicedSalesPage() {
                                     placeholder="ELIMINAR"
                                 />
                             </div>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                    onClick={handleDeleteSale}
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</Button>
+                                <Button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        handleDeleteSale();
+                                    }}
                                     disabled={deleteConfirmationText !== 'ELIMINAR'}
                                     className="bg-destructive hover:bg-destructive/90"
                                 >
                                     Sí, eliminar venta
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 )
             }
 

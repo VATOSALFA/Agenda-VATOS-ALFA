@@ -185,10 +185,10 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
               {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-grow overflow-y-auto md:overflow-hidden">
+          <div className="flex-grow overflow-y-auto">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 md:h-full flex flex-col">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:flex-grow md:overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:flex-grow">
                   {/* Left Column */}
                   <div className="space-y-4 flex flex-col md:h-full">
                     <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>

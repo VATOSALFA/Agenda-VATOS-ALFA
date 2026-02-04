@@ -63,7 +63,8 @@ import {
   Clock,
   Circle,
   ChevronDown,
-  GripVertical
+  GripVertical,
+  ChevronUp
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditProfesionalModal } from '@/components/admin/profesionales/edit-profesional-modal';
@@ -79,7 +80,7 @@ import type { Local, Profesional, Schedule } from '@/lib/types';
 
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void }) {
+function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay, onMove }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void, onMove: (prof: Profesional, direction: 'up' | 'down') => void }) {
   const {
     attributes,
     listeners,
@@ -99,6 +100,14 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
   return (
     <li ref={setNodeRef} style={style} className="flex items-center justify-between p-4 bg-card hover:bg-muted/50 list-none">
       <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-1 mr-2">
+          <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(prof, 'up'); }}>
+            <ChevronUp className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(prof, 'down'); }}>
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </div>
         <div {...attributes} {...listeners} className="cursor-grab p-2">
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
@@ -247,6 +256,27 @@ export default function ProfesionalesPage() {
     setActiveId(event.active.id as string);
   }
 
+  async function saveNewOrder(newOrder: Profesional[]) {
+    if (!db) return;
+    try {
+      const batch = writeBatch(db);
+      newOrder.forEach((prof, index) => {
+        const profRef = doc(db, 'profesionales', prof.id);
+        batch.update(profRef, { order: index });
+      });
+      await batch.commit();
+      toast({
+        title: "Orden actualizado",
+        description: "El nuevo orden de los profesionales ha sido guardado."
+      });
+      handleDataUpdated();
+    } catch (error) {
+      console.error("Error updating order:", error);
+      toast({ variant: 'destructive', title: 'Error al guardar el orden' });
+      setProfessionals(professionals); // Revert on error
+    }
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
@@ -259,27 +289,41 @@ export default function ProfesionalesPage() {
 
       const newOrder = arrayMove(professionals, oldIndex, newIndex);
       setProfessionals(newOrder);
-
-      if (!db) return;
-      try {
-        const batch = writeBatch(db);
-        newOrder.forEach((prof, index) => {
-          const profRef = doc(db, 'profesionales', prof.id);
-          batch.update(profRef, { order: index });
-        });
-        await batch.commit();
-        toast({
-          title: "Orden actualizado",
-          description: "El nuevo orden de los profesionales ha sido guardado."
-        });
-        handleDataUpdated();
-      } catch (error) {
-        console.error("Error updating order:", error);
-        toast({ variant: 'destructive', title: 'Error al guardar el orden' });
-        setProfessionals(professionals); // Revert on error
-      }
+      saveNewOrder(newOrder);
     }
   }
+
+  const handleMove = (prof: Profesional, direction: 'up' | 'down') => {
+    // 1. Find the local group this prof belongs to
+    const group = professionalsByLocal.find(g => g.professionals.some(p => p.id === prof.id));
+    if (!group) return;
+
+    // 2. Find index within that group
+    const localIndex = group.professionals.findIndex(p => p.id === prof.id);
+
+    // 3. Determine target local index
+    let targetLocalIndex = -1;
+    if (direction === 'up') {
+      if (localIndex > 0) targetLocalIndex = localIndex - 1;
+    } else {
+      if (localIndex < group.professionals.length - 1) targetLocalIndex = localIndex + 1;
+    }
+
+    if (targetLocalIndex === -1) return;
+
+    const targetProf = group.professionals[targetLocalIndex];
+
+    // 4. Find global indices
+    const oldIndex = professionals.findIndex(p => p.id === prof.id);
+    const newIndex = professionals.findIndex(p => p.id === targetProf.id);
+
+    // 5. Move in global array
+    const newOrder = arrayMove(professionals, oldIndex, newIndex);
+    setProfessionals(newOrder);
+
+    // 6. Save
+    saveNewOrder(newOrder);
+  };
 
   const professionalsByLocal = useMemo(() => {
     if (professionalsLoading || localesLoading) return [];
@@ -421,6 +465,7 @@ export default function ProfesionalesPage() {
                               key={prof.id}
                               prof={prof}
                               onToggleActive={handleToggleActive}
+                              onMove={handleMove}
                               onEdit={() => handleOpenModal(prof)}
                               onOpenSpecialDay={() => handleOpenSpecialDayModal(prof)}
                             />
@@ -429,7 +474,7 @@ export default function ProfesionalesPage() {
                       </SortableContext>
                       <DragOverlay>
                         {activeProfessional ? (
-                          <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => { }} onEdit={() => { }} onOpenSpecialDay={() => { }} /></ul>
+                          <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => { }} onEdit={() => { }} onOpenSpecialDay={() => { }} onMove={() => { }} /></ul>
                         ) : null}
                       </DragOverlay>
                     </DndContext>

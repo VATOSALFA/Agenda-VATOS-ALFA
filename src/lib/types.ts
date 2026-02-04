@@ -234,6 +234,7 @@ export interface Sale {
   detalle_pago_combinado?: {
     efectivo: number;
     tarjeta: number;
+    transferencia?: number;
     pagos_en_linea?: number;
   };
   professionalNames?: string; // transient

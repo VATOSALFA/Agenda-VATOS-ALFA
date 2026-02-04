@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/popover";
 import type { Client } from '@/lib/types';
 
+import { Command as CommandPrimitive } from "cmdk";
+
 interface ClientInputProps {
     value: string;
     onChange: (value: string) => void;
@@ -55,7 +57,7 @@ export const ClientInput = ({ value, onChange, clients, loading }: ClientInputPr
                         onClick={() => setOpen(true)}
                     >
                         <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                        <CommandInput
+                        <CommandPrimitive.Input
                             value={search}
                             onValueChange={(val) => {
                                 setSearch(val);
@@ -63,7 +65,7 @@ export const ClientInput = ({ value, onChange, clients, loading }: ClientInputPr
                             }}
                             onFocus={() => setOpen(true)}
                             placeholder="Busca o selecciona un cliente..."
-                            className="border-none focus:ring-0 h-9 p-0 bg-transparent flex-grow outline-none placeholder:text-muted-foreground"
+                            className="border-none focus:ring-0 h-9 p-0 bg-transparent flex-grow outline-none placeholder:text-muted-foreground w-full py-2 text-sm"
                             disabled={loading}
                         />
                     </div>

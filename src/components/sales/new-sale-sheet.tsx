@@ -8,7 +8,7 @@ import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, Document
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
-import type { Client, Product, Service as ServiceType, Profesional, Local, User } from '@/lib/types';
+
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 
 import { functions, httpsCallable, db } from '@/lib/firebase-client';
@@ -58,6 +58,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { ClientInput } from '../reservations/client-input';
+import type { Service as ServiceType, Product, Client, User, Local, Profesional, Sale, SaleItem, ServiceCategory } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -86,11 +87,12 @@ const saleSchema = (total: number) => z.object({
     metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
     pago_efectivo: z.coerce.number().optional().default(0),
     pago_tarjeta: z.coerce.number().optional().default(0),
+    pago_transferencia: z.coerce.number().optional().default(0),
     propina: z.coerce.number().optional().default(0),
     notas: z.string().optional(),
 }).refine(data => {
     if (data.metodo_pago === 'combinado') {
-        const combinedTotal = Number(data.pago_efectivo || 0) + Number(data.pago_tarjeta || 0);
+        const combinedTotal = Number(data.pago_efectivo || 0) + Number(data.pago_tarjeta || 0) + Number(data.pago_transferencia || 0);
         return combinedTotal === total;
     }
     return true;
@@ -236,13 +238,28 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
     </div>
 );
 
-const AddItemDialog = ({ open, onOpenChange, services, products, servicesLoading, productsLoading, addToCart }: any) => {
+const AddItemDialog = ({ open, onOpenChange, services, categories, products, servicesLoading, productsLoading, addToCart }: any) => {
     const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
 
-    const addItemFilteredServices = useMemo(() => {
-        if (!services) return [];
-        return services.filter((s: ServiceType) => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
-    }, [addItemSearchTerm, services]);
+    const { regularServices, packageServices } = useMemo(() => {
+        if (!services) return { regularServices: [], packageServices: [] };
+
+        // Sort first
+        const sorted = [...services].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+        // Filter by search term
+        const filtered = sorted.filter((s: ServiceType) => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
+
+        // Split by category (Package vs Regular)
+        const packageCategoryIds = (categories || [])
+            .filter((c: any) => c.name.toLowerCase().includes('paquete') || c.name.toLowerCase().includes('package'))
+            .map((c: any) => c.id);
+
+        const regular = filtered.filter((s: ServiceType) => !packageCategoryIds.includes(s.category));
+        const packages = filtered.filter((s: ServiceType) => packageCategoryIds.includes(s.category));
+
+        return { regularServices: regular, packageServices: packages };
+    }, [addItemSearchTerm, services, categories]);
 
     const addItemFilteredProducts = useMemo(() => {
         if (!products) return [];
@@ -265,23 +282,57 @@ const AddItemDialog = ({ open, onOpenChange, services, products, servicesLoading
                         <TabsTrigger value="productos">Productos</TabsTrigger>
                     </TabsList>
                     <ScrollArea className="flex-grow mt-4">
-                        <TabsContent value="servicios">
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {servicesLoading ? (
-                                    Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>)
-                                ) : (
-                                    addItemFilteredServices.map((service: ServiceType) => (
-                                        <DialogClose asChild key={service.id}>
-                                            <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
-                                                <CardContent className="p-3">
-                                                    <p className="font-semibold text-sm">{service.name}</p>
-                                                    <p className="text-xs text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                                </CardContent>
-                                            </Card>
-                                        </DialogClose>
-                                    ))
-                                )}
-                            </div>
+                        <TabsContent value="servicios" className="space-y-6">
+                            {servicesLoading ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {Array.from({ length: 3 }).map((_, idx) => <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>)}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Regular Services Section */}
+                                    <div>
+                                        {regularServices.length > 0 && <h3 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">Servicios Individuales</h3>}
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                            {regularServices.map((service: ServiceType) => (
+                                                <DialogClose asChild key={service.id}>
+                                                    <Card className="cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
+                                                        <CardContent className="p-3">
+                                                            <p className="font-semibold text-sm leading-tight mb-1">{service.name}</p>
+                                                            <p className="text-xs text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                        </CardContent>
+                                                    </Card>
+                                                </DialogClose>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Packages Section */}
+                                    {packageServices.length > 0 && (
+                                        <div className="pt-2">
+                                            <h3 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">Paquetes</h3>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                {packageServices.map((service: ServiceType) => (
+                                                    <DialogClose asChild key={service.id}>
+                                                        <Card className="cursor-pointer hover:border-primary bg-blue-50/30 transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
+                                                            <CardContent className="p-3">
+                                                                <p className="font-semibold text-sm leading-tight mb-1">{service.name}</p>
+                                                                <p className="text-xs text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                            </CardContent>
+                                                        </Card>
+                                                    </DialogClose>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {regularServices.length === 0 && packageServices.length === 0 && (
+                                        <div className="text-center py-8 text-muted-foreground">
+                                            No se encontraron servicios.
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
                         </TabsContent>
                         <TabsContent value="productos">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -336,6 +387,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+    const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales');
 
@@ -411,6 +463,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             notas: '',
             pago_efectivo: 0,
             pago_tarjeta: 0,
+            pago_transferencia: 0,
         },
     });
 
@@ -432,10 +485,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, [terminals, mainTerminalId]);
 
 
-    const filteredServices = useMemo(() => {
-        if (!services) return [];
-        return services.filter(s => s?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
-    }, [searchTerm, services]);
+    const { regularServices, packageServices } = useMemo(() => {
+        if (!services) return { regularServices: [], packageServices: [] };
+
+        // Sort first
+        const sorted = [...services].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+        // Filter by search term
+        const filtered = sorted.filter((s: ServiceType) => s?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        // Split by category (Package vs Regular)
+        const packageCategoryIds = (categories || [])
+            .filter((c: any) => c.name.toLowerCase().includes('paquete') || c.name.toLowerCase().includes('package'))
+            .map((c: any) => c.id);
+
+        const regular = filtered.filter((s: ServiceType) => !packageCategoryIds.includes(s.category));
+        const packages = filtered.filter((s: ServiceType) => packageCategoryIds.includes(s.category));
+
+        return { regularServices: regular, packageServices: packages };
+
+    }, [searchTerm, services, categories]);
 
     const filteredProducts = useMemo(() => {
         if (!products) return [];
@@ -495,19 +564,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const paymentMethod = form.watch('metodo_pago');
 
+    const watchedCash = form.watch('pago_efectivo');
+    const watchedCard = form.watch('pago_tarjeta');
+    const watchedTransfer = form.watch('pago_transferencia');
+
     const isCombinedPaymentInvalid = useMemo(() => {
         if (paymentMethod !== 'combinado') return false;
-        const cashAmount = Number(form.getValues('pago_efectivo') || 0);
-        const cardAmount = Number(form.getValues('pago_tarjeta') || 0);
-        return cashAmount + cardAmount !== total;
-    }, [form, paymentMethod, total]);
+        const cashAmount = Number(watchedCash || 0);
+        const cardAmount = Number(watchedCard || 0);
+        const transferAmount = Number(watchedTransfer || 0);
+        return cashAmount + cardAmount + transferAmount !== total;
+    }, [paymentMethod, total, watchedCash, watchedCard, watchedTransfer]);
 
     const combinedTotal = useMemo(() => {
         if (paymentMethod !== 'combinado') return 0;
-        const cashAmount = Number(form.getValues('pago_efectivo') || 0);
-        const cardAmount = Number(form.getValues('pago_tarjeta') || 0);
-        return cashAmount + cardAmount;
-    }, [form, paymentMethod]);
+        const cashAmount = Number(watchedCash || 0);
+        const cardAmount = Number(watchedCard || 0);
+        const transferAmount = Number(watchedTransfer || 0);
+        return cashAmount + cardAmount + transferAmount;
+    }, [paymentMethod, watchedCash, watchedCard, watchedTransfer]);
 
     const remainingAmount = total - combinedTotal;
 
@@ -857,6 +932,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             metodo_pago: '',
             pago_efectivo: 0,
             pago_tarjeta: 0,
+            pago_transferencia: 0,
             propina: 0,
             notas: ''
         });
@@ -1151,6 +1227,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     saleDataToSave.detalle_pago_combinado = {
                         efectivo: data.pago_efectivo,
                         tarjeta: data.pago_tarjeta,
+                        transferencia: data.pago_transferencia,
                     };
                 }
 
@@ -1160,6 +1237,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     // 1. Extract previous payments
                     let prevEfectivo = 0;
                     let prevTarjeta = 0;
+                    let prevTransferencia = 0;
                     let prevOnline = 0;
 
                     const prevCombined = existingSaleData.detalle_pago_combinado;
@@ -1167,6 +1245,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     if (existingSaleData.metodo_pago === 'combinado' && prevCombined) {
                         prevEfectivo = prevCombined.efectivo || 0;
                         prevTarjeta = prevCombined.tarjeta || 0;
+                        prevTransferencia = prevCombined.transferencia || 0;
                         prevOnline = prevCombined.pagos_en_linea || 0;
                     } else if (existingSaleData.metodo_pago === 'mercadopago') {
                         // The deposit was likely 'mercadopago'
@@ -1175,25 +1254,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         prevEfectivo = existingSaleData.total || 0;
                     } else if (existingSaleData.metodo_pago === 'tarjeta') {
                         prevTarjeta = existingSaleData.total || 0;
+                    } else if (existingSaleData.metodo_pago === 'transferencia') {
+                        prevTransferencia = existingSaleData.total || 0;
                     }
 
                     // 2. Extract current payments (amountBeingPaid is the balance being paid NOW)
                     let currEfectivo = 0;
                     let currTarjeta = 0;
+                    let currTransferencia = 0;
 
                     if (data.metodo_pago === 'combinado') {
                         currEfectivo = data.pago_efectivo || 0;
                         currTarjeta = data.pago_tarjeta || 0;
+                        currTransferencia = data.pago_transferencia || 0;
                     } else if (data.metodo_pago === 'efectivo') {
                         currEfectivo = amountBeingPaid;
                     } else if (data.metodo_pago === 'tarjeta') {
                         currTarjeta = amountBeingPaid;
+                    } else if (data.metodo_pago === 'transferencia') {
+                        currTransferencia = amountBeingPaid;
                     }
 
                     // 3. Combine
                     saleDataToSave.detalle_pago_combinado = {
                         efectivo: prevEfectivo + currEfectivo,
                         tarjeta: prevTarjeta + currTarjeta,
+                        transferencia: prevTransferencia + currTransferencia,
                         pagos_en_linea: prevOnline
                     };
                     saleDataToSave.metodo_pago = 'combinado'; // Always combined when merging multiple payments
@@ -1301,23 +1387,54 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             <TabsTrigger value="productos">Productos</TabsTrigger>
                                         </TabsList>
                                         <ScrollArea className="flex-grow mt-4 pr-4">
-                                            <TabsContent value="servicios" className="mt-0">
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                    {servicesLoading ? (
-                                                        Array.from({ length: 6 }).map((_, idx) => (
+                                            <TabsContent value="servicios" className="mt-0 space-y-6">
+                                                {servicesLoading ? (
+                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                        {Array.from({ length: 6 }).map((_, idx) => (
                                                             <Card key={idx}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
-                                                        ))
-                                                    ) : (
-                                                        filteredServices.map((service: ServiceType) => (
-                                                            <Card key={service.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(service, 'servicio')}>
-                                                                <CardContent className="p-4">
-                                                                    <p className="font-semibold">{service.name}</p>
-                                                                    <p className="text-sm text-primary">${(service.price || 0).toLocaleString('es-MX')}</p>
-                                                                </CardContent>
-                                                            </Card>
-                                                        ))
-                                                    )}
-                                                </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        {/* Regular Services Section */}
+                                                        <div>
+                                                            {regularServices.length > 0 && <h3 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">Servicios Individuales</h3>}
+                                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                                {regularServices.map((service: ServiceType) => (
+                                                                    <Card key={service.id} className="cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
+                                                                        <CardContent className="p-4">
+                                                                            <p className="font-semibold leading-tight mb-1">{service.name}</p>
+                                                                            <p className="text-sm text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                                        </CardContent>
+                                                                    </Card>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Packages Section */}
+                                                        {packageServices.length > 0 && (
+                                                            <div className="pt-2">
+                                                                <h3 className="font-semibold mb-3 text-sm text-muted-foreground uppercase tracking-wider">Paquetes</h3>
+                                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                                    {packageServices.map((service: ServiceType) => (
+                                                                        <Card key={service.id} className="cursor-pointer hover:border-primary bg-blue-50/30 transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
+                                                                            <CardContent className="p-4">
+                                                                                <p className="font-semibold leading-tight mb-1">{service.name}</p>
+                                                                                <p className="text-sm text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                                            </CardContent>
+                                                                        </Card>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {regularServices.length === 0 && packageServices.length === 0 && (
+                                                            <div className="text-center py-12 text-muted-foreground">
+                                                                No se encontraron servicios.
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
                                             </TabsContent>
                                             <TabsContent value="productos" className="mt-0">
                                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -1611,14 +1728,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                                         {paymentMethod === 'combinado' && (
                                             <Card className="p-4 bg-muted/50">
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                     <FormField
                                                         control={form.control}
                                                         name="pago_efectivo"
                                                         render={({ field }) => (
                                                             <FormItem>
                                                                 <FormLabel>Efectivo</FormLabel>
-                                                                <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                                                <FormControl><Input type="number" placeholder="$" {...field} value={field.value || ''} onChange={e => field.onChange(e.target.valueAsNumber)} /></FormControl>
                                                             </FormItem>
                                                         )}
                                                     />
@@ -1628,7 +1745,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         render={({ field }) => (
                                                             <FormItem>
                                                                 <FormLabel>Tarjeta</FormLabel>
-                                                                <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                                                                <FormControl><Input type="number" placeholder="$" {...field} value={field.value || ''} onChange={e => field.onChange(e.target.valueAsNumber)} /></FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="pago_transferencia"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Transferencia</FormLabel>
+                                                                <FormControl><Input type="number" placeholder="$" {...field} value={field.value || ''} onChange={e => field.onChange(e.target.valueAsNumber)} /></FormControl>
                                                             </FormItem>
                                                         )}
                                                     />
@@ -1638,7 +1765,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         <span className="text-muted-foreground">Total Ingresado:</span>
                                                         <span className="font-medium">${combinedTotal.toLocaleString('es-MX')}</span>
                                                     </div>
-                                                    <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-green-600" : "text-destructive")}>
+                                                    <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-primary" : "text-destructive")}>
                                                         <span>Faltante:</span>
                                                         <span>${remainingAmount.toLocaleString('es-MX')}</span>
                                                     </div>
@@ -1730,6 +1857,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 open={isAddItemDialogOpen}
                 onOpenChange={setIsAddItemDialogOpen}
                 services={services}
+                categories={categories}
                 products={products}
                 servicesLoading={servicesLoading}
                 productsLoading={productsLoading}
@@ -1739,5 +1867,4 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     );
 }
 
-// Force deploy trigger
 

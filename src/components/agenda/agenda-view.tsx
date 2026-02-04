@@ -56,6 +56,33 @@ import Image from 'next/image';
 import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser, Product } from '@/lib/types';
 
 import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { writeBatch } from 'firebase/firestore';
+
+function SortableHeader({ barber, avatarUrl }: { barber: Profesional, avatarUrl: string | undefined }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: barber.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.8 : 1,
+    backgroundColor: isDragging ? 'hsl(var(--background))' : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="p-2 h-28 flex flex-col items-center justify-center border-b select-none">
+      <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group w-full h-full">
+        <Avatar className="h-[60px] w-[60px] rounded-lg group-hover:ring-2 group-hover:ring-primary transition-all pointer-events-none">
+          <AvatarImage src={avatarUrl} alt={barber.name} />
+          <AvatarFallback className="rounded-lg">{barber.name ? barber.name.substring(0, 2) : '??'}</AvatarFallback>
+        </Avatar>
+        <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
+      </Link>
+    </div>
+  );
+}
 
 interface EmpresaSettings {
   receipt_logo_url?: string;
@@ -113,7 +140,7 @@ const getStatusColor = (status: string | undefined) => {
     case 'deposit_paid':
       return 'bg-orange-300/80 border-orange-500 text-orange-900';
     case 'En espera':
-      return 'bg-indigo-300/80 border-indigo-500 text-indigo-900';
+      return 'bg-green-300/80 border-green-500 text-green-900';
     case 'Cancelado':
       return 'bg-gray-300/80 border-gray-500 text-gray-800 line-through';
     default:
@@ -198,6 +225,46 @@ export default function AgendaView() {
 
   const gridRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const popoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  async function handleHeaderDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      // We deal with filteredProfessionals, but we must update the global order if we want consistency?
+      // Actually, we just need to reorder the professionals in the current view and save their new indices.
+      // However, filteredProfessionals might be a subset. If 'todos' is selected, it's all visible professionals of this local.
+      // We should treat the visible list as the authoritative list for this local's order.
+      const oldIndex = filteredProfessionals.findIndex(p => p.id === active.id);
+      const newIndex = filteredProfessionals.findIndex(p => p.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        // Optimistic update? We can't easily set filteredProfessionals directly as it is a memo.
+        // But we can update the Firestore docs.
+        // To see immediate effect we might need local state, but let's rely on Firestore subscription for now or force update?
+        // Since it's a memo, we can't set it. But updating DB triggers snapshot update.
+        // To make it smooth, we might want to wait for DB.
+
+        // Create new order array locally to calculate indices
+        const newOrderArray = arrayMove(filteredProfessionals, oldIndex, newIndex);
+
+        if (!db) return;
+        const batch = writeBatch(db);
+        newOrderArray.forEach((prof, index) => {
+          const profRef = doc(db, 'profesionales', prof.id);
+          batch.update(profRef, { order: index });
+        });
+        await batch.commit();
+        toast({ title: "Orden actualizado" });
+      }
+    }
+  }
   const currentTime = useCurrentTime();
   const [isClientMounted, setIsClientMounted] = useState(false);
   const { toast } = useToast();
@@ -305,7 +372,7 @@ export default function AgendaView() {
     }
 
     if (selectedProfessionalFilter === 'todos') {
-      return professionalsOfLocal;
+      return professionalsOfLocal.sort((a, b) => (a.order || 0) - (b.order || 0));
     }
     return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
   }, [professionals, selectedProfessionalFilter, selectedLocalId, user]);
@@ -841,17 +908,13 @@ export default function AgendaView() {
                   </DropdownMenu>
                 </div>
               </div>
-              {filteredProfessionals.map(barber => (
-                <div key={barber.id} className="p-2 h-28 flex flex-col items-center justify-center border-b">
-                  <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group">
-                    <Avatar className="h-[60px] w-[60px] group-hover:ring-2 group-hover:ring-primary transition-all">
-                      <AvatarImage src={getProfessionalAvatar(barber)} alt={barber.name} />
-                      <AvatarFallback>{barber.name ? barber.name.substring(0, 2) : '??'}</AvatarFallback>
-                    </Avatar>
-                    <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
-                  </Link>
-                </div>
-              ))}
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleHeaderDragEnd}>
+                <SortableContext items={filteredProfessionals} strategy={horizontalListSortingStrategy}>
+                  {filteredProfessionals.map(barber => (
+                    <SortableHeader key={barber.id} barber={barber} avatarUrl={getProfessionalAvatar(barber)} />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </div>
 
             <div className="grid gap-2" style={{ gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
@@ -1176,19 +1239,21 @@ export default function AgendaView() {
         initialData={blockInitialData}
       />
 
-      {selectedReservation && (
-        <ReservationDetailModal
-          reservation={selectedReservation}
-          isOpen={isDetailModalOpen}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) setSelectedReservation(null);
-            setIsDetailModalOpen(isOpen);
-          }}
-          onPay={handlePayFromDetail}
-          onUpdateStatus={handleUpdateStatus}
-          onEdit={canSee('editar_reservas') ? handleEditFromDetail : undefined}
-        />
-      )}
+      {
+        selectedReservation && (
+          <ReservationDetailModal
+            reservation={selectedReservation}
+            isOpen={isDetailModalOpen}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) setSelectedReservation(null);
+              setIsDetailModalOpen(isOpen);
+            }}
+            onPay={handlePayFromDetail}
+            onUpdateStatus={handleUpdateStatus}
+            onEdit={canSee('editar_reservas') ? handleEditFromDetail : undefined}
+          />
+        )
+      }
 
       <NewSaleSheet
         isOpen={isSaleSheetOpen}
@@ -1204,36 +1269,38 @@ export default function AgendaView() {
         onConfirm={handleCancelReservation}
       />
 
-      {blockToDelete && (
-        <AlertDialog open={!!blockToDelete} onOpenChange={() => setBlockToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {(blockToDelete as any).originalType === 'available' ? '¿Deshabilitar Horario Especial?' : '¿Desbloquear Horario?'}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {(blockToDelete as any).originalType === 'available'
-                  ? `Se eliminará el horario habilitado especial. El profesional volverá a tener este horario bloqueado según su configuración.`
-                  : `Se eliminará el bloqueo "${blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?`
-                }
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteBlock}>
-                {(blockToDelete as any).originalType === 'available' ? 'Sí, deshabilitar' : 'Sí, desbloquear'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      {
+        blockToDelete && (
+          <AlertDialog open={!!blockToDelete} onOpenChange={() => setBlockToDelete(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {(blockToDelete as any).originalType === 'available' ? '¿Deshabilitar Horario Especial?' : '¿Desbloquear Horario?'}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {(blockToDelete as any).originalType === 'available'
+                    ? `Se eliminará el horario habilitado especial. El profesional volverá a tener este horario bloqueado según su configuración.`
+                    : `Se eliminará el bloqueo "${blockToDelete.motivo}" de la agenda de este profesional. ¿Estás seguro?`
+                  }
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteBlock}>
+                  {(blockToDelete as any).originalType === 'available' ? 'Sí, deshabilitar' : 'Sí, desbloquear'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )
+      }
       <EnableScheduleModal
         isOpen={isEnableScheduleModalOpen}
         onOpenChange={setIsEnableScheduleModalOpen}
         onFormSubmit={onDataRefresh}
         initialData={enableScheduleInitialData}
       />
-    </TooltipProvider>
+    </TooltipProvider >
   );
 }
 

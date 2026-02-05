@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { startOfDay, endOfDay } from 'date-fns';
+import { startOfDay, endOfDay, subDays } from 'date-fns';
 import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,9 @@ interface ProfessionalCommissionSummary {
 
 export default function CommissionsPage() {
     const { user } = useAuth();
+
+    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+
     const { toast } = useToast();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [localFilter, setLocalFilter] = useState('todos');
@@ -86,7 +89,7 @@ export default function CommissionsPage() {
     const [queryKey, setQueryKey] = useState(0);
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey, where('active', '==', true));
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
@@ -278,6 +281,15 @@ export default function CommissionsPage() {
         });
     }
 
+    const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+
+    const handleDateSelect = (range: DateRange | undefined) => {
+        setDateRange(range);
+        if (range?.from && range?.to) {
+            setIsPopoverOpen(false);
+        }
+    };
+
     const summaryByProfessional = useMemo(() => {
         const grouped = commissionData.reduce((acc, current) => {
             if (!acc[current.professionalId]) {
@@ -396,7 +408,7 @@ export default function CommissionsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Periodo de tiempo</label>
-                                <Popover>
+                                <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                                     <PopoverTrigger asChild>
                                         <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-4 w-4" />
@@ -412,12 +424,21 @@ export default function CommissionsPage() {
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={dateRange?.from}
+                                            selected={dateRange}
+                                            onSelect={handleDateSelect}
+                                            numberOfMonths={1}
+                                            locale={es}
+                                            disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                                        />
                                     </PopoverContent>
                                 </Popover>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Locales</label>
+                                <label className="text-sm font-medium">Local</label>
                                 <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLocalAdmin || localesLoading}>
                                     <SelectTrigger>
                                         <SelectValue placeholder={localesLoading ? "Cargando..." : "Todos"} />

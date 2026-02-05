@@ -63,8 +63,7 @@ import {
   Clock,
   Circle,
   ChevronDown,
-  GripVertical,
-  ChevronUp
+  GripVertical
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditProfesionalModal } from '@/components/admin/profesionales/edit-profesional-modal';
@@ -80,7 +79,7 @@ import type { Local, Profesional, Schedule } from '@/lib/types';
 
 const daysOfWeek = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay, onMove }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void, onMove: (prof: Profesional, direction: 'up' | 'down') => void }) {
+function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDay }: { prof: Profesional, onToggleActive: (id: string, active: boolean) => void, onEdit: (prof: Profesional) => void, onOpenSpecialDay: (prof: Profesional) => void }) {
   const {
     attributes,
     listeners,
@@ -93,22 +92,24 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 10 : 'auto',
-    boxShadow: isDragging ? '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' : 'none'
+    zIndex: isDragging ? 20 : 'auto',
+    position: 'relative' as const,
+    opacity: isDragging ? 0.8 : 1,
   };
 
   return (
-    <li ref={setNodeRef} style={style} className="flex items-center justify-between p-4 bg-card hover:bg-muted/50 list-none">
+    <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        "flex items-center justify-between p-4 bg-card hover:bg-muted/50 list-none cursor-grab active:cursor-grabbing touch-none",
+        isDragging && "shadow-xl ring-2 ring-primary ring-opacity-50 rounded-md bg-accent"
+      )}
+    >
       <div className="flex items-center gap-4">
-        <div className="flex flex-col gap-1 mr-2">
-          <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(prof, 'up'); }}>
-            <ChevronUp className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-4 w-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(prof, 'down'); }}>
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-        </div>
-        <div {...attributes} {...listeners} className="cursor-grab p-2">
+        <div className="p-2">
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
         <Avatar>
@@ -120,7 +121,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
       <div className="flex items-center gap-4">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground">
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
               <Clock className="mr-2 h-4 w-4" />
               Ver horario
             </Button>
@@ -158,7 +159,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </Badge>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onPointerDown={(e) => e.stopPropagation()}>
               Opciones <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -169,7 +170,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="sm" onClick={() => onEdit(prof)}>
+        <Button variant="outline" size="sm" onClick={() => onEdit(prof)} onPointerDown={(e) => e.stopPropagation()}>
           <Pencil className="mr-2 h-4 w-4" />
           Editar
         </Button>
@@ -182,9 +183,11 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
 export default function ProfesionalesPage() {
   const [queryKey, setQueryKey] = useState(0);
   const { data: professionalsData, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
-  const [professionals, setProfessionals] = useState<Profesional[]>([]);
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
   const { db } = useAuth();
+
+  // Local state for optimistic updates
+  const [localProfessionals, setLocalProfessionals] = useState<Profesional[]>([]);
 
   const [editingProfessional, setEditingProfessional] = useState<Profesional | null | 'new'>(null);
   const [specialDayProfessional, setSpecialDayProfessional] = useState<Profesional | null>(null);
@@ -196,28 +199,51 @@ export default function ProfesionalesPage() {
     setIsClientMounted(true);
   }, []);
 
+  // Sync local state with Firestore data, but preserve local order to prevent jumping
   useEffect(() => {
     if (professionalsData) {
-      console.log("Professionals data received:", professionalsData.length);
-      const valid = professionalsData.filter(p => !p.deleted);
-      console.log("Valid professionals (not deleted):", valid.length);
-      if (professionalsData.length !== valid.length) {
-        console.log("Filtered out:", professionalsData.filter(p => p.deleted).map(p => p.name));
-      }
-      const sorted = [...valid].sort((a, b) => (a.order || 99) - (b.order || 99));
-      setProfessionals(sorted);
+      const validData = professionalsData.filter(p => !p.deleted);
+
+      setLocalProfessionals(prev => {
+        // If it's the first load (empty prev), just sort by order and return
+        if (prev.length === 0) {
+          return [...validData].sort((a, b) => (a.order || 99) - (b.order || 99));
+        }
+
+        // Check if the list composition has changed (added or removed items)
+        const prevIds = new Set(prev.map(p => p.id));
+        const newIds = new Set(validData.map(p => p.id));
+
+        const isSameSet = prevIds.size === newIds.size && [...prevIds].every(id => newIds.has(id));
+
+        if (isSameSet) {
+          // If the items are the same, we update their data (properties) but KEEP the current local order.
+          // This prevents the "jump" caused by server-side reordering delay or race conditions.
+          return prev.map(p => {
+            const updatedData = validData.find(v => v.id === p.id);
+            return updatedData ? { ...updatedData } : p;
+          });
+        } else {
+          // If items were added or removed, we must resort and reset using server data
+          return [...validData].sort((a, b) => (a.order || 99) - (b.order || 99));
+        }
+      });
     }
   }, [professionalsData]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
   const handleDataUpdated = () => {
-    setQueryKey(prev => prev + 1); // Refreshes the data
+    setQueryKey(prev => prev + 1);
     handleCloseModal();
   };
 
@@ -256,88 +282,62 @@ export default function ProfesionalesPage() {
     setActiveId(event.active.id as string);
   }
 
-  async function saveNewOrder(newOrder: Profesional[]) {
-    if (!db) return;
-    try {
-      const batch = writeBatch(db);
-      newOrder.forEach((prof, index) => {
-        const profRef = doc(db, 'profesionales', prof.id);
-        batch.update(profRef, { order: index });
-      });
-      await batch.commit();
-      toast({
-        title: "Orden actualizado",
-        description: "El nuevo orden de los profesionales ha sido guardado."
-      });
-      handleDataUpdated();
-    } catch (error) {
-      console.error("Error updating order:", error);
-      toast({ variant: 'destructive', title: 'Error al guardar el orden' });
-      setProfessionals(professionals); // Revert on error
-    }
-  }
-
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
 
     if (over && active.id !== over.id) {
-      const oldIndex = professionals.findIndex((item) => item.id === active.id);
-      const newIndex = professionals.findIndex((item) => item.id === over.id);
+      // Find indices in the global localProfessionals list
+      const oldIndex = localProfessionals.findIndex((item) => item.id === active.id);
+      const newIndex = localProfessionals.findIndex((item) => item.id === over.id);
 
       if (oldIndex === -1 || newIndex === -1) return;
 
-      const newOrder = arrayMove(professionals, oldIndex, newIndex);
-      setProfessionals(newOrder);
-      saveNewOrder(newOrder);
+      // Swap Logic: The user requested that items just swap places, and others stay put.
+      const newOrder = [...localProfessionals];
+      const temp = newOrder[oldIndex];
+      newOrder[oldIndex] = newOrder[newIndex];
+      newOrder[newIndex] = temp;
+
+      // Optimistically update local state
+      setLocalProfessionals(newOrder);
+
+      // Update Firestore
+      if (!db) return;
+      try {
+        const batch = writeBatch(db);
+        // Persist the new order for all items (simplest way to ensure consistency)
+        newOrder.forEach((prof, index) => {
+          const profRef = doc(db, 'profesionales', prof.id);
+          batch.update(profRef, { order: index });
+        });
+        await batch.commit();
+        toast({
+          title: "Orden actualizado",
+          description: "Se han intercambiado las posiciones exitosamente."
+        });
+      } catch (error) {
+        console.error("Error updating order:", error);
+        toast({ variant: 'destructive', title: 'Error al actualizar orden' });
+        // Revert on error
+        setLocalProfessionals(localProfessionals);
+      }
     }
   }
 
-  const handleMove = (prof: Profesional, direction: 'up' | 'down') => {
-    // 1. Find the local group this prof belongs to
-    const group = professionalsByLocal.find(g => g.professionals.some(p => p.id === prof.id));
-    if (!group) return;
-
-    // 2. Find index within that group
-    const localIndex = group.professionals.findIndex(p => p.id === prof.id);
-
-    // 3. Determine target local index
-    let targetLocalIndex = -1;
-    if (direction === 'up') {
-      if (localIndex > 0) targetLocalIndex = localIndex - 1;
-    } else {
-      if (localIndex < group.professionals.length - 1) targetLocalIndex = localIndex + 1;
-    }
-
-    if (targetLocalIndex === -1) return;
-
-    const targetProf = group.professionals[targetLocalIndex];
-
-    // 4. Find global indices
-    const oldIndex = professionals.findIndex(p => p.id === prof.id);
-    const newIndex = professionals.findIndex(p => p.id === targetProf.id);
-
-    // 5. Move in global array
-    const newOrder = arrayMove(professionals, oldIndex, newIndex);
-    setProfessionals(newOrder);
-
-    // 6. Save
-    saveNewOrder(newOrder);
-  };
-
   const professionalsByLocal = useMemo(() => {
-    if (professionalsLoading || localesLoading) return [];
+    if (localesLoading) return [];
 
     const assignedProfessionals = new Set<string>();
 
     const byLocal = locales.map(local => {
-      const prosInLocal = professionals.filter(p => {
+      const prosInLocal = localProfessionals.filter(p => {
         if (p.local_id === local.id) {
           assignedProfessionals.add(p.id);
           return true;
         }
         return false;
-      }).sort((a, b) => (a.order || 99) - (b.order || 99));
+      });
 
       return {
         ...local,
@@ -345,24 +345,22 @@ export default function ProfesionalesPage() {
       };
     }).filter(localGroup => localGroup.professionals.length > 0);
 
-    const unassignedProfessionals = professionals
-      .filter(p => !p.local_id || !assignedProfessionals.has(p.id))
-      .sort((a, b) => (a.order || 99) - (b.order || 99));
+    const unassigned = localProfessionals.filter(p => !p.local_id || !assignedProfessionals.has(p.id));
 
     const result: ({ professionals: Profesional[] } & Partial<Local>)[] = [...byLocal];
 
-    if (unassignedProfessionals.length > 0) {
+    if (unassigned.length > 0) {
       result.push({
         id: 'unassigned',
         name: 'Profesionales Sin Asignar',
-        professionals: unassignedProfessionals
+        professionals: unassigned
       });
     }
 
     return result;
-  }, [professionals, locales, professionalsLoading, localesLoading]);
+  }, [localProfessionals, locales, localesLoading]);
 
-  const activeProfessional = useMemo(() => professionals.find(p => p.id === activeId), [activeId, professionals]);
+  const activeProfessional = useMemo(() => localProfessionals.find(p => p.id === activeId), [activeId, localProfessionals]);
 
   if ((professionalsLoading || localesLoading) && !isClientMounted) {
     return (
@@ -372,8 +370,6 @@ export default function ProfesionalesPage() {
         <Card>
           <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
           <CardContent className="space-y-2 p-0">
-            <div className="p-4"><Skeleton className="h-12 w-full" /></div>
-            <div className="p-4"><Skeleton className="h-12 w-full" /></div>
             <div className="p-4"><Skeleton className="h-12 w-full" /></div>
           </CardContent>
         </Card>
@@ -443,48 +439,43 @@ export default function ProfesionalesPage() {
             </Popover>
           </div>
 
-          {professionalsByLocal.map(localGroup => (
-            localGroup.professionals.length > 0 && (
-              <Card key={localGroup.id}>
-                <CardHeader>
-                  <CardTitle>{localGroup.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isClientMounted ? (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
-                    >
-                      <SortableContext items={localGroup.professionals} strategy={verticalListSortingStrategy}>
-                        <ul className="divide-y">
-                          {localGroup.professionals.map((prof) => (
-                            <SortableProfesionalItem
-                              key={prof.id}
-                              prof={prof}
-                              onToggleActive={handleToggleActive}
-                              onMove={handleMove}
-                              onEdit={() => handleOpenModal(prof)}
-                              onOpenSpecialDay={() => handleOpenSpecialDayModal(prof)}
-                            />
-                          ))}
-                        </ul>
-                      </SortableContext>
-                      <DragOverlay>
-                        {activeProfessional ? (
-                          <ul className="divide-y"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => { }} onEdit={() => { }} onOpenSpecialDay={() => { }} onMove={() => { }} /></ul>
-                        ) : null}
-                      </DragOverlay>
-                    </DndContext>
-                  ) : (
-                    <div className="p-4 text-center text-muted-foreground">Cargando...</div>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          ))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+          >
+            {professionalsByLocal.map(localGroup => (
+              localGroup.professionals.length > 0 && (
+                <Card key={localGroup.id}>
+                  <CardHeader>
+                    <CardTitle>{localGroup.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <SortableContext items={localGroup.professionals} strategy={verticalListSortingStrategy}>
+                      <ul className="divide-y">
+                        {localGroup.professionals.map((prof) => (
+                          <SortableProfesionalItem
+                            key={prof.id}
+                            prof={prof}
+                            onToggleActive={handleToggleActive}
+                            onEdit={() => handleOpenModal(prof)}
+                            onOpenSpecialDay={() => handleOpenSpecialDayModal(prof)}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </CardContent>
+                </Card>
+              )
+            ))}
+            <DragOverlay>
+              {activeProfessional ? (
+                <ul className="divide-y bg-background border rounded-md shadow-xl"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => { }} onEdit={() => { }} onOpenSpecialDay={() => { }} /></ul>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
       </div>
 
@@ -494,7 +485,7 @@ export default function ProfesionalesPage() {
           isOpen={!!editingProfessional}
           onClose={handleCloseModal}
           onDataSaved={handleDataUpdated}
-          local={null} // Pass null, the modal will fetch all locales
+          local={null}
         />
       )}
 

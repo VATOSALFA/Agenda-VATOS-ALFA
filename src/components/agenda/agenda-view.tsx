@@ -21,6 +21,7 @@ import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set,
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -62,6 +63,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { writeBatch } from 'firebase/firestore';
 
 function SortableHeader({ barber, avatarUrl }: { barber: Profesional, avatarUrl: string | undefined }) {
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: barber.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -72,14 +74,25 @@ function SortableHeader({ barber, avatarUrl }: { barber: Profesional, avatarUrl:
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="p-2 h-28 flex flex-col items-center justify-center border-b select-none">
-      <Link href={`/agenda/semanal/${barber.id}`} className="flex flex-col items-center justify-center cursor-pointer group w-full h-full">
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="p-2 h-28 flex flex-col items-center justify-center border-b select-none cursor-pointer hover:bg-muted/50 transition-colors"
+      onClick={() => {
+        // dnd-kit should prevent this click if a drag occurred.
+        // If the event fires, it means it was a click.
+        router.push(`/agenda/semanal/${barber.id}`);
+      }}
+    >
+      <div className="flex flex-col items-center justify-center group w-full h-full">
         <Avatar className="h-[60px] w-[60px] rounded-lg group-hover:ring-2 group-hover:ring-primary transition-all pointer-events-none">
           <AvatarImage src={avatarUrl} alt={barber.name} />
           <AvatarFallback className="rounded-lg">{barber.name ? barber.name.substring(0, 2) : '??'}</AvatarFallback>
         </Avatar>
         <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
-      </Link>
+      </div>
     </div>
   );
 }
@@ -460,7 +473,25 @@ export default function AgendaView() {
 
         const hasCommonProfessional = eventAProfessionals.some(p => eventBProfessionals.includes(p));
 
-        if (hasCommonProfessional && eventA.start < eventB.end && eventA.end > eventB.start) {
+        const isAAvailable = (eventA as any).originalType === 'available';
+        const isBAvailable = (eventB as any).originalType === 'available';
+        const eitherIsAvailable = isAAvailable || isBAvailable;
+
+        // If either is 'available' block, we generally don't want them to collide with appointments
+        // to avoid shrinking the appointment width. 
+        // We only care about collisions between:
+        // 1. Appointment vs Appointment
+        // 2. Block (blocking) vs Appointment (maybe?)
+        // 3. Block (blocking) vs Block (blocking)
+
+        // If eventA is Appointment and eventB is Available Block -> Ignore
+        // If eventA is Available Block and eventB is Appointment -> Ignore
+        // If both are Available Blocks -> Ignore? (Maybe allow overlap or separation, but usually they don't overlap)
+
+        const ignoreCollision = (eventA.type === 'appointment' && isBAvailable) ||
+          (eventB.type === 'appointment' && isAAvailable);
+
+        if (!ignoreCollision && hasCommonProfessional && eventA.start < eventB.end && eventA.end > eventB.start) {
           overlappingEvents.push(eventB);
         }
       }
@@ -534,6 +565,7 @@ export default function AgendaView() {
         const [slotH, slotM] = time.split(':').map(Number);
         const slotTime = slotH * 60 + slotM;
         const slotEnd = slotTime + 15; // 15 min slot check
+        const slotTimeDecimal = slotH + slotM / 60;
 
         const isBreak = daySchedule.breaks.some((brk: any) => {
           const [sH, sM] = brk.start.split(':').map(Number);
@@ -545,7 +577,16 @@ export default function AgendaView() {
           return (slotTime < breakEnd && slotEnd > breakStart);
         });
 
-        if (isBreak) {
+        // Check if this break slot is unlocked by an 'available' block
+        const isUnlocked = allEvents.some(evt =>
+          evt.barbero_id === barberId &&
+          evt.type === 'block' &&
+          (evt as any).originalType === 'available' &&
+          evt.start <= slotTimeDecimal &&
+          evt.end > slotTimeDecimal
+        );
+
+        if (isBreak && !isUnlocked) {
           setHoveredSlot(null);
           if (popoverState && !popoverTimeoutRef.current) {
             popoverTimeoutRef.current = setTimeout(() => setPopoverState(null), 400);
@@ -623,6 +664,43 @@ export default function AgendaView() {
       setPopoverState(null);
     }
   };
+
+  const handleDeleteUnlockedBlock = () => {
+    if (!popoverState || !allEvents) return;
+
+    // Find the available block at this time
+    const [h, m] = popoverState.time.split(':').map(Number);
+    const timeDecimal = h + m / 60;
+
+    const block = allEvents.find(evt =>
+      evt.barbero_id === popoverState.barberId &&
+      evt.type === 'block' &&
+      (evt as any).originalType === 'available' &&
+      evt.start <= timeDecimal &&
+      evt.end > timeDecimal
+    );
+
+    if (block) {
+      setBlockToDelete(block as unknown as TimeBlock);
+      setPopoverState(null);
+    }
+  }
+
+  // End of handlers injection, now finding a way to inject popover logic changes without breaking file
+  // Wait, I can't inject handleDeleteUnlockedBlock easily because it's in the middle of functions.
+  // I will just return the original handleMouseMove (updated) and remaining functions up to handleOpenBlockModal
+  // And THEN insert handleDeleteUnlockedBlock? No, the tool replaces CONTIGUOUS block.
+  // I have to stick to the StartLine/EndLine logic.
+
+  // The provided StartLine is 529. The EndLine is 1097. That's HUGE.
+  // I should narrow down.
+  // Step 1: Replace handleMouseMove (lines 529-577 approx)
+  // Step 2: Insert handleDeleteUnlockedBlock somewhere (maybe before return?)
+  // Step 3: Replace Popover JSX (lines 1071-1097)
+
+  // This tool call is trying to do too much at once. I will split it.
+
+
 
   const handleOpenDetailModal = (event: AgendaEvent) => {
     const fullReservation = allEvents.find(r => r.id === event.id) as Reservation | undefined;
@@ -1090,7 +1168,19 @@ export default function AgendaView() {
                           <Card className="shadow-lg border-primary">
                             <CardContent className="p-2 space-y-1">
                               <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenReservationModal}><Plus className="w-4 h-4 mr-2" /> Agregar Reserva</Button>
-                              <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}><Lock className="w-4 h-4 mr-2" /> Bloquear horario</Button>
+                              {allEvents.some(evt =>
+                                evt.barbero_id === barber.id &&
+                                evt.type === 'block' &&
+                                (evt as any).originalType === 'available' &&
+                                evt.start <= (parseInt(popoverState.time.split(':')[0]) + parseInt(popoverState.time.split(':')[1]) / 60) &&
+                                evt.end > (parseInt(popoverState.time.split(':')[0]) + parseInt(popoverState.time.split(':')[1]) / 60)
+                              ) ? (
+                                <Button variant="ghost" className="w-full justify-start h-8 text-destructive hover:text-destructive" onClick={handleDeleteUnlockedBlock}>
+                                  <Trash2 className="w-4 h-4 mr-2" /> Eliminar Horario
+                                </Button>
+                              ) : (
+                                <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}><Lock className="w-4 h-4 mr-2" /> Bloquear horario</Button>
+                              )}
                             </CardContent>
                           </Card>
                         </div>
@@ -1098,7 +1188,11 @@ export default function AgendaView() {
 
                       {/* Events */}
                       {eventsWithLayout
-                        .filter(event => (event.type === 'block' && event.barbero_id === barber.id) || (event.type === 'appointment' && event.items?.some((i: SaleItem) => i.barbero_id === barber.id)))
+                        .filter(event =>
+                          ((event.type === 'block' && event.barbero_id === barber.id) ||
+                            (event.type === 'appointment' && event.items?.some((i: SaleItem) => i.barbero_id === barber.id))) &&
+                          (event as any).originalType !== 'available'
+                        )
                         .map((event: AgendaEvent) => (
                           <Tooltip key={event.id}>
                             <TooltipTrigger asChild>
@@ -1108,30 +1202,21 @@ export default function AgendaView() {
                                   if (event.type === 'appointment') {
                                     handleOpenDetailModal(event);
                                   } else if (event.type === 'block') {
-                                    if (event.originalType === 'available') {
-                                      // Normal click on available block => Create Reservation
-                                      setReservationInitialData({
-                                        barbero_id: event.barbero_id,
-                                        fecha: date,
-                                        hora_inicio: formatHour(event.start),
-                                        local_id: selectedLocalId,
-                                      });
-                                      setIsReservationModalOpen(true);
-                                    } else {
-                                      // Normal click on blockage => Confirm delete
-                                      setBlockToDelete(event);
-                                    }
+                                    setBlockToDelete(event);
                                   }
                                 }}
                                 onContextMenu={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
-                                  // Right click to manage/delete any block (including available ones)
                                   if (event.type === 'block') {
                                     setBlockToDelete(event);
                                   }
                                 }}
-                                className={cn("absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 z-10 overflow-hidden cursor-pointer select-none", event.color)}
+                                className={cn(
+                                  "absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 overflow-hidden cursor-pointer select-none",
+                                  event.color,
+                                  event.type === 'appointment' ? 'z-20' : 'z-10'
+                                )}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
                                 <div className="flex-grow overflow-hidden pr-1">

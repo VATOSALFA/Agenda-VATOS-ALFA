@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import type { DateRange } from 'react-day-picker';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import {
@@ -127,6 +127,16 @@ const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
 export default function CashBoxPage() {
     const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+
+    const handleDateSelect = (range: DateRange | undefined) => {
+        setDateRange(range);
+        if (range?.from && range?.to) {
+            setIsPopoverOpen(false);
+        }
+    };
+
     const [selectedLocalId, setSelectedLocalId] = useState<string>('todos');
     const [activeFilters, setActiveFilters] = useState<{
         dateRange: DateRange | undefined;
@@ -495,6 +505,18 @@ export default function CashBoxPage() {
     };
 
 
+    const handleOpenDeleteSaleModal = (sale: Sale) => {
+        const action = () => setSaleToDelete(sale);
+        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
+            action();
+        } else {
+            setAuthAction(() => action);
+            // Delay opening the modal slightly to allow dropdown to close cleanly
+            setTimeout(() => setIsAuthModalOpen(true), 100);
+        }
+    }
+
+
     const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
     // --- LIVE CASH LOGIC: Calculates current cash in box based on Last Cut + Transactions since then ---
@@ -619,24 +641,8 @@ export default function CashBoxPage() {
                         <Card className="h-full">
                             <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
                                 <div className="space-y-2 flex-grow min-w-[200px]">
-                                    <label className="text-sm font-medium">Local</label>
-                                    <Select value={selectedLocalId} onValueChange={setSelectedLocalId} disabled={isLocalAdmin || localesLoading}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {!isLocalAdmin && <SelectItem value="todos">Todos los locales</SelectItem>}
-                                            {locales.map(local => (
-                                                <SelectItem key={local.id} value={local.id}>
-                                                    {local.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2 flex-grow min-w-[200px]">
-                                    <label className="text-sm font-medium">Desde / Hasta</label>
-                                    <Popover>
+                                    <label className="text-sm font-medium">Periodo de tiempo</label>
+                                    <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 id="date"
@@ -664,12 +670,29 @@ export default function CashBoxPage() {
                                                 mode="range"
                                                 defaultMonth={dateRange?.from}
                                                 selected={dateRange}
-                                                onSelect={setDateRange}
-                                                numberOfMonths={2}
+                                                onSelect={handleDateSelect}
+                                                numberOfMonths={1}
                                                 locale={es}
+                                                disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
                                             />
                                         </PopoverContent>
                                     </Popover>
+                                </div>
+                                <div className="space-y-2 flex-grow min-w-[200px]">
+                                    <label className="text-sm font-medium">Local</label>
+                                    <Select value={selectedLocalId} onValueChange={setSelectedLocalId} disabled={isLocalAdmin || localesLoading}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={localesLoading ? "Cargando..." : "Seleccionar local"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {!isLocalAdmin && <SelectItem value="todos">Todos los locales</SelectItem>}
+                                            {locales.map(local => (
+                                                <SelectItem key={local.id} value={local.id}>
+                                                    {local.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <Button className="w-full sm:w-auto" onClick={handleSearch} disabled={isLoading}>
                                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />}
@@ -768,7 +791,7 @@ export default function CashBoxPage() {
                                                                             <Printer className="mr-2 h-4 w-4 text-yellow-500" />
                                                                             <span className="text-yellow-500">Imprimir</span>
                                                                         </DropdownMenuItem>
-                                                                        <DropdownMenuItem onSelect={() => setSaleToDelete(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                        <DropdownMenuItem onSelect={() => handleOpenDeleteSaleModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                                                         </DropdownMenuItem>
                                                                     </DropdownMenuContent>
@@ -1166,7 +1189,7 @@ export default function CashBoxPage() {
                         <Input id="auth-code-action" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
                     </div>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); }}>Cancelar</AlertDialogCancel>
+                        <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); setIsAuthModalOpen(false); }}>Cancelar</AlertDialogCancel>
                         <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

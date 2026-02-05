@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Timestamp, where, orderBy } from 'firebase/firestore'; // Importamos tipos de Firebase
 
@@ -16,19 +16,31 @@ import { Calendar as CalendarIcon, Download, Filter, Search, Loader2 } from "luc
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Local, Profesional } from "@/lib/types";
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 export default function TipsPage() {
+    const { user } = useAuth();
+    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+    const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+    const handleDateSelect = (range: DateRange | undefined) => {
+        setDateRange(range);
+        if (range?.from && range?.to) {
+            setIsPopoverOpen(false);
+        }
+    };
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0); // Para forzar recarga si es necesario
 
     // 1. Cargar catálogos
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
     const { data: clients } = useFirestoreQuery<any>('clientes'); // Traemos clientes para mapear nombres si hace falta
 
-    // 2. Configurar rango de fechas inicial (Hoy)
+    // 3. Configurar rango de fechas inicial (Hoy)
     useEffect(() => {
         if (!dateRange) {
             const today = new Date();
@@ -36,7 +48,10 @@ export default function TipsPage() {
             const to = endOfDay(today);     // Fin del día
             setDateRange({ from, to });
         }
-    }, []);
+        if (isReceptionist && user?.local_id) {
+            setLocalFilter(user.local_id);
+        }
+    }, [user, isReceptionist]);
 
     // 3. Construir consulta a 'ventas' basada en fechas
     const salesConstraints = useMemo(() => {
@@ -128,8 +143,8 @@ export default function TipsPage() {
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Periodo</label>
-                            <Popover>
+                            <label className="text-sm font-medium">Periodo de tiempo</label>
+                            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -145,13 +160,22 @@ export default function TipsPage() {
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={handleDateSelect}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                        disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                                    />
                                 </PopoverContent>
                             </Popover>
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Local</label>
-                            <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading}>
+                            <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading || isReceptionist}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="todos">Todos</SelectItem>
@@ -170,11 +194,11 @@ export default function TipsPage() {
                             </Select>
                         </div>
                         <Button onClick={handleSearch} disabled={isLoading}>
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Actualizar
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                         </Button>
                     </div>
-                </CardContent>
-            </Card>
+                </CardContent >
+            </Card >
 
             <Card>
                 <CardHeader className="flex-row items-center justify-between">
@@ -221,6 +245,6 @@ export default function TipsPage() {
                     </Table>
                 </CardContent>
             </Card>
-        </div>
+        </div >
     );
 }

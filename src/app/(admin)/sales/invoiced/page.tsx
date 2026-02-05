@@ -152,12 +152,7 @@ export default function InvoicedSalesPage() {
 
     useEffect(() => {
         const today = new Date();
-        let initialDateRange: DateRange | undefined;
-        if (isReceptionist) {
-            initialDateRange = { from: subDays(today, 2), to: today };
-        } else {
-            initialDateRange = { from: today, to: today };
-        }
+        const initialDateRange = { from: today, to: today };
         setDateRange(initialDateRange);
 
         const initialFilters = {
@@ -169,16 +164,12 @@ export default function InvoicedSalesPage() {
         if (user?.local_id) {
             setLocalFilter(user.local_id);
         }
-    }, [user, isReceptionist]);
+    }, [user]); // Removed isReceptionist dependency as logic is now uniform
 
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
-        let fromDate = activeFilters.dateRange?.from;
-        if (isReceptionist) {
-            const today = new Date();
-            fromDate = startOfDay(subDays(today, 2));
-        }
+        const fromDate = activeFilters.dateRange?.from;
 
         if (fromDate) {
             constraints.push(where('fecha_hora_venta', '>=', startOfDay(fromDate)));
@@ -187,7 +178,7 @@ export default function InvoicedSalesPage() {
             constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
         }
         return constraints;
-    }, [activeFilters.dateRange, isReceptionist]);
+    }, [activeFilters.dateRange]); // Removed isReceptionist dependency
 
     const { data: salesDataFromHook, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
     const { data: clients } = useFirestoreQuery<Client>('clientes');
@@ -436,8 +427,12 @@ export default function InvoicedSalesPage() {
         if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
             action();
         } else {
-            setAuthAction(() => action);
-            setIsAuthModalOpen(true);
+            // Delay opening the modal slightly to allow dropdown to close cleanly
+            // This prevents race conditions with body lock/pointer-events
+            setTimeout(() => {
+                setAuthAction(() => action);
+                setIsAuthModalOpen(true);
+            }, 100);
         }
     }
 
@@ -803,7 +798,7 @@ export default function InvoicedSalesPage() {
                         <Input id="auth-code-action" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
                     </div>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); }}>Cancelar</AlertDialogCancel>
+                        <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); setIsAuthModalOpen(false); }}>Cancelar</AlertDialogCancel>
                         <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

@@ -199,7 +199,7 @@ export default function Header() {
                   </SheetTitle>
                 </SheetHeader>
                 <ScrollArea className="h-[calc(100vh-64px)]">
-                  <div className="flex flex-col gap-1 p-4">
+                  <div className="flex flex-col gap-1 p-4 pb-16">
                     <div className="mb-4">
                       <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Menú Principal</h4>
                       <div className="flex flex-col space-y-1">

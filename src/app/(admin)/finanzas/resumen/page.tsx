@@ -357,11 +357,11 @@ export default function FinanzasResumenPage() {
                                     </div>
                                     <div className="flex justify-between items-center text-base">
                                         <span className="text-muted-foreground">Reinversión</span>
-                                        <span className="font-semibold text-red-600">-${reinversionAnual.toLocaleString('es-MX')}</span>
+                                        <span className="font-semibold text-muted-foreground">-${reinversionAnual.toLocaleString('es-MX')}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-base">
                                         <span className="text-muted-foreground">Comisión de profesionales</span>
-                                        <span className="font-semibold text-red-600">-${comisionProfesionalesAnual.toLocaleString('es-MX')}</span>
+                                        <span className="font-semibold text-muted-foreground">-${comisionProfesionalesAnual.toLocaleString('es-MX')}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
                                         <span className="font-bold text-primary flex items-center"><TrendingDown className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
@@ -417,9 +417,9 @@ export default function FinanzasResumenPage() {
                                     <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
                                     <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
                                     <Legend />
-                                    <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-2))" name="Ingresos" />
-                                    <Line type="monotone" dataKey="egresos" stroke="hsl(var(--destructive))" name="Egresos" />
-                                    <Line type="monotone" dataKey="utilidad" stroke="#22c55e" name="Utilidad neta" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-1))" name="Ingresos" />
+                                    <Line type="monotone" dataKey="egresos" stroke="hsl(var(--chart-2))" name="Egresos" />
+                                    <Line type="monotone" dataKey="utilidad" stroke="hsl(var(--primary))" name="Utilidad neta" strokeWidth={2} />
                                 </LineChart>
                             </ResponsiveContainer>
                         )}

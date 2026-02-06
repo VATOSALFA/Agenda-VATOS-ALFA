@@ -16,7 +16,7 @@ import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
+import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery, writeBatch, increment, getDoc, Timestamp } from "firebase/firestore";
 import type { Client, Local, Profesional, Service, AuthCode, Sale, User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
@@ -120,6 +120,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
 export default function InvoicedSalesPage() {
     const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [localFilter, setLocalFilter] = useState('todos');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [activeFilters, setActiveFilters] = useState<{
@@ -344,11 +345,59 @@ export default function InvoicedSalesPage() {
 
     const handleDeleteSale = async () => {
         if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR' || !db) return;
+
         try {
-            await deleteDoc(doc(db, 'ventas', saleToDelete.id));
+            const batch = writeBatch(db);
+            const saleRef = doc(db, 'ventas', saleToDelete.id);
+
+            // Revertir inventario si hay productos
+            if (saleToDelete.items && saleToDelete.items.length > 0) {
+                for (const item of saleToDelete.items) {
+                    if (item.tipo === 'producto' && item.id) {
+                        const productRef = doc(db, 'productos', item.id);
+                        const productSnap = await getDoc(productRef);
+
+                        if (productSnap.exists()) {
+                            const productData = productSnap.data();
+                            const currentStock = productData.stock || 0;
+                            const quantityToReturn = item.cantidad || 1;
+                            const newStock = currentStock + quantityToReturn;
+
+                            // 1. Incrementar Stock
+                            batch.update(productRef, {
+                                stock: increment(quantityToReturn)
+                            });
+
+                            // 2. Registrar Movimiento
+                            const movementRef = doc(collection(db, 'movimientos_inventario'));
+                            batch.set(movementRef, {
+                                date: Timestamp.now(),
+                                local_id: saleToDelete.local_id || 'unknown',
+                                product_id: item.id,
+                                presentation_id: productData.presentation_id || 'default',
+                                from: currentStock,
+                                to: newStock,
+                                cause: 'Cancellation',
+                                staff_id: user?.uid || 'unknown',
+                                comment: `Devolución automática por cancelación de venta: ${saleToDelete.id}`,
+                                product_name: item.nombre || productData.nombre,
+                                staff_name: user?.displayName || user?.email || 'Admin',
+                                local_name: 'System',
+                                concepto: 'Devolución por venta cancelada'
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Eliminar Venta
+            batch.delete(saleRef);
+
+            await batch.commit();
+
             toast({
                 title: "Venta Eliminada",
-                description: "La venta ha sido eliminada permanentemente.",
+                description: "La venta ha sido eliminada y el stock revertido.",
             });
             setQueryKey(prevKey => prevKey + 1);
         } catch (error) {
@@ -480,7 +529,12 @@ export default function InvoicedSalesPage() {
 
                 <Card>
                     <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Popover>
+                        <Popover open={isCalendarOpen} onOpenChange={(open) => {
+                            setIsCalendarOpen(open);
+                            if (open) {
+                                setDateRange(undefined);
+                            }
+                        }}>
                             <PopoverTrigger asChild>
                                 <Button variant={"outline"} className="justify-start text-left font-normal">
                                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -499,8 +553,13 @@ export default function InvoicedSalesPage() {
                                 <Calendar
                                     mode="range"
                                     selected={dateRange}
-                                    onSelect={setDateRange}
-                                    numberOfMonths={2}
+                                    onSelect={(range) => {
+                                        setDateRange(range);
+                                        if (range?.from && range?.to) {
+                                            setIsCalendarOpen(false);
+                                        }
+                                    }}
+                                    numberOfMonths={1}
                                     locale={es}
                                     disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
                                 />
@@ -663,7 +722,7 @@ export default function InvoicedSalesPage() {
                 </Card >
 
                 {!salesLoading && populatedSales.length > 0 && (
-                    <div className="flex items-center justify-end space-x-6 p-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 p-4">
                         <div className="flex items-center space-x-2">
                             <p className="text-sm font-medium">Resultados por página</p>
                             <Select

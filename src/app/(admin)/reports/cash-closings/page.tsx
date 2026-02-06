@@ -83,6 +83,7 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
 
 export default function CashClosingsPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [deliveredByFilter, setDeliveredByFilter] = useState('todos');
     const [receivedByFilter, setReceivedByFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0);
@@ -122,7 +123,12 @@ export default function CashClosingsPage() {
                         <CardDescription>Busca cierres de caja por fecha o por personas involucradas.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                        <Popover>
+                        <Popover open={isCalendarOpen} onOpenChange={(open) => {
+                            setIsCalendarOpen(open);
+                            if (open) {
+                                setDateRange(undefined);
+                            }
+                        }}>
                             <PopoverTrigger asChild>
                                 <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -138,7 +144,20 @@ export default function CashClosingsPage() {
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange?.from}
+                                    selected={dateRange}
+                                    onSelect={(range) => {
+                                        setDateRange(range);
+                                        if (range?.from && range?.to) {
+                                            setIsCalendarOpen(false);
+                                        }
+                                    }}
+                                    numberOfMonths={1}
+                                    locale={es}
+                                />
                             </PopoverContent>
                         </Popover>
                         <Select value={deliveredByFilter} onValueChange={setDeliveredByFilter} disabled={usersLoading}>
@@ -154,7 +173,7 @@ export default function CashClosingsPage() {
                             Buscar
                         </Button>
                     </CardContent>
-                </Card>
+                </Card >
 
                 <Card>
                     <CardHeader className="flex-row items-center justify-between">
@@ -202,7 +221,7 @@ export default function CashClosingsPage() {
                         </Table>
                     </CardContent>
                 </Card>
-            </div>
+            </div >
 
             <ClosingDetailModal
                 isOpen={!!selectedClosing}

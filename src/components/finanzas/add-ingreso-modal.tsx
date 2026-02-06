@@ -28,14 +28,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit, Tag } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit, Tag, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
-import type { IngresoManual, User } from '@/lib/types';
+import type { IngresoManual, User, Local } from '@/lib/types';
 import { useLocal } from '@/contexts/local-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 const ingresoSchema = z.object({
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
@@ -61,15 +62,31 @@ interface AddIngresoModalProps {
   onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
   ingreso?: IngresoManual | null;
+  localId?: string;
 }
 
-export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }: AddIngresoModalProps) {
+export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, localId }: AddIngresoModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { selectedLocalId } = useLocal();
+  const { selectedLocalId: contextLocalId } = useLocal();
+  const activeLocalId = localId || contextLocalId; // Prioritize prop, then context
   const isEditMode = !!ingreso;
 
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+
+  const isAdminGeneral = user?.role === 'Administrador general';
+
+  const filteredLocales = useMemo(() => {
+    if (localesLoading || !locales) return [];
+    if (isAdminGeneral) return locales;
+    // For local admins/others, only show their assigned local
+    if (user?.local_id) {
+      return locales.filter(l => l.id === user.local_id);
+    }
+    return [];
+  }, [locales, localesLoading, isAdminGeneral, user]);
 
   const form = useForm<IngresoFormData>({
     resolver: zodResolver(ingresoSchema),
@@ -82,9 +99,13 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
   });
 
   const localAdmins = useMemo(() => {
-    if (usersLoading || !selectedLocalId) return [];
-    return users.filter(u => u.role === 'Administrador local' && u.local_id === selectedLocalId);
-  }, [users, selectedLocalId, usersLoading]);
+    if (usersLoading) return [];
+    // If specific local selected, filter by it. If 'todos' or none, show all local admins.
+    if (activeLocalId && activeLocalId !== 'todos') {
+      return users.filter(u => u.role === 'Administrador local' && u.local_id === activeLocalId);
+    }
+    return users.filter(u => u.role === 'Administrador local');
+  }, [users, activeLocalId, usersLoading]);
 
   const generalAdmins = useMemo(() => {
     if (usersLoading) return [];
@@ -127,11 +148,11 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
           concepto: '',
           concepto_otro: '',
           comentarios: '',
-          local_id: selectedLocalId || '',
+          local_id: activeLocalId && activeLocalId !== 'todos' ? activeLocalId : '',
         });
       }
     }
-  }, [isOpen, ingreso, isEditMode, form, selectedLocalId, conceptos]);
+  }, [isOpen, ingreso, isEditMode, form, activeLocalId, conceptos]);
 
 
   async function onSubmit(data: IngresoFormData) {
@@ -232,6 +253,30 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso }:
                   )}
                 />
               </div>
+
+              {/* Fila 1.5: Local (Nuevo Campo Requerido) */}
+              <FormField
+                control={form.control}
+                name="local_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><Store className="mr-1 h-3 w-3" /> Local / Sucursal</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode || (!!activeLocalId && activeLocalId !== 'todos') || (!isAdminGeneral && localesLoading)}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona la sucursal" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {filteredLocales?.map((local) => (
+                          <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               {/* Fila 2: Concepto (Select) */}
               <FormField

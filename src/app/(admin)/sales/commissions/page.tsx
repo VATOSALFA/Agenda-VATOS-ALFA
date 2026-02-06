@@ -408,7 +408,12 @@ export default function CommissionsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Periodo de tiempo</label>
-                                <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                                <Popover open={isPopoverOpen} onOpenChange={(open) => {
+                                    setIsPopoverOpen(open);
+                                    if (open) {
+                                        setDateRange(undefined);
+                                    }
+                                }}>
                                     <PopoverTrigger asChild>
                                         <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-4 w-4" />

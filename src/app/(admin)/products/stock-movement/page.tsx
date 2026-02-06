@@ -7,7 +7,7 @@ import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowRight, Calendar as CalendarIcon, Search } from "lucide-react";
+import { Loader2, ArrowRight, Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Timestamp, where } from "firebase/firestore";
 import type { StockMovement, Product, ProductCategory } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,15 @@ import { useEffect } from "react";
 
 export default function StockMovementPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [statusFilter, setStatusFilter] = useState('todos');
     const [categoryFilter, setCategoryFilter] = useState('todos');
     const [productFilter, setProductFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0);
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
@@ -95,6 +100,17 @@ export default function StockMovementPage() {
         });
     }, [movements, products, statusFilter, categoryFilter, productFilter]);
 
+    // Pagination Logic
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [dateRange, statusFilter, categoryFilter, productFilter, queryKey]);
+
+    const totalPages = Math.ceil(filteredMovements.length / itemsPerPage);
+    const paginatedMovements = filteredMovements.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
 
     const handleSearch = () => {
         setQueryKey(prev => prev + 1);
@@ -118,7 +134,12 @@ export default function StockMovementPage() {
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     {/* Date Range */}
-                    <Popover>
+                    <Popover open={isCalendarOpen} onOpenChange={(open) => {
+                        setIsCalendarOpen(open);
+                        if (open) {
+                            setDateRange(undefined);
+                        }
+                    }}>
                         <PopoverTrigger asChild>
                             <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -134,7 +155,20 @@ export default function StockMovementPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={(range) => {
+                                    setDateRange(range);
+                                    if (range?.from && range?.to) {
+                                        setIsCalendarOpen(false);
+                                    }
+                                }}
+                                numberOfMonths={1}
+                                locale={es}
+                            />
                         </PopoverContent>
                     </Popover>
 
@@ -206,7 +240,7 @@ export default function StockMovementPage() {
                                         No hay movimientos registrados con estos filtros.
                                     </TableCell>
                                 </TableRow>
-                            ) : filteredMovements.map((movement) => {
+                            ) : paginatedMovements.map((movement) => {
                                 const date = movement.date instanceof Timestamp ? movement.date.toDate() : new Date(movement.date);
                                 const diff = (movement.to || 0) - (movement.from || 0);
                                 const isPositive = diff > 0;
@@ -244,6 +278,53 @@ export default function StockMovementPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {/* Pagination Controls */}
+            {filteredMovements.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 p-4">
+                    <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium">Resultados por página</p>
+                        <Select
+                            value={`${itemsPerPage}`}
+                            onValueChange={(value) => {
+                                setItemsPerPage(Number(value));
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <SelectTrigger className="h-8 w-[70px]">
+                                <SelectValue placeholder={itemsPerPage} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="text-sm font-medium">
+                        Página {currentPage} de {totalPages}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

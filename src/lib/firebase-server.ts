@@ -2,6 +2,7 @@
 'use server';
 
 import * as admin from 'firebase-admin';
+import fs from 'fs';
 
 // Variable para almacenar la app de Firebase y evitar reinicializaciones.
 let firebaseAdminApp: admin.app.App | null = null;
@@ -24,12 +25,12 @@ const initializeFirebaseAdmin = () => {
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       console.log("Inicializando Firebase Admin SDK con archivo de credenciales local...");
       try {
-        const serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        const serviceAccount = JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'));
         firebaseAdminApp = admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
-      } catch (err) {
-        console.warn("No se pudo cargar el archivo de credenciales, intentando con ADC...", err);
+      } catch (err: any) {
+        console.warn("No se pudo cargar el archivo de credenciales, intentando con ADC...", err.message);
         firebaseAdminApp = admin.initializeApp({
           projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agenda-1ae08',
           credential: admin.credential.applicationDefault()

@@ -44,6 +44,7 @@ const CustomBarLabel = (props: any) => {
 
 export default function SalesReportPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 28), to: new Date() });
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [localFilter, setLocalFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0);
 
@@ -182,7 +183,12 @@ export default function SalesReportPage() {
                         </div>
                         <div className="space-y-1 md:col-span-2">
                             <label className="text-sm font-medium">Rango de fechas</label>
-                            <Popover>
+                            <Popover open={isCalendarOpen} onOpenChange={(open) => {
+                                setIsCalendarOpen(open);
+                                if (open) {
+                                    setDateRange(undefined);
+                                }
+                            }}>
                                 <PopoverTrigger asChild>
                                     <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
                                         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -190,7 +196,20 @@ export default function SalesReportPage() {
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={(range) => {
+                                            setDateRange(range);
+                                            if (range?.from && range?.to) {
+                                                setIsCalendarOpen(false);
+                                            }
+                                        }}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                    />
                                 </PopoverContent>
                             </Popover>
                         </div>

@@ -89,7 +89,6 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     const { user } = useAuth();
     const isEditMode = !!egreso;
 
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
 
@@ -113,34 +112,37 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
     const localSeleccionadoId = form.watch('local_id');
 
     const destinatariosDisponibles = useMemo(() => {
-        if (usersLoading || professionalsLoading) return [];
+        if (usersLoading || !users) return [];
 
-        const staffMap = new Map<string, { id: string, name: string, role: string, local_id?: string }>();
+        // Filtramos usuarios según el local seleccionado
+        // Incluimos:
+        // 1. Usuarios asignados explícitamente al local seleccionado
+        // 2. Administradores Generales (siempre visibles para opciones de pago)
 
-        const allStaff = [...(users || []), ...(professionals || [])];
-
-        allStaff.forEach(p => {
-            const userId = (p as AppUser).id || (p as Profesional).id;
-            if (!staffMap.has(userId) && p.name) {
-                staffMap.set(userId, { ...p, id: userId, name: p.name, role: (p as AppUser).role || 'Staff (Sin edición)' });
-            }
+        const filteredUsers = users.filter(u => {
+            // Si es admin general, incluirlo siempre
+            if (u.role === 'Administrador general') return true;
+            // Si coincide con el local seleccionado
+            if (u.local_id === localSeleccionadoId) return true;
+            return false;
         });
 
-        let personal = Array.from(staffMap.values())
-            .filter(p => p.local_id === localSeleccionadoId);
+        if (isAdmin) return filteredUsers;
 
-        if (isAdmin) return personal;
+        // Si NO es admin (cajera/recepcionista), restringimos más si es necesario.
+        // En este caso, la lógica anterior permitía ver Admins Generales y Locales.
+        // Mantengamos esa lógica sobre la lista ya filtrada (que tiene a local staff + admins generales).
 
-        // Si NO es admin (es cajera/recepcionista), solo puede entregar dinero a:
-        // 1. Administradores Generales (sin importar su local)
-        // 2. Administradores Locales (que pertenezcan a este local)
-        const allEligible = Array.from(staffMap.values());
-        return allEligible.filter(u =>
+        return filteredUsers.filter(u =>
             (u.role === 'Administrador general') ||
             (u.role === 'Administrador local' && u.local_id === localSeleccionadoId)
+            // ¿Deberían poder pagarle a Staff? Normalmente egresos de caja son a admins o dueños,
+            // pero si es nomina, tal vez a staff. 
+            // La petición original no restringía, pero la lógica anterior de 'non-admin' restringía a admins.
+            // Asumiré que cajeras solo entregan dinero a supervisores (Admins).
         );
 
-    }, [isAdmin, professionals, users, localSeleccionadoId, usersLoading, professionalsLoading]);
+    }, [isAdmin, users, localSeleccionadoId, usersLoading]);
 
     useEffect(() => {
         const subscription = form.watch((value, { name }) => {
@@ -364,16 +366,26 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><User className="mr-1 h-3 w-3" /> Destinatario / Receptor</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading || esCostoFijo || usersLoading}>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={esCostoFijo || usersLoading}>
                                             <FormControl>
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder={esCostoFijo ? 'N/A (Costo Fijo)' : (professionalsLoading || usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega')} />
+                                                    <SelectValue placeholder={esCostoFijo ? 'N/A (Costo Fijo)' : (usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega')} />
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                {destinatariosDisponibles.map(p => (
-                                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                                ))}
+                                                {destinatariosDisponibles.map(p => {
+                                                    const shortRole = p.role === 'Administrador general' ? 'Admin General'
+                                                        : p.role === 'Administrador local' ? 'Admin Local'
+                                                            : p.role?.includes('Recepcionista') ? 'Recepcionista'
+                                                                : p.role?.includes('Staff') ? 'Staff'
+                                                                    : p.role || 'Usuario';
+
+                                                    return (
+                                                        <SelectItem key={p.id} value={p.id}>
+                                                            {p.name} <span className="text-muted-foreground text-xs">({shortRole})</span>
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                         <FormMessage />

@@ -975,8 +975,8 @@ export default function AgendaView() {
           {/* Esta es la linea que genera el scroll vertical */}
           <div className="flex-grow overflow-auto">
             {/* Professional Headers */}
-            <div className="sticky top-0 z-20 grid gap-2 bg-background" style={{ gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
-              <div className="sticky left-0 bg-background z-30">
+            <div className="sticky top-0 z-40 grid gap-2 bg-background" style={{ gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
+              <div className="sticky left-0 bg-background z-50">
                 <div className="h-28 flex items-center justify-center p-2 border-b">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

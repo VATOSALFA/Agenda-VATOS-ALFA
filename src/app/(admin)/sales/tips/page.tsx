@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Download, Filter, Search, Loader2 } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Filter, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Local, Profesional } from "@/lib/types";
@@ -24,6 +24,23 @@ export default function TipsPage() {
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [localFilter, setLocalFilter] = useState('todos');
+    const [professionalFilter, setProfessionalFilter] = useState('todos');
+
+    // Estado para los filtros activos (aplicados al buscar)
+    const [activeFilters, setActiveFilters] = useState<{
+        dateRange: DateRange | undefined;
+        local: string;
+        professional: string;
+    }>({
+        dateRange: undefined,
+        local: 'todos',
+        professional: 'todos'
+    });
+
+    const [queryKey, setQueryKey] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const handleDateSelect = (range: DateRange | undefined) => {
         setDateRange(range);
@@ -31,100 +48,119 @@ export default function TipsPage() {
             setIsPopoverOpen(false);
         }
     };
-    const [localFilter, setLocalFilter] = useState('todos');
-    const [professionalFilter, setProfessionalFilter] = useState('todos');
-    const [queryKey, setQueryKey] = useState(0); // Para forzar recarga si es necesario
 
     // 1. Cargar catálogos
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
-    const { data: clients } = useFirestoreQuery<any>('clientes'); // Traemos clientes para mapear nombres si hace falta
+    const { data: clients } = useFirestoreQuery<any>('clientes');
 
-    // 3. Configurar rango de fechas inicial (Hoy)
+    // 2. Configurar rango de fechas inicial (Hoy) y filtros por defecto
     useEffect(() => {
+        const today = new Date();
+        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
+
+        // Solo inicializar si no están definidos
         if (!dateRange) {
-            const today = new Date();
-            const from = startOfDay(today); // Inicio del día
-            const to = endOfDay(today);     // Fin del día
-            setDateRange({ from, to });
+            setDateRange(initialDateRange);
         }
-        if (isReceptionist && user?.local_id) {
-            setLocalFilter(user.local_id);
+
+        const initialFilters = {
+            dateRange: initialDateRange,
+            local: (isReceptionist && user?.local_id) ? user.local_id : 'todos',
+            professional: 'todos'
+        };
+
+        // Si es la primera carga (activeFilters.dateRange es undefined), aplicamos filtros iniciales
+        if (!activeFilters.dateRange) {
+            setActiveFilters(initialFilters);
+            // Sincronizar UI state
+            if (isReceptionist && user?.local_id) {
+                setLocalFilter(user.local_id);
+            }
         }
+
     }, [user, isReceptionist]);
 
-    // 3. Construir consulta a 'ventas' basada en fechas
+    // 3. Construir consulta a 'ventas' basada en fechas ACTIVAS
     const salesConstraints = useMemo(() => {
-        if (!dateRange?.from) return [];
+        if (!activeFilters.dateRange?.from) return [];
 
-        const start = Timestamp.fromDate(startOfDay(dateRange.from));
-        // Si no hay 'to', usamos el final del mismo día 'from'
-        const end = Timestamp.fromDate(endOfDay(dateRange.to || dateRange.from));
+        const start = Timestamp.fromDate(startOfDay(activeFilters.dateRange.from));
+        const end = Timestamp.fromDate(endOfDay(activeFilters.dateRange.to || activeFilters.dateRange.from));
 
-        // Importante: Firestore requiere índices compuestos para rangos + otros filtros.
-        // Para simplificar y evitar errores de índices ahora, traemos por fecha y filtramos propina en cliente.
         return [
             where('fecha_hora_venta', '>=', start),
             where('fecha_hora_venta', '<=', end),
             orderBy('fecha_hora_venta', 'desc')
         ];
-    }, [dateRange]);
+    }, [activeFilters.dateRange]);
 
     // 4. Ejecutar consulta
-    const { data: rawSales, loading: salesLoading } = useFirestoreQuery<any>('ventas', JSON.stringify(dateRange), ...salesConstraints);
+    // Usamos activeFilters.dateRange en la key para re-fetching
+    const { data: rawSales, loading: salesLoading } = useFirestoreQuery<any>(
+        'ventas',
+        `tips-sales-${queryKey}`, // Key simple combinada con constraints
+        ...salesConstraints
+    );
 
-    // 5. Procesar y Filtrar Datos en Memoria
+    // 5. Procesar y Filtrar Datos en Memoria usando filtros ACTIVOS
     const filteredTips = useMemo(() => {
         if (!rawSales) return [];
 
         return rawSales
             // A. Solo ventas con propina registrada mayor a 0
             .filter(sale => (sale.propina && Number(sale.propina) > 0))
-            // B. Filtrar por Local
-            .filter(sale => localFilter === 'todos' || sale.local_id === localFilter)
-            // C. Filtrar por Profesional (Buscamos si el profesional participó en algún item de la venta)
+            // B. Filtrar por Local ACTIVO
+            .filter(sale => activeFilters.local === 'todos' || sale.local_id === activeFilters.local)
+            // C. Filtrar por Profesional ACTIVO
             .filter(sale => {
-                if (professionalFilter === 'todos') return true;
-                // Revisamos los items de la venta para ver si el barbero seleccionado participó
-                return sale.items?.some((item: any) => item.barbero_id === professionalFilter);
+                if (activeFilters.professional === 'todos') return true;
+                return sale.items?.some((item: any) => item.barbero_id === activeFilters.professional);
             })
             .map(sale => {
-                // D. Enriquecer datos para la tabla
-
-                // Obtener nombres de profesionales involucrados en esta venta
+                // D. Enriquecer datos...
                 const uniqueBarberIds = Array.from(new Set(sale.items?.map((i: any) => i.barbero_id).filter(Boolean)));
                 const professionalNames = uniqueBarberIds.map((id: any) => {
                     const prof = professionals?.find(p => p.id === id);
                     return prof ? prof.name : 'Desconocido';
                 }).join(', ');
 
-                // Obtener nombre del local
                 const localName = locales?.find(l => l.id === sale.local_id)?.name || 'Local desconocido';
 
-                // Obtener nombre del cliente (si no viene en la venta, buscar en catalogo)
-                // Normalmente guardas 'cliente_nombre' en la venta, si no, fallback al ID
                 const clientName = clients?.find((c: any) => c.id === sale.cliente_id)?.nombre
                     ? `${clients.find((c: any) => c.id === sale.cliente_id)?.nombre} ${clients.find((c: any) => c.id === sale.cliente_id)?.apellido || ''}`
                     : (sale.cliente_nombre || 'Cliente General');
 
                 return {
                     id: sale.id,
-                    saleId: sale.id.slice(0, 8), // ID corto visual
-                    date: sale.fecha_hora_venta?.toDate(), // Convertir Timestamp a Date
+                    saleId: sale.id.slice(0, 8),
+                    date: sale.fecha_hora_venta?.toDate(),
                     localName: localName,
                     clientName: clientName,
                     professionalName: professionalNames || 'Sin asignar',
                     tip: Number(sale.propina)
                 };
             });
-    }, [rawSales, localFilter, professionalFilter, locales, professionals, clients]);
+    }, [rawSales, activeFilters, locales, professionals, clients]);
+
+    const totalPages = Math.ceil(filteredTips.length / itemsPerPage);
+    const paginatedTips = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredTips.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredTips, currentPage, itemsPerPage]);
 
     const totalTips = useMemo(() => {
         return filteredTips.reduce((acc, item) => acc + item.tip, 0);
     }, [filteredTips]);
 
     const handleSearch = () => {
+        setActiveFilters({
+            dateRange: dateRange,
+            local: localFilter,
+            professional: professionalFilter
+        });
         setQueryKey(prev => prev + 1); // Forzar re-render si fuera necesario
+        setCurrentPage(1); // Resetear paginación al buscar
     }
 
     const isLoading = localesLoading || professionalsLoading || salesLoading;
@@ -144,7 +180,10 @@ export default function TipsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Periodo de tiempo</label>
-                            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                            <Popover open={isPopoverOpen} onOpenChange={(open) => {
+                                setIsPopoverOpen(open);
+                                if (open) setDateRange(undefined);
+                            }}>
                                 <PopoverTrigger asChild>
                                     <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -223,9 +262,9 @@ export default function TipsPage() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                            ) : filteredTips.length === 0 ? (
+                            ) : paginatedTips.length === 0 ? (
                                 <TableRow><TableCell colSpan={6} className="text-center h-24">No hay propinas registradas en este período.</TableCell></TableRow>
-                            ) : filteredTips.map((tip) => (
+                            ) : paginatedTips.map((tip) => (
                                 <TableRow key={tip.id}>
                                     <TableCell className="font-mono text-xs text-muted-foreground">...{tip.saleId}</TableCell>
                                     <TableCell>{tip.date ? format(tip.date, 'dd/MM/yyyy HH:mm', { locale: es }) : '-'}</TableCell>
@@ -243,6 +282,51 @@ export default function TipsPage() {
                             </TableRow>
                         </TableFooter>
                     </Table>
+
+                    {!isLoading && filteredTips.length > 0 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
+                            <div className="flex items-center space-x-2">
+                                <p className="text-sm font-medium">Resultados por página</p>
+                                <Select
+                                    value={`${itemsPerPage}`}
+                                    onValueChange={(value) => {
+                                        setItemsPerPage(Number(value))
+                                        setCurrentPage(1)
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 w-[70px]">
+                                        <SelectValue placeholder={itemsPerPage} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="20">20</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="text-sm font-medium">
+                                Página {currentPage} de {totalPages}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div >

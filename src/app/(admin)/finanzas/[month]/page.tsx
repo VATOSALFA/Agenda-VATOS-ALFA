@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2 } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -110,6 +110,8 @@ export default function FinanzasMensualesPage() {
 
 
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
+    const [egresosPage, setEgresosPage] = useState(1);
+    const [egresosPerPage, setEgresosPerPage] = useState(10);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -420,6 +422,12 @@ export default function FinanzasMensualesPage() {
     };
 
 
+    const totalEgresosPages = Math.ceil(calculatedEgresos.length / egresosPerPage);
+    const paginatedEgresos = calculatedEgresos.slice(
+        (egresosPage - 1) * egresosPerPage,
+        egresosPage * egresosPerPage
+    );
+
     return (
         <>
             <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -466,11 +474,11 @@ export default function FinanzasMensualesPage() {
                             </div>
                             <div className="flex justify-between items-center text-base">
                                 <span className="text-muted-foreground">Reinversión</span>
-                                <span className="font-semibold text-red-600">-${reinversion.toLocaleString('es-MX')}</span>
+                                <span className="font-semibold text-muted-foreground">-${reinversion.toLocaleString('es-MX')}</span>
                             </div>
                             <div className="flex justify-between items-center text-base">
                                 <span className="text-muted-foreground">Comisión de profesionales</span>
-                                <span className="font-semibold text-red-600">-${comisionProfesionales.toLocaleString('es-MX')}</span>
+                                <span className="font-semibold text-muted-foreground">-${comisionProfesionales.toLocaleString('es-MX')}</span>
                             </div>
                             <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
                                 <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
@@ -582,7 +590,7 @@ export default function FinanzasMensualesPage() {
                                     ) : calculatedEgresos.length === 0 ? (
                                         <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
                                     ) : (
-                                        calculatedEgresos.map((egreso) => (
+                                        paginatedEgresos.map((egreso) => (
                                             <TableRow key={egreso.id}>
                                                 <TableCell>{safeFormatDate(egreso.fecha)}</TableCell>
                                                 <TableCell>{egreso.concepto}</TableCell>
@@ -602,6 +610,50 @@ export default function FinanzasMensualesPage() {
                                     )}
                                 </TableBody>
                             </Table>
+                            {calculatedEgresos.length > 0 && (
+                                <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                    <div className="flex items-center space-x-2">
+                                        <p className="text-sm font-medium">Resultados por página</p>
+                                        <Select
+                                            value={`${egresosPerPage}`}
+                                            onValueChange={(value) => {
+                                                setEgresosPerPage(Number(value));
+                                                setEgresosPage(1);
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8 w-[70px]">
+                                                <SelectValue placeholder={egresosPerPage} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="20">20</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="text-sm font-medium">
+                                        Página {egresosPage} de {totalEgresosPages}
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setEgresosPage(prev => Math.max(prev - 1, 1))}
+                                            disabled={egresosPage === 1}
+                                        >
+                                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setEgresosPage(prev => Math.min(prev + 1, totalEgresosPages))}
+                                            disabled={egresosPage === totalEgresosPages}
+                                        >
+                                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

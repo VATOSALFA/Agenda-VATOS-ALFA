@@ -74,7 +74,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing } from '@/lib/types';
-import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc, orderBy, limit } from 'firebase/firestore';
+import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc, orderBy, limit, writeBatch, increment } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
@@ -317,10 +317,57 @@ export default function CashBoxPage() {
     const handleDeleteSale = async () => {
         if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR' || !db) return;
         try {
-            await deleteDoc(doc(db, 'ventas', saleToDelete.id));
+            const batch = writeBatch(db);
+            const saleRef = doc(db, 'ventas', saleToDelete.id);
+
+            // Revertir inventario si hay productos
+            if (saleToDelete.items && saleToDelete.items.length > 0) {
+                for (const item of saleToDelete.items) {
+                    if (item.tipo === 'producto' && item.id) {
+                        const productRef = doc(db, 'productos', item.id);
+                        const productSnap = await getDoc(productRef);
+
+                        if (productSnap.exists()) {
+                            const productData = productSnap.data();
+                            const currentStock = productData.stock || 0;
+                            const quantityToReturn = item.cantidad || 1;
+                            const newStock = currentStock + quantityToReturn;
+
+                            // 1. Incrementar Stock
+                            batch.update(productRef, {
+                                stock: increment(quantityToReturn)
+                            });
+
+                            // 2. Registrar Movimiento
+                            const movementRef = doc(collection(db, 'movimientos_inventario'));
+                            batch.set(movementRef, {
+                                date: Timestamp.now(),
+                                local_id: saleToDelete.local_id || 'unknown',
+                                product_id: item.id,
+                                presentation_id: productData.presentation_id || 'default',
+                                from: currentStock,
+                                to: newStock,
+                                cause: 'Cancellation',
+                                staff_id: user?.uid || 'unknown',
+                                comment: `Devolución automática por cancelación de venta: ${saleToDelete.id}`,
+                                product_name: item.nombre || productData.nombre,
+                                staff_name: user?.displayName || user?.email || 'Admin',
+                                local_name: 'System',
+                                concepto: 'Devolución por venta cancelada'
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Eliminar Venta
+            batch.delete(saleRef);
+
+            await batch.commit();
+
             toast({
                 title: "Venta Eliminada",
-                description: "La venta ha sido eliminada permanentemente.",
+                description: "La venta ha sido eliminada y el stock revertido.",
             });
             setQueryKey(prevKey => prevKey + 1);
         } catch (error) {
@@ -328,7 +375,7 @@ export default function CashBoxPage() {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: "No se pudo eliminar la venta.",
+                description: "No se pudo eliminar la venta completemente.",
             });
         } finally {
             setSaleToDelete(null);
@@ -540,21 +587,21 @@ export default function CashBoxPage() {
     const baseCash = lastCut?.fondo_base || 0;
 
     // Queries for LIVE calculation (Everything > liveStartDate)
-    const { data: liveSales } = useFirestoreQuery<Sale>('ventas', `live-sales-${selectedLocalId}-${queryKey}`, ...useMemo(() => {
+    const { data: liveSales } = useFirestoreQuery<Sale>('ventas', `live-sales-${selectedLocalId}-${liveStartDate.getTime()}`, ...useMemo(() => {
         const c: QueryConstraint[] = [];
         if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
         c.push(where('fecha_hora_venta', '>', Timestamp.fromDate(liveStartDate)));
         return c;
     }, [selectedLocalId, liveStartDate]));
 
-    const { data: liveIngresos } = useFirestoreQuery<IngresoManual>('ingresos_manuales', `live-ingresos-${selectedLocalId}-${queryKey}`, ...useMemo(() => {
+    const { data: liveIngresos } = useFirestoreQuery<IngresoManual>('ingresos_manuales', `live-ingresos-${selectedLocalId}-${liveStartDate.getTime()}`, ...useMemo(() => {
         const c: QueryConstraint[] = [];
         if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
         c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
         return c;
     }, [selectedLocalId, liveStartDate]));
 
-    const { data: liveEgresos } = useFirestoreQuery<Egreso>('egresos', `live-egresos-${selectedLocalId}-${queryKey}`, ...useMemo(() => {
+    const { data: liveEgresos } = useFirestoreQuery<Egreso>('egresos', `live-egresos-${selectedLocalId}-${liveStartDate.getTime()}`, ...useMemo(() => {
         const c: QueryConstraint[] = [];
         if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
         c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
@@ -599,9 +646,9 @@ export default function CashBoxPage() {
             ? sale.monto_pagado_real
             : (sale.total || 0);
         return sum + amount;
-    }, 0) + ingresosManuales, [salesWithClientData, ingresosManuales]);
+    }, 0), [salesWithClientData]); // REMOVUNUSED + ingresosManuales
+
     const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-    // Removed old efectivoEnCaja calculation
 
     const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
     const isLocalAdmin = user?.role !== 'Administrador general';
@@ -642,7 +689,10 @@ export default function CashBoxPage() {
                             <CardContent className="pt-6 flex flex-wrap items-end gap-4 h-full">
                                 <div className="space-y-2 flex-grow min-w-[200px]">
                                     <label className="text-sm font-medium">Periodo de tiempo</label>
-                                    <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                                    <Popover open={isPopoverOpen} onOpenChange={(open) => {
+                                        setIsPopoverOpen(open);
+                                        if (open) setDateRange(undefined);
+                                    }}>
                                         <PopoverTrigger asChild>
                                             <Button
                                                 id="date"
@@ -704,7 +754,11 @@ export default function CashBoxPage() {
                         <Card className="flex-shrink-0 w-full md:w-auto h-full">
                             <CardContent className="p-4 flex flex-col items-center justify-center h-full text-center">
                                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
-                                <p className="text-3xl font-extrabold text-primary">${liveCashInBox.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                {selectedLocalId === 'todos' ? (
+                                    <p className="text-lg font-semibold text-muted-foreground">Seleccione sucursal</p>
+                                ) : (
+                                    <p className="text-3xl font-extrabold text-primary">${liveCashInBox.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -717,12 +771,14 @@ export default function CashBoxPage() {
                     </div>
 
                     {/* Detailed Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-center">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-4 items-center">
                         <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
+                        <IconSeparator icon={Plus} />
+                        <SummaryCard title="Otros Ingresos" amount={ingresosManuales} />
                         <IconSeparator icon={Minus} />
                         <SummaryCard title="Egresos" amount={totalEgresos} />
                         <IconSeparator icon={Equal} />
-                        <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas - totalEgresos} />
+                        <SummaryCard title="Resultado de Flujo del Periodo" amount={totalVentasFacturadas + ingresosManuales - totalEgresos} />
                     </div>
 
                     {/* Main Table */}
@@ -804,7 +860,7 @@ export default function CashBoxPage() {
                                         </TableBody>
                                     </Table>
                                     {paginatedSales.length > 0 && (
-                                        <div className="flex items-center justify-end space-x-6 pt-4">
+                                        <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
                                             <div className="flex items-center space-x-2">
                                                 <p className="text-sm font-medium">Resultados por página</p>
                                                 <Select
@@ -876,7 +932,7 @@ export default function CashBoxPage() {
                                                 </TableBody>
                                             </Table>
                                             {paginatedIngresos.length > 0 && (
-                                                <div className="flex items-center justify-end space-x-6 pt-4">
+                                                <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
                                                     <div className="flex items-center space-x-2">
                                                         <p className="text-sm font-medium">Resultados por página</p>
                                                         <Select
@@ -955,7 +1011,7 @@ export default function CashBoxPage() {
                                                 </TableBody>
                                             </Table>
                                             {paginatedEgresos.length > 0 && (
-                                                <div className="flex items-center justify-end space-x-6 pt-4">
+                                                <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
                                                     <div className="flex items-center space-x-2">
                                                         <p className="text-sm font-medium">Resultados por página</p>
                                                         <Select
@@ -986,8 +1042,8 @@ export default function CashBoxPage() {
                             </Tabs>
                         </CardContent>
                     </Card>
-                </div>
-            </div>
+                </div >
+            </div >
 
             <AddEgresoModal
                 isOpen={isEgresoModalOpen}
@@ -1006,6 +1062,7 @@ export default function CashBoxPage() {
                     handleSearch()
                 }}
                 ingreso={editingIngreso}
+                localId={selectedLocalId}
             />
             <CashBoxClosingModal
                 isOpen={isClosingModalOpen}
@@ -1027,123 +1084,131 @@ export default function CashBoxPage() {
                 dateRange={activeFilters.dateRange}
                 localId={activeFilters.localId}
             />
-            {selectedSale && (
-                <SaleDetailModal
-                    isOpen={isDetailModalOpen}
-                    onOpenChange={setIsDetailModalOpen}
-                    sale={selectedSale}
-                />
-            )}
-            {saleToDelete && (
-                <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
-                    if (!open) {
-                        setSaleToDelete(null);
-                        setDeleteConfirmationText('');
-                    }
-                }}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="space-y-2 py-2">
-                            <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
-                            <Input
-                                id="delete-confirm"
-                                value={deleteConfirmationText}
-                                onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                                placeholder="ELIMINAR"
-                            />
-                        </div>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={handleDeleteSale}
-                                disabled={deleteConfirmationText !== 'ELIMINAR'}
-                                className="bg-destructive hover:bg-destructive/90"
-                            >
-                                Sí, eliminar venta
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            {
+                selectedSale && (
+                    <SaleDetailModal
+                        isOpen={isDetailModalOpen}
+                        onOpenChange={setIsDetailModalOpen}
+                        sale={selectedSale}
+                    />
+                )
+            }
+            {
+                saleToDelete && (
+                    <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {
+                        if (!open) {
+                            setSaleToDelete(null);
+                            setDeleteConfirmationText('');
+                        }
+                    }}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la venta seleccionada.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="space-y-2 py-2">
+                                <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                                <Input
+                                    id="delete-confirm"
+                                    value={deleteConfirmationText}
+                                    onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={handleDeleteSale}
+                                    disabled={deleteConfirmationText !== 'ELIMINAR'}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                >
+                                    Sí, eliminar venta
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )
+            }
 
-            {egresoToDelete && (
-                <AlertDialog open={!!egresoToDelete} onOpenChange={(open) => {
-                    if (!open) {
-                        setEgresoToDelete(null);
-                        setEgresoDeleteConfirmationText('');
-                    }
-                }}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Se eliminará permanentemente el egreso seleccionado.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="space-y-2 py-2">
-                            <Label htmlFor="egreso-delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
-                            <Input
-                                id="egreso-delete-confirm"
-                                value={egresoDeleteConfirmationText}
-                                onChange={(e) => setEgresoDeleteConfirmationText(e.target.value)}
-                                placeholder="ELIMINAR"
-                            />
-                        </div>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => { setEgresoToDelete(null); setEgresoDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={handleDeleteEgreso}
-                                disabled={egresoDeleteConfirmationText !== 'ELIMINAR'}
-                                className="bg-destructive hover:bg-destructive/90"
-                            >
-                                Sí, eliminar
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            {
+                egresoToDelete && (
+                    <AlertDialog open={!!egresoToDelete} onOpenChange={(open) => {
+                        if (!open) {
+                            setEgresoToDelete(null);
+                            setEgresoDeleteConfirmationText('');
+                        }
+                    }}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Se eliminará permanentemente el egreso seleccionado.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="space-y-2 py-2">
+                                <Label htmlFor="egreso-delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                                <Input
+                                    id="egreso-delete-confirm"
+                                    value={egresoDeleteConfirmationText}
+                                    onChange={(e) => setEgresoDeleteConfirmationText(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => { setEgresoToDelete(null); setEgresoDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={handleDeleteEgreso}
+                                    disabled={egresoDeleteConfirmationText !== 'ELIMINAR'}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                >
+                                    Sí, eliminar
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )
+            }
 
-            {ingresoToDelete && (
-                <AlertDialog open={!!ingresoToDelete} onOpenChange={(open) => {
-                    if (!open) {
-                        setIngresoToDelete(null);
-                        setIngresoDeleteConfirmationText('');
-                    }
-                }}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Se eliminará permanentemente el ingreso por "<strong>{ingresoToDelete.concepto}</strong>".
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="space-y-2 py-2">
-                            <Label htmlFor="ingreso-delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
-                            <Input
-                                id="ingreso-delete-confirm"
-                                value={ingresoDeleteConfirmationText}
-                                onChange={(e) => setIngresoDeleteConfirmationText(e.target.value)}
-                                placeholder="ELIMINAR"
-                            />
-                        </div>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => { setIngresoToDelete(null); setIngresoDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={handleDeleteIngreso}
-                                disabled={ingresoDeleteConfirmationText !== 'ELIMINAR'}
-                                className="bg-destructive hover:bg-destructive/90"
-                            >
-                                Sí, eliminar
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            {
+                ingresoToDelete && (
+                    <AlertDialog open={!!ingresoToDelete} onOpenChange={(open) => {
+                        if (!open) {
+                            setIngresoToDelete(null);
+                            setIngresoDeleteConfirmationText('');
+                        }
+                    }}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Se eliminará permanentemente el ingreso por "<strong>{ingresoToDelete.concepto}</strong>".
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="space-y-2 py-2">
+                                <Label htmlFor="ingreso-delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
+                                <Input
+                                    id="ingreso-delete-confirm"
+                                    value={ingresoDeleteConfirmationText}
+                                    onChange={(e) => setIngresoDeleteConfirmationText(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => { setIngresoToDelete(null); setIngresoDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={handleDeleteIngreso}
+                                    disabled={ingresoDeleteConfirmationText !== 'ELIMINAR'}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                >
+                                    Sí, eliminar
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )
+            }
 
             <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
                 <AlertDialogContent>

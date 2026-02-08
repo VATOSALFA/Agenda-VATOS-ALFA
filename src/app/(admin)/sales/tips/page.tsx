@@ -271,7 +271,7 @@ export default function TipsPage() {
                                     <TableCell>{tip.localName}</TableCell>
                                     <TableCell>{tip.clientName}</TableCell>
                                     <TableCell>{tip.professionalName}</TableCell>
-                                    <TableCell className="text-right font-semibold text-green-600">+${tip.tip.toLocaleString('es-MX')}</TableCell>
+                                    <TableCell className="text-right font-semibold text-secondary">+${tip.tip.toLocaleString('es-MX')}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

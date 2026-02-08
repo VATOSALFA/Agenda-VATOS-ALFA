@@ -103,8 +103,8 @@ const SortableServiceItem = ({
       <TableCell>{service.duration} min</TableCell>
       <TableCell>${service.price.toLocaleString('es-MX')}</TableCell>
       <TableCell>
-        <Badge variant={service.active ? 'default' : 'secondary'} className={service.active ? 'bg-green-100 text-green-800' : ''}>
-          <Circle className={`mr-2 h-2 w-2 fill-current ${service.active ? 'text-green-500' : 'text-gray-400'}`} />
+        <Badge variant={service.active ? 'default' : 'secondary'} className={service.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50'}>
+          <Circle className={`mr-2 h-2 w-2 fill-current ${service.active ? 'text-primary' : 'text-accent-foreground'}`} />
           {service.active ? 'Activo' : 'Inactivo'}
         </Badge>
       </TableCell>
@@ -121,7 +121,7 @@ const SortableServiceItem = ({
               <Pencil className="mr-2 h-4 w-4" /> Editar
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onToggleActive(service)}>
-              <Circle className={`mr-2 h-4 w-4 ${!service.active ? 'text-green-500' : 'text-gray-400'}`} />
+              <Circle className={`mr-2 h-4 w-4 ${!service.active ? 'text-primary' : 'text-gray-400'}`} />
               {service.active ? 'Desactivar' : 'Activar'}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onDelete(service)} className="text-destructive focus:text-destructive">

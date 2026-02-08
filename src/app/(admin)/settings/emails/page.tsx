@@ -17,14 +17,17 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { Badge } from '@/components/ui/badge';
+import { Star } from 'lucide-react';
 
+// Verified domain - emails with this domain are auto-confirmed
+const VERIFIED_DOMAIN = 'vatosalfa.com';
 
-const initialSenders = [
-    { email: 'vatosalfa@gmail.com', confirmed: true },
-    { email: 'contacto@vatosalfa.com', confirmed: false },
-];
-
-export type Sender = typeof initialSenders[0];
+export type Sender = {
+    email: string;
+    confirmed: boolean;
+    isPrimary?: boolean;
+};
 
 function CollapsibleCard({ title, description, children, defaultOpen = false, action }: { title: string, description?: string, children: React.ReactNode, defaultOpen?: boolean, action?: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -62,9 +65,10 @@ export default function EmailsSettingsPage() {
     const { db } = useAuth(); // Get db
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSenderModalOpen, setIsSenderModalOpen] = useState(false);
-    const [senders, setSenders] = useState<Sender[]>(initialSenders);
+    const [senders, setSenders] = useState<Sender[]>([]);
     const [editingSender, setEditingSender] = useState<Sender | null>(null);
     const [senderToDelete, setSenderToDelete] = useState<Sender | null>(null);
+    const [isLoadingSenders, setIsLoadingSenders] = useState(true);
 
     const form = useForm({
         defaultValues: {
@@ -92,6 +96,7 @@ export default function EmailsSettingsPage() {
     useEffect(() => {
         const loadSettings = async () => {
             if (!db) return;
+            setIsLoadingSenders(true);
             try {
                 // 1. Load Website Settings (Confirmation Note + Visibility Flags)
                 const websiteDoc = await getDoc(doc(db, 'settings', 'website'));
@@ -120,14 +125,28 @@ export default function EmailsSettingsPage() {
                     }
                 }
 
-                // 2. Load Email Config (Signature)
+                // 2. Load Email Config (Signature + Senders)
                 const emailConfigDoc = await getDoc(doc(db, 'configuracion', 'emails'));
                 if (emailConfigDoc.exists()) {
-                    form.setValue('signature', emailConfigDoc.data().signature || '');
+                    const emailData = emailConfigDoc.data();
+                    form.setValue('signature', emailData.signature || '');
+
+                    // Load senders from Firebase
+                    if (emailData.senders && Array.isArray(emailData.senders)) {
+                        setSenders(emailData.senders);
+                    } else {
+                        // Default sender if none configured
+                        setSenders([{ email: 'contacto@vatosalfa.com', confirmed: true, isPrimary: true }]);
+                    }
+                } else {
+                    // Default sender if no config exists
+                    setSenders([{ email: 'contacto@vatosalfa.com', confirmed: true, isPrimary: true }]);
                 }
 
             } catch (error) {
                 console.error("Error loading settings:", error);
+            } finally {
+                setIsLoadingSenders(false);
             }
         };
         loadSettings();
@@ -182,33 +201,109 @@ export default function EmailsSettingsPage() {
         }
     }
 
-    const handleSaveSender = (newEmail: string) => {
+    // Helper to check if email is from verified domain
+    const isEmailFromVerifiedDomain = (email: string) => {
+        return email.toLowerCase().endsWith(`@${VERIFIED_DOMAIN}`);
+    };
+
+    // Save senders to Firebase
+    const saveSendersToFirebase = async (newSenders: Sender[]) => {
+        if (!db) return;
+        try {
+            await setDoc(doc(db, 'configuracion', 'emails'), {
+                senders: newSenders
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error saving senders:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los cambios.' });
+        }
+    };
+
+    const handleSaveSender = async (newEmail: string) => {
+        // Auto-confirm if from verified domain
+        const isConfirmed = isEmailFromVerifiedDomain(newEmail);
+
+        let newSenders: Sender[];
+
         if (editingSender) {
             // Edit mode
-            setSenders(prev => prev.map(s => s.email === editingSender.email ? { ...s, email: newEmail } : s));
+            newSenders = senders.map(s =>
+                s.email === editingSender.email
+                    ? { ...s, email: newEmail, confirmed: isConfirmed }
+                    : s
+            );
             toast({
                 title: "Correo actualizado con éxito",
                 description: `El correo ha sido cambiado a ${newEmail}.`,
             });
         } else {
-            // Add mode
-            setSenders(prev => [...prev, { email: newEmail, confirmed: false }]);
-            toast({
-                title: "Correo agregado con éxito",
-                description: `Se ha enviado un correo de confirmación a ${newEmail}.`,
-            });
-        }
-        closeModal();
-    }
+            // Add mode - if it's the first sender, make it primary
+            const isPrimary = senders.length === 0;
+            newSenders = [...senders, { email: newEmail, confirmed: isConfirmed, isPrimary }];
 
-    const handleDeleteSender = () => {
+            if (isConfirmed) {
+                toast({
+                    title: "Correo agregado con éxito",
+                    description: `El correo ${newEmail} está listo para usar (dominio verificado).`,
+                });
+            } else {
+                toast({
+                    title: "Correo agregado",
+                    description: `El correo ${newEmail} requiere verificación de dominio en Resend.`,
+                    variant: 'destructive'
+                });
+            }
+        }
+
+        setSenders(newSenders);
+        await saveSendersToFirebase(newSenders);
+        closeModal();
+    };
+
+    const handleDeleteSender = async () => {
         if (!senderToDelete) return;
-        setSenders(prev => prev.filter(s => s.email !== senderToDelete.email));
+
+        // Don't allow deleting the primary sender if it's the only one
+        if (senderToDelete.isPrimary && senders.length === 1) {
+            toast({
+                variant: 'destructive',
+                title: 'No se puede eliminar',
+                description: 'Debes tener al menos un correo remitente.',
+            });
+            setSenderToDelete(null);
+            return;
+        }
+
+        let newSenders = senders.filter(s => s.email !== senderToDelete.email);
+
+        // If we deleted the primary, make the first remaining one primary
+        if (senderToDelete.isPrimary && newSenders.length > 0) {
+            newSenders[0].isPrimary = true;
+        }
+
+        setSenders(newSenders);
+        await saveSendersToFirebase(newSenders);
+
         toast({
             title: "Correo eliminado",
             description: `El correo "${senderToDelete.email}" ha sido eliminado.`,
         });
         setSenderToDelete(null);
+    };
+
+    const handleSetPrimary = async (email: string) => {
+        const newSenders = senders.map(s => ({
+            ...s,
+            isPrimary: s.email === email
+        }));
+
+        setSenders(newSenders);
+        await saveSendersToFirebase(newSenders);
+
+        toast({
+            title: "Correo principal actualizado",
+            description: `${email} es ahora el remitente principal.`,
+        });
     };
 
     const openAddModal = () => {
@@ -224,7 +319,13 @@ export default function EmailsSettingsPage() {
     const closeModal = () => {
         setIsSenderModalOpen(false);
         setEditingSender(null);
+        // Force cleanup of body styles in case dialog didn't clean up properly
+        setTimeout(() => {
+            document.body.style.pointerEvents = "";
+            document.body.style.overflow = "";
+        }, 0);
     };
+
 
 
     return (
@@ -251,22 +352,43 @@ export default function EmailsSettingsPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Remitente</TableHead>
-                                    <TableHead>Confirmado</TableHead>
+                                    <TableHead>Estado</TableHead>
                                     <TableHead className="text-right">Opciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {senders.map((sender) => (
+                                {isLoadingSenders ? (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center h-24">
+                                            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : senders.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center h-24 text-muted-foreground">
+                                            No hay correos configurados. Agrega uno para comenzar.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : senders.map((sender) => (
                                     <TableRow key={sender.email}>
-                                        <TableCell className="font-medium">{sender.email}</TableCell>
+                                        <TableCell className="font-medium">
+                                            <div className="flex items-center gap-2">
+                                                {sender.email}
+                                                {sender.isPrimary && (
+                                                    <Badge className="bg-primary/10 text-primary border-primary/30">
+                                                        <Star className="mr-1 h-3 w-3 fill-current" /> Principal
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell>
-                                            <span className={`flex items-center ${sender.confirmed ? 'text-green-600' : 'text-yellow-600'}`}>
+                                            <span className={`flex items-center ${sender.confirmed ? 'text-primary' : 'text-yellow-600'}`}>
                                                 <CheckCircle className="mr-2 h-4 w-4" />
-                                                {sender.confirmed ? 'Confirmado' : 'Pendiente'}
+                                                {sender.confirmed ? 'Verificado' : 'Pendiente'}
                                             </span>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <DropdownMenu>
+                                            <DropdownMenu modal={false}>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0">
                                                         <span className="sr-only">Abrir menú</span>
@@ -274,6 +396,11 @@ export default function EmailsSettingsPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
+                                                    {!sender.isPrimary && sender.confirmed && (
+                                                        <DropdownMenuItem onClick={() => handleSetPrimary(sender.email)}>
+                                                            <Star className="mr-2 h-4 w-4" /> Usar como principal
+                                                        </DropdownMenuItem>
+                                                    )}
                                                     <DropdownMenuItem onClick={() => openEditModal(sender)}><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => setSenderToDelete(sender)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                         <Trash2 className="mr-2 h-4 w-4" /> Eliminar
@@ -285,6 +412,7 @@ export default function EmailsSettingsPage() {
                                 ))}
                             </TableBody>
                         </Table>
+
                     </CollapsibleCard>
 
                     <CollapsibleCard

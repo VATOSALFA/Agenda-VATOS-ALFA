@@ -83,6 +83,7 @@ export interface Reservation {
   origen?: string;
   local_id?: string; // Added local_id to reservations
   notifications?: {
+    email_notification?: boolean;
     whatsapp_notification: boolean;
     whatsapp_reminder: boolean;
   };

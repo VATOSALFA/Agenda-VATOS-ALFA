@@ -63,7 +63,7 @@ export default function LocalesPage() {
     setQueryKey(prev => prev + 1); // Refreshes the data
     closeModal();
   };
-  
+
   const openNewModal = () => {
     setEditingLocal(null);
     setIsModalOpen(true);
@@ -73,7 +73,7 @@ export default function LocalesPage() {
     setEditingLocal(local);
     setIsModalOpen(true);
   }
-  
+
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingLocal(null);
@@ -83,20 +83,20 @@ export default function LocalesPage() {
     if (!db) return;
     const newStatus = local.status === 'active' ? 'inactive' : 'active';
     try {
-        const localRef = doc(db, 'locales', local.id);
-        await updateDoc(localRef, { status: newStatus });
-        toast({
-            title: `Local ${newStatus === 'active' ? 'activado' : 'desactivado'}`,
-            description: `El local "${local.name}" ha sido ${newStatus === 'active' ? 'activado' : 'desactivado'}.`,
-        });
-        setQueryKey(prev => prev + 1);
+      const localRef = doc(db, 'locales', local.id);
+      await updateDoc(localRef, { status: newStatus });
+      toast({
+        title: `Local ${newStatus === 'active' ? 'activado' : 'desactivado'}`,
+        description: `El local "${local.name}" ha sido ${newStatus === 'active' ? 'activado' : 'desactivado'}.`,
+      });
+      setQueryKey(prev => prev + 1);
     } catch (error) {
-        console.error("Error toggling status: ", error);
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "No se pudo cambiar el estado del local. Inténtalo de nuevo.",
-        });
+      console.error("Error toggling status: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo cambiar el estado del local. Inténtalo de nuevo.",
+      });
     }
   };
 
@@ -117,7 +117,7 @@ export default function LocalesPage() {
         description: "No se pudo eliminar el local. Inténtalo de nuevo.",
       });
     } finally {
-        setLocalToDelete(null);
+      setLocalToDelete(null);
     }
   };
 
@@ -132,7 +132,7 @@ export default function LocalesPage() {
             En esta sección puedes administrar y crear nuevos locales o sucursales para tu negocio.
           </AlertDescription>
         </Alert>
-        
+
         <div className="flex items-center justify-between pt-4">
           <Button variant="outline">
             <Filter className="mr-2 h-4 w-4" /> Filtrar por
@@ -162,15 +162,15 @@ export default function LocalesPage() {
                 <div key={local.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
                   <div>
                     <div className="font-bold flex items-center gap-2">
-                       <Badge className={cn(
-                           local.status === 'active'
-                           ? 'bg-green-100 text-green-800 border-green-200'
-                           : 'bg-orange-100 text-orange-800 border-orange-200'
-                       )}>
-                         <Circle className={cn("mr-2 h-2 w-2 fill-current", local.status === 'active' ? 'text-green-600' : 'text-orange-600')} />
-                         {local.status === 'active' ? 'Activo' : 'Inactivo'}
-                       </Badge>
-                       {local.name}
+                      <Badge className={cn(
+                        local.status === 'active'
+                          ? 'bg-primary/10 text-primary border-primary/30'
+                          : 'bg-accent/20 text-accent-foreground border-accent/50'
+                      )}>
+                        <Circle className={cn("mr-2 h-2 w-2 fill-current", local.status === 'active' ? 'text-primary' : 'text-accent-foreground')} />
+                        {local.status === 'active' ? 'Activo' : 'Inactivo'}
+                      </Badge>
+                      {local.name}
                     </div>
                     <p className="text-sm text-muted-foreground">{local.address}</p>
                   </div>
@@ -183,11 +183,11 @@ export default function LocalesPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => handleToggleStatus(local)}>
-                            {local.status === 'active' ? 'Desactivar' : 'Activar'}
+                          {local.status === 'active' ? 'Desactivar' : 'Activar'}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setLocalToDelete(local)} className="text-destructive hover:!text-destructive focus:text-destructive focus:bg-destructive/10">
-                            <Trash2 className="mr-2 h-4 w-4"/>
-                            Eliminar
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Eliminar
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -205,31 +205,31 @@ export default function LocalesPage() {
           </CardContent>
         </Card>
       </div>
-      
+
       <NewLocalModal
         isOpen={isModalOpen}
         onClose={closeModal}
         onLocalCreated={handleDataUpdated}
         local={editingLocal}
       />
-      
+
       {localToDelete && (
-         <AlertDialog open={!!localToDelete} onOpenChange={(open) => !open && setLocalToDelete(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Esto eliminará permanentemente el local
-                        <span className="font-bold"> {localToDelete.name}</span>.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setLocalToDelete(null)}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteLocal} className="bg-destructive hover:bg-destructive/90">
-                        Sí, eliminar local
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
+        <AlertDialog open={!!localToDelete} onOpenChange={(open) => !open && setLocalToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Esto eliminará permanentemente el local
+                <span className="font-bold"> {localToDelete.name}</span>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setLocalToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteLocal} className="bg-destructive hover:bg-destructive/90">
+                Sí, eliminar local
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
         </AlertDialog>
       )}
     </>

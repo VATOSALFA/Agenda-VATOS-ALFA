@@ -24,8 +24,13 @@ export async function spellCheck(text: string): Promise<SpellCheckOutput> {
   if (text.trim().length <= 2) {
     return { correctedText: text, hasCorrection: false };
   }
-  const result = await spellCheckFlow({ text });
-  return result;
+  try {
+    const result = await spellCheckFlow({ text });
+    return result;
+  } catch (error) {
+    console.warn("Spell check failed (likely API key issue), skipping.", error);
+    return { correctedText: text, hasCorrection: false };
+  }
 }
 
 const spellCheckPrompt = ai.definePrompt({

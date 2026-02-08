@@ -257,7 +257,13 @@ export default function StockMovementPage() {
                                                 <span className="text-muted-foreground">{movement.from}</span>
                                                 <ArrowRight className="h-3 w-3 text-muted-foreground" />
                                                 <span className="font-semibold">{movement.to}</span>
-                                                <Badge variant={isPositive ? "default" : "destructive"} className="ml-1 h-5 px-1.5 min-w-[30px] justify-center">
+                                                <Badge
+                                                    variant={isPositive ? "default" : "secondary"}
+                                                    className={cn(
+                                                        "ml-1 h-5 px-1.5 min-w-[30px] justify-center",
+                                                        !isPositive && "bg-[#C9C9C9] text-black hover:bg-[#b0b0b0]"
+                                                    )}
+                                                >
                                                     {isPositive ? '+' : ''}{diff}
                                                 </Badge>
                                             </div>

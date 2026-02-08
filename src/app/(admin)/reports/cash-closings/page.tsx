@@ -46,7 +46,7 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
                             <div className="flex justify-between border-t pt-2 mt-2"><span>Total en sistema:</span> <span className="font-medium">${closing.total_sistema.toLocaleString('es-MX')}</span></div>
                             <div className="flex justify-between"><span>Fondo base:</span> <span className="font-medium">${closing.fondo_base.toLocaleString('es-MX')}</span></div>
                             <div className="flex justify-between"><span>Total contado:</span> <span className="font-medium">${closing.total_calculado.toLocaleString('es-MX')}</span></div>
-                            <div className={cn("flex justify-between font-bold", closing.diferencia !== 0 ? 'text-destructive' : 'text-green-600')}><span>Diferencia:</span> <span>${closing.diferencia.toLocaleString('es-MX')}</span></div>
+                            <div className={cn("flex justify-between font-bold", closing.diferencia !== 0 ? 'text-primary' : 'text-secondary')}><span>Diferencia:</span> <span>${closing.diferencia.toLocaleString('es-MX')}</span></div>
                             <div className="pt-2">
                                 <h5 className="font-semibold">Comentarios:</h5>
                                 <p className="text-muted-foreground">{closing.comentarios || 'Sin comentarios.'}</p>
@@ -208,7 +208,7 @@ export default function CashClosingsPage() {
                                             <TableCell>{closing.persona_recibe}</TableCell>
                                             <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-MX')}</TableCell>
                                             <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className={cn("text-right font-bold", closing.diferencia !== 0 ? 'text-destructive' : 'text-green-600')}>
+                                            <TableCell className={cn("text-right font-bold", closing.diferencia !== 0 ? 'text-primary' : 'text-secondary')}>
                                                 ${closing.diferencia.toLocaleString('es-MX')}
                                             </TableCell>
                                             <TableCell className="text-right">

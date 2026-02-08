@@ -840,12 +840,12 @@ export default function CashBoxPage() {
                                                                     </DropdownMenuTrigger>
                                                                     <DropdownMenuContent align="end">
                                                                         <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
-                                                                            <Send className="mr-2 h-4 w-4 text-blue-500" />
-                                                                            <span className="text-blue-500">Enviar Comprobante</span>
+                                                                            <Send className="mr-2 h-4 w-4 text-primary" />
+                                                                            <span className="text-primary">Enviar Comprobante</span>
                                                                         </DropdownMenuItem>
                                                                         <DropdownMenuItem onSelect={() => window.print()}>
-                                                                            <Printer className="mr-2 h-4 w-4 text-yellow-500" />
-                                                                            <span className="text-yellow-500">Imprimir</span>
+                                                                            <Printer className="mr-2 h-4 w-4 text-secondary" />
+                                                                            <span className="text-secondary">Imprimir</span>
                                                                         </DropdownMenuItem>
                                                                         <DropdownMenuItem onSelect={() => handleOpenDeleteSaleModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar

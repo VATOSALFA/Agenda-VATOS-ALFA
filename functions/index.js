@@ -830,161 +830,153 @@ exports.mercadoPagoWebhook = onRequest(
  */
 exports.checkAutomatedMessages = onSchedule({
   schedule: "every 1 hours",
-  secrets: [mpAccessToken, resendApiKey] // Added Resend secret availability
+  secrets: [mpAccessToken, resendApiKey]
 }, async (event) => {
-  console.log("Cron Engine Started: Checking automated messages...");
-  const db = admin.firestore();
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  await runAutomatedChecks();
+});
 
-  // -- 0. Load Configuration --
-  const reminderSettingsDoc = await db.collection('configuracion').doc('recordatorios').get();
-  const reminderSettings = reminderSettingsDoc.exists ? reminderSettingsDoc.data() : {};
-  const notifications = reminderSettings.notifications || {};
-
-  /*
-   * Twilio credentials removed.
-   */
-
-
-  /* 
-   * Initializing Resend for future email usage
-   * const resend = new Resend(resendApiKey.value()); 
-   */
-
-  const sendTemplate = async (to, templateName, variables) => {
-    // TODO: Conectar webhook de Impulso 64 aquí.
-    console.log(`[Stub] Would send ${templateName} to ${to} with vars:`, variables);
-    return true;
-  };
-
-  // -- 1. Birthdays --
-  // Only run birthday check once a day, e.g., if hour is 10 AM
-  if (now.getHours() === 10 && notifications.birthday_notification?.enabled) {
-    console.log("Checking birthdays...");
-    const clientsSnap = await db.collection('clientes').where('fecha_nacimiento', '!=', null).get();
-    for (const doc of clientsSnap.docs) {
-      const data = doc.data();
-      let dob = null;
-      if (data.fecha_nacimiento && typeof data.fecha_nacimiento.toDate === 'function') {
-        dob = data.fecha_nacimiento.toDate();
-      } else if (typeof data.fecha_nacimiento === 'string') {
-        dob = new Date(data.fecha_nacimiento);
-      }
-
-      if (dob && dob.getDate() === now.getDate() && dob.getMonth() === now.getMonth()) {
-        // Happy Birthday!
-        console.log(`It's ${data.nombre}'s birthday!`);
-        await sendTemplate(data.telefono, 'Feliz Cumpleaños', { '1': data.nombre });
-      }
-    }
-  }
-
-  // -- 2. Appointment Reminders --
-  if (notifications.appointment_reminder?.enabled) {
-    // Logic depends on 'day_before' or 'same_day' + hours
-    const timing = notifications.appointment_reminder.timing;
-    let targetStart = new Date();
-    let targetEnd = new Date();
-
-    // This is a simplified check. For robust 'hours before', we need to check current hour + X.
-    // Let's implement 'Day Before' as: running at 6 PM to check tomorrow? 
-    // Or running hourly to check appointments in exactly X hours.
-    // Assuming 'day_before' means 24 hours before.
-
-    // Strategy: Look for appointments starting between [now + X hours, now + X hours + 1 hour window]
-    // This requires precise math.
-
-    if (timing?.type === 'day_before') {
-      // Check for appointments tomorrow at this same hour (roughly 24h from now)
-      targetStart.setDate(targetStart.getDate() + 1);
-    } else if (timing?.hours_before) {
-      targetStart.setHours(targetStart.getHours() + timing.hours_before);
-    }
-
-    // Create 1 hour window
-    targetEnd = new Date(targetStart);
-    targetEnd.setHours(targetEnd.getHours() + 1);
-
-    const startStr = targetStart.toISOString(); // Firestore string comparison works for ISO dates
-    // Warning: 'fecha' field is YYYY-MM-DD. 'hora_inicio' is HH:MM.
-    // We need to query based on fecha and hora_inicio.
-
-    const targetDateStr = targetStart.toISOString().split('T')[0];
-    const targetHourStr = targetStart.toTimeString().slice(0, 5); // HH:MM
-
-    // Query reservations for the target date
-    const resSettings = notifications.appointment_reminder;
-
-    const resSnap = await db.collection('reservas')
-      .where('fecha', '==', targetDateStr)
-      .get();
-
-    for (const doc of resSnap.docs) {
-      const res = doc.data();
-      if (res.estado === 'Confirmado' || res.estado === 'Pendiente') { // Only remind active ones
-        // Check time
-        // res.hora_inicio is '14:30'. We checked 'targetHourStr' which is based on execution time.
-        // We want to send reminder closely matched.
-        // If we run hourly, we check if res.hora_inicio starts with current hour + offset.
-
-        const resHour = parseInt(res.hora_inicio.split(':')[0], 10);
-        const targetHour = targetStart.getHours();
-
-        if (resHour === targetHour) {
-          // Get Client
-          const clientDoc = await db.collection('clientes').doc(res.cliente_id).get();
-          if (clientDoc.exists) {
-            const clientData = clientDoc.data();
-            // Check if already sent? (Optional: Add flag to reservation)
-            if (!res.reminderSent) {
-              console.log(`Sending reminder to ${clientData.nombre} for ${res.fecha} ${res.hora_inicio}`);
-              const sent = await sendTemplate(clientData.telefono, 'Recordatorio Cita', {
-                '1': clientData.nombre,
-                '2': res.servicio || 'Servicio',
-                '3': `${res.fecha} a las ${res.hora_inicio}`
-              });
-              if (sent) {
-                await doc.ref.update({ reminderSent: true });
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // -- 3. Google Reviews --
-  // Run once a day at 12:00 PM
-  if (now.getHours() === 12 && notifications.google_review?.enabled) {
-    // Check reservations from YESTERDAY
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    const resSnap = await db.collection('reservas')
-      .where('fecha', '==', yesterdayStr)
-      .where('estado', '==', 'Asiste') // Completed appointments
-      .get();
-
-    for (const doc of resSnap.docs) {
-      const res = doc.data();
-      const clientRef = db.collection('clientes').doc(res.cliente_id);
-      const clientDoc = await clientRef.get();
-
-      if (clientDoc.exists) {
-        const clientData = clientDoc.data();
-        if (!clientData.reviewRequestSent) {
-          console.log(`Asking ${clientData.nombre} for review...`);
-          const sent = await sendTemplate(clientData.telefono, 'Solicitud Reseña', { '1': clientData.nombre });
-          if (sent) {
-            await clientRef.update({ reviewRequestSent: true });
-          }
-        }
-      }
-    }
+exports.triggerManualChecks = onRequest({
+  cors: true,
+  secrets: [mpAccessToken, resendApiKey]
+}, async (req, res) => {
+  try {
+    await runAutomatedChecks();
+    res.status(200).send("Automated checks executed successfully (Reminders sent if applicable).");
+  } catch (e) {
+    console.error("Manual Trigger Error:", e);
+    res.status(500).send(e.message);
   }
 });
+
+async function runAutomatedChecks() {
+  console.log("Running Automated Checks (Email Reminders)...");
+  const db = admin.firestore();
+
+  // 1. Config & Setup
+  const [reminderSettingsDoc, empresaSnap, emailConfigDoc] = await Promise.all([
+    db.collection('configuracion').doc('recordatorios').get(),
+    db.collection('empresa').limit(1).get(),
+    db.collection('configuracion').doc('emails').get()
+  ]);
+
+  const reminderSettings = reminderSettingsDoc.exists ? reminderSettingsDoc.data() : {};
+  const notifications = reminderSettings.notifications || {};
+  const empresaConfig = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
+  const emailConfig = emailConfigDoc.exists ? emailConfigDoc.data() : {};
+
+  const senderName = empresaConfig.name || 'VATOS ALFA';
+  const senderEmail = 'contacto@vatosalfa.com';
+  const logoUrl = empresaConfig.logo_url || 'https://vatosalfa.com/logo.png';
+
+  let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+  try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
+  const resend = new Resend(apiKey);
+
+  // Timezone Handling (Mexico City)
+  const timeZone = 'America/Mexico_City';
+  const now = new Date();
+  const getMexicoDate = (date) => {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
+  };
+  // Format: YYYY-MM-DD, HH:mm
+  const mexicoNowStr = getMexicoDate(now);
+  const [mDate, mTimePart] = mexicoNowStr.split(', ');
+  // Note: format output depends on node version/locale (comma usually present in en-CA for separation? Actually en-CA is mostly YYYY-MM-DD). 
+  // Let's use formatToParts for safety
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(now);
+  const p = (type) => parts.find(x => x.type === type).value;
+  const nowMexicoYear = parseInt(p('year'));
+  const nowMexicoMonth = parseInt(p('month')) - 1;
+  const nowMexicoDay = parseInt(p('day'));
+  const nowMexicoHour = parseInt(p('hour'));
+  const nowMexicoMin = parseInt(p('minute'));
+
+  const nowMexico = new Date(nowMexicoYear, nowMexicoMonth, nowMexicoDay, nowMexicoHour, nowMexicoMin);
+
+  // 2. Appointment Reminders
+  const remindConfig = notifications.appointment_reminder;
+  if (remindConfig?.enabled !== false) {
+    const hoursBefore = remindConfig?.timing?.hours_before || 24; // Default generous window for testing
+
+    const targetEnd = new Date(nowMexico);
+    targetEnd.setHours(targetEnd.getHours() + hoursBefore);
+
+    // Query reservations for range
+    const todayStr = `${nowMexicoYear}-${String(nowMexicoMonth + 1).padStart(2, '0')}-${String(nowMexicoDay).padStart(2, '0')}`;
+
+    // Simple query: Get Today's and Tomorrow's reservations to scan
+    const tomorrow = new Date(nowMexico);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+
+    // Fetch potential reservations
+    const snapToday = await db.collection('reservas').where('fecha', '==', todayStr).get();
+    const snapTomorrow = await db.collection('reservas').where('fecha', '==', tomorrowStr).get();
+
+    const candidates = [...snapToday.docs, ...snapTomorrow.docs];
+
+    for (const doc of candidates) {
+      const res = doc.data();
+      if (res.estado !== 'Confirmado' && res.estado !== 'Pendiente') continue;
+      if (res.reminderSent) continue;
+
+      // Construct Reservation Time (Mexico)
+      if (!res.fecha || !res.hora_inicio) continue;
+      const [ry, rm, rd] = res.fecha.split('-').map(Number);
+      const [rh, rmin] = res.hora_inicio.split(':').map(Number);
+      const resDate = new Date(ry, rm - 1, rd, rh, rmin);
+
+      // Check if in the past
+      if (resDate < nowMexico) continue;
+
+      // Check if within window
+      if (resDate <= targetEnd) {
+        // SEND REMINDER
+        if (!res.cliente_id) continue;
+        const clientDoc = await db.collection('clientes').doc(res.cliente_id).get();
+        if (!clientDoc.exists) continue;
+        const clientData = clientDoc.data();
+        const email = clientData.correo || clientData.email;
+
+        if (email && email.includes('@')) {
+          console.log(`[Reminders] Sending to ${email} for ${res.fecha} ${res.hora_inicio}`);
+
+          const html = `
+                 <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+                   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                      <img src="${logoUrl}" width="150" style="margin-bottom: 20px;" />
+                      <h2 style="color: #333; margin-bottom: 10px;">¡Recordatorio de Cita!</h2>
+                      <p style="color: #666; margin-bottom: 20px;">Hola ${clientData.nombre}, te recordamos que tienes una cita próxima.</p>
+                      
+                      <div style="background: #f0fdf4; border: 1px solid #dcfce7; padding: 20px; border-radius: 8px; display: inline-block; text-align: left; margin-bottom: 20px;">
+                         <p style="margin: 5px 0;"><strong>Fecha:</strong> ${res.fecha}</p>
+                         <p style="margin: 5px 0;"><strong>Hora:</strong> ${res.hora_inicio}</p>
+                         <p style="margin: 5px 0;"><strong>Servicio:</strong> ${res.servicio || 'Servicio General'}</p>
+                      </div>
+                      
+                      <p style="font-size: 0.9em; color: #999;">${senderName}</p>
+                   </div>
+                 </div>
+               `;
+
+          try {
+            await resend.emails.send({
+              from: `${senderName} <${senderEmail}>`,
+              to: email,
+              subject: `Recordatorio de Cita - ${senderName}`,
+              html: html
+            });
+
+            await db.collection('reservas').doc(doc.id).update({ reminderSent: true });
+            console.log(`[Reminders] Sent and Marked ${doc.id}`);
+          } catch (err) {
+            console.error(`[Reminders] Failed to send to ${doc.id}:`, err);
+          }
+        }
+      }
+    }
+  }
+}
 
 exports.backfillClientNumbers = onRequest(
   {
@@ -1904,10 +1896,15 @@ exports.resendReservationConfirmation = onCall(
         throw new HttpsError('failed-precondition', 'La reserva no tiene cliente asociado.');
       }
 
-      // Reuse the existing helper function
+      // Check for Client Email to provide feedback
+      const clientDoc = await db.collection('clientes').doc(clientId).get();
+      const clientData = clientDoc.exists ? clientDoc.data() : {};
+      const hasEmail = (clientData.correo && clientData.correo.includes('@')) || (clientData.email && clientData.email.includes('@'));
+
+      // Reuse the existing helper function (sends to Pro + Client if applicable)
       await sendReservationConfirmationEmail(reservationId, clientId, localId);
 
-      return { success: true };
+      return { success: true, warning: hasEmail ? null : 'El cliente no tiene correo registrado, solo se notificó al profesional.' };
     } catch (error) {
       console.error("Error resending reservation confirmation:", error);
       throw new HttpsError('internal', error.message);

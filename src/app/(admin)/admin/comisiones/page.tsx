@@ -65,7 +65,7 @@ export default function ComisionesPage() {
     }
   };
 
-  const sortedProfessionals = useMemo(() => [...professionals].sort((a, b) => a.name.localeCompare(b.name)), [professionals]);
+  const sortedProfessionals = useMemo(() => [...professionals].filter(p => p.active && !p.deleted).sort((a, b) => a.name.localeCompare(b.name)), [professionals]);
   const sortedServices = useMemo(() => [...services].sort((a, b) => a.name.localeCompare(b.name)), [services]);
   const sortedProducts = useMemo(() => [...products].sort((a, b) => a.nombre.localeCompare(b.nombre)), [products]);
 

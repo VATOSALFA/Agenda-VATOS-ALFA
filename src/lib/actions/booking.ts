@@ -470,10 +470,327 @@ export async function createPublicReservation(data: any) {
 
         const resRef = await db.collection('reservas').add(reservationData);
 
-        return { success: true, reservationId: resRef.id };
+        // --- EMAIL NOTIFICATIONS ---
+        let emailWarning = null;
+        try {
+            // Await execution to ensure delivery in Serverless environment (Next.js Server Actions)
+            await sendBookingConfirmation(reservationData, db, data.client.email, data.professionalId);
+        } catch (emailError: any) {
+            console.error("Failed to send confirmation emails:", emailError);
+            emailWarning = `Email falló: ${emailError.message}`;
+        }
+
+        return { success: true, reservationId: resRef.id, warning: emailWarning };
 
     } catch (error: any) {
         console.error("Error creating reservation:", error);
         return { error: error.message };
+    }
+}
+
+// --- MANUAL EMAIL TRIGGER (FOR ADMIN PANEL) ---
+export async function sendManualBookingConfirmation(reservationId: string) {
+    const db = getDb();
+    if (!db) return { error: 'Database not available' };
+
+    try {
+        const resDoc = await db.collection('reservas').doc(reservationId).get();
+        if (!resDoc.exists) return { error: 'Reserva no encontrada' };
+
+        const reservation = resDoc.data();
+        if (!reservation) return { error: 'Datos vacíos' };
+
+        if (reservation.notifications?.email_notification === false) {
+            return { success: true, skipped: true };
+        }
+
+        // Fetch Client Email manually since internal function needs it arg
+        let clientEmail = '';
+        if (reservation.cliente_id) {
+            const clientDoc = await db.collection('clientes').doc(reservation.cliente_id).get();
+            if (clientDoc.exists) {
+                const data = clientDoc.data();
+                clientEmail = data?.correo || data?.email || '';
+            }
+        }
+
+        const professionalId = reservation.barbero_id || (reservation.items && reservation.items[0] ? reservation.items[0].barbero_id : '');
+
+        await sendBookingConfirmation(reservation, db, clientEmail, professionalId);
+        return { success: true };
+    } catch (e: any) {
+        console.error("Manual Email Error:", e);
+        return { error: e.message }; // Return error to client for toast
+    }
+}
+
+// --- EMAIL HELPER ---
+import { Resend } from 'resend';
+
+async function sendBookingConfirmation(reservation: any, db: any, clientEmail: string, professionalId: string) {
+    if (!clientEmail && !professionalId) return;
+
+    // Direct error propagation - no try/catch wrapping the whole thing
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+        throw new Error("RESEND_API_KEY is missing in server environment.");
+    }
+    const resend = new Resend(resendApiKey);
+
+    // 1. Fetch Configuration & Sender
+    const [emailConfigDoc, websiteSettingsDoc, empresaSnap, professionalDoc, localDoc, clientDoc] = await Promise.all([
+        db.collection('configuracion').doc('emails').get(),
+        db.collection('settings').doc('website').get(),
+        db.collection('empresa').limit(1).get(),
+        professionalId ? db.collection('profesionales').doc(professionalId).get() : Promise.resolve({ exists: false, data: () => ({}) }),
+        reservation.local_id ? db.collection('locales').doc(reservation.local_id).get() : Promise.resolve({ exists: false, data: () => ({}) }),
+        reservation.cliente_id ? db.collection('clientes').doc(reservation.cliente_id).get() : Promise.resolve({ exists: false, data: () => ({}) })
+    ]);
+
+    const emailConfig = emailConfigDoc.exists ? emailConfigDoc.data() : {};
+    const websiteSettings = websiteSettingsDoc.exists ? websiteSettingsDoc.data() : {};
+    const empresaConfig = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
+    const professional = professionalDoc.exists ? professionalDoc.data() : {};
+    const localData = localDoc.exists ? localDoc.data() : {};
+    const clientData = clientDoc.exists ? clientDoc.data() : {};
+
+    // Determine Sender
+    const senderName = empresaConfig.name || 'VATOS ALFA Barber Shop';
+    const senderEmail = 'contacto@vatosalfa.com'; // Default verified
+    const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
+    const secondaryColor = empresaConfig.theme?.secondaryColor || '#314177';
+
+    // Construct Sender String correctly
+    let fromEmail = `${senderName} <${senderEmail}>`;
+
+    // Override with configured sender if available
+    if (emailConfig.senders && Array.isArray(emailConfig.senders)) {
+        const primary = emailConfig.senders.find((s: any) => s.isPrimary && s.confirmed);
+        const anyConfirmed = emailConfig.senders.find((s: any) => s.confirmed);
+        const sender = primary || anyConfirmed;
+        if (sender) fromEmail = `${senderName} <${sender.email}>`;
+    }
+
+    // Common Data formatting
+    const itemsList = reservation.items || [{ servicio: reservation.servicio || 'Servicio' }];
+    const itemsListHtml = itemsList.map((i: any) =>
+        `<div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">${i.nombre || i.servicio || 'Servicio'}</div>`
+    ).join('');
+
+    let dateStr = reservation.fecha;
+    try {
+        // Try parsing if it's YYYY-MM-DD
+        if (reservation.fecha && typeof reservation.fecha === 'string' && reservation.fecha.includes('-')) {
+            const dateObj = parse(reservation.fecha, 'yyyy-MM-dd', new Date());
+            dateStr = format(dateObj, "EEEE, d 'de' MMMM, yyyy", { locale: es });
+        }
+    } catch (e) {
+        console.log("Date parsing skipped:", e);
+    }
+
+    const timeStr = reservation.hora_inicio || '00:00';
+
+    const localAddress = localData.address || localData.direccion || 'Sucursal Principal';
+    const localPhone = localData.phone || localData.telefono || '';
+    const whatsappLink = localPhone ? `https://wa.me/${localPhone.replace(/\D/g, '')}` : '#';
+
+    // --- CLIENT EMAIL ---
+    const clientConfig = websiteSettings.confirmationEmailConfig || {};
+    const isClientEnabled = clientEmail && clientConfig.enabled !== false;
+
+    if (isClientEnabled) {
+        const subject = `Confirmación de Cita - ${senderName}`;
+
+        const showDate = clientConfig.showDate !== false;
+        const showTime = clientConfig.showTime !== false;
+        const showProfessional = clientConfig.showProfessional !== false;
+        const showLocation = clientConfig.showLocation !== false;
+        const showServices = clientConfig.showServices !== false;
+        const yellowNote = websiteSettings.predefinedNotes || 'Favor de llegar 5 minutos antes de la hora de tu cita.';
+
+        const html = `
+            <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+            
+            <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                    <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
+                </div>
+
+                <div style="padding: 25px;">
+                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡Hola${clientData.nombre ? ' ' + clientData.nombre : ''}, tu cita está confirmada!</h2>
+                    
+                    ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
+
+                    <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                            ${showDate ? `<tr>
+                            <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                            <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                            </tr>` : ''}
+                            
+                            ${showTime ? `<tr>
+                            <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                            <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                            </tr>` : ''}
+
+                            ${showProfessional ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${professional.name || 'Profesional'}</td>
+                            </tr>` : ''}
+
+                            ${showLocation ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                            </tr>` : ''}
+                    </table>
+
+                    <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
+                        ${yellowNote}
+                    </div>
+
+                    <div style="margin-top: 25px; text-align: left;">
+                        <div style="margin-bottom: 12px; padding-left: 2px;">
+                            <a href="${whatsappLink}" style="text-decoration: none; color: #333; display: inline-flex; align-items: center;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" style="margin-right: 12px;" alt="WhatsApp" />
+                                <span style="font-weight: 700; font-size: 1em;">Contáctanos por WhatsApp</span>
+                            </a>
+                        </div>
+                        <div style="display: flex; align-items: center; color: #333; padding-left: 2px;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/724/724664.png" width="20" style="margin-right: 12px; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);" alt="Teléfono" />
+                                <span style="font-weight: 700; font-size: 1em;">${localPhone}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="background-color: #ffffff; padding: 20px; text-align: center; font-size: 0.75em; color: #bbb; border-top: 1px solid #f9f9f9;">
+                    ${emailConfig.signature ? emailConfig.signature.replace(/\n/g, '<br/>') : senderName}
+                </div>
+            </div>
+        </div>`;
+
+        await resend.emails.send({
+            from: fromEmail,
+            to: clientEmail,
+            subject: subject,
+            html: html
+        });
+        console.log(`[Email] Client confirmation sent to ${clientEmail}`);
+    } else {
+        console.log(`[Email] Skipping Client Email. Email: ${clientEmail}, Enabled: ${clientConfig.enabled}`);
+    }
+
+    // --- PROFESSIONAL EMAIL ---
+    const profConfig = websiteSettings.professionalConfirmationEmailConfig || {};
+    let isProfEnabled = professional.email && profConfig.enabled !== false;
+
+    // QUIET HOURS LOGIC: Skip if < 8:00 AM or > Today's Closing Time
+    if (isProfEnabled) {
+        try {
+            const timeZone = localData.timezone || 'America/Mexico_City';
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('es-MX', {
+                timeZone,
+                weekday: 'long',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: false
+            });
+            const parts = formatter.formatToParts(now);
+            const dayName = parts.find(p => p.type === 'weekday')?.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || '';
+            const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+            const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+            const currentMinutes = hour * 60 + minute;
+            const summaryTimeMinutes = 8 * 60; // 08:00 AM
+
+            const schedule = localData.schedule || {};
+            const scheduleDay = schedule[dayName];
+
+            if (scheduleDay && scheduleDay.enabled && scheduleDay.end) {
+                const [endH, endM] = scheduleDay.end.split(':').map(Number);
+                const endMinutes = endH * 60 + endM;
+
+                // Rule: If it's too early (before Daily Summary) OR too late (After closing), SKIP.
+                if (currentMinutes < summaryTimeMinutes || currentMinutes > endMinutes) {
+                    console.log(`[Email-Pro] Quiet Hours enforced (Current: ${hour}:${minute}, Window: 08:00-${scheduleDay.end}). Skipping email.`);
+                    isProfEnabled = false;
+                }
+            } else {
+                // Shop Closed today: Skip email (relies on next available Summary)
+                console.log(`[Email-Pro] Shop Closed or No Schedule for ${dayName}. Skipping email.`);
+                isProfEnabled = false;
+            }
+        } catch (e) {
+            console.error("Error checking quiet hours:", e);
+        }
+    }
+
+    if (isProfEnabled) {
+        const subject = `Nueva Cita - ${clientData.nombre || 'Cliente'}`;
+
+        const showDate = profConfig.showDate !== false;
+        const showTime = profConfig.showTime !== false;
+        const showClientName = profConfig.showClientName !== false;
+        const showLocation = profConfig.showLocation !== false;
+        const showServices = profConfig.showServices !== false;
+        const note = profConfig.note || '';
+
+        const html = `
+                <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+                
+                <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                        <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
+                    </div>
+
+                    <div style="padding: 25px;">
+                        <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡${professional.name || 'Profesional'}, tienes una nueva cita!</h2>
+                        
+                        ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
+
+                        <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                            ${showDate ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                            </tr>` : ''}
+                            
+                            ${showTime ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                            </tr>` : ''}
+
+                            ${showClientName ? `<tr>
+                                    <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                    <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${clientData.nombre || 'Cliente'} ${clientData.apellido || ''}</td>
+                                </tr>` : ''}
+
+                            ${showLocation ? `<tr>
+                                    <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                    <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                                </tr>` : ''}
+                        </table>
+
+                        ${note ? `
+                        <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
+                            ${note}
+                        </div>` : ''}
+                    </div>
+                    
+                    <div style="background-color: #ffffff; padding: 20px; text-align: center; font-size: 0.75em; color: #bbb; border-top: 1px solid #f9f9f9;">
+                        ${emailConfig.signature ? emailConfig.signature.replace(/\n/g, '<br/>') : senderName}
+                    </div>
+                </div>
+                </div>
+                `;
+
+        await resend.emails.send({
+            from: fromEmail,
+            to: professional.email,
+            subject: subject,
+            html: html
+        });
+        console.log(`[Email] Professional confirmation sent to ${professional.email}`);
+    } else {
+        console.log(`[Email] Skipping Professional Email. Email: ${professional.email}, Enabled: ${profConfig.enabled}`);
     }
 }

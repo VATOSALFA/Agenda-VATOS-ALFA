@@ -60,40 +60,40 @@ function Calendar({
       components={{
         IconLeft: () => <ChevronLeft className="h-4 w-4" />,
         IconRight: () => <ChevronRight className="h-4 w-4" />,
-        Dropdown: ({ name, value, onChange, children }) => {
-            const options = React.Children.toArray(children) as React.ReactElement<React.HTMLProps<HTMLOptionElement>>[];
-            const handleValueChange = (newValue: string) => {
-              const changeEvent = {
-                target: { value: newValue },
-              } as React.ChangeEvent<HTMLSelectElement>;
-              if (onChange) onChange(changeEvent);
-            };
+        Dropdown: ({ name, value, onChange, children }: DropdownProps) => {
+          const options = React.Children.toArray(children) as React.ReactElement<React.HTMLProps<HTMLOptionElement>>[];
+          const handleValueChange = (newValue: string) => {
+            const changeEvent = {
+              target: { value: newValue },
+            } as React.ChangeEvent<HTMLSelectElement>;
+            if (onChange) onChange(changeEvent);
+          };
 
-            let selectValue: string | undefined;
-            let triggerDisplayValue = value;
+          let selectValue: string | undefined;
+          let triggerDisplayValue = value;
 
-            if (name === 'months' && value !== undefined) {
-              selectValue = String(value);
-              triggerDisplayValue = new Date(new Date().getFullYear(), value as number).toLocaleString('default', { month: 'long' });
-            } else if (name === 'years' && value !== undefined) {
-              selectValue = String(value);
-              triggerDisplayValue = String(value);
-            }
-            
-            return (
-              <Select onValueChange={handleValueChange} value={selectValue}>
-                <SelectTrigger className="w-[120px]">{triggerDisplayValue}</SelectTrigger>
-                <SelectContent>
-                  <ScrollArea className="h-80">
-                    {options.map((option, index) => (
-                      <SelectItem key={`${option.props.value}-${index}`} value={String(option.props.value)}>
-                        {option.props.children}
-                      </SelectItem>
-                    ))}
-                  </ScrollArea>
-                </SelectContent>
-              </Select>
-            );
+          if (name === 'months' && value !== undefined) {
+            selectValue = String(value);
+            triggerDisplayValue = new Date(new Date().getFullYear(), value as number).toLocaleString('default', { month: 'long' });
+          } else if (name === 'years' && value !== undefined) {
+            selectValue = String(value);
+            triggerDisplayValue = String(value);
+          }
+
+          return (
+            <Select onValueChange={handleValueChange} value={selectValue}>
+              <SelectTrigger className="w-[120px]">{triggerDisplayValue}</SelectTrigger>
+              <SelectContent>
+                <ScrollArea className="h-80">
+                  {options.map((option, index) => (
+                    <SelectItem key={`${option.props.value}-${index}`} value={String(option.props.value)}>
+                      {option.props.children}
+                    </SelectItem>
+                  ))}
+                </ScrollArea>
+              </SelectContent>
+            </Select>
+          );
         },
       }}
       {...props}

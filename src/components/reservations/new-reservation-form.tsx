@@ -39,6 +39,7 @@ import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshC
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType, Product } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
+import { sendManualBookingConfirmation } from '@/lib/actions/booking';
 import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
@@ -85,6 +86,7 @@ const createReservationSchema = (isEditMode: boolean) => z.object({
   notas: z.string().optional(),
   nota_interna: z.string().optional(),
   notifications: z.object({
+    email_notification: z.boolean().default(true),
     whatsapp_notification: z.boolean().default(false),
     whatsapp_reminder: z.boolean().default(false),
   }).optional(),
@@ -321,6 +323,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       precio: 0,
       items: [{ servicio: '', barbero_id: '' }],
       notifications: {
+        email_notification: true,
         whatsapp_notification: false,
         whatsapp_reminder: false,
       }
@@ -558,9 +561,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         precio: initialData.precio || 0,
         notas: initialData.notas || '',
         nota_interna: initialData.nota_interna || '',
-        notifications: initialData.notifications || {
-          whatsapp_notification: true,
-          whatsapp_reminder: true
+        notifications: {
+          email_notification: initialData.notifications?.email_notification ?? true,
+          whatsapp_notification: initialData.notifications?.whatsapp_notification ?? (initialData.notifications ? false : true),
+          whatsapp_reminder: initialData.notifications?.whatsapp_reminder ?? (initialData.notifications ? false : true)
         },
         local_id: initialData.local_id
       });
@@ -714,16 +718,34 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         professional_lock: isProfessionalLocked,
       };
 
+      let reservationId = initialData?.id;
+
       if (isEditMode && initialData?.id) {
         const resRef = doc(db, 'reservas', initialData.id);
         await updateDoc(resRef, dataToSave);
       } else {
-        await addDoc(collection(db, 'reservas'), {
+        const newRef = await addDoc(collection(db, 'reservas'), {
           ...dataToSave,
           pago_estado: 'Pendiente',
           canal_reserva: 'agenda',
           creada_por: 'admin',
           creado_en: Timestamp.now(),
+        });
+        reservationId = newRef.id;
+      }
+
+      // Trigger Email Notification (Server Action)
+      if (reservationId && !isEditMode) {
+        sendManualBookingConfirmation(reservationId).then((res: any) => {
+          if (res?.error) {
+            console.error("Email sending failed:", res.error);
+            toast({ variant: "destructive", title: "Aviso de Email", description: `Error enviando correo: ${res.error}` });
+          } else if (res?.skipped) {
+            toast({ description: "Envío de correo omitido." });
+          } else {
+            console.log("Confirmation email sent successfully.");
+            toast({ description: "Correo de confirmación enviado." });
+          }
         });
       }
 
@@ -851,10 +873,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                               mode="single"
                               selected={field.value}
                               onSelect={(date) => {
-                                field.onChange(date);
-                                setIsCalendarOpen(false);
+                                if (date) {
+                                  field.onChange(date);
+                                  setIsCalendarOpen(false);
+                                }
                               }}
                               disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                              required
                               initialFocus
                             />
                           </PopoverContent>
@@ -1040,6 +1065,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 <AccordionItem value="info" className="border-none">
                   <AccordionTrigger className="px-6 py-4 text-sm font-medium hover:no-underline">Información adicional</AccordionTrigger>
                   <AccordionContent className="px-6 pb-4 space-y-4">
+                    <FormField control={form.control} name="notifications.email_notification" render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-white">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="cursor-pointer">Enviar confirmación por correo</FormLabel>
+                        </div>
+                      </FormItem>
+                    )} />
+
                     <FormField control={form.control} name="precio" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Precio</FormLabel>

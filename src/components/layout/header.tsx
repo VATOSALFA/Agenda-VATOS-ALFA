@@ -378,7 +378,7 @@ export default function Header() {
                     className={cn(
                       'px-3 py-2 rounded-md transition-colors',
                       isActive
-                        ? 'bg-black/10 text-primary-foreground'
+                        ? 'bg-secondary text-secondary-foreground'
                         : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                     )}
                   >
@@ -394,7 +394,7 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/sales')
-                      ? 'bg-black/10 text-primary-foreground'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Ventas <ChevronDown className="w-4 h-4 ml-1" />
@@ -421,7 +421,7 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/products')
-                      ? 'bg-black/10 text-primary-foreground'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Productos <ChevronDown className="w-4 h-4 ml-1" />
@@ -448,7 +448,7 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/reports')
-                      ? 'bg-black/10 text-primary-foreground'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Reportes <ChevronDown className="w-4 h-4 ml-1" />
@@ -475,7 +475,7 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/finanzas')
-                      ? 'bg-black/10 text-primary-foreground'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Finanzas <ChevronDown className="w-4 h-4 ml-1" />
@@ -505,7 +505,7 @@ export default function Header() {
                   <Button variant="ghost" className={cn(
                     'px-3 py-2 rounded-md transition-colors text-sm font-medium',
                     pathname.startsWith('/admin')
-                      ? 'bg-black/10 text-primary-foreground'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
                     Administración <ChevronDown className="w-4 h-4 ml-1" />

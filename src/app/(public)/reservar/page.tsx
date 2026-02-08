@@ -678,6 +678,10 @@ export default function BookingPage() {
 
                     if (res.success && res.reservationId) {
                         createdReservationIds.push(res.reservationId);
+                        if (res.warning) {
+                            console.warn("SERVER WARNING:", res.warning);
+                            toast({ variant: "destructive", title: "Aviso del Sistema", description: res.warning, duration: 10000 });
+                        }
                     } else {
                         errorCount++;
                         lastError = res.error || "Error al crear la reserva";

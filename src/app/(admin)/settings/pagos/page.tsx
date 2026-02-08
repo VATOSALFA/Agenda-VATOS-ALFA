@@ -274,20 +274,6 @@ export default function PagosAgendaProPage() {
             </div>
 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="show-tips" className="font-semibold text-base">Mostrar opciones de propina</Label>
-                            <Controller
-                                name="showTips"
-                                control={form.control}
-                                render={({ field }) => (
-                                    <Switch id="show-tips" checked={field.value} onCheckedChange={field.onChange} />
-                                )}
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
 
                 <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
 

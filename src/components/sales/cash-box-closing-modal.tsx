@@ -171,7 +171,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   }
 
   const filteredUsers = useMemo(() => {
-    return users.filter(u => u.role === 'Administrador local' || u.role === 'Recepcionista');
+    return users.filter(u => u.role === 'Administrador local' || u.role === 'Recepcionista' || u.role === 'Administrador general');
   }, [users]);
 
 
@@ -296,9 +296,9 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                         <p>Fondo Base</p>
                         <p>- ${fondoBase.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
                       </div>
-                      <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia !== 0 ? 'text-red-500' : 'text-green-500')}>
+                      <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia >= 0 ? 'text-primary' : 'text-muted-foreground')}>
                         <p>Diferencia</p>
-                        <p>{diferencia < 0 ? '-' : ''}${Math.abs(diferencia).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                        <p>{diferencia < 0 ? '' : '+'}${diferencia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
                       </div>
                     </div>
                   </div>

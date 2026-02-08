@@ -201,8 +201,14 @@ export function ReservationDetailModal({
     setIsSendingEmail(true);
     try {
       const resendFn = httpsCallable(functions, 'resendReservationConfirmation');
-      await resendFn({ reservationId: reservation.id });
-      toast({ title: "Correo enviado", description: "Se ha enviado la confirmación al cliente." });
+      const result = await resendFn({ reservationId: reservation.id });
+      const data = result.data as any;
+
+      if (data?.warning) {
+        toast({ title: "Atención", description: data.warning, variant: "destructive" });
+      } else {
+        toast({ title: "Correo enviado", description: "Se ha enviado la confirmación al cliente." });
+      }
     } catch (error: any) {
       console.error("Error sending email:", error);
       toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo enviar el correo." });

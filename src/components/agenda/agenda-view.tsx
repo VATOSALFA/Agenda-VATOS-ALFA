@@ -127,7 +127,7 @@ const useCurrentTime = () => {
 
 const NonWorkBlock = ({ top, height, text, onClick }: { top: number, height: number, text: string, onClick?: (e: MouseEvent<HTMLDivElement>) => void }) => (
   <div
-    className={cn("absolute w-full bg-striped-gray flex items-center justify-center p-2 z-0", onClick && "cursor-pointer hover:bg-gray-200/50 transition-colors")}
+    className={cn("absolute w-full bg-gray-100 flex items-center justify-center p-2 z-0", onClick && "cursor-pointer hover:bg-gray-200/50 transition-colors")}
     style={{ top: `${top}px`, height: `${height}px` }}
     onClick={onClick}
   >

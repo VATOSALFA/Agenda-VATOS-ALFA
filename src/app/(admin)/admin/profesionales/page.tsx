@@ -152,9 +152,9 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </Tooltip>
 
         <Badge variant={prof.active ? 'default' : 'destructive'} className={cn(
-          prof.active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'
+          prof.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50'
         )}>
-          <Circle className={cn("mr-2 h-2 w-2 fill-current", prof.active ? 'text-green-600' : 'text-red-600')} />
+          <Circle className={cn("mr-2 h-2 w-2 fill-current", prof.active ? 'text-primary' : 'text-accent-foreground')} />
           {prof.active ? 'Activo' : 'Inactivo'}
         </Badge>
         <DropdownMenu>

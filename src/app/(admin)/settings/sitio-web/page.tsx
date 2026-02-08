@@ -143,25 +143,7 @@ export default function SitioWebPage() {
             </div>
 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-                <Card>
-                    <CardContent className="p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="onlineReservations" className="font-semibold">Reservas en línea</Label>
-                            <Controller
-                                control={form.control}
-                                name="onlineReservations"
-                                render={({ field }) => (
-                                    <Switch
-                                        id="onlineReservations"
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                    />
-                                )}
-                            />
-                        </div>
 
-                    </CardContent>
-                </Card>
 
                 <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
                     <AccordionItem value="item-1" className="border rounded-lg bg-card">

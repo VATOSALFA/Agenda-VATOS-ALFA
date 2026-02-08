@@ -180,7 +180,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                                     </SelectTrigger>
                                     <SelectContent>
                                         {(item.tipo === 'servicio'
-                                            ? serviceSellers.filter(p => !p.services || p.services.includes(item.id))
+                                            ? serviceSellers.filter((p: any) => !p.services || p.services.includes(item.id))
                                             : productSellers
                                         ).map((b: { id: string, name: string }) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                                     </SelectContent>

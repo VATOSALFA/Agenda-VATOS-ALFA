@@ -37,15 +37,22 @@ const DialogContent = React.forwardRef<
   // Efecto para garantizar la limpieza de estilos del body al desmontar el componente.
   React.useEffect(() => {
     return () => {
-      // Usamos un pequeño timeout para asegurar que la limpieza ocurra
-      // después de que cualquier otra lógica de cierre haya terminado.
-      setTimeout(() => {
+      // Limpieza inmediata
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
+
+      // Backup cleanup con timeout más largo para casos edge
+      const cleanup = () => {
         document.body.style.pointerEvents = "";
-        // También es buena idea restaurar el overflow por si acaso.
         document.body.style.overflow = "";
-      }, 50);
+        document.body.style.paddingRight = "";
+      };
+
+      setTimeout(cleanup, 100);
+      setTimeout(cleanup, 300);
     };
   }, []);
+
 
   return (
     <DialogPortal>

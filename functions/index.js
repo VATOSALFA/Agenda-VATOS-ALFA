@@ -829,7 +829,7 @@ exports.mercadoPagoWebhook = onRequest(
  * 3. Google Reviews
  */
 exports.checkAutomatedMessages = onSchedule({
-  schedule: "every 1 hours",
+  schedule: "every 1 minutes",
   secrets: [mpAccessToken, resendApiKey]
 }, async (event) => {
   await runAutomatedChecks();
@@ -896,7 +896,7 @@ async function runAutomatedChecks() {
   // 2. Appointment Reminders
   const remindConfig = notifications.appointment_reminder;
   if (remindConfig?.enabled !== false) {
-    const hoursBefore = remindConfig?.timing?.hours_before || 24; // Default generous window for testing
+    const hoursBefore = 48; // FORCE 48H for immediate testing (Ignore config)
 
     const targetEnd = new Date(nowMexico);
     targetEnd.setHours(targetEnd.getHours() + hoursBefore);

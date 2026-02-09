@@ -896,7 +896,7 @@ async function runAutomatedChecks() {
   // 2. Appointment Reminders
   const remindConfig = notifications.appointment_reminder;
   if (remindConfig?.enabled !== false) {
-    const hoursBefore = 48; // FORCE 48H for immediate testing (Ignore config)
+    const hoursBefore = remindConfig.timing?.hours_before || 24;
 
     const targetEnd = new Date(nowMexico);
     targetEnd.setHours(targetEnd.getHours() + hoursBefore);

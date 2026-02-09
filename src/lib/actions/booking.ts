@@ -619,7 +619,7 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
                 </div>
 
                 <div style="padding: 25px;">
-                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">{(tpl.headline || '¡Hola {nombre}, tu cita está confirmada!').replace('{nombre}', clientData.nombre || '').replace(/  +/g, ' ')}</h2>
+                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">${(tpl.headline || '¡Hola {nombre}, tu cita está confirmada!').replace('{nombre}', clientData.nombre || '').replace(/  +/g, ' ')}</h2>
                     
                     ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
 

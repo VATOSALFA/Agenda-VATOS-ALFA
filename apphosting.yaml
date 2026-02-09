@@ -97,3 +97,16 @@ env:
     
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY
     secret: FIREBASE_SERVICE_ACCOUNT_KEY
+
+  # --- MOVED FROM BACKEND SECTION (CRITICAL FIX) ---
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+
+  - variable: TWILIO_ACCOUNT_SID
+    secret: TWILIO_ACCOUNT_SID
+
+  - variable: TWILIO_AUTH_TOKEN
+    secret: TWILIO_AUTH_TOKEN
+
+  - variable: RECAPTCHA_SECRET_KEY
+    secret: RECAPTCHA_SECRET_KEY

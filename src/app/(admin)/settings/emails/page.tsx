@@ -90,6 +90,8 @@ export default function EmailsSettingsPage() {
             // Professional Email Settings
             enableProfessionalConfirmationEmail: true,
             profConfirmationEmailNote: '',
+            profSubject: 'Nueva Cita - {cliente}',
+            profHeadline: '¡{profesional}, tienes una nueva cita!',
             profShowDate: true,
             profShowTime: true,
             profShowLocation: true,
@@ -141,6 +143,12 @@ export default function EmailsSettingsPage() {
                         form.setValue('profShowLocation', data.professionalConfirmationEmailConfig.showLocation ?? true);
                         form.setValue('profShowServices', data.professionalConfirmationEmailConfig.showServices ?? true);
                         form.setValue('profShowClientName', data.professionalConfirmationEmailConfig.showClientName ?? true);
+                    }
+
+                    if (data.professionalConfirmationEmailTemplate) {
+                        const pTpl = data.professionalConfirmationEmailTemplate;
+                        form.setValue('profSubject', pTpl.subject || 'Nueva Cita - {cliente}');
+                        form.setValue('profHeadline', pTpl.headline || '¡{profesional}, tienes una nueva cita!');
                     }
                 }
 
@@ -215,6 +223,10 @@ export default function EmailsSettingsPage() {
                     showLocation: data.profShowLocation,
                     showServices: data.profShowServices,
                     showClientName: data.profShowClientName
+                },
+                professionalConfirmationEmailTemplate: {
+                    subject: data.profSubject,
+                    headline: data.profHeadline
                 }
             }, { merge: true });
 
@@ -702,76 +714,99 @@ export default function EmailsSettingsPage() {
                             </div>
 
                             {form.watch('enableProfessionalConfirmationEmail') && (
-                                <>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="profConfirmationEmailNote">Notas predefinidas</Label>
-                                        <Textarea
-                                            id="profConfirmationEmailNote"
-                                            placeholder="Mensaje para el profesional..."
-                                            maxLength={150}
-                                            {...form.register('profConfirmationEmailNote')}
-                                        />
-                                        <p className="text-[0.8rem] text-muted-foreground">
-                                            Este mensaje aparecerá en el correo. Máximo 150 caracteres.
-                                        </p>
-                                    </div>
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensajes</h4>
 
-                                    <div className="space-y-4 pt-4 border-t">
-                                        <h4 className="font-medium text-sm text-muted-foreground">Datos visibles en el correo</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                                                <Label htmlFor="profShowDate" className="cursor-pointer">Mostrar Fecha</Label>
-                                                <Controller
-                                                    control={form.control}
-                                                    name="profShowDate"
-                                                    render={({ field }) => (
-                                                        <Switch id="profShowDate" checked={field.value} onCheckedChange={field.onChange} />
-                                                    )}
-                                                />
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+
+                                        <div className="space-y-4 order-2 xl:order-1">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="profSubject">Asunto del Correo</Label>
+                                                <Input id="profSubject" {...form.register('profSubject')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{cliente}'}</code> para insertar el nombre del cliente.</p>
                                             </div>
-                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                                                <Label htmlFor="profShowTime" className="cursor-pointer">Mostrar Hora</Label>
-                                                <Controller
-                                                    control={form.control}
-                                                    name="profShowTime"
-                                                    render={({ field }) => (
-                                                        <Switch id="profShowTime" checked={field.value} onCheckedChange={field.onChange} />
-                                                    )}
-                                                />
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="profHeadline">Título Principal</Label>
+                                                <Input id="profHeadline" {...form.register('profHeadline')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{profesional}'}</code> para insertar el nombre del barbero.</p>
                                             </div>
-                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                                                <Label htmlFor="profShowLocation" className="cursor-pointer">Mostrar Lugar</Label>
-                                                <Controller
-                                                    control={form.control}
-                                                    name="profShowLocation"
-                                                    render={({ field }) => (
-                                                        <Switch id="profShowLocation" checked={field.value} onCheckedChange={field.onChange} />
-                                                    )}
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="profConfirmationEmailNote">Nota al pie (Recuadro)</Label>
+                                                <Textarea
+                                                    id="profConfirmationEmailNote"
+                                                    placeholder="Mensaje para el profesional..."
+                                                    maxLength={150}
+                                                    {...form.register('profConfirmationEmailNote')}
                                                 />
+                                                <p className="text-[0.8rem] text-muted-foreground">
+                                                    Este mensaje aparecerá en el correo. Máximo 150 caracteres.
+                                                </p>
                                             </div>
-                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                                                <Label htmlFor="profShowServices" className="cursor-pointer">Mostrar Servicios</Label>
-                                                <Controller
-                                                    control={form.control}
-                                                    name="profShowServices"
-                                                    render={({ field }) => (
-                                                        <Switch id="profShowServices" checked={field.value} onCheckedChange={field.onChange} />
-                                                    )}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                                                <Label htmlFor="profShowClientName" className="cursor-pointer">Nombre del cliente</Label>
-                                                <Controller
-                                                    control={form.control}
-                                                    name="profShowClientName"
-                                                    render={({ field }) => (
-                                                        <Switch id="profShowClientName" checked={field.value} onCheckedChange={field.onChange} />
-                                                    )}
-                                                />
+
+                                            <div className="space-y-4 pt-4 border-t">
+                                                <h4 className="font-medium text-sm text-muted-foreground">Datos visibles en el correo</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                        <Label htmlFor="profShowDate" className="cursor-pointer">Mostrar Fecha</Label>
+                                                        <Controller
+                                                            control={form.control}
+                                                            name="profShowDate"
+                                                            render={({ field }) => (
+                                                                <Switch id="profShowDate" checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                        <Label htmlFor="profShowTime" className="cursor-pointer">Mostrar Hora</Label>
+                                                        <Controller
+                                                            control={form.control}
+                                                            name="profShowTime"
+                                                            render={({ field }) => (
+                                                                <Switch id="profShowTime" checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                        <Label htmlFor="profShowLocation" className="cursor-pointer">Mostrar Lugar</Label>
+                                                        <Controller
+                                                            control={form.control}
+                                                            name="profShowLocation"
+                                                            render={({ field }) => (
+                                                                <Switch id="profShowLocation" checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                        <Label htmlFor="profShowServices" className="cursor-pointer">Mostrar Servicios</Label>
+                                                        <Controller
+                                                            control={form.control}
+                                                            name="profShowServices"
+                                                            render={({ field }) => (
+                                                                <Switch id="profShowServices" checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                        <Label htmlFor="profShowClientName" className="cursor-pointer">Nombre del cliente</Label>
+                                                        <Controller
+                                                            control={form.control}
+                                                            name="profShowClientName"
+                                                            render={({ field }) => (
+                                                                <Switch id="profShowClientName" checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
+
+                                        <div className="order-1 xl:order-2 xl:sticky xl:top-6">
+                                            <EmailPreview config={form.watch()} type="professional" />
+                                        </div>
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
                     </CollapsibleCard>

@@ -726,7 +726,10 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
     }
 
     if (isProfEnabled) {
-        const subject = `Nueva Cita - ${clientData.nombre || 'Cliente'}`;
+        const profTpl = websiteSettings.professionalConfirmationEmailTemplate || {};
+
+        // Subject with variable replacement
+        let subject = (profTpl.subject || `Nueva Cita - {cliente}`).replace('{cliente}', clientData.nombre || 'Cliente');
 
         const showDate = profConfig.showDate !== false;
         const showTime = profConfig.showTime !== false;
@@ -734,6 +737,9 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
         const showLocation = profConfig.showLocation !== false;
         const showServices = profConfig.showServices !== false;
         const note = profConfig.note || '';
+
+        // Headline with variable replacement
+        let headline = (profTpl.headline || `¡{profesional}, tienes una nueva cita!`).replace('{profesional}', professional.name || 'Profesional');
 
         const html = `
                 <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
@@ -745,7 +751,7 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
                     </div>
 
                     <div style="padding: 25px;">
-                        <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡${professional.name || 'Profesional'}, tienes una nueva cita!</h2>
+                        <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">${headline}</h2>
                         
                         ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
 

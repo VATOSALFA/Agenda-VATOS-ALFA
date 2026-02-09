@@ -4,10 +4,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EmailPreviewProps {
     config: any;
-    type: 'confirmation' | 'reminder';
+    type: 'confirmation' | 'reminder' | 'professional';
 }
 
 export function EmailPreview({ config, type }: EmailPreviewProps) {
+
+    const typeLabels = {
+        confirmation: 'Confirmación',
+        reminder: 'Recordatorio',
+        professional: 'Profesional'
+    };
 
     const getHtml = () => {
         const clientName = "Juan Pérez";
@@ -90,8 +96,7 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
             </div>
         </div>`;
 
-        } else {
-            // Reminder
+        } else if (type === 'reminder') {
             const headline = (config.reminderHeadline || '¡{nombre}, recordatorio de tu cita!').replace('{nombre}', clientName);
             const subHeadline = config.reminderSubHeadline || 'Reserva Agendada';
             const footerNote = config.reminderFooterNote || 'Te esperamos 5 minutos antes de tu cita.';
@@ -153,13 +158,66 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
                    </div>
                 </div>
             </div>`;
+        } else {
+            // PROFESSIONAL
+            const headline = (config.profHeadline || `¡{profesional}, tienes una nueva cita!`).replace('{profesional}', professionalName);
+            const footerNote = config.profConfirmationEmailNote || '';
+
+            return `
+            <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px;">
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+            
+            <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                    <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
+                </div>
+
+                <div style="padding: 25px;">
+                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">${headline}</h2>
+                    
+                    <div style="margin-bottom: 25px; text-align: center;"><div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">Corte de Cabello</div></div>
+
+                    <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                            ${config.profShowDate !== false ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                            </tr>` : ''}
+                            
+                            ${config.profShowTime !== false ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                            </tr>` : ''}
+
+                            ${config.profShowClientName !== false ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${clientName}</td>
+                            </tr>` : ''}
+
+                            ${config.profShowLocation !== false ? `<tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                            </tr>` : ''}
+                    </table>
+
+                     ${footerNote ? `
+                    <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
+                        ${footerNote}
+                    </div>` : ''}
+
+                </div>
+                
+                <div style="background-color: #ffffff; padding: 20px; text-align: center; font-size: 0.75em; color: #bbb; border-top: 1px solid #f9f9f9;">
+                    ${config.signature || senderName}
+                </div>
+            </div>
+            </div>`;
         }
     }
 
     return (
         <div className="border rounded-md bg-gray-100/50 overflow-hidden flex flex-col h-full min-h-[600px] shadow-inner">
             <div className="bg-muted px-4 py-2 text-xs uppercase font-semibold text-muted-foreground border-b flex items-center justify-between">
-                <span>Vista Previa ({type === 'confirmation' ? 'Confirmación' : 'Recordatorio'})</span>
+                <span>Vista Previa ({typeLabels[type]})</span>
                 <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">En vivo</span>
             </div>
             <ScrollArea className="flex-1 w-full bg-gray-100">

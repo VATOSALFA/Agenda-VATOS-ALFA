@@ -917,7 +917,7 @@ async function runAutomatedChecks() {
 
     for (const doc of candidates) {
       const res = doc.data();
-      if (res.estado !== 'Confirmado' && res.estado !== 'Pendiente') continue;
+      if (res.estado !== 'Confirmado' && res.estado !== 'Pendiente' && res.estado !== 'Reservado') continue;
       if (res.reminderSent) continue;
 
       // Construct Reservation Time (Mexico)

@@ -961,6 +961,14 @@ async function runAutomatedChecks() {
             if (pDoc.exists) professionalName = pDoc.data().name || pDoc.data().nombre || professionalName;
           }
 
+          // Template Configuration
+          const tpl = remindConfig.template || {};
+          const subjectText = (tpl.subject || '¡Recordatorio de Cita!').replace('{nombre}', clientData.nombre || '');
+          const headlineText = (tpl.headline || '¡{nombre}, recordatorio de tu cita!').replace('{nombre}', clientData.nombre || 'Hola');
+          const subHeadlineText = tpl.subHeadline || 'Reserva Agendada';
+          const footerNoteText = tpl.footerNote || 'Te esperamos 5 minutos antes de tu cita.';
+          const whatsappLabel = tpl.whatsappText || 'Contáctanos por WhatsApp';
+
           // Format Date
           let dateStr = res.fecha;
           try {
@@ -981,8 +989,8 @@ async function runAutomatedChecks() {
                        <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
                    </div>
                    <div style="padding: 25px;">
-                        <h2 style="color: #333; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡${clientData.nombre || 'Hola'}, recordatorio de tu cita!</h2>
-                        <p style="text-align: center; color: #999; font-size: 0.9em; margin-bottom: 25px;">Reserva Agendada</p>
+                        <h2 style="color: #333; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">${headlineText}</h2>
+                        <p style="text-align: center; color: #999; font-size: 0.9em; margin-bottom: 25px;">${subHeadlineText}</p>
                         
                         <div style="margin-bottom: 25px; text-align: center;">
                             <div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">${res.servicio || 'Servicio'}</div>
@@ -1008,14 +1016,14 @@ async function runAutomatedChecks() {
                         </table>
 
                         <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
-                           Te esperamos 5 minutos antes de tu cita.
+                           ${footerNoteText}
                         </div>
 
                         <div style="margin-top: 25px; text-align: left;">
                             <div style="margin-bottom: 12px; padding-left: 2px;">
                                 <a href="${whatsappLink}" style="text-decoration: none; color: #333; display: inline-flex; align-items: center;">
                                     <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" style="margin-right: 12px;" alt="WhatsApp" />
-                                    <span style="font-weight: 700; font-size: 1em;">Contáctanos por WhatsApp</span>
+                                    <span style="font-weight: 700; font-size: 1em;">${whatsappLabel}</span>
                                 </a>
                             </div>
                             <div style="display: flex; align-items: center; color: #333; padding-left: 2px;">
@@ -1034,7 +1042,7 @@ async function runAutomatedChecks() {
             await resend.emails.send({
               from: `${senderName} <${senderEmail}>`,
               to: email,
-              subject: `¡Recordatorio de Cita! - ${senderName}`,
+              subject: `${subjectText} - ${senderName}`,
               html: html
             });
 

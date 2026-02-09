@@ -93,6 +93,12 @@ export default function EmailsSettingsPage() {
             // Reminder Settings
             enableReminders: true,
             reminderHoursBefore: 24,
+            // Reminder Template Defaults
+            reminderSubject: '¡Recordatorio de Cita!',
+            reminderHeadline: '¡{nombre}, recordatorio de tu cita!',
+            reminderSubHeadline: 'Reserva Agendada',
+            reminderFooterNote: 'Te esperamos 5 minutos antes de tu cita.',
+            reminderWhatsappText: 'Contáctanos por WhatsApp',
         }
     });
 
@@ -135,6 +141,13 @@ export default function EmailsSettingsPage() {
                     const config = data.notifications?.appointment_reminder ?? {};
                     form.setValue('enableReminders', config.enabled !== false);
                     form.setValue('reminderHoursBefore', config.timing?.hours_before || 24);
+
+                    const tpl = config.template || {};
+                    form.setValue('reminderSubject', tpl.subject || '¡Recordatorio de Cita!');
+                    form.setValue('reminderHeadline', tpl.headline || '¡{nombre}, recordatorio de tu cita!');
+                    form.setValue('reminderSubHeadline', tpl.subHeadline || 'Reserva Agendada');
+                    form.setValue('reminderFooterNote', tpl.footerNote || 'Te esperamos 5 minutos antes de tu cita.');
+                    form.setValue('reminderWhatsappText', tpl.whatsappText || 'Contáctanos por WhatsApp');
                 }
 
                 // 2. Load Email Config (Signature + Senders)
@@ -198,6 +211,13 @@ export default function EmailsSettingsPage() {
                         timing: {
                             hours_before: data.reminderHoursBefore,
                             type: 'hours_before'
+                        },
+                        template: {
+                            subject: data.reminderSubject,
+                            headline: data.reminderHeadline,
+                            subHeadline: data.reminderSubHeadline,
+                            footerNote: data.reminderFooterNote,
+                            whatsappText: data.reminderWhatsappText,
                         }
                     }
                 }
@@ -652,7 +672,7 @@ export default function EmailsSettingsPage() {
                                 />
                             </div>
 
-                            {form.watch('enableReminders') && (
+                            {form.watch('enableReminders') && (<>
                                 <div className="space-y-2 p-4 border rounded-lg bg-card/50">
                                     <Label htmlFor="reminderHoursBefore">Anticipación (Horas)</Label>
                                     <div className="flex items-center gap-2">
@@ -670,7 +690,38 @@ export default function EmailsSettingsPage() {
                                         Se recomienda <strong>24 horas</strong>. El sistema revisará y enviará recordatorios a las citas que comiencen dentro de este tiempo.
                                     </p>
                                 </div>
-                            )}
+
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h4 className="font-medium text-sm text-foreground">Personalizar Mensajes</h4>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="reminderSubject">Asunto del Correo</Label>
+                                            <Input id="reminderSubject" {...form.register('reminderSubject')} />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="reminderHeadline">Título Principal</Label>
+                                            <Input id="reminderHeadline" {...form.register('reminderHeadline')} />
+                                            <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="reminderSubHeadline">Subtítulo</Label>
+                                            <Input id="reminderSubHeadline" {...form.register('reminderSubHeadline')} />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="reminderFooterNote">Nota al pie (Recuadro)</Label>
+                                            <Input id="reminderFooterNote" {...form.register('reminderFooterNote')} />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="reminderWhatsappText">Texto botón WhatsApp</Label>
+                                            <Input id="reminderWhatsappText" {...form.register('reminderWhatsappText')} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </>)}
                         </div>
                     </CollapsibleCard>
 

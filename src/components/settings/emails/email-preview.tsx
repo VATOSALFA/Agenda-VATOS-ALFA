@@ -1,22 +1,17 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-interface EmailPreviewModalProps {
-    isOpen: boolean;
-    onClose: () => void;
+interface EmailPreviewProps {
     config: any;
     type: 'confirmation' | 'reminder';
 }
 
-export function EmailPreviewModal({ isOpen, onClose, config, type }: EmailPreviewModalProps) {
+export function EmailPreview({ config, type }: EmailPreviewProps) {
 
     const getHtml = () => {
         const clientName = "Juan Pérez";
         const senderName = "VATOS ALFA Barber Shop";
-        // Use a generic placeholder logo if you don't have the specific URL, but here we try a likely one
         const logoUrl = "https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.appspot.com/o/empresa%2Flogo.png?alt=media";
         const secondaryColor = "#314177";
         const dateStr = "Lunes, 12 de Octubre, 2026";
@@ -27,14 +22,16 @@ export function EmailPreviewModal({ isOpen, onClose, config, type }: EmailPrevie
         const whatsappLink = "#";
 
         if (type === 'confirmation') {
-            const subject = config.confirmSubject || `Confirmación de Cita - ${senderName}`;
-            const headline = (config.confirmHeadline || `¡Hola {nombre}, tu cita está confirmada!`).replace('{nombre}', clientName);
-            // Note: predefinedNotes in form maps to footerNote here
+            const subject = config.confirmSubject || `Confirmación de Cita`;
+            // Handle {nombre} replacement nicely
+            let headline = config.confirmHeadline || `¡Hola {nombre}, tu cita está confirmada!`;
+            headline = headline.replace('{nombre}', clientName);
+
             const footerNote = config.confirmationEmailNote || 'Favor de llegar 5 minutos antes de la hora de tu cita.';
             const whatsappText = config.confirmWhatsappText || 'Contáctanos por WhatsApp';
 
             return `
-            <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+            <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px;">
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
             
             <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -95,14 +92,13 @@ export function EmailPreviewModal({ isOpen, onClose, config, type }: EmailPrevie
 
         } else {
             // Reminder
-            const subject = config.reminderSubject || '¡Recordatorio de Cita!';
             const headline = (config.reminderHeadline || '¡{nombre}, recordatorio de tu cita!').replace('{nombre}', clientName);
             const subHeadline = config.reminderSubHeadline || 'Reserva Agendada';
             const footerNote = config.reminderFooterNote || 'Te esperamos 5 minutos antes de tu cita.';
             const whatsappText = config.reminderWhatsappText || 'Contáctanos por WhatsApp';
 
             return `
-               <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+               <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px;">
                 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
                 <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                    <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
@@ -161,24 +157,20 @@ export function EmailPreviewModal({ isOpen, onClose, config, type }: EmailPrevie
     }
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-3xl h-[85vh] flex flex-col p-6">
-                <DialogHeader>
-                    <DialogTitle>Previsualización del Correo ({type === 'confirmation' ? 'Confirmación' : 'Recordatorio'})</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="flex-1 border rounded-md bg-gray-100">
-                    <div className="w-full h-full min-h-[500px] flex items-center justify-center p-4">
-                        <div
-                            dangerouslySetInnerHTML={{ __html: getHtml() }}
-                            className="w-full max-w-[600px] bg-white shadow-sm"
-                            style={{ isolation: 'isolate' }}
-                        />
-                    </div>
-                </ScrollArea>
-                <div className="flex justify-end pt-4">
-                    <Button variant="secondary" onClick={onClose}>Cerrar</Button>
+        <div className="border rounded-md bg-gray-100/50 overflow-hidden flex flex-col h-full min-h-[600px] shadow-inner">
+            <div className="bg-muted px-4 py-2 text-xs uppercase font-semibold text-muted-foreground border-b flex items-center justify-between">
+                <span>Vista Previa ({type === 'confirmation' ? 'Confirmación' : 'Recordatorio'})</span>
+                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">En vivo</span>
+            </div>
+            <ScrollArea className="flex-1 w-full bg-gray-100">
+                <div className="w-full min-h-full flex items-start justify-center p-6">
+                    <div
+                        dangerouslySetInnerHTML={{ __html: getHtml() }}
+                        className="w-full max-w-[450px] bg-transparent origin-top transform transition-all"
+                        style={{ isolation: 'isolate' }}
+                    />
                 </div>
-            </DialogContent>
-        </Dialog>
+            </ScrollArea>
+        </div>
     );
 }

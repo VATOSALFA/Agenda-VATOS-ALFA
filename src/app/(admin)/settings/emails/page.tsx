@@ -9,11 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake, ChevronDown, Eye } from "lucide-react";
+import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake, ChevronDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AddSenderModal } from '@/components/settings/emails/add-sender-modal';
-import { EmailPreviewModal } from '@/components/settings/emails/email-preview-modal';
+import { EmailPreview } from '@/components/settings/emails/email-preview';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -70,7 +70,6 @@ export default function EmailsSettingsPage() {
     const [editingSender, setEditingSender] = useState<Sender | null>(null);
     const [senderToDelete, setSenderToDelete] = useState<Sender | null>(null);
     const [isLoadingSenders, setIsLoadingSenders] = useState(true);
-    const [previewState, setPreviewState] = useState<{ isOpen: boolean, type: 'confirmation' | 'reminder' }>({ isOpen: false, type: 'confirmation' });
 
     const form = useForm({
         defaultValues: {
@@ -509,47 +508,43 @@ export default function EmailsSettingsPage() {
                             {form.watch('enableConfirmationEmail') && (
                                 <>
                                     <div className="space-y-4 pt-4 border-t">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="font-medium text-sm text-foreground">Personalizar Mensaje</h4>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                type="button"
-                                                onClick={() => setPreviewState({ isOpen: true, type: 'confirmation' })}
-                                            >
-                                                <Eye className="w-4 h-4 mr-2" /> Previsualizar
-                                            </Button>
-                                        </div>
+                                        <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensaje</h4>
 
-                                        <div className="grid grid-cols-1 gap-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="confirmSubject">Asunto del Correo</Label>
-                                                <Input id="confirmSubject" {...form.register('confirmSubject')} />
-                                                <p className="text-[0.8rem] text-muted-foreground">El nombre de la empresa se agregará automáticamente al final.</p>
+                                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                                            <div className="space-y-4 order-2 xl:order-1">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="confirmSubject">Asunto del Correo</Label>
+                                                    <Input id="confirmSubject" {...form.register('confirmSubject')} />
+                                                    <p className="text-[0.8rem] text-muted-foreground">El nombre de la empresa se agregará automáticamente al final.</p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="confirmHeadline">Título Principal</Label>
+                                                    <Input id="confirmHeadline" {...form.register('confirmHeadline')} />
+                                                    <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="confirmationEmailNote">Nota al pie (Recuadro)</Label>
+                                                    <Textarea
+                                                        id="confirmationEmailNote"
+                                                        placeholder="Ej: Favor de llegar 5 minutos antes de la hora de tu cita."
+                                                        maxLength={150}
+                                                        {...form.register('confirmationEmailNote')}
+                                                    />
+                                                    <p className="text-[0.8rem] text-muted-foreground">
+                                                        Este mensaje también aparecerá en la pantalla de confirmación.
+                                                    </p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="confirmWhatsappText">Texto botón WhatsApp</Label>
+                                                    <Input id="confirmWhatsappText" {...form.register('confirmWhatsappText')} />
+                                                </div>
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <Label htmlFor="confirmHeadline">Título Principal</Label>
-                                                <Input id="confirmHeadline" {...form.register('confirmHeadline')} />
-                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="confirmationEmailNote">Nota al pie (Recuadro)</Label>
-                                                <Textarea
-                                                    id="confirmationEmailNote"
-                                                    placeholder="Ej: Favor de llegar 5 minutos antes de la hora de tu cita."
-                                                    maxLength={150}
-                                                    {...form.register('confirmationEmailNote')}
-                                                />
-                                                <p className="text-[0.8rem] text-muted-foreground">
-                                                    Este mensaje también aparecerá en la pantalla de confirmación.
-                                                </p>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="confirmWhatsappText">Texto botón WhatsApp</Label>
-                                                <Input id="confirmWhatsappText" {...form.register('confirmWhatsappText')} />
+                                            <div className="order-1 xl:order-2 xl:sticky xl:top-6">
+                                                <EmailPreview config={form.watch()} type="confirmation" />
                                             </div>
                                         </div>
                                     </div>
@@ -741,42 +736,39 @@ export default function EmailsSettingsPage() {
                                 </div>
 
                                 <div className="space-y-4 pt-4 border-t">
-                                    <div className="flex items-center justify-between">
-                                        <h4 className="font-medium text-sm text-foreground">Personalizar Mensajes</h4>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            type="button"
-                                            onClick={() => setPreviewState({ isOpen: true, type: 'reminder' })}
-                                        >
-                                            <Eye className="w-4 h-4 mr-2" /> Previsualizar
-                                        </Button>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reminderSubject">Asunto del Correo</Label>
-                                            <Input id="reminderSubject" {...form.register('reminderSubject')} />
+                                    <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensajes</h4>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                                        <div className="space-y-4 order-2 xl:order-1">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderSubject">Asunto del Correo</Label>
+                                                <Input id="reminderSubject" {...form.register('reminderSubject')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderHeadline">Título Principal</Label>
+                                                <Input id="reminderHeadline" {...form.register('reminderHeadline')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderSubHeadline">Subtítulo</Label>
+                                                <Input id="reminderSubHeadline" {...form.register('reminderSubHeadline')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderFooterNote">Nota al pie (Recuadro)</Label>
+                                                <Input id="reminderFooterNote" {...form.register('reminderFooterNote')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderWhatsappText">Texto botón WhatsApp</Label>
+                                                <Input id="reminderWhatsappText" {...form.register('reminderWhatsappText')} />
+                                            </div>
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reminderHeadline">Título Principal</Label>
-                                            <Input id="reminderHeadline" {...form.register('reminderHeadline')} />
-                                            <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reminderSubHeadline">Subtítulo</Label>
-                                            <Input id="reminderSubHeadline" {...form.register('reminderSubHeadline')} />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reminderFooterNote">Nota al pie (Recuadro)</Label>
-                                            <Input id="reminderFooterNote" {...form.register('reminderFooterNote')} />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reminderWhatsappText">Texto botón WhatsApp</Label>
-                                            <Input id="reminderWhatsappText" {...form.register('reminderWhatsappText')} />
+                                        <div className="order-1 xl:order-2 xl:sticky xl:top-6">
+                                            <EmailPreview config={form.watch()} type="reminder" />
                                         </div>
                                     </div>
                                 </div>
@@ -792,12 +784,7 @@ export default function EmailsSettingsPage() {
                     </div>
                 </form >
 
-                <EmailPreviewModal
-                    isOpen={previewState.isOpen}
-                    onClose={() => setPreviewState(prev => ({ ...prev, isOpen: false }))}
-                    config={form.watch()}
-                    type={previewState.type}
-                />
+
             </div >
 
             <AddSenderModal

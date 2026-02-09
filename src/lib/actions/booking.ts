@@ -599,7 +599,8 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
     const isClientEnabled = clientEmail && clientConfig.enabled !== false;
 
     if (isClientEnabled) {
-        const subject = `Confirmación de Cita - ${senderName}`;
+        const tpl = websiteSettings.confirmationEmailTemplate || {};
+        const subject = `${tpl.subject || 'Confirmación de Cita'} - ${senderName}`;
 
         const showDate = clientConfig.showDate !== false;
         const showTime = clientConfig.showTime !== false;
@@ -618,7 +619,7 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
                 </div>
 
                 <div style="padding: 25px;">
-                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡Hola${clientData.nombre ? ' ' + clientData.nombre : ''}, tu cita está confirmada!</h2>
+                    <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">{(tpl.headline || '¡Hola {nombre}, tu cita está confirmada!').replace('{nombre}', clientData.nombre || '').replace(/  +/g, ' ')}</h2>
                     
                     ${showServices ? `<div style="margin-bottom: 25px; text-align: center;">${itemsListHtml}</div>` : ''}
 
@@ -652,7 +653,7 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
                         <div style="margin-bottom: 12px; padding-left: 2px;">
                             <a href="${whatsappLink}" style="text-decoration: none; color: #333; display: inline-flex; align-items: center;">
                                 <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" style="margin-right: 12px;" alt="WhatsApp" />
-                                <span style="font-weight: 700; font-size: 1em;">Contáctanos por WhatsApp</span>
+                                <span style="font-weight: 700; font-size: 1em;">${tpl.whatsappText || 'Contáctanos por WhatsApp'}</span>
                             </a>
                         </div>
                         <div style="display: flex; align-items: center; color: #333; padding-left: 2px;">

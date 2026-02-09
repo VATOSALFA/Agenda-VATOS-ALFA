@@ -9,10 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake, ChevronDown } from "lucide-react";
+import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake, ChevronDown, Eye } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AddSenderModal } from '@/components/settings/emails/add-sender-modal';
+import { EmailPreviewModal } from '@/components/settings/emails/email-preview-modal';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -69,12 +70,17 @@ export default function EmailsSettingsPage() {
     const [editingSender, setEditingSender] = useState<Sender | null>(null);
     const [senderToDelete, setSenderToDelete] = useState<Sender | null>(null);
     const [isLoadingSenders, setIsLoadingSenders] = useState(true);
+    const [previewState, setPreviewState] = useState<{ isOpen: boolean, type: 'confirmation' | 'reminder' }>({ isOpen: false, type: 'confirmation' });
 
     const form = useForm({
         defaultValues: {
             signature: 'Saludos, El equipo de VATOS ALFA Barber Shop',
 
             confirmationEmailNote: '', // Added field
+            // Confirmation Template Defaults
+            confirmSubject: 'Confirmación de Cita',
+            confirmHeadline: '¡Hola {nombre}, tu cita está confirmada!',
+            confirmWhatsappText: 'Contáctanos por WhatsApp',
             // New visibility flags
             showDate: true,
             showTime: true,
@@ -122,6 +128,11 @@ export default function EmailsSettingsPage() {
                         form.setValue('showProfessional', data.confirmationEmailConfig.showProfessional ?? true);
                         form.setValue('enableConfirmationEmail', data.confirmationEmailConfig.enabled ?? true);
                     }
+
+                    const cTpl = data.confirmationEmailTemplate || {};
+                    form.setValue('confirmSubject', cTpl.subject || 'Confirmación de Cita');
+                    form.setValue('confirmHeadline', cTpl.headline || '¡Hola {nombre}, tu cita está confirmada!');
+                    form.setValue('confirmWhatsappText', cTpl.whatsappText || 'Contáctanos por WhatsApp');
 
                     if (data.professionalConfirmationEmailConfig) {
                         form.setValue('enableProfessionalConfirmationEmail', data.professionalConfirmationEmailConfig.enabled ?? true);
@@ -191,6 +202,11 @@ export default function EmailsSettingsPage() {
                     showServices: data.showServices,
                     showProfessional: data.showProfessional,
                     enabled: data.enableConfirmationEmail
+                },
+                confirmationEmailTemplate: {
+                    subject: data.confirmSubject,
+                    headline: data.confirmHeadline,
+                    whatsappText: data.confirmWhatsappText
                 },
                 professionalConfirmationEmailConfig: {
                     enabled: data.enableProfessionalConfirmationEmail,
@@ -492,17 +508,50 @@ export default function EmailsSettingsPage() {
 
                             {form.watch('enableConfirmationEmail') && (
                                 <>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="confirmationEmailNote">Notas predefinidas</Label>
-                                        <Textarea
-                                            id="confirmationEmailNote"
-                                            placeholder="Ej: Favor de llegar 5 minutos antes de la hora de tu cita."
-                                            maxLength={150}
-                                            {...form.register('confirmationEmailNote')}
-                                        />
-                                        <p className="text-[0.8rem] text-muted-foreground">
-                                            Este mensaje aparecerá en la pantalla de confirmación. Máximo 150 caracteres.
-                                        </p>
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="font-medium text-sm text-foreground">Personalizar Mensaje</h4>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                type="button"
+                                                onClick={() => setPreviewState({ isOpen: true, type: 'confirmation' })}
+                                            >
+                                                <Eye className="w-4 h-4 mr-2" /> Previsualizar
+                                            </Button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="confirmSubject">Asunto del Correo</Label>
+                                                <Input id="confirmSubject" {...form.register('confirmSubject')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">El nombre de la empresa se agregará automáticamente al final.</p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="confirmHeadline">Título Principal</Label>
+                                                <Input id="confirmHeadline" {...form.register('confirmHeadline')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="confirmationEmailNote">Nota al pie (Recuadro)</Label>
+                                                <Textarea
+                                                    id="confirmationEmailNote"
+                                                    placeholder="Ej: Favor de llegar 5 minutos antes de la hora de tu cita."
+                                                    maxLength={150}
+                                                    {...form.register('confirmationEmailNote')}
+                                                />
+                                                <p className="text-[0.8rem] text-muted-foreground">
+                                                    Este mensaje también aparecerá en la pantalla de confirmación.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="confirmWhatsappText">Texto botón WhatsApp</Label>
+                                                <Input id="confirmWhatsappText" {...form.register('confirmWhatsappText')} />
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div className="space-y-4 pt-4 border-t">
@@ -692,7 +741,17 @@ export default function EmailsSettingsPage() {
                                 </div>
 
                                 <div className="space-y-4 pt-4 border-t">
-                                    <h4 className="font-medium text-sm text-foreground">Personalizar Mensajes</h4>
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="font-medium text-sm text-foreground">Personalizar Mensajes</h4>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            type="button"
+                                            onClick={() => setPreviewState({ isOpen: true, type: 'reminder' })}
+                                        >
+                                            <Eye className="w-4 h-4 mr-2" /> Previsualizar
+                                        </Button>
+                                    </div>
                                     <div className="grid grid-cols-1 gap-4">
                                         <div className="space-y-2">
                                             <Label htmlFor="reminderSubject">Asunto del Correo</Label>
@@ -732,6 +791,13 @@ export default function EmailsSettingsPage() {
                         </Button>
                     </div>
                 </form >
+
+                <EmailPreviewModal
+                    isOpen={previewState.isOpen}
+                    onClose={() => setPreviewState(prev => ({ ...prev, isOpen: false }))}
+                    config={form.watch()}
+                    type={previewState.type}
+                />
             </div >
 
             <AddSenderModal

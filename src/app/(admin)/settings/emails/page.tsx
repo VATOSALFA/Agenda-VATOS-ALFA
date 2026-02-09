@@ -610,6 +610,82 @@ export default function EmailsSettingsPage() {
                     </CollapsibleCard>
 
                     <CollapsibleCard
+                        title="Recordatorios de citas"
+                        description="Configura el envío automático de recordatorios por correo."
+                    >
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <Label htmlFor="enable-reminders">Activar recordatorios</Label>
+                                <Controller
+                                    name="enableReminders"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch id="enable-reminders" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
+
+                            {form.watch('enableReminders') && (<>
+                                <div className="space-y-2 p-4 border rounded-lg bg-card/50">
+                                    <Label htmlFor="reminderHoursBefore">Anticipación (Horas)</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            id="reminderHoursBefore"
+                                            type="number"
+                                            min={1}
+                                            max={48}
+                                            {...form.register('reminderHoursBefore', { valueAsNumber: true })}
+                                            className="w-24"
+                                        />
+                                        <span className="text-sm text-muted-foreground">horas antes de la cita.</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Se recomienda <strong>24 horas</strong>. El sistema revisará y enviará recordatorios a las citas que comiencen dentro de este tiempo.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensajes</h4>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                                        <div className="space-y-4 order-2 xl:order-1">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderSubject">Asunto del Correo</Label>
+                                                <Input id="reminderSubject" {...form.register('reminderSubject')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderHeadline">Título Principal</Label>
+                                                <Input id="reminderHeadline" {...form.register('reminderHeadline')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderSubHeadline">Subtítulo</Label>
+                                                <Input id="reminderSubHeadline" {...form.register('reminderSubHeadline')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderFooterNote">Nota al pie (Recuadro)</Label>
+                                                <Input id="reminderFooterNote" {...form.register('reminderFooterNote')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="reminderWhatsappText">Texto botón WhatsApp</Label>
+                                                <Input id="reminderWhatsappText" {...form.register('reminderWhatsappText')} />
+                                            </div>
+                                        </div>
+
+                                        <div className="order-1 xl:order-2 xl:sticky xl:top-6">
+                                            <EmailPreview config={form.watch()} type="reminder" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </>)}
+                        </div>
+                    </CollapsibleCard>
+
+                    <CollapsibleCard
                         title="Correo para confirmar cita (Profesional)"
                         description="Personaliza el correo que reciben los profesionales al confirmar una reserva."
                     >
@@ -697,82 +773,6 @@ export default function EmailsSettingsPage() {
                                     </div>
                                 </>
                             )}
-                        </div>
-                    </CollapsibleCard>
-
-                    <CollapsibleCard
-                        title="Recordatorios de citas"
-                        description="Configura el envío automático de recordatorios por correo."
-                    >
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between rounded-lg border p-4">
-                                <Label htmlFor="enable-reminders">Activar recordatorios</Label>
-                                <Controller
-                                    name="enableReminders"
-                                    control={form.control}
-                                    render={({ field }) => (
-                                        <Switch id="enable-reminders" checked={field.value} onCheckedChange={field.onChange} />
-                                    )}
-                                />
-                            </div>
-
-                            {form.watch('enableReminders') && (<>
-                                <div className="space-y-2 p-4 border rounded-lg bg-card/50">
-                                    <Label htmlFor="reminderHoursBefore">Anticipación (Horas)</Label>
-                                    <div className="flex items-center gap-2">
-                                        <Input
-                                            id="reminderHoursBefore"
-                                            type="number"
-                                            min={1}
-                                            max={48}
-                                            {...form.register('reminderHoursBefore', { valueAsNumber: true })}
-                                            className="w-24"
-                                        />
-                                        <span className="text-sm text-muted-foreground">horas antes de la cita.</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Se recomienda <strong>24 horas</strong>. El sistema revisará y enviará recordatorios a las citas que comiencen dentro de este tiempo.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-4 pt-4 border-t">
-                                    <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensajes</h4>
-
-                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
-                                        <div className="space-y-4 order-2 xl:order-1">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="reminderSubject">Asunto del Correo</Label>
-                                                <Input id="reminderSubject" {...form.register('reminderSubject')} />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="reminderHeadline">Título Principal</Label>
-                                                <Input id="reminderHeadline" {...form.register('reminderHeadline')} />
-                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="reminderSubHeadline">Subtítulo</Label>
-                                                <Input id="reminderSubHeadline" {...form.register('reminderSubHeadline')} />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="reminderFooterNote">Nota al pie (Recuadro)</Label>
-                                                <Input id="reminderFooterNote" {...form.register('reminderFooterNote')} />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="reminderWhatsappText">Texto botón WhatsApp</Label>
-                                                <Input id="reminderWhatsappText" {...form.register('reminderWhatsappText')} />
-                                            </div>
-                                        </div>
-
-                                        <div className="order-1 xl:order-2 xl:sticky xl:top-6">
-                                            <EmailPreview config={form.watch()} type="reminder" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </>)}
                         </div>
                     </CollapsibleCard>
 

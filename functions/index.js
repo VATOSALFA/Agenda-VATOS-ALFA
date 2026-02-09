@@ -941,29 +941,99 @@ async function runAutomatedChecks() {
         if (email && email.includes('@')) {
           console.log(`[Reminders] Sending to ${email} for ${res.fecha} ${res.hora_inicio}`);
 
+          // Fetch Extra Data (Local & Professional) for Premium Template
+          let localAddress = 'Dirección Principal';
+          let localPhone = '4428727279';
+          let professionalName = 'VATOS ALFA';
+
+          if (res.local_id) {
+            const lDoc = await db.collection('locales').doc(res.local_id).get();
+            if (lDoc.exists) {
+              const ld = lDoc.data();
+              localAddress = ld.direccion || localAddress;
+              localPhone = ld.telefono || localPhone;
+            }
+          }
+
+          if (res.profesional_id) {
+            const pDoc = await db.collection('profesionales').doc(res.profesional_id).get();
+            if (pDoc.exists) professionalName = pDoc.data().nombre || professionalName;
+          }
+
+          // Format Date
+          let dateStr = res.fecha;
+          try {
+            const [y, m, d] = res.fecha.split('-').map(Number);
+            const dateObj = new Date(y, m - 1, d);
+            dateStr = dateObj.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          } catch (e) { }
+
+          const timeStr = res.hora_inicio || '00:00';
+          const whatsappLink = `https://wa.me/${localPhone.replace(/\D/g, '')}`;
+
+          // Premium HTML Template
           const html = `
-                 <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-                   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                      <img src="${logoUrl}" width="150" style="margin-bottom: 20px;" />
-                      <h2 style="color: #333; margin-bottom: 10px;">¡Recordatorio de Cita!</h2>
-                      <p style="color: #666; margin-bottom: 20px;">Hola ${clientData.nombre}, te recordamos que tienes una cita próxima.</p>
-                      
-                      <div style="background: #f0fdf4; border: 1px solid #dcfce7; padding: 20px; border-radius: 8px; display: inline-block; text-align: left; margin-bottom: 20px;">
-                         <p style="margin: 5px 0;"><strong>Fecha:</strong> ${res.fecha}</p>
-                         <p style="margin: 5px 0;"><strong>Hora:</strong> ${res.hora_inicio}</p>
-                         <p style="margin: 5px 0;"><strong>Servicio:</strong> ${res.servicio || 'Servicio General'}</p>
-                      </div>
-                      
-                      <p style="font-size: 0.9em; color: #999;">${senderName}</p>
+               <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+                <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                   <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                       <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
                    </div>
-                 </div>
-               `;
+                   <div style="padding: 25px;">
+                        <h2 style="color: #333; text-align: center; margin-top: 5px; margin-bottom: 5px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2;">¡${clientData.nombre || 'Hola'}, recordatorio de tu cita!</h2>
+                        <p style="text-align: center; color: #999; font-size: 0.9em; margin-bottom: 25px;">Reserva Agendada</p>
+                        
+                        <div style="margin-bottom: 25px; text-align: center;">
+                            <div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">${res.servicio || 'Servicio'}</div>
+                        </div>
+
+                        <table style="width: 100%; border-collapse: separate; border-spacing: 0 12px;">
+                             <tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                             </tr>
+                             <tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                             </tr>
+                             <tr>
+                                 <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                 <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${professionalName}</td>
+                             </tr>
+                             <tr>
+                                 <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                 <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                             </tr>
+                        </table>
+
+                        <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
+                           Te esperamos 5 minutos antes de tu cita.
+                        </div>
+
+                        <div style="margin-top: 25px; text-align: left;">
+                            <div style="margin-bottom: 12px; padding-left: 2px;">
+                                <a href="${whatsappLink}" style="text-decoration: none; color: #333; display: inline-flex; align-items: center;">
+                                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" style="margin-right: 12px;" alt="WhatsApp" />
+                                    <span style="font-weight: 700; font-size: 1em;">Contáctanos por WhatsApp</span>
+                                </a>
+                            </div>
+                            <div style="display: flex; align-items: center; color: #333; padding-left: 2px;">
+                                 <img src="https://cdn-icons-png.flaticon.com/512/724/724664.png" width="20" style="margin-right: 12px; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);" alt="Teléfono" />
+                                 <span style="font-weight: 700; font-size: 1em;">${localPhone}</span>
+                            </div>
+                        </div>
+                   </div>
+                   <div style="background-color: #ffffff; padding: 20px; text-align: center; font-size: 0.75em; color: #bbb; border-top: 1px solid #f9f9f9;">
+                        ${senderName}
+                   </div>
+                </div>
+            </div>`;
 
           try {
             await resend.emails.send({
               from: `${senderName} <${senderEmail}>`,
               to: email,
-              subject: `Recordatorio de Cita - ${senderName}`,
+              subject: `¡Recordatorio de Cita! - ${senderName}`,
               html: html
             });
 

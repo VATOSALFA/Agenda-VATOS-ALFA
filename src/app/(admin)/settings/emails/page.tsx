@@ -90,6 +90,9 @@ export default function EmailsSettingsPage() {
             profShowLocation: true,
             profShowServices: true,
             profShowClientName: true,
+            // Reminder Settings
+            enableReminders: true,
+            reminderHoursBefore: 24,
         }
     });
 
@@ -123,6 +126,15 @@ export default function EmailsSettingsPage() {
                         form.setValue('profShowServices', data.professionalConfirmationEmailConfig.showServices ?? true);
                         form.setValue('profShowClientName', data.professionalConfirmationEmailConfig.showClientName ?? true);
                     }
+                }
+
+                // 1.5 Load Reminder Config
+                const reminderDoc = await getDoc(doc(db, 'configuracion', 'recordatorios'));
+                if (reminderDoc.exists()) {
+                    const data = reminderDoc.data();
+                    const config = data.notifications?.appointment_reminder ?? {};
+                    form.setValue('enableReminders', config.enabled !== false);
+                    form.setValue('reminderHoursBefore', config.timing?.hours_before || 24);
                 }
 
                 // 2. Load Email Config (Signature + Senders)
@@ -175,6 +187,19 @@ export default function EmailsSettingsPage() {
                     showLocation: data.profShowLocation,
                     showServices: data.profShowServices,
                     showClientName: data.profShowClientName
+                }
+            }, { merge: true });
+
+            // 1.5 Save Reminder Config
+            await setDoc(doc(db, 'configuracion', 'recordatorios'), {
+                notifications: {
+                    appointment_reminder: {
+                        enabled: data.enableReminders,
+                        timing: {
+                            hours_before: data.reminderHoursBefore,
+                            type: 'hours_before'
+                        }
+                    }
                 }
             }, { merge: true });
 
@@ -611,7 +636,43 @@ export default function EmailsSettingsPage() {
                         </div>
                     </CollapsibleCard>
 
+                    <CollapsibleCard
+                        title="Recordatorios de citas"
+                        description="Configura el envío automático de recordatorios por correo."
+                    >
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <Label htmlFor="enable-reminders">Activar recordatorios</Label>
+                                <Controller
+                                    name="enableReminders"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch id="enable-reminders" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
 
+                            {form.watch('enableReminders') && (
+                                <div className="space-y-2 p-4 border rounded-lg bg-card/50">
+                                    <Label htmlFor="reminderHoursBefore">Anticipación (Horas)</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            id="reminderHoursBefore"
+                                            type="number"
+                                            min={1}
+                                            max={48}
+                                            {...form.register('reminderHoursBefore', { valueAsNumber: true })}
+                                            className="w-24"
+                                        />
+                                        <span className="text-sm text-muted-foreground">horas antes de la cita.</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Se recomienda <strong>24 horas</strong>. El sistema revisará y enviará recordatorios a las citas que comiencen dentro de este tiempo.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </CollapsibleCard>
 
                     <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
                         <Button type="submit" disabled={isSubmitting}>

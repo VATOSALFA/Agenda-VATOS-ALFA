@@ -946,18 +946,19 @@ async function runAutomatedChecks() {
           let localPhone = '4428727279';
           let professionalName = 'VATOS ALFA';
 
-          if (res.local_id) {
+          if (res.local_id && res.local_id !== 'default') {
             const lDoc = await db.collection('locales').doc(res.local_id).get();
             if (lDoc.exists) {
               const ld = lDoc.data();
-              localAddress = ld.direccion || localAddress;
-              localPhone = ld.telefono || localPhone;
+              localAddress = ld.address || ld.direccion || localAddress;
+              localPhone = ld.phone || ld.telefono || localPhone;
             }
           }
 
-          if (res.profesional_id) {
-            const pDoc = await db.collection('profesionales').doc(res.profesional_id).get();
-            if (pDoc.exists) professionalName = pDoc.data().nombre || professionalName;
+          const profId = res.barbero_id || res.profesional_id;
+          if (profId) {
+            const pDoc = await db.collection('profesionales').doc(profId).get();
+            if (pDoc.exists) professionalName = pDoc.data().name || pDoc.data().nombre || professionalName;
           }
 
           // Format Date

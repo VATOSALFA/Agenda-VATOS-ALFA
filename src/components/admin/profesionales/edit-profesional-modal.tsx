@@ -128,20 +128,36 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
         }
         const scheduleSource = locales.find(l => l.id === form.watch('local_id'))?.schedule || defaultSchedule;
 
-        const [startH, startM] = scheduleSource.lunes.start.split(':').map(Number);
-        const [endH, endM] = scheduleSource.lunes.end.split(':').map(Number);
+        let minTime = 24 * 60;
+        let maxTime = 0;
+
+        const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+
+        days.forEach(day => {
+            const daySchedule = scheduleSource[day as keyof Schedule];
+            if (daySchedule?.enabled) {
+                const [startH, startM] = daySchedule.start.split(':').map(Number);
+                const [endH, endM] = daySchedule.end.split(':').map(Number);
+
+                const startMins = startH * 60 + startM;
+                const endMins = endH * 60 + endM;
+
+                if (startMins < minTime) minTime = startMins;
+                if (endMins > maxTime) maxTime = endMins;
+            }
+        });
+
+        // Fallback if nothing enabled or invalid range
+        if (maxTime === 0 || minTime > maxTime) {
+            minTime = 8 * 60; // 08:00
+            maxTime = 22 * 60; // 22:00
+        }
 
         const options = [];
-        let currentHour = startH;
-        let currentMinute = startM;
-
-        while (currentHour < endH || (currentHour === endH && currentMinute <= endM)) {
-            options.push(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
-            currentMinute += 30;
-            if (currentMinute >= 60) {
-                currentHour++;
-                currentMinute = 0;
-            }
+        for (let t = minTime; t <= maxTime; t += 30) {
+            const h = Math.floor(t / 60);
+            const m = t % 60;
+            options.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
         }
         return options;
     }, [locales, form]);

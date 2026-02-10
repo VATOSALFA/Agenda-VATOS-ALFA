@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { AggregatedSellerSale } from '@/app/(admin)/products/sales/page';
+import type { AggregatedSellerSale } from '@/lib/types';
 
 interface SellerSaleDetailModalProps {
   isOpen: boolean;

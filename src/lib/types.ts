@@ -367,3 +367,69 @@ export interface Promotion {
   active: boolean;
   createdAt?: Timestamp;
 }
+
+export interface AgendaLayout {
+  width: number;
+  left: number;
+  col: number;
+  totalCols: number;
+}
+
+export type AgendaEvent = (Reservation & { type: 'appointment', duration: number, start: number, end: number, color: string, layout: AgendaLayout }) |
+  (TimeBlock & { type: 'block', duration: number, start: number, end: number, color: string, layout: AgendaLayout, originalType?: string });
+
+export interface SellerSaleDetail {
+  saleId: string;
+  clientName: string;
+  productName: string;
+  unitsSold: number;
+  revenue: number;
+  date: string;
+}
+
+export interface ProductSaleDetail {
+  saleId: string;
+  clientName: string;
+  sellerName: string;
+  unitsSold: number;
+  revenue: number;
+  date: string;
+}
+
+export interface AggregatedSellerSale {
+  sellerId: string;
+  sellerName: string;
+  unitsSold: number;
+  revenue: number;
+  userType: string;
+  details: SellerSaleDetail[];
+}
+
+export interface AggregatedProductSale {
+  id: string;
+  nombre: string;
+  presentation: string;
+  unitsSold: number;
+  revenue: number;
+  sellers: { [key: string]: number };
+  details: ProductSaleDetail[];
+}
+
+export interface CommissionRowData {
+  professionalId: string;
+  professionalName: string;
+  clientName: string;
+  itemName: string;
+  itemType: 'servicio' | 'producto' | 'propina';
+  saleAmount: number;
+  commissionAmount: number;
+  commissionPercentage: number;
+}
+
+export interface ProfessionalCommissionSummary {
+  professionalId: string;
+  professionalName: string;
+  totalSales: number;
+  totalCommission: number;
+  details: CommissionRowData[];
+}

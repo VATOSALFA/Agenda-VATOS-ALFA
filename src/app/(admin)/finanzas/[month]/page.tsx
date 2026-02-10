@@ -239,12 +239,12 @@ export default function FinanzasMensualesPage() {
     const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
 
     const commissionsSummary = useMemo(() => {
-        const summary: Record<string, { commission: number, tips: number, avatarUrl?: string }> = {};
-        const profIdToData: Record<string, { name: string, avatarUrl?: string }> = {};
+        const summary: Record<string, { commission: number, tips: number, avatarUrl?: string, active?: boolean }> = {};
+        const profIdToData: Record<string, { name: string, avatarUrl?: string, active?: boolean }> = {};
 
         professionals.forEach(prof => {
-            summary[prof.name] = { commission: 0, tips: 0, avatarUrl: prof.avatarUrl };
-            profIdToData[prof.id] = { name: prof.name, avatarUrl: prof.avatarUrl };
+            summary[prof.name] = { commission: 0, tips: 0, avatarUrl: prof.avatarUrl, active: prof.active };
+            profIdToData[prof.id] = { name: prof.name, avatarUrl: prof.avatarUrl, active: prof.active };
         });
 
         calculatedEgresos.forEach(egreso => {
@@ -258,15 +258,28 @@ export default function FinanzasMensualesPage() {
                 if (summary[profName]) {
                     summary[profName].commission += egreso.monto;
                 } else {
-                    summary[profName] = { commission: egreso.monto, tips: 0, avatarUrl: profData?.avatarUrl };
+                    // Fallback for direct names or legacy data not in current professionals list
+                    const legacyProf = professionals.find(p => p.name === profName);
+                    summary[profName] = {
+                        commission: egreso.monto,
+                        tips: 0,
+                        avatarUrl: profData?.avatarUrl || legacyProf?.avatarUrl,
+                        active: profData?.active ?? legacyProf?.active ?? false
+                    };
                 }
             }
         });
 
-        return Object.entries(summary).map(([name, data]) => ({
-            name,
-            ...data
-        }));
+        return Object.entries(summary)
+            .filter(([_, data]) => {
+                // Mostrar si está activo O si tiene comisión > 0 (histórico)
+                // Si el profesional ya no trabaja (inactivo) y no generó comisión este mes, lo ocultamos.
+                return data.active || data.commission > 0 || data.tips > 0;
+            })
+            .map(([name, data]) => ({
+                name,
+                ...data
+            }));
 
     }, [calculatedEgresos, professionals]);
 
@@ -418,7 +431,18 @@ export default function FinanzasMensualesPage() {
         if (!date) return 'Fecha inválida';
         const dateObj = date instanceof Timestamp ? date.toDate() : new Date(date);
         if (!isValid(dateObj)) return 'Fecha inválida';
-        return format(dateObj, 'yyyy-MM-dd');
+        return format(dateObj, 'dd/MM/yyyy');
+    };
+
+    const getNameFromId = (id: string) => {
+        if (!id) return '';
+        const professional = professionals?.find(p => p.id === id);
+        if (professional) return professional.name;
+
+        const user = users?.find(u => u.id === id);
+        if (user) return user.name;
+
+        return id;
     };
 
 
@@ -563,7 +587,7 @@ export default function FinanzasMensualesPage() {
                                     ) : (
                                         dailyIncome.map((ingreso, i) => (
                                             <TableRow key={i}>
-                                                <TableCell>{ingreso.fecha}</TableCell>
+                                                <TableCell>{ingreso.fecha.split('-').reverse().join('/')}</TableCell>
                                                 <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
                                                 <TableCell>${ingreso.deposito.toLocaleString('es-MX')}</TableCell>
                                                 <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
@@ -594,7 +618,7 @@ export default function FinanzasMensualesPage() {
                                             <TableRow key={egreso.id}>
                                                 <TableCell>{safeFormatDate(egreso.fecha)}</TableCell>
                                                 <TableCell>{egreso.concepto}</TableCell>
-                                                <TableCell>{egreso.aQuien}</TableCell>
+                                                <TableCell>{getNameFromId(egreso.aQuien)}</TableCell>
                                                 <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-MX')}</TableCell>
                                                 <TableCell>{egreso.comentarios}</TableCell>
                                                 <TableCell className="text-right">

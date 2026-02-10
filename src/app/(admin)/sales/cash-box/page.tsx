@@ -96,6 +96,8 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
 import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
 import { Switch } from '@/components/ui/switch';
+import { useCashBoxData } from './use-cash-box-data';
+import { useLiveCash } from './use-live-cash';
 
 
 const SummaryCard = ({
@@ -188,117 +190,27 @@ export default function CashBoxPage() {
         setActiveFilters({ dateRange: initialDateRange, localId: initialLocalId });
     }, [user]);
 
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-    const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const {
+        sales: salesWithClientData,
+        egresos: egresosWithData,
+        ingresos,
+        loading: dataLoading,
+        totals,
+        maps: { local: localMap, professional: professionalMap },
+        raw: { locales }
+    } = useCashBoxData(activeFilters, queryKey);
 
-    const salesQueryConstraints = useMemo(() => {
-        const constraints: QueryConstraint[] = [];
-        if (activeFilters.dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-        }
-        if (activeFilters.dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-        }
-        if (activeFilters.localId !== 'todos') {
-            constraints.push(where('local_id', '==', activeFilters.localId));
-        }
-        return constraints;
-    }, [activeFilters]);
+    // We already have loading state from hook
+    const localesLoading = dataLoading;
+    const clientsLoading = dataLoading;
+    const salesLoading = dataLoading;
+    const egresosLoading = dataLoading;
+    const ingresosLoading = dataLoading;
 
-    const egresosQueryConstraints = useMemo(() => {
-        if (!activeFilters.dateRange?.from) return [];
-        const constraints: QueryConstraint[] = [];
-        constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-        if (activeFilters.dateRange.to) {
-            constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-        }
-        return constraints;
-    }, [activeFilters.dateRange]);
-
-    const ingresosQueryConstraints = useMemo(() => {
-        if (!activeFilters.dateRange?.from) return [];
-        const constraints: QueryConstraint[] = [];
-        constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-        if (activeFilters.dateRange.to) {
-            constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
-        }
-        return constraints;
-    }, [activeFilters.dateRange]);
-
-
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
-        'ventas',
-        `sales-${queryKey}`,
-        ...salesQueryConstraints
-    );
-
-    const { data: allEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
-        'egresos',
-        `egresos-${queryKey}`,
-        ...egresosQueryConstraints
-    );
-
-    const { data: allIngresos, loading: ingresosLoading } = useFirestoreQuery<IngresoManual>(
-        'ingresos_manuales',
-        `ingresos-${queryKey}`,
-        ...ingresosQueryConstraints
-    );
-
-    const egresos = useMemo(() => {
-        let filtered = activeFilters.localId === 'todos'
-            ? allEgresos
-            : allEgresos.filter(e => e.local_id === activeFilters.localId);
-
-        return [...filtered].sort((a, b) => {
-            const tA = a.fecha instanceof Timestamp ? a.fecha.toMillis() : 0;
-            const tB = b.fecha instanceof Timestamp ? b.fecha.toMillis() : 0;
-            return tB - tA;
-        });
-    }, [allEgresos, activeFilters.localId]);
-
-    const ingresos = useMemo(() => {
-        let filtered = activeFilters.localId === 'todos'
-            ? allIngresos
-            : allIngresos.filter(i => i.local_id === activeFilters.localId);
-
-        return [...filtered].sort((a, b) => {
-            const tA = a.fecha instanceof Timestamp ? a.fecha.toMillis() : 0;
-            const tB = b.fecha instanceof Timestamp ? b.fecha.toMillis() : 0;
-            return tB - tA;
-        });
-    }, [allIngresos, activeFilters.localId]);
-
-    const clientMap = useMemo(() => {
-        if (clientsLoading) return new Map();
-        return new Map(clients.map(c => [c.id, c]));
-    }, [clients, clientsLoading]);
-
-    const professionalMap = useMemo(() => {
-        if (professionalsLoading) return new Map();
-        return new Map(professionals.map(p => [p.id, p.name]));
-    }, [professionals, professionalsLoading]);
-
-    const salesWithClientData = useMemo(() => {
-        if (salesLoading || clientsLoading) return [];
-        const sortedSales = [...sales].sort((a, b) => {
-            const tA = a.fecha_hora_venta instanceof Timestamp ? a.fecha_hora_venta.toMillis() : 0;
-            const tB = b.fecha_hora_venta instanceof Timestamp ? b.fecha_hora_venta.toMillis() : 0;
-            return tB - tA;
-        });
-        return sortedSales.map(sale => ({
-            ...sale,
-            client: clientMap.get(sale.cliente_id)
-        }))
-    }, [sales, clientMap, salesLoading, clientsLoading]);
-
-    const egresosWithData = useMemo(() => {
-        if (egresosLoading || professionalsLoading) return [];
-        return egresos.map(egreso => ({
-            ...egreso,
-            aQuienNombre: professionalMap.get(egreso.aQuien) || egreso.aQuien
-        }))
-    }, [egresos, professionalMap, egresosLoading, professionalsLoading]);
+    // Derived values for summary cards (mapping to hook outputs)
+    const totalVentasFacturadas = totals.ventas;
+    const ingresosManuales = totals.ingresosManuales;
+    const totalEgresos = totals.egresos;
 
     const handleSearch = () => {
         setActiveFilters({ dateRange, localId: selectedLocalId });
@@ -567,90 +479,9 @@ export default function CashBoxPage() {
     const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
     // --- LIVE CASH LOGIC: Calculates current cash in box based on Last Cut + Transactions since then ---
-    const lastCutConstraints = useMemo(() => {
-        if (selectedLocalId === 'todos') return [orderBy('fecha_corte', 'desc'), limit(1)];
-        return [where('local_id', '==', selectedLocalId), orderBy('fecha_corte', 'desc'), limit(1)];
-    }, [selectedLocalId]);
-
-    const { data: lastCuts } = useFirestoreQuery<CashClosing>(
-        'cortes_caja',
-        `last-cut-${selectedLocalId}-${queryKey}`,
-        ...lastCutConstraints
-    );
-    const lastCut = lastCuts?.[0];
-
-    const liveStartDate = useMemo(() => {
-        if (lastCut) return lastCut.fecha_corte.toDate();
-        return new Date(0); // If no cut ever, start from beginning
-    }, [lastCut]);
-
-    const baseCash = lastCut?.fondo_base || 0;
-
-    // Queries for LIVE calculation (Everything > liveStartDate)
-    const { data: liveSales } = useFirestoreQuery<Sale>('ventas', `live-sales-${selectedLocalId}-${liveStartDate.getTime()}`, ...useMemo(() => {
-        const c: QueryConstraint[] = [];
-        if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
-        c.push(where('fecha_hora_venta', '>', Timestamp.fromDate(liveStartDate)));
-        return c;
-    }, [selectedLocalId, liveStartDate]));
-
-    const { data: liveIngresos } = useFirestoreQuery<IngresoManual>('ingresos_manuales', `live-ingresos-${selectedLocalId}-${liveStartDate.getTime()}`, ...useMemo(() => {
-        const c: QueryConstraint[] = [];
-        if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
-        c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
-        return c;
-    }, [selectedLocalId, liveStartDate]));
-
-    const { data: liveEgresos } = useFirestoreQuery<Egreso>('egresos', `live-egresos-${selectedLocalId}-${liveStartDate.getTime()}`, ...useMemo(() => {
-        const c: QueryConstraint[] = [];
-        if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
-        c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
-        return c;
-    }, [selectedLocalId, liveStartDate]));
-
-
-    const liveCashInBox = useMemo(() => {
-        const salesCash = liveSales
-            .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
-            .reduce((sum, sale) => {
-                if (sale.metodo_pago === 'efectivo') {
-                    const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                        ? sale.monto_pagado_real
-                        : (sale.total || 0);
-                    return sum + amount;
-                }
-                return sum + (sale.detalle_pago_combinado?.efectivo || 0);
-            }, 0);
-
-        const ingresosCash = liveIngresos.reduce((sum, i) => sum + i.monto, 0);
-        const egresosCash = liveEgresos.reduce((sum, e) => sum + e.monto, 0);
-
-        return baseCash + salesCash + ingresosCash - egresosCash;
-    }, [baseCash, liveSales, liveIngresos, liveEgresos]);
+    const { liveCashInBox, loading: liveCashLoading } = useLiveCash(selectedLocalId, queryKey);
     // ----------------------
 
-
-    const ingresosEfectivo = useMemo(() => salesWithClientData.filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado').reduce((sum, sale) => {
-        if (sale.metodo_pago === 'efectivo') {
-            const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                ? sale.monto_pagado_real
-                : (sale.total || 0);
-            return sum + amount;
-        }
-        return sum + (sale.detalle_pago_combinado?.efectivo || 0);
-    }, 0), [salesWithClientData]);
-
-    const ingresosManuales = useMemo(() => ingresos.reduce((sum, i) => sum + i.monto, 0), [ingresos]);
-    const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => {
-        const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-            ? sale.monto_pagado_real
-            : (sale.total || 0);
-        return sum + amount;
-    }, 0), [salesWithClientData]); // REMOVUNUSED + ingresosManuales
-
-    const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
-
-    const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
     const isLocalAdmin = user?.role !== 'Administrador general';
 
     const totalPagesSales = Math.ceil(salesWithClientData.length / itemsPerPageSales);

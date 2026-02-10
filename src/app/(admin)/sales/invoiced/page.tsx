@@ -37,85 +37,11 @@ import * as XLSX from 'xlsx';
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { db } from "@/lib/firebase-client";
+import { DonutChartCard } from "@/components/sales/donut-chart-card";
+import { useInvoicedSales } from "./use-invoiced-sales";
 
 
-const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, data: any[], total: number, dataLabels?: string[] }) => {
-    const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
 
-    const allLabels = dataLabels || ['Efectivo', 'Tarjeta', 'Transferencia'];
-
-    const tableData = allLabels.map(label => {
-        const found = data.find(d => d.name.toLowerCase() === label.toLowerCase());
-        return {
-            name: label,
-            value: found ? found.value : 0,
-        };
-    });
-
-    const chartData = data.length > 0 ? data : [{ name: 'Sin datos', value: 1 }];
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-xl font-medium">{title}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-6 items-center">
-                <div className="h-[320px] relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <RechartsPieChart>
-                            <Pie
-                                data={chartData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={70}
-                                outerRadius={110}
-                                fill="#8884d8"
-                                paddingAngle={data.length > 0 ? 2 : 0}
-                                dataKey="value"
-                                labelLine={false}
-                            >
-                                {chartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={data.length > 0 ? COLORS[index % COLORS.length] : '#e5e7eb'} />
-                                ))}
-                            </Pie>
-                            {data.length > 0 && <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'hsl(var(--background))',
-                                    border: '1px solid hsl(var(--border))'
-                                }}
-                                formatter={(value: number) => `$${value.toLocaleString('es-MX')}`}
-                            />}
-                        </RechartsPieChart>
-                    </ResponsiveContainer>
-                    {data.length > 0 && <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-2xl font-bold">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>}
-                </div>
-                <div className="text-sm">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Tipo</TableHead>
-                                <TableHead className="text-right">Monto</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {tableData.map((item, index) => (
-                                <TableRow key={index}>
-                                    <TableCell className="capitalize font-medium flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                                        {item.name}
-                                    </TableCell>
-                                    <TableCell className="text-right">${item.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
-        </Card>
-    )
-}
 
 export default function InvoicedSalesPage() {
     const { user } = useAuth();
@@ -168,63 +94,8 @@ export default function InvoicedSalesPage() {
     }, [user]); // Removed isReceptionist dependency as logic is now uniform
 
 
-    const salesQueryConstraints = useMemo(() => {
-        const constraints = [];
-        const fromDate = activeFilters.dateRange?.from;
-
-        if (fromDate) {
-            constraints.push(where('fecha_hora_venta', '>=', startOfDay(fromDate)));
-        }
-        if (activeFilters.dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
-        }
-        return constraints;
-    }, [activeFilters.dateRange]); // Removed isReceptionist dependency
-
-    const { data: salesDataFromHook, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
-    const { data: clients } = useFirestoreQuery<Client>('clientes');
+    const { sales: populatedSales, loading: salesLoading, salesData } = useInvoicedSales(activeFilters, queryKey);
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-    const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
-    const { data: users } = useFirestoreQuery<User>('usuarios');
-
-    const sales = useMemo(() => {
-        const filtered = salesDataFromHook.filter(sale => {
-            const localMatch = activeFilters.local === 'todos' || sale.local_id === activeFilters.local;
-            const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || sale.metodo_pago === activeFilters.paymentMethod;
-            return localMatch && paymentMethodMatch;
-        });
-
-        return filtered.sort((a, b) => {
-            const dateA = a.fecha_hora_venta?.seconds ? new Date(a.fecha_hora_venta.seconds * 1000) : new Date(a.fecha_hora_venta);
-            const dateB = b.fecha_hora_venta?.seconds ? new Date(b.fecha_hora_venta.seconds * 1000) : new Date(b.fecha_hora_venta);
-            return dateB.getTime() - dateA.getTime();
-        });
-    }, [salesDataFromHook, activeFilters.local, activeFilters.paymentMethod]);
-
-    const clientMap = useMemo(() => {
-        if (!clients) return new Map();
-        return new Map(clients.map(c => [c.id, c]));
-    }, [clients]);
-
-    const sellerMap = useMemo(() => {
-        const map = new Map<string, string>();
-        if (professionals) {
-            professionals.forEach(p => map.set(p.id, p.name));
-        }
-        if (users) {
-            users.forEach(u => map.set(u.id, u.name));
-        }
-        return map;
-    }, [professionals, users]);
-
-    const populatedSales = useMemo(() => {
-        if (!sales || !clientMap.size || !sellerMap.size) return [];
-        return sales.map(sale => ({
-            ...sale,
-            client: clientMap.get(sale.cliente_id),
-            professionalNames: sale.items?.map(item => sellerMap.get(item.barbero_id)).filter(Boolean).join(', ') || 'N/A'
-        }));
-    }, [sales, clientMap, sellerMap]);
 
     const totalPages = Math.ceil(populatedSales.length / itemsPerPage);
     const paginatedSales = populatedSales.slice(
@@ -232,83 +103,6 @@ export default function InvoicedSalesPage() {
         currentPage * itemsPerPage
     );
 
-
-    const salesData = useMemo(() => {
-        if (!populatedSales) {
-            return {
-                totalSales: { data: [], total: 0, dataLabels: ['Servicios', 'Productos'] },
-                paymentMethods: { data: [], total: 0, dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia'] }
-            };
-        }
-
-        const salesByType = populatedSales.reduce((acc, sale) => {
-            const saleSubtotal = sale.subtotal || 1; // Avoid division by zero
-            let saleTotal = sale.total || 0;
-
-            // Use real paid amount if available (for deposits/partial)
-            if (sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < saleTotal)) {
-                saleTotal = sale.monto_pagado_real || 0;
-            }
-
-            if (sale.items && Array.isArray(sale.items)) {
-                sale.items.forEach(item => {
-                    const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
-                    const itemSubtotal = (item as any).subtotal || 0;
-                    const proportion = itemSubtotal / saleSubtotal;
-                    const proportionalTotal = proportion * saleTotal;
-                    acc[type] = (acc[type] || 0) + proportionalTotal;
-                });
-            }
-            return acc;
-        }, {} as Record<string, number>);
-
-        const salesByPaymentMethod = populatedSales.reduce((acc, sale) => {
-            if (sale.metodo_pago === 'combinado') {
-                acc['efectivo'] = (acc['efectivo'] || 0) + (sale.detalle_pago_combinado?.efectivo || 0);
-                acc['tarjeta'] = (acc['tarjeta'] || 0) + (sale.detalle_pago_combinado?.tarjeta || 0);
-
-                // Add online payments if present in combined
-                const onlineAmount = sale.detalle_pago_combinado?.pagos_en_linea || 0;
-                if (onlineAmount > 0) {
-                    acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + onlineAmount;
-                }
-            } else {
-                let method = sale.metodo_pago || 'otro';
-                let amount = sale.total || 0;
-
-                if (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) { // Updated safegaurd
-                    amount = sale.monto_pagado_real;
-                }
-
-                if (method === 'mercadopago') method = 'Pagos en Linea';
-
-                acc[method] = (acc[method] || 0) + amount;
-            }
-            return acc;
-        }, {} as Record<string, number>);
-
-        const totalSales = populatedSales.reduce((acc, sale) => {
-            // Use real paid amount if available (for deposits/partial), otherwise total
-            // This handles cases where status might be 'deposit_paid' OR if we just want to track actual inflow
-            const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                ? sale.monto_pagado_real
-                : (sale.total || 0);
-            return acc + actualRevenue;
-        }, 0);
-
-        return {
-            totalSales: {
-                data: Object.entries(salesByType).map(([name, value]) => ({ name, value })),
-                total: totalSales,
-                dataLabels: ['Servicios', 'Productos'],
-            },
-            paymentMethods: {
-                data: Object.entries(salesByPaymentMethod).map(([name, value]) => ({ name, value })),
-                total: totalSales, // Ensure totals match
-                dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia', 'Pagos en Linea']
-            },
-        };
-    }, [populatedSales]);
 
     const handleSearch = () => {
         setActiveFilters({

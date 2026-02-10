@@ -12,16 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { AggregatedProductSale } from '@/app/(admin)/products/sales/page';
-
-export interface ProductSaleDetail {
-  saleId: string;
-  clientName: string;
-  sellerName: string;
-  unitsSold: number;
-  revenue: number;
-  date: string;
-}
+import type { AggregatedProductSale } from '@/lib/types';
 
 interface ProductSaleDetailModalProps {
   isOpen: boolean;

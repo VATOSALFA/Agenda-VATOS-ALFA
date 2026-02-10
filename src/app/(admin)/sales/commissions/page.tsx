@@ -37,24 +37,8 @@ import { db } from "@/lib/firebase-client";
 import { useToast } from "@/hooks/use-toast";
 
 
-interface CommissionRowData {
-    professionalId: string;
-    professionalName: string;
-    clientName: string;
-    itemName: string;
-    itemType: 'servicio' | 'producto' | 'propina';
-    saleAmount: number;
-    commissionAmount: number;
-    commissionPercentage: number;
-}
-
-interface ProfessionalCommissionSummary {
-    professionalId: string;
-    professionalName: string;
-    totalSales: number;
-    totalCommission: number;
-    details: CommissionRowData[];
-}
+import { useCommissionsData } from './use-commissions-data';
+import type { ProfessionalCommissionSummary } from "@/lib/types";
 
 
 export default function CommissionsPage() {
@@ -67,10 +51,14 @@ export default function CommissionsPage() {
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
 
-    const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
-    const [discountsAffectCommissions, setDiscountsAffectCommissions] = useState(true);
+    const [commissionData, setCommissionData] = useState<any[]>([]); // Keep it as empty array or remove it if not used. 
+    // Actually, commissionData was state, now it's internal to hook. Detailed modal uses summary.details.
+    // So distinct state commissionData is NOT needed in page.
+    const [discountsAffectCommissions, setDiscountsAffectCommissions] = useState(true); // Needed? Hook handles it internally.
+    // Hook does NOT expose discountsAffectCommissions. If UI doesn't show it, we can remove it.
+    // UI doesn't seem to show 'discountsAffectCommissions'.
 
-    const [isLoading, setIsLoading] = useState(true);
+    // We can remove these states.
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedProfessionalSummary, setSelectedProfessionalSummary] = useState<ProfessionalCommissionSummary | null>(null);
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
@@ -88,190 +76,18 @@ export default function CommissionsPage() {
 
     const [queryKey, setQueryKey] = useState(0);
 
-    const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
-    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey, where('active', '==', true));
-    const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
-    const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos', queryKey);
-    const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes', queryKey);
+    const {
+        summaryByProfessional,
+        overallSummary,
+        serviceSummary,
+        productSummary,
+        loading: isLoading,
+        raw: { locales, professionals }
+    } = useCommissionsData(activeFilters, queryKey);
 
-    useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const d = await getDoc(doc(db, 'settings', 'commissions'));
-                if (d.exists()) {
-                    setDiscountsAffectCommissions(d.data().discountsAffectCommissions ?? true);
-                }
-            } catch (e) {
-                console.error("Error loading commission settings", e);
-            }
-        };
-        fetchSettings();
-    }, []);
-
-    useEffect(() => {
-        const today = new Date();
-        const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
-        setDateRange(initialDateRange);
-
-        const initialFilters = {
-            dateRange: initialDateRange,
-            local: user?.local_id || 'todos',
-            professional: 'todos'
-        };
-
-        setActiveFilters(initialFilters);
-        if (user?.local_id) {
-            setLocalFilter(user.local_id);
-        }
-
-    }, [user]);
-
-    const salesQueryConstraints = useMemo(() => {
-        if (!activeFilters.dateRange?.from) return undefined;
-
-        const constraints = [];
-        constraints.push(where('fecha_hora_venta', '>=', startOfDay(activeFilters.dateRange.from)));
-        if (activeFilters.dateRange.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
-        }
-        return constraints;
-    }, [activeFilters.dateRange]);
-
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
-        'ventas',
-        salesQueryConstraints ? `sales-${JSON.stringify(activeFilters)}` : undefined,
-        ...(salesQueryConstraints || [])
-    );
-
-    useEffect(() => {
-        const anyLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading || clientsLoading;
-        setIsLoading(anyLoading);
-
-        if (anyLoading || !sales || !professionals || !services || !products || !clients) {
-            setCommissionData([]);
-            return;
-        }
-
-        const professionalMap = new Map(professionals.map(p => [p.id, p]));
-        const serviceMap = new Map(services.map(s => [s.id, s]));
-        const productMap = new Map(products.map(p => [p.id, p]));
-        const clientMap = new Map(clients.map(c => [c.id, c]));
-
-        let filteredSales = sales;
-        if (activeFilters.local !== 'todos') {
-            filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
-        }
-
-        const commissionRows: CommissionRowData[] = [];
-
-        filteredSales.forEach(sale => {
-            // Strict check: Commissions are ONLY for fully paid sales
-            if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
-                return;
-            }
-
-            // Secondary check: If real paid amount is significant less than total (allowing for small rounding errors), skip
-            // This catches cases where status might be 'Pagado' incorrectly but amount is obviously partial
-            if (sale.monto_pagado_real !== undefined && (sale.total - sale.monto_pagado_real) > 1) {
-                return;
-            }
-
-            const client = clientMap.get(sale.cliente_id);
-            const clientName = client ? `${client.nombre} ${client.apellido}` : 'Cliente desconocido';
-
-            sale.items?.forEach(item => {
-                // If professional filter is active, only process items from that professional
-                if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
-                    return; // Skip this item if it doesn't match the professional filter
-                }
-
-                const professional = professionalMap.get(item.barbero_id);
-                if (!professional) return;
-
-                const itemPrice = item.subtotal || item.precio || 0;
-                const itemDiscount = item.descuento?.monto || 0;
-                // If discounts affect commissions (default), subtract discount. Otherwise use gross price.
-                const finalItemPrice = discountsAffectCommissions ? (itemPrice - itemDiscount) : itemPrice;
-
-                let commissionConfig = null;
-                let itemName = item.nombre;
-
-                if (item.tipo === 'servicio') {
-                    const service = serviceMap.get(item.id);
-                    if (!service) return;
-                    itemName = service.name;
-                    commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
-
-                } else if (item.tipo === 'producto') {
-                    const product = productMap.get(item.id);
-                    if (!product) return;
-                    itemName = product.nombre;
-                    // Corrected Logic: Professional's specific commission -> Product's default -> Professional's default
-                    commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
-                }
-
-                if (commissionConfig) {
-                    const commissionAmount = commissionConfig.type === '%'
-                        ? finalItemPrice * (commissionConfig.value / 100)
-                        : commissionConfig.value;
-
-                    commissionRows.push({
-                        professionalId: professional.id,
-                        professionalName: professional.name,
-                        clientName: clientName,
-                        itemName: itemName,
-                        itemType: item.tipo,
-                        saleAmount: finalItemPrice,
-                        commissionAmount: commissionAmount,
-                        commissionPercentage: commissionConfig.type === '%' ? commissionConfig.value : (finalItemPrice > 0 ? (commissionAmount / finalItemPrice) * 100 : 0)
-                    });
-                }
-            });
-
-            // Handle Transfer Tip
-            if (sale.propina && sale.propina > 0) {
-                // Determine who gets the tip. Default to the professional with the most revenue in this sale.
-                const professionalsInSale = new Map<string, number>();
-                sale.items.forEach(i => {
-                    const pid = i.barbero_id;
-                    if (pid) {
-                        professionalsInSale.set(pid, (professionalsInSale.get(pid) || 0) + (i.subtotal || 0));
-                    }
-                });
-
-                let topProfId = '';
-                let maxRev = -1;
-                professionalsInSale.forEach((rev, pid) => {
-                    if (rev > maxRev) {
-                        maxRev = rev;
-                        topProfId = pid;
-                    }
-                });
-
-                const professional = professionalMap.get(topProfId);
-
-                // Filter check
-                if (professional && (activeFilters.professional === 'todos' || activeFilters.professional === professional.id)) {
-                    const client = clientMap.get(sale.cliente_id);
-                    const clientName = client ? `${client.nombre} ${client.apellido}` : 'Cliente desconocido';
-
-                    commissionRows.push({
-                        professionalId: professional.id,
-                        professionalName: professional.name,
-                        clientName: clientName,
-                        itemName: 'Propina (Transferencia)',
-                        itemType: 'propina',
-                        saleAmount: sale.propina,
-                        commissionAmount: sale.propina, // Tip is 100% to the pro
-                        commissionPercentage: 100
-                    });
-                }
-            }
-        });
-
-        setCommissionData(commissionRows);
-
-    }, [sales, professionals, services, products, clients, salesLoading, professionalsLoading, servicesLoading, productsLoading, clientsLoading, activeFilters, discountsAffectCommissions]);
+    // Derived loading states for UI compatibility (though isLoading covers all)
+    const localesLoading = isLoading;
+    const professionalsLoading = isLoading;
 
     const handleSearch = () => {
         setActiveFilters({
@@ -289,52 +105,6 @@ export default function CommissionsPage() {
             setIsPopoverOpen(false);
         }
     };
-
-    const summaryByProfessional = useMemo(() => {
-        const grouped = commissionData.reduce((acc, current) => {
-            if (!acc[current.professionalId]) {
-                acc[current.professionalId] = {
-                    professionalId: current.professionalId,
-                    professionalName: current.professionalName,
-                    totalSales: 0,
-                    totalCommission: 0,
-                    details: []
-                };
-            }
-            acc[current.professionalId].totalSales += current.saleAmount;
-            acc[current.professionalId].totalCommission += current.commissionAmount;
-            acc[current.professionalId].details.push(current);
-            return acc;
-        }, {} as Record<string, ProfessionalCommissionSummary>);
-
-        return Object.values(grouped);
-    }, [commissionData]);
-
-    const overallSummary = useMemo(() => {
-        return summaryByProfessional.reduce((acc, current) => {
-            acc.totalSales += current.totalSales;
-            acc.totalCommission += current.totalCommission;
-            return acc;
-        }, { totalSales: 0, totalCommission: 0 });
-    }, [summaryByProfessional]);
-
-    const serviceSummary = useMemo(() => {
-        const serviceData = commissionData.filter(d => d.itemType === 'servicio');
-        return serviceData.reduce((acc, current) => {
-            acc.serviceSales += current.saleAmount;
-            acc.serviceCommission += current.commissionAmount;
-            return acc;
-        }, { serviceSales: 0, serviceCommission: 0 });
-    }, [commissionData]);
-
-    const productSummary = useMemo(() => {
-        const productData = commissionData.filter(d => d.itemType === 'producto');
-        return productData.reduce((acc, current) => {
-            acc.productSales += current.saleAmount;
-            acc.productCommission += current.commissionAmount;
-            return acc;
-        }, { productSales: 0, productCommission: 0 });
-    }, [commissionData]);
 
     const handleViewDetails = (summary: ProfessionalCommissionSummary) => {
         setSelectedProfessionalSummary(summary);

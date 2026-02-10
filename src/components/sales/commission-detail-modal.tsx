@@ -18,24 +18,7 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { functions, httpsCallable } from '@/lib/firebase-client';
 
-interface CommissionRowData {
-  professionalId: string;
-  professionalName: string;
-  clientName: string;
-  itemName: string;
-  itemType: 'servicio' | 'producto' | 'propina';
-  saleAmount: number;
-  commissionAmount: number;
-  commissionPercentage: number;
-}
-
-interface ProfessionalCommissionSummary {
-  professionalId: string;
-  professionalName: string;
-  totalSales: number;
-  totalCommission: number;
-  details: CommissionRowData[];
-}
+import type { ProfessionalCommissionSummary } from "@/lib/types";
 
 interface CommissionDetailModalProps {
   isOpen: boolean;

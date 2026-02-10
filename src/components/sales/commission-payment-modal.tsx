@@ -161,14 +161,14 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                 if (item.tipo === 'servicio') {
                     const service = serviceMap.get(item.id);
                     if (service) {
-                        // Priority: 1. Specific Override per Service, 2. Professional Default (Base), 3. Service Default
-                        commissionConfig = professional?.comisionesPorServicio?.[service.id] || professional.defaultCommission || service.defaultCommission;
+                        // Priority: 1. Specific Override per Service, 2. Service Default, 3. Professional Default (Base)
+                        commissionConfig = professional?.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission;
                     }
                 } else if (item.tipo === 'producto') {
                     const product = productMap.get(item.id);
                     if (product) {
-                        // Priority: 1. Specific Override per Product, 2. Professional Default (Base), 3. Product Default
-                        commissionConfig = professional?.comisionesPorProducto?.[product.id] || professional.defaultCommission || product.commission;
+                        // Priority: 1. Specific Override per Product, 2. Product Default, 3. Professional Default (Base)
+                        commissionConfig = professional?.comisionesPorProducto?.[product.id] || product.commission || professional.defaultCommission;
                     }
                 }
 

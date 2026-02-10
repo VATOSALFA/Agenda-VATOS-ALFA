@@ -1521,7 +1521,7 @@ exports.sendDailyAgendaSummary = onSchedule({
   timezone: "America/Mexico_City",
   secrets: [resendApiKey]
 }, async (event) => {
-  console.log("[DailySummary] Starting daily agenda summary job...");
+  console.log("[DailySummary] Starting daily agenda summary job... (Secrets Refreshed)");
   const db = admin.firestore();
 
   // 1. Determine "Today" in Mexico City

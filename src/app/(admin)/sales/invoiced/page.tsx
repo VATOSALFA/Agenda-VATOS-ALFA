@@ -390,6 +390,30 @@ export default function InvoicedSalesPage() {
                 }
             }
 
+            // Revertir Reserva asociada (si existe)
+            if (saleToDelete.reservationId) {
+                const reservationRef = doc(db, 'reservas', saleToDelete.reservationId);
+                const reservationSnap = await getDoc(reservationRef);
+
+                if (reservationSnap.exists()) {
+                    const resData = reservationSnap.data();
+                    const anticipo = Number(resData.anticipo_pagado || 0);
+                    const total = Number(resData.total || 0);
+
+                    // Determinar el estado de pago previo (si hubo anticipo)
+                    const newPagoEstado = anticipo > 0 ? 'deposit_paid' : 'pendiente';
+                    const newSaldoPendiente = total > anticipo ? (total - anticipo) : total;
+
+                    batch.update(reservationRef, {
+                        estado: 'Reservado', // Regresa a estado de "Reservado" (Azul)
+                        pago_estado: newPagoEstado,
+                        saldo_pendiente: newSaldoPendiente,
+                        // Limpiamos campos de cierre si existen
+                        monto_pagado: anticipo, // Regresamos al anticipo (o 0)
+                    });
+                }
+            }
+
             // Eliminar Venta
             batch.delete(saleRef);
 

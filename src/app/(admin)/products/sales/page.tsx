@@ -4,7 +4,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
-import { format, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from 'xlsx';
 
@@ -36,6 +36,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { db } from "@/lib/firebase-client";
+import { useAuth } from "@/contexts/firebase-auth-context";
 
 
 export interface AggregatedProductSale {
@@ -68,7 +69,9 @@ export interface AggregatedSellerSale {
 
 
 export default function ProductSalesPage() {
+    const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [productStatusFilter, setProductStatusFilter] = useState('active');
     const [productFilter, setProductFilter] = useState('todos');
     const [isSellerDetailModalOpen, setIsSellerDetailModalOpen] = useState(false);
@@ -100,6 +103,7 @@ export default function ProductSalesPage() {
     const { data: presentations, loading: presentationsLoading } = useFirestoreQuery<ProductPresentation>('formatos_productos');
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
+    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
 
     const isLoading = salesLoading || productsLoading || professionalsLoading || presentationsLoading || clientsLoading || usersLoading;
 
@@ -391,7 +395,12 @@ export default function ProductSalesPage() {
                         <CardDescription>Filtra las ventas por diferentes criterios.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        <Popover>
+                        <Popover open={isCalendarOpen} onOpenChange={(open) => {
+                            setIsCalendarOpen(open);
+                            if (open) {
+                                setDateRange(undefined);
+                            }
+                        }}>
                             <PopoverTrigger asChild>
                                 <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -407,7 +416,21 @@ export default function ProductSalesPage() {
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={es} />
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange?.from}
+                                    selected={dateRange}
+                                    onSelect={(range) => {
+                                        setDateRange(range);
+                                        if (range?.from && range?.to) {
+                                            setIsCalendarOpen(false);
+                                        }
+                                    }}
+                                    numberOfMonths={1}
+                                    locale={es}
+                                    disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                                />
                             </PopoverContent>
                         </Popover>
                         <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>

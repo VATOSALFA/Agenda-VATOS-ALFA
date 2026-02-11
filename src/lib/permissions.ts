@@ -84,6 +84,9 @@ export const allPermissionCategories: PermissionCategory[] = [
         icon: Settings,
         permissions: [
             { key: 'ver_administracion', label: 'Ver Administración' },
+            { key: 'ver_profesionales', label: 'Ver Profesionales' },
+            { key: 'ver_servicios', label: 'Ver Servicios' },
+            { key: 'ver_comisiones', label: 'Ver Comisiones' },
         ]
     },
 

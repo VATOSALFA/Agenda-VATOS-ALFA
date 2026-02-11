@@ -17,7 +17,7 @@ import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery, writeBatch, increment, getDoc, Timestamp } from "firebase/firestore";
-import type { Client, Local, Profesional, Service, AuthCode, Sale, User } from "@/lib/types";
+import type { Client, Local, Profesional, Service, AuthCode, Sale, User, Role } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
 import {
@@ -74,7 +74,7 @@ export default function InvoicedSalesPage() {
 
     const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
 
-    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+
 
 
     useEffect(() => {
@@ -340,6 +340,10 @@ export default function InvoicedSalesPage() {
     const isLocalAdmin = user?.role !== 'Administrador general';
 
 
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -379,7 +383,7 @@ export default function InvoicedSalesPage() {
                                     }}
                                     numberOfMonths={1}
                                     locale={es}
-                                    disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                                    disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                 />
                             </PopoverContent>
                         </Popover>

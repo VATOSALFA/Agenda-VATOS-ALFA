@@ -15,7 +15,7 @@ interface ThemeColors {
 }
 
 interface ThemeContextType {
-  setThemeColors: (colors: Partial<ThemeColors>) => void;
+    setThemeColors: (colors: Partial<ThemeColors>) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -43,7 +43,7 @@ function hexToHsl(hex: string): string {
         }
         h /= 6;
     }
-    
+
     h = Math.round(h * 360);
     s = Math.round(s * 100);
     l = Math.round(l * 100);
@@ -54,17 +54,22 @@ function hexToHsl(hex: string): string {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const { data: empresaData, loading } = useFirestoreQuery<any>('empresa', 'main');
-    
+
     useEffect(() => {
-        if (!loading && empresaData.length > 0 && empresaData[0].theme) {
-            const theme = empresaData[0].theme;
-            const root = document.documentElement;
-            if (theme.primaryColor) root.style.setProperty('--primary', hexToHsl(theme.primaryColor));
-            if (theme.secondaryColor) root.style.setProperty('--secondary', hexToHsl(theme.secondaryColor));
-            if (theme.accentColor) root.style.setProperty('--accent', hexToHsl(theme.accentColor));
-            if (theme.backgroundColor) root.style.setProperty('--background', hexToHsl(theme.backgroundColor));
-            if (theme.foreground) root.style.setProperty('--foreground', hexToHsl(theme.foreground));
-            if (theme.cardColor) root.style.setProperty('--card', hexToHsl(theme.cardColor));
+        if (!loading && empresaData.length > 0) {
+            // Find the first document that has a theme property, or default to the first one
+            const companyDoc = empresaData.find((d: any) => d.theme) || empresaData[0];
+
+            if (companyDoc && companyDoc.theme) {
+                const theme = companyDoc.theme;
+                const root = document.documentElement;
+                if (theme.primaryColor) root.style.setProperty('--primary', hexToHsl(theme.primaryColor));
+                if (theme.secondaryColor) root.style.setProperty('--secondary', hexToHsl(theme.secondaryColor));
+                if (theme.accentColor) root.style.setProperty('--accent', hexToHsl(theme.accentColor));
+                if (theme.backgroundColor) root.style.setProperty('--background', hexToHsl(theme.backgroundColor));
+                if (theme.foreground) root.style.setProperty('--foreground', hexToHsl(theme.foreground));
+                if (theme.cardColor) root.style.setProperty('--card', hexToHsl(theme.cardColor));
+            }
         }
     }, [empresaData, loading]);
 

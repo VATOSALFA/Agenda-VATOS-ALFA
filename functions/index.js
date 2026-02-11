@@ -1522,24 +1522,80 @@ exports.sendDailyAgendaSummary = onSchedule({
   secrets: [resendApiKey]
 }, async (event) => {
   console.log("[DailySummary] Starting daily agenda summary job... (Secrets Refreshed)");
-  const db = admin.firestore();
 
   // 1. Determine "Today" in Mexico City
-  // We use the same timezone as the scheduler to ensure alignment
   const today = new Date();
   const options = { timeZone: "America/Mexico_City", year: 'numeric', month: '2-digit', day: '2-digit' };
-  // Format: DD/MM/YYYY -> we need YYYY-MM-DD for firestore query if that's how it's stored
   const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(today);
   const day = parts.find(p => p.type === 'day').value;
   const month = parts.find(p => p.type === 'month').value;
   const year = parts.find(p => p.type === 'year').value;
   const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
 
+  await runDailySummary(dateStr);
+});
+
+/**
+ * Callable: Trigger Daily Summary Manually
+ * Useful for debugging or resending if cron fails.
+ */
+exports.triggerDailyAgendaSummary = onCall(
+  {
+    cors: true,
+    secrets: [resendApiKey],
+    region: "us-central1"
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+
+    // Optional: date in YYYY-MM-DD
+    const { date } = request.data || {};
+
+    let dateStr = date;
+    if (!dateStr) {
+      const today = new Date();
+      const options = { timeZone: "America/Mexico_City", year: 'numeric', month: '2-digit', day: '2-digit' };
+      const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(today);
+      const day = parts.find(p => p.type === 'day').value;
+      const month = parts.find(p => p.type === 'month').value;
+      const year = parts.find(p => p.type === 'year').value;
+      dateStr = `${year}-${month}-${day}`;
+    }
+
+    try {
+      const results = await runDailySummary(dateStr);
+      return { success: true, results };
+    } catch (e) {
+      console.error("Manual Trigger Error:", e);
+      throw new HttpsError('internal', e.message);
+    }
+  }
+);
+
+async function runDailySummary(dateStr) {
+  const db = admin.firestore();
   console.log(`[DailySummary] Processing for date: ${dateStr}`);
 
+  const logResults = {
+    date: dateStr,
+    reservationsFound: 0,
+    professionalsContacted: 0,
+    details: []
+  };
+
   try {
+    // 0. Check Settings Enable/Disable
+    const settingsDoc = await db.collection('settings').doc('website').get();
+    if (settingsDoc.exists) {
+      const settings = settingsDoc.data();
+      if (settings.dailySummaryConfig && settings.dailySummaryConfig.enabled === false) {
+        console.log("[DailySummary] Feature is disabled in settings. Aborting.");
+        logResults.message = "Feature disabled.";
+        return logResults;
+      }
+    }
+
     // 2. Query Reservations for Today
-    // Indexing: 'fecha' ASC/DESC is usually indexed.
     const resQuery = await db.collection('reservas')
       .where('fecha', '==', dateStr)
       .where('estado', '!=', 'Cancelado')
@@ -1547,8 +1603,11 @@ exports.sendDailyAgendaSummary = onSchedule({
 
     if (resQuery.empty) {
       console.log("[DailySummary] No reservations found for today.");
-      return;
+      logResults.message = "No reservations found.";
+      return logResults;
     }
+
+    logResults.reservationsFound = resQuery.size;
 
     // 3. Group by Professional
     const reservationsByPro = {};
@@ -1557,38 +1616,71 @@ exports.sendDailyAgendaSummary = onSchedule({
       // Only active reservations
       if (d.status === 'cancelled' || d.estado === 'Cancelado') return;
 
-      const proId = d.barbero_id || d.professional_id;
-      if (proId) {
+      const proIdsInRes = new Set();
+
+      // 1. Check root level (legacy or simple structure)
+      if (d.barbero_id) proIdsInRes.add(d.barbero_id);
+      if (d.professional_id) proIdsInRes.add(d.professional_id);
+
+      // 2. Check items array (structure shown in user screenshot)
+      if (Array.isArray(d.items)) {
+        d.items.forEach(item => {
+          if (item.barbero_id) proIdsInRes.add(item.barbero_id);
+          if (item.professional_id) proIdsInRes.add(item.professional_id);
+        });
+      }
+
+      proIdsInRes.forEach(proId => {
         if (!reservationsByPro[proId]) reservationsByPro[proId] = [];
         reservationsByPro[proId].push(d);
-      }
+      });
     });
 
     // 4. Send Emails
-    // Fetch Company Config once
     const empresaConfigSnap = await db.collection('empresa').limit(1).get();
     const empresaConfig = !empresaConfigSnap.empty ? empresaConfigSnap.docs[0].data() : {};
-    const senderName = empresaConfig.name || 'VATOS ALFA';
-    const senderEmail = 'contacto@vatosalfa.com'; // Verify sender domain in Resend
 
-    // Init Resend
+    // Fetch All Locales to map phones
+    const localesSnap = await db.collection('locales').get();
+    const localesMap = {};
+    localesSnap.forEach(doc => {
+      localesMap[doc.id] = doc.data();
+    });
+
+    const senderName = empresaConfig.name || 'VATOS ALFA';
+    const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://agenda-vatos-alfa.vercel.app/logo-vatos-alfa.png';
+    const senderEmail = 'contacto@vatosalfa.com';
+
     let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
     try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
     const resend = new Resend(apiKey);
 
     const proIds = Object.keys(reservationsByPro);
-    console.log(`[DailySummary] Assiging summaries for ${proIds.length} professionals.`);
+    console.log(`[DailySummary] Assigned summaries for ${proIds.length} unique professional IDs from ${resQuery.size} reservations.`);
+    console.log(`[DailySummary] Professional IDs found: ${proIds.join(', ')}`);
 
     for (const proId of proIds) {
+      console.log(`[DailySummary] Processing Pro ID: ${proId} (Reservations: ${reservationsByPro[proId].length})`);
       try {
         const proDoc = await db.collection('profesionales').doc(proId).get();
-        if (!proDoc.exists) continue;
+        if (!proDoc.exists) {
+          console.warn(`[DailySummary] Pro ID ${proId} NOT FOUND in 'profesionales' collection.`);
+          logResults.details.push({ proId, status: 'skipped', reason: 'Pro Document Not Found' });
+          continue;
+        }
         const proData = proDoc.data();
 
-        if (!proData.email || !proData.active) continue;
+        // Check if explicitly disabled, otherwise assume true.
+        // It's possible older records don't have 'active' field.
+        const isActive = proData.active !== false;
+
+        if (!proData.email || !isActive) {
+          logResults.details.push({ proId, email: proData.email, active: isActive, status: 'skipped', reason: 'No email or inactive' });
+          console.warn(`[DailySummary] Skipping pro ${proId}: No email or inactive (active=${isActive})`);
+          continue;
+        }
 
         const appointments = reservationsByPro[proId];
-        // Sort appointments by start time
         appointments.sort((a, b) => (a.hora_inicio || '').localeCompare(b.hora_inicio || ''));
 
         // Build HTML Table Rows
@@ -1606,54 +1698,152 @@ exports.sendDailyAgendaSummary = onSchedule({
             }
           } catch (e) { }
 
-          let localName = "Local"; // Could fetch if needed, but keeping it simple for now or using cached
+          let localName = "Local";
           if (res.local_id) {
-            // Optimization: Cache locales if needed, but for now individual read is acceptable daily
             const lSnap = await db.collection('locales').doc(res.local_id).get();
             if (lSnap.exists) localName = lSnap.data().name;
           }
 
+          const formattedTime = res.hora_inicio || '--:--';
+          let duration = res.duracion || 0;
+          let serviceName = res.servicio || 'Servicio';
+
+          // Try to get a better service name from items if available
+          if (Array.isArray(res.items) && res.items.length > 0) {
+            const servicesList = res.items.map(i => i.nombre).join(', ');
+            if (servicesList) serviceName = servicesList;
+          }
+
+          // Status Badge Style
+          let statusStyle = "background-color: #e3f2fd; color: #1e88e5;"; // Default Blue
+          if (res.estado === 'Confirmado') statusStyle = "background-color: #e8f5e9; color: #2e7d32;"; // Green
+          if (res.estado === 'Pendiente') statusStyle = "background-color: #fff3e0; color: #ef6c00;"; // Orange
+
           return `
-               <tr style="border-bottom: 1px solid #333;">
-                   <td style="padding: 12px; color: #ccc;">${clientName}</td>
-                   <td style="padding: 12px; color: #ccc;">${res.servicio || 'Servicio'}</td>
-                   <td style="padding: 12px; color: #ccc;">${res.hora_inicio}</td>
-                   <td style="padding: 12px; color: #ccc;">${localName}</td>
-                   <td style="padding: 12px; color: #ccc;">${res.estado}</td>
+               <tr style="border-bottom: 1px solid #eee;">
+                   <td style="padding: 16px; color: #333; font-weight: 500;">
+                        ${formattedTime} 
+                        <span style="display:block; font-size: 0.8em; color: #888;">${duration} min</span>
+                   </td>
+                   <td style="padding: 16px; color: #333;">
+                        <span style="display:block; font-weight: bold; font-size: 1.05em;">${clientName}</span>
+                        <span style="display:block; color: #666; margin-top: 4px;">${serviceName}</span>
+                   </td>
+                   <td style="padding: 16px;">
+                        <span style="font-size: 0.85em; padding: 4px 10px; border-radius: 20px; font-weight: 600; ${statusStyle}">${res.estado}</span>
+                   </td>
                </tr>
             `;
         }));
 
+        // Determine Phone Number for this Professional's Context
+        let proLocalPhone = '81 1234 5678'; // Default Fallback
+
+        if (appointments.length > 0) {
+          const firstRes = appointments[0];
+          // Check all possible field names for local ID
+          const localId = firstRes.local_id || firstRes.sucursal_id || firstRes.localId;
+
+          if (localId && localesMap[localId]) {
+            const lData = localesMap[localId];
+            // Check both phone fields
+            const foundPhone = lData.phone || lData.telefono;
+
+            if (foundPhone) {
+              proLocalPhone = foundPhone;
+              console.log(`[DailySummary] Found Local ID: ${localId} for Pro ${proId}. Using Phone: ${foundPhone}`);
+            } else {
+              console.log(`[DailySummary] Found Local ID: ${localId} but NO PHONE field in data:`, JSON.stringify(lData));
+            }
+          } else {
+            console.log(`[DailySummary] Could not find local info for ID: ${localId} (or ID missing) in first appointment. Map keys: ${Object.keys(localesMap).join(', ')}`);
+
+            // Fallback: Use first available local's phone
+            const localKeys = Object.keys(localesMap);
+            if (localKeys.length > 0) {
+              const firstK = localKeys[0];
+              const fallbackPhone = localesMap[firstK].phone || localesMap[firstK].telefono;
+              if (fallbackPhone) {
+                proLocalPhone = fallbackPhone;
+                console.log(`[DailySummary] Using Fallback Local Phone (${firstK}): ${fallbackPhone}`);
+              }
+            }
+          }
+        } else {
+          // No appointments? Fallback
+          const localKeys = Object.keys(localesMap);
+          if (localKeys.length > 0) {
+            const firstK = localKeys[0];
+            const fallbackPhone = localesMap[firstK].phone || localesMap[firstK].telefono;
+            if (fallbackPhone) proLocalPhone = fallbackPhone;
+          }
+        }
+
+        const cleanPhone = proLocalPhone.replace(/\D/g, '');
+        const proWaLink = `https://wa.me/52${cleanPhone}`;
+
         const htmlContent = `
-         <div style="font-family: 'Roboto', sans-serif; background-color: #1a1a1a; color: #e0e0e0; padding: 20px;">
-             <div style="text-align: center; margin-bottom: 20px;">
-                 <h2 style="color: #ffffff;">${senderName}</h2>
-                 <p>Hola ${proData.name}, esta es tu agenda para hoy (${dateStr}).</p>
-             </div>
-             
-             <div style="background-color: #2a2a2a; padding: 20px; border-radius: 8px;">
-                 <h3 style="color: #ffffff; border-bottom: 1px solid #444; padding-bottom: 10px;">📅 Agenda de hoy</h3>
+         <!DOCTYPE html>
+         <html>
+         <head>
+            <style>
+                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+                .header { background-color: #ffffff; padding: 40px 20px; text-align: center; border-bottom: 3px solid #000; }
+                .logo { max-width: 250px; height: auto; }
+                .content { padding: 40px 20px; }
+                .greeting { font-size: 18px; color: #333; margin-bottom: 20px; }
+                .date-badge { display: inline-block; background-color: #000; color: #fff; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 14px; margin-bottom: 30px; letter-spacing: 1px; }
+                table { width: 100%; border-collapse: collapse; }
+                th { text-align: left; color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
+                .footer { background-color: #ffffff; padding: 40px 20px; text-align: center; font-size: 13px; color: #999; border-top: 1px solid #f0f0f0; }
+                .whatsapp-link { display: inline-flex; align-items: center; justify-content: center; color: #25D366; text-decoration: none; font-weight: bold; font-size: 16px; margin-top: 5px; }
+                .whatsapp-icon { width: 24px; height: 24px; margin-right: 8px; }
+            </style>
+         </head>
+         <body>
+             <div class="container">
+                 <div class="header">
+                     <img src="${logoUrl}" alt="${senderName}" class="logo">
+                 </div>
                  
-                 <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em;">
-                     <thead>
-                         <tr style="background-color: #333; color: #fff;">
-                             <th style="padding: 12px; text-align: left;">Cliente</th>
-                             <th style="padding: 12px; text-align: left;">Servicio</th>
-                             <th style="padding: 12px; text-align: left;">Hora</th>
-                             <th style="padding: 12px; text-align: left;">Lugar</th>
-                             <th style="padding: 12px; text-align: left;">Estado</th>
-                         </tr>
-                     </thead>
-                     <tbody>
-                         ${rows.join('')}
-                     </tbody>
-                 </table>
+                 <div class="content">
+                     <p class="greeting">Hola <strong>${proData.name}</strong>,</p>
+                     <p style="color: #666; margin-top: -10px; margin-bottom: 30px; font-size: 15px;">Aquí está tu agenda programada para hoy.</p>
+                     
+                     <div style="text-align: center;">
+                        <span class="date-badge">📅  ${dateStr}</span>
+                     </div>
+
+                     <table>
+                         <thead>
+                             <tr>
+                                 <th style="width: 20%;">Hora</th>
+                                 <th style="width: 55%;">Detalles</th>
+                                 <th style="width: 25%;">Estado</th>
+                             </tr>
+                         </thead>
+                         <tbody>
+                             ${rows.join('')}
+                         </tbody>
+                     </table>
+
+                     ${rows.length === 0 ? '<p style="text-align:center; color: #999; padding: 40px; font-style: italic;">No hay citas agendadas para hoy.</p>' : ''}
+                 </div>
+                 
+                 <div class="footer">
+                    <p style="margin-bottom: 15px; color: #333; font-weight: 600;">${senderName}</p>
+                    
+                    <a href="${proWaLink}" class="whatsapp-link">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png" alt="WA" class="whatsapp-icon">
+                        ${proLocalPhone}
+                    </a>
+
+                    <p style="margin-top: 30px; font-size: 11px; color: #bbb;">Mensaje automático del sistema de gestión.</p>
+                 </div>
              </div>
-             
-             <div style="margin-top: 20px; font-size: 0.8em; color: #666; text-align: center;">
-                Autogenerado por ${senderName}.
-             </div>
-         </div>
+         </body>
+         </html>
          `;
 
         await resend.emails.send({
@@ -1664,16 +1854,22 @@ exports.sendDailyAgendaSummary = onSchedule({
         });
 
         console.log(`[DailySummary] Email sent to ${proData.email}`);
+        logResults.professionalsContacted++;
+        logResults.details.push({ proId, email: proData.email, status: 'sent', count: appointments.length });
 
       } catch (err) {
         console.error(`[DailySummary] Error processing pro ${proId}:`, err);
+        logResults.details.push({ proId, status: 'error', error: err.message });
       }
     }
 
+    return logResults;
+
   } catch (error) {
     console.error("[DailySummary] Job failed:", error);
+    throw error;
   }
-});
+}
 
 /**
  * Callable: Send Sale Receipt Email

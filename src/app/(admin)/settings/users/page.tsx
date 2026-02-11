@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save, Clock } from "lucide-react";
+
+
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -94,6 +96,7 @@ export default function UsersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [userToDelete, setUserToDelete] = useState<User | null>(null);
+    const [sortBy, setSortBy] = useState<'default' | 'name' | 'role' | 'local'>('default');
     const { toast } = useToast();
 
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios', queryKey);
@@ -110,7 +113,12 @@ export default function UsersPage() {
             const mergedRoles = combinedRoles.map(initialRole => {
                 const firestoreRole = firestoreRolesMap.get(initialRole.title);
                 if (firestoreRole) {
-                    return { ...initialRole, id: firestoreRole.id, permissions: firestoreRole.permissions };
+                    return {
+                        ...initialRole,
+                        id: firestoreRole.id,
+                        permissions: firestoreRole.permissions,
+                        historyRestrictionDays: firestoreRole.historyRestrictionDays
+                    };
                 }
                 return { ...initialRole, id: initialRole.title.toLowerCase().replace(/ /g, '_') };
             });
@@ -130,8 +138,32 @@ export default function UsersPage() {
         );
     }, [users, searchTerm]);
 
-    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-    const paginatedUsers = filteredUsers.slice(
+    const sortedUsers = useMemo(() => {
+        const sorted = [...filteredUsers];
+        switch (sortBy) {
+            case 'name':
+                return sorted.sort((a, b) => a.name.localeCompare(b.name));
+            case 'role':
+                return sorted.sort((a, b) => a.role.localeCompare(b.role));
+            case 'local':
+                return sorted.sort((a, b) => {
+                    const localA = a.local_id ? localMap.get(a.local_id) || '' : 'Todos';
+                    const localB = b.local_id ? localMap.get(b.local_id) || '' : 'Todos';
+                    return localA.localeCompare(localB);
+                });
+            default: // 'default' - Admin general first
+                return sorted.sort((a, b) => {
+                    const roleA = a.role;
+                    const roleB = b.role;
+                    if (roleA === 'Administrador general' && roleB !== 'Administrador general') return -1;
+                    if (roleA !== 'Administrador general' && roleB === 'Administrador general') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+        }
+    }, [filteredUsers, sortBy, localMap]);
+
+    const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+    const paginatedUsers = sortedUsers.slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
@@ -167,6 +199,19 @@ export default function UsersPage() {
         }
     }
 
+
+
+    const handleHistoryRestrictionChange = (roleId: string, days: number | undefined) => {
+        setLocalRolesState(currentRoles =>
+            currentRoles.map(role => {
+                if (role.id === roleId) {
+                    return { ...role, historyRestrictionDays: days };
+                }
+                return role;
+            })
+        );
+    }
+
     const handlePermissionChange = (roleId: string, permissionKey: string, checked: boolean) => {
         setLocalRolesState(currentRoles =>
             currentRoles.map(role => {
@@ -188,10 +233,18 @@ export default function UsersPage() {
         try {
             const docId = roleToUpdate.id; // Use consistent ID
             const roleRef = doc(db, 'roles', docId);
-            await setDoc(roleRef, {
+            const dataToSave: any = {
                 title: roleToUpdate.title,
                 permissions: roleToUpdate.permissions
-            }, { merge: true });
+            };
+
+            if (roleToUpdate.historyRestrictionDays !== undefined) {
+                dataToSave.historyRestrictionDays = roleToUpdate.historyRestrictionDays;
+            } else {
+                dataToSave.historyRestrictionDays = null;
+            }
+
+            await setDoc(roleRef, dataToSave, { merge: true });
 
             toast({ title: 'Permisos guardados', description: `Los permisos para el rol ${roleToUpdate.title} se han actualizado.` });
             handleDataUpdated();
@@ -214,6 +267,17 @@ export default function UsersPage() {
             <div className="flex items-center justify-between space-y-2 pt-4">
                 <h2 className="text-3xl font-bold tracking-tight">Usuarios registrados</h2>
                 <div className="flex items-center space-x-2">
+                    <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Ordenar por" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="default">Por defecto</SelectItem>
+                            <SelectItem value="name">Nombre</SelectItem>
+                            <SelectItem value="role">Rol</SelectItem>
+                            <SelectItem value="local">Sucursal</SelectItem>
+                        </SelectContent>
+                    </Select>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Buscar usuario" className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -348,6 +412,32 @@ export default function UsersPage() {
                                                     isDisabled={false}
                                                 />
                                             ))}
+
+                                            <Collapsible defaultOpen={false}>
+                                                <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted mt-4">
+                                                    <CollapsibleTrigger className="flex items-center gap-2 font-semibold flex-grow text-left">
+                                                        <Clock className="h-5 w-5 text-primary" />
+                                                        Historial
+                                                    </CollapsibleTrigger>
+                                                </div>
+                                                <CollapsibleContent className="p-4 border border-t-0 rounded-b-lg">
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-medium">
+                                                            Días visibles en el pasado
+                                                        </label>
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            placeholder="Sin límite"
+                                                            value={role.historyRestrictionDays ?? ''}
+                                                            onChange={(e) => handleHistoryRestrictionChange(role.id, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                                                        />
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Define cuántos días hacia atrás puede ver este rol. Dejar vacío para acceso ilimitado.
+                                                        </p>
+                                                    </div>
+                                                </CollapsibleContent>
+                                            </Collapsible>
                                         </div>
                                         <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>
                                             <Save className="mr-2 h-4 w-4" /> Guardar Cambios

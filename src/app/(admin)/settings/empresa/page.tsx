@@ -149,6 +149,8 @@ export default function EmpresaPage() {
                     cardColor,
                 }
             };
+            // Ensure restrictions object exists if values are present
+
 
             const settingsRef = doc(db, 'empresa', settings.id);
             await setDoc(settingsRef, dataToSave, { merge: true });
@@ -181,6 +183,7 @@ export default function EmpresaPage() {
                 <CollapsibleCard
                     title="Nombre de tu empresa"
                     description="El nombre que aparecerá en todos los lugares de VATOS ALFA, incluido tu sitio web."
+                    defaultOpen={true}
                 >
                     <Input {...form.register('name')} />
                 </CollapsibleCard>
@@ -264,6 +267,8 @@ export default function EmpresaPage() {
                         <Button type="button" variant="outline" onClick={copyToClipboard}><Copy className="mr-2 h-4 w-4" /> Copia tu link</Button>
                     </div>
                 </CollapsibleCard>
+
+
 
                 <CollapsibleCard
                     title="Personalización"

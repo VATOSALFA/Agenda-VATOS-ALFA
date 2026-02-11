@@ -215,7 +215,7 @@ export default function LandingPage() {
             {/* Hero */}
             <section
                 className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden"
-                style={{ backgroundColor: websiteSettings?.customization?.primaryColor || 'hsl(var(--primary))' }}
+                style={{ backgroundColor: 'hsl(var(--primary))' }}
             >
                 <div className="absolute inset-0 z-0 bg-background/0 pointer-events-none"></div>
                 <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
@@ -928,7 +928,10 @@ export default function LandingPage() {
 
             {/* Floating Navigation Bar */}
             <div className={cn("fixed left-0 right-0 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300", totalItems > 0 ? "bottom-24" : "bottom-6")}>
-                <div className="flex items-center gap-1 sm:gap-2 bg-slate-900/90 backdrop-blur-md text-white border border-slate-700 shadow-2xl rounded-full p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar">
+                <div
+                    className="flex items-center gap-1 sm:gap-2 backdrop-blur-md text-white border border-white/20 shadow-2xl rounded-full p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar"
+                    style={{ backgroundColor: 'hsl(var(--secondary) / 0.9)' }}
+                >
                     <Link href="#servicios">
                         <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
                             Servicios

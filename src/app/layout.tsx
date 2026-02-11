@@ -59,16 +59,16 @@ export default function RootLayout({
     <html lang="es" className={inter.variable}>
       <body>
         <LocalProvider>
-          <ThemeProvider>
-            <AuthProvider>
+          <AuthProvider>
+            <ThemeProvider>
               <MercadoPagoProvider>
                 <RecaptchaProvider>
                   {children}
                   <Toaster />
                 </RecaptchaProvider>
               </MercadoPagoProvider>
-            </AuthProvider>
-          </ThemeProvider>
+            </ThemeProvider>
+          </AuthProvider>
         </LocalProvider>
       </body>
     </html>

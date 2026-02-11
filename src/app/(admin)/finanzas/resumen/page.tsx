@@ -7,15 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Edit, Save, Loader2, TrendingDown } from 'lucide-react';
+import { Edit, Save, Loader2, TrendingDown, Mail } from 'lucide-react';
 import { AddDepositoModal } from '@/components/finanzas/add-deposito-modal';
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product, User } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Timestamp, where, getDocs, collection, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
+import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, fractionDigits = 2 }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, fractionDigits?: number }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
@@ -31,6 +32,8 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
 export default function FinanzasResumenPage() {
     const [isDepositoModalOpen, setIsDepositoModalOpen] = useState(false);
     const [monthlyAdjustments, setMonthlyAdjustments] = useState<Record<string, { adminCommissions?: Record<string, { type: 'fixed' | 'percentage', value: number }> }>>({});
+    const [isResending, setIsResending] = useState(false);
+    const { toast } = useToast();
     const currentYear = new Date().getFullYear();
 
 
@@ -83,6 +86,43 @@ export default function FinanzasResumenPage() {
         };
         fetchAdjustments();
     }, [currentYear]);
+
+    const handleResendSummary = async () => {
+        setIsResending(true);
+        try {
+            const triggerSummary = httpsCallable(functions, 'triggerDailyAgendaSummary');
+
+            // Calculate date for TODAY (Production behavior)
+            const today = new Date();
+            const options: Intl.DateTimeFormatOptions = { timeZone: "America/Mexico_City", year: 'numeric', month: '2-digit', day: '2-digit' };
+            const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(today);
+            const day = parts.find(p => p.type === 'day')?.value || '';
+            const month = parts.find(p => p.type === 'month')?.value || '';
+            const year = parts.find(p => p.type === 'year')?.value || '';
+            const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
+
+            console.log("Requesting summary for:", todayStr);
+
+            // Pass the date explicitly
+            const result: any = await triggerSummary({ date: todayStr });
+            console.log("Summary Result:", result.data);
+
+            toast({
+                title: "Resumen enviado (HOY)",
+                description: `Reservas: ${result.data?.results?.reservationsFound || 0}. Detalles: ${JSON.stringify(result.data?.results?.details || [])}`
+            });
+
+        } catch (error: any) {
+            console.error("Error triggering summary:", error);
+            toast({
+                variant: 'destructive',
+                title: "Error al enviar",
+                description: error.message || "No se pudo enviar el resumen."
+            });
+        } finally {
+            setIsResending(false);
+        }
+    };
 
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading || usersLoading;
 
@@ -316,7 +356,13 @@ export default function FinanzasResumenPage() {
     return (
         <>
             <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-                <h2 className="text-3xl font-bold tracking-tight">Resumen anual</h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-bold tracking-tight">Resumen anual</h2>
+                    <Button variant="outline" onClick={handleResendSummary} disabled={isResending}>
+                        {isResending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                        Reenviar Resumen Diario
+                    </Button>
+                </div>
 
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     <Card className="lg:col-span-1">
@@ -333,7 +379,7 @@ export default function FinanzasResumenPage() {
                                     {annualAdminCommissions.map(admin => (
                                         <ResumenGeneralItem
                                             key={admin.id}
-                                            label={`Comisión ${admin.name} (${admin.value.toLocaleString('es-MX', { maximumFractionDigits: 1 })}%)`}
+                                            label={`Comisión ${admin.name}(${admin.value.toLocaleString('es-MX', { maximumFractionDigits: 1 })} %)`}
                                             amount={admin.amount}
                                             fractionDigits={2}
                                         />
@@ -415,7 +461,7 @@ export default function FinanzasResumenPage() {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="month" />
                                     <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                                    <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-MX')} `} />
                                     <Legend />
                                     <Line type="monotone" dataKey="ingresos" stroke="hsl(var(--chart-1))" name="Ingresos" />
                                     <Line type="monotone" dataKey="egresos" stroke="hsl(var(--chart-2))" name="Egresos" />

@@ -97,9 +97,9 @@ const finanzasNavLinks = [
 ];
 
 const adminNavLinks = [
-  { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_administracion' },
-  { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_administracion' },
-  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_administracion' },
+  { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
+  { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
+  { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
 ];
 
 export default function Header() {
@@ -327,25 +327,27 @@ export default function Header() {
                       </div>
                     )}
 
-                    {canSee('ver_administracion') && (
+                    {canSeeAny(['ver_administracion', 'ver_profesionales', 'ver_servicios', 'ver_comisiones']) && (
                       <div className="mb-4">
                         <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Administración</h4>
                         <div className="flex flex-col space-y-1">
                           {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                            <Link
-                              key={href}
-                              href={href!}
-                              onClick={handleLinkClick}
-                              className={cn(
-                                'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                pathname === href
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'text-foreground hover:bg-muted'
-                              )}
-                            >
-                              <Icon className="mr-3 h-4 w-4" />
-                              {label}
-                            </Link>
+                            (canSee(permission!) || canSee('ver_administracion')) && (
+                              <Link
+                                key={href}
+                                href={href!}
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === href
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <Icon className="mr-3 h-4 w-4" />
+                                {label}
+                              </Link>
+                            )
                           ))}
                         </div>
                       </div>
@@ -499,7 +501,7 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-            {canSee('ver_administracion') && (
+            {canSeeAny(['ver_administracion', 'ver_profesionales', 'ver_servicios', 'ver_comisiones']) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -513,12 +515,14 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
                   {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                    <DropdownMenuItem key={href} asChild>
-                      <Link href={href!}>
-                        <Icon className="mr-2 h-4 w-4" />
-                        <span>{label}</span>
-                      </Link>
-                    </DropdownMenuItem>
+                    (canSee(permission!) || canSee('ver_administracion')) && (
+                      <DropdownMenuItem key={href} asChild>
+                        <Link href={href!}>
+                          <Icon className="mr-2 h-4 w-4" />
+                          <span>{label}</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -321,6 +321,7 @@ export interface Role {
   title: string;
   description: string;
   permissions: string[];
+  historyRestrictionDays?: number;
 }
 
 export interface AuthCode {

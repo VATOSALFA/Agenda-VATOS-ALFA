@@ -17,7 +17,8 @@ import { DateRange } from 'react-day-picker';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { where, Timestamp } from 'firebase/firestore';
-import type { Sale, Service, ServiceCategory, SaleItem } from '@/lib/types';
+import type { Sale, Service, ServiceCategory, SaleItem, Role } from '@/lib/types';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 
 const KpiCard = ({ title, value, change, isPositive, prefix = '', suffix = '' }: { title: string, value: string, change?: string, isPositive?: boolean, prefix?: string, suffix?: string }) => (
@@ -163,6 +164,13 @@ export default function SalesReportPage() {
     }, [sales, services, categoryMap, isLoading]);
 
 
+    const { user } = useAuth();
+
+
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
     return (
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
             <h2 className="text-3xl font-bold tracking-tight">Reporte de ventas</h2>
@@ -209,6 +217,7 @@ export default function SalesReportPage() {
                                         }}
                                         numberOfMonths={1}
                                         locale={es}
+                                        disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                     />
                                 </PopoverContent>
                             </Popover>

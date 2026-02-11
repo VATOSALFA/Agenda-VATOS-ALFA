@@ -73,7 +73,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing } from '@/lib/types';
+import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing, Role } from '@/lib/types';
 import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc, orderBy, limit, writeBatch, increment } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
@@ -130,7 +130,6 @@ export default function CashBoxPage() {
     const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
 
     const handleDateSelect = (range: DateRange | undefined) => {
         setDateRange(range);
@@ -502,6 +501,10 @@ export default function CashBoxPage() {
         currentPageIngresos * itemsPerPageIngresos
     );
 
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -554,7 +557,8 @@ export default function CashBoxPage() {
                                                 onSelect={handleDateSelect}
                                                 numberOfMonths={1}
                                                 locale={es}
-                                                disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+
+                                                disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                             />
                                         </PopoverContent>
                                     </Popover>

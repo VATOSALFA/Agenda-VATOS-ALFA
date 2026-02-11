@@ -18,7 +18,7 @@ import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, Dol
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp, doc, getDocs, getDoc, collection, query as firestoreQuery } from "firebase/firestore";
-import type { Local, Profesional, Service, Product, Sale, SaleItem, Client, AuthCode } from "@/lib/types";
+import type { Local, Profesional, Service, Product, Sale, SaleItem, Client, AuthCode, Role } from "@/lib/types";
 import { CommissionDetailModal } from "@/components/sales/commission-detail-modal";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import {
@@ -44,7 +44,7 @@ import type { ProfessionalCommissionSummary } from "@/lib/types";
 export default function CommissionsPage() {
     const { user } = useAuth();
 
-    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+
 
     const { toast } = useToast();
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -162,6 +162,13 @@ export default function CommissionsPage() {
     const isLocalAdmin = user?.role !== 'Administrador general';
 
 
+
+
+
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -207,7 +214,7 @@ export default function CommissionsPage() {
                                             onSelect={handleDateSelect}
                                             numberOfMonths={1}
                                             locale={es}
-                                            disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                                            disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                         />
                                     </PopoverContent>
                                 </Popover>

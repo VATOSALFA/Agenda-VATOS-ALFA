@@ -15,12 +15,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon, Download, Filter, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Local, Profesional } from "@/lib/types";
+import type { Local, Profesional, Role } from "@/lib/types";
 import { useAuth } from "@/contexts/firebase-auth-context";
 
 export default function TipsPage() {
     const { user } = useAuth();
-    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+    const isLocalRestricted = !!user?.local_id;
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -66,7 +66,7 @@ export default function TipsPage() {
 
         const initialFilters = {
             dateRange: initialDateRange,
-            local: (isReceptionist && user?.local_id) ? user.local_id : 'todos',
+            local: (isLocalRestricted && user?.local_id) ? user.local_id : 'todos',
             professional: 'todos'
         };
 
@@ -74,12 +74,12 @@ export default function TipsPage() {
         if (!activeFilters.dateRange) {
             setActiveFilters(initialFilters);
             // Sincronizar UI state
-            if (isReceptionist && user?.local_id) {
+            if (isLocalRestricted && user?.local_id) {
                 setLocalFilter(user.local_id);
             }
         }
 
-    }, [user, isReceptionist]);
+    }, [user, isLocalRestricted]);
 
     // 3. Construir consulta a 'ventas' basada en fechas ACTIVAS
     const salesConstraints = useMemo(() => {
@@ -165,6 +165,10 @@ export default function TipsPage() {
 
     const isLoading = localesLoading || professionalsLoading || salesLoading;
 
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <div className="flex items-center justify-between space-y-2">
@@ -207,14 +211,14 @@ export default function TipsPage() {
                                         onSelect={handleDateSelect}
                                         numberOfMonths={1}
                                         locale={es}
-                                        disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+                                        disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                     />
                                 </PopoverContent>
                             </Popover>
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Local</label>
-                            <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading || isReceptionist}>
+                            <Select value={localFilter} onValueChange={setLocalFilter} disabled={localesLoading || isLocalRestricted}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="todos">Todos</SelectItem>

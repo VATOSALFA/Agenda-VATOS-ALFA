@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client, AuthCode, User as AppUser } from "@/lib/types";
+import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client, AuthCode, User as AppUser, Role } from "@/lib/types";
 import { where, Timestamp, collection, query, getDocs } from "firebase/firestore";
 import { SellerSaleDetailModal } from "@/components/products/sales/seller-sale-detail-modal";
 import { ProductSaleDetailModal } from "@/components/products/sales/product-sale-detail-modal";
@@ -77,7 +77,7 @@ export default function ProductSalesPage() {
         formatDate
     } = useProductSalesData(activeFilters, queryKey);
 
-    const isReceptionist = useMemo(() => user?.role === 'Recepcionista' || user?.role === 'Recepcionista (Sin edición)', [user]);
+
 
     const handleSearch = () => {
         setActiveFilters({
@@ -179,6 +179,10 @@ export default function ProductSalesPage() {
         }
     };
 
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -224,7 +228,8 @@ export default function ProductSalesPage() {
                                     }}
                                     numberOfMonths={1}
                                     locale={es}
-                                    disabled={isReceptionist ? (date) => date > new Date() || date < subDays(new Date(), 2) : undefined}
+
+                                    disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                 />
                             </PopoverContent>
                         </Popover>

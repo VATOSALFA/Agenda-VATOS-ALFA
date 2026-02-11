@@ -106,6 +106,9 @@ export default function EmailsSettingsPage() {
             reminderSubHeadline: 'Reserva Agendada',
             reminderFooterNote: 'Te esperamos 5 minutos antes de tu cita.',
             reminderWhatsappText: 'Contáctanos por WhatsApp',
+            // Daily Summary Settings
+            enableDailySummary: true,
+            dailySummaryTimeBeforeOpen: 1,
         }
     });
 
@@ -166,6 +169,15 @@ export default function EmailsSettingsPage() {
                     form.setValue('reminderSubHeadline', tpl.subHeadline || 'Reserva Agendada');
                     form.setValue('reminderFooterNote', tpl.footerNote || 'Te esperamos 5 minutos antes de tu cita.');
                     form.setValue('reminderWhatsappText', tpl.whatsappText || 'Contáctanos por WhatsApp');
+                }
+
+                // 1.8 Load Daily Summary Config
+                if (websiteDoc.exists()) {
+                    const data = websiteDoc.data();
+                    if (data.dailySummaryConfig) {
+                        form.setValue('enableDailySummary', data.dailySummaryConfig.enabled ?? true);
+                        form.setValue('dailySummaryTimeBeforeOpen', data.dailySummaryConfig.timeBeforeOpen ?? 1);
+                    }
                 }
 
                 // 2. Load Email Config (Signature + Senders)
@@ -247,6 +259,14 @@ export default function EmailsSettingsPage() {
                             whatsappText: data.reminderWhatsappText,
                         }
                     }
+                }
+            }, { merge: true });
+
+            // 1.8 Save Daily Summary Config (merge into website settings)
+            await setDoc(doc(db, 'settings', 'website'), {
+                dailySummaryConfig: {
+                    enabled: data.enableDailySummary,
+                    timeBeforeOpen: data.dailySummaryTimeBeforeOpen
                 }
             }, { merge: true });
 
@@ -697,6 +717,8 @@ export default function EmailsSettingsPage() {
                         </div>
                     </CollapsibleCard>
 
+
+
                     <CollapsibleCard
                         title="Correo para confirmar cita (Profesional)"
                         description="Personaliza el correo que reciben los profesionales al confirmar una reserva."
@@ -805,6 +827,46 @@ export default function EmailsSettingsPage() {
                                         <div className="order-1 xl:order-2 xl:sticky xl:top-6">
                                             <EmailPreview config={form.watch()} type="professional" />
                                         </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </CollapsibleCard>
+
+                    <CollapsibleCard
+                        title="Resumen del día para profesionales"
+                        description="Configura el envío automático del resumen de agenda para tus profesionales."
+                    >
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <Label htmlFor="enable-daily-summary" className="font-medium">activar resumen diario automático</Label>
+                                <Controller
+                                    name="enableDailySummary"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch id="enable-daily-summary" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
+
+                            {form.watch('enableDailySummary') && (
+                                <div className="space-y-4 pt-4 border-t">
+                                    <div className="space-y-2 p-4 border rounded-lg bg-card/50">
+                                        <Label htmlFor="dailySummaryTimeBeforeOpen">Tiempo antes de apertura (Horas)</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                id="dailySummaryTimeBeforeOpen"
+                                                type="number"
+                                                min={0}
+                                                max={12}
+                                                {...form.register('dailySummaryTimeBeforeOpen', { valueAsNumber: true })}
+                                                className="w-24"
+                                            />
+                                            <span className="text-sm text-muted-foreground">horas antes de abrir la sucursal.</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Determina con cuánta anticipación recibirán los profesionales su agenda del día.
+                                        </p>
                                     </div>
                                 </div>
                             )}

@@ -169,6 +169,10 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
                             </a>
                         </div>
 
+                        <div style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+                            Enviado automáticamente por el sistema de agenda Vatos Alfa.
+                        </div>
+
                     </div>
                     
                 </div>

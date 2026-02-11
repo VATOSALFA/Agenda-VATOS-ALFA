@@ -1758,10 +1758,15 @@ async function runDailySummary(dateStr) {
           }
 
           const formattedTime = res.hora_inicio || '--:--';
-          let duration = res.duracion || 0;
-          let serviceName = res.servicio || 'Servicio';
 
-          // Try to get a better service name from items if available
+          // Calculate Duration
+          let duration = res.duracion || 0;
+          if ((!duration || duration === 0) && Array.isArray(res.items)) {
+            duration = res.items.reduce((acc, item) => acc + (parseInt(item.duracion) || 0), 0);
+          }
+          const durationHtml = duration > 0 ? ` <span style="color:#aaa">(${duration} min)</span>` : '';
+
+          let serviceName = res.servicio || 'Servicio';
           if (Array.isArray(res.items) && res.items.length > 0) {
             const servicesList = res.items.map(i => i.nombre).join(', ');
             if (servicesList) serviceName = servicesList;
@@ -1779,7 +1784,7 @@ async function runDailySummary(dateStr) {
                     <span style="background-color: ${bgColor}; color: ${fgColor}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">${res.estado}</span>
                 </div>
                 <div style="font-weight: 600; color: #444; margin-bottom: 2px;">${clientName}</div>
-                <div style="font-size: 13px; color: #777;">${serviceName} <span style="color:#aaa">(${duration} min)</span></div>
+                <div style="font-size: 13px; color: #777;">${serviceName}${durationHtml}</div>
             </div>
           `;
         }));
@@ -1887,7 +1892,7 @@ async function runDailySummary(dateStr) {
             </div>
             
             <div style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
-                Enviado automáticamente por el sistema de agenda.
+                Enviado automáticamente por el sistema de agenda Vatos Alfa.
             </div>
 
         </body>

@@ -61,6 +61,7 @@ import {
     Trash2,
     Send,
     Printer,
+    Mail,
     AlertTriangle,
     LogOut,
     Percent,
@@ -592,7 +593,7 @@ export default function CashBoxPage() {
                                 {selectedLocalId === 'todos' ? (
                                     <p className="text-lg font-semibold text-muted-foreground">Seleccione sucursal</p>
                                 ) : (
-                                    <p className="text-3xl font-extrabold text-primary">${liveCashInBox.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-3xl font-extrabold text-primary">${(totalVentasFacturadas + ingresosManuales - totalEgresos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 )}
                             </CardContent>
                         </Card>
@@ -675,7 +676,7 @@ export default function CashBoxPage() {
                                                                     </DropdownMenuTrigger>
                                                                     <DropdownMenuContent align="end">
                                                                         <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
-                                                                            <Send className="mr-2 h-4 w-4 text-primary" />
+                                                                            <Mail className="mr-2 h-4 w-4 text-primary" />
                                                                             <span className="text-primary">Enviar Comprobante</span>
                                                                         </DropdownMenuItem>
                                                                         <DropdownMenuItem onSelect={() => window.print()}>
@@ -906,7 +907,7 @@ export default function CashBoxPage() {
                     setIsClosingModalOpen(false);
                     handleSearch();
                 }}
-                initialCash={liveCashInBox}
+                initialCash={totalVentasFacturadas + ingresosManuales - totalEgresos}
                 localId={selectedLocalId}
             />
             <CommissionPaymentModal

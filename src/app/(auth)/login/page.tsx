@@ -209,6 +209,11 @@ export default function LoginPage() {
                                         router.push('/agenda');
                                     }
                                 } catch (error: any) {
+                                    if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/user-cancelled' || error.message?.includes('user-cancelled')) {
+                                        console.log("Google login cancelled by user");
+                                        return;
+                                    }
+
                                     if (error.message?.includes("ACCESS_DENIED") || error.code === 'auth/user-not-found') {
                                         setError("Acceso denegado: Tu correo no está registrado como usuario en el sistema.");
                                     } else {

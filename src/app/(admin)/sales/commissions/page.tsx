@@ -51,6 +51,14 @@ export default function CommissionsPage() {
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
 
+    useEffect(() => {
+        if (user && user.role !== 'Administrador general') {
+            const userLocalId = user.local_id || 'todos';
+            setLocalFilter(userLocalId);
+            setActiveFilters(prev => ({ ...prev, local: userLocalId }));
+        }
+    }, [user]);
+
     const [commissionData, setCommissionData] = useState<any[]>([]); // Keep it as empty array or remove it if not used. 
     // Actually, commissionData was state, now it's internal to hook. Detailed modal uses summary.details.
     // So distinct state commissionData is NOT needed in page.
@@ -111,6 +119,8 @@ export default function CommissionsPage() {
         setIsDetailModalOpen(true);
     }
 
+    const periodString = dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yyyy", { locale: es })} - ${format(dateRange.to, "dd/MM/yyyy", { locale: es })}` : format(dateRange.from, "dd/MM/yyyy", { locale: es })) : "Periodo no definido";
+
     const triggerDownload = () => {
         if (summaryByProfessional.length === 0) {
             toast({ title: "No hay datos para exportar", variant: "destructive" });
@@ -118,6 +128,7 @@ export default function CommissionsPage() {
         }
 
         const dataForExcel = summaryByProfessional.map(row => ({
+            'Periodo': periodString,
             'Profesional / Staff': row.professionalName,
             'Venta total': row.totalSales,
             'Monto comisión': row.totalCommission,
@@ -302,6 +313,7 @@ export default function CommissionsPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Profesional / Staff</TableHead>
+                                    <TableHead>Periodo</TableHead>
                                     <TableHead className="text-right">Venta total</TableHead>
                                     <TableHead className="text-right">Monto comisión</TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
@@ -309,12 +321,13 @@ export default function CommissionsPage() {
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                 ) : summaryByProfessional.length === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={5} className="text-center h-24">No hay datos para el período seleccionado.</TableCell></TableRow>
                                 ) : summaryByProfessional.map((row) => (
                                     <TableRow key={row.professionalId}>
                                         <TableCell className="font-medium">{row.professionalName}</TableCell>
+                                        <TableCell>{periodString}</TableCell>
                                         <TableCell className="text-right">${row.totalSales.toLocaleString('es-MX')}</TableCell>
                                         <TableCell className="text-right text-primary font-semibold">${row.totalCommission.toLocaleString('es-MX')}</TableCell>
                                         <TableCell className="text-right">
@@ -328,6 +341,7 @@ export default function CommissionsPage() {
                             <TableFooter>
                                 <TableRow className="bg-muted/50">
                                     <TableHead className="text-right font-bold">Totales</TableHead>
+                                    <TableHead></TableHead>
                                     <TableHead className="text-right font-bold">${overallSummary.totalSales.toLocaleString('es-MX')}</TableHead>
                                     <TableHead className="text-right font-bold text-primary">${overallSummary.totalCommission.toLocaleString('es-MX')}</TableHead>
                                     <TableHead></TableHead>

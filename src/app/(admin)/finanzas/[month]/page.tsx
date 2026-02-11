@@ -5,10 +5,12 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product, User } from '@/lib/types';
@@ -50,10 +52,22 @@ const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string
     </div>
 );
 
-const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string }) => (
+const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, tooltipText }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, tooltipText?: string }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
         <div className="flex items-center gap-2">
             <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
+            {tooltipText && (
+                <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                        <TooltipTrigger asChild>
+                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p className="max-w-xs text-sm font-normal text-center">{tooltipText}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
             {children}
         </div>
         <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
@@ -66,26 +80,36 @@ export default function FinanzasMensualesPage() {
     const monthName = typeof params.month === 'string' ? params.month : 'enero';
     const monthNumber = monthNameToNumber[monthName.toLowerCase()];
     const currentYear = new Date().getFullYear();
+    const [selectedYear, setSelectedYear] = useState(currentYear);
     const [queryKey, setQueryKey] = useState(0);
+
+    // Dynamic year range: 2025 to 2035 (11 years)
+    const startYear = 2025;
+    const years = Array.from({ length: 11 }, (_, i) => startYear + i);
 
     const { toast } = useToast();
     const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
     const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
     const [monthlyAdjustments, setMonthlyAdjustments] = useState<Record<string, { type: 'fixed' | 'percentage', value: number }>>({});
+    const [monthlyProductAdjustments, setMonthlyProductAdjustments] = useState<Record<string, { type: 'fixed' | 'percentage', value: number }>>({});
     const [editingCommissionUser, setEditingCommissionUser] = useState<{ id: string, name: string, type: 'fixed' | 'percentage', value: number } | null>(null);
+    const [editingCommissionType, setEditingCommissionType] = useState<'service' | 'product'>('service');
     const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
 
     const { startDate, endDate } = useMemo(() => {
         if (monthNumber === undefined) {
             const now = new Date();
+            // If month is undefined, defaulting to current month of selected year might be better, 
+            // but let's stick to simple logic or just use StartOfMonth of selected Year's specific month if logic flow allows.
+            // Actually monthNumber comes from URL, so it should be defined if route is valid.
             return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
         }
-        const date = new Date(currentYear, monthNumber, 1);
+        const date = new Date(selectedYear, monthNumber, 1);
         return {
             startDate: startOfMonth(date),
             endDate: endOfMonth(date),
         };
-    }, [monthNumber, currentYear]);
+    }, [monthNumber, selectedYear]);
 
     const salesQueryConstraints = useMemo(() => {
         return [
@@ -112,6 +136,8 @@ export default function FinanzasMensualesPage() {
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
     const [egresosPage, setEgresosPage] = useState(1);
     const [egresosPerPage, setEgresosPerPage] = useState(10);
+    const [incomesPage, setIncomesPage] = useState(1);
+    const [incomesPerPage, setIncomesPerPage] = useState(10);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -150,16 +176,19 @@ export default function FinanzasMensualesPage() {
     // Fetch monthly adjustments
     useEffect(() => {
         if (!db) return;
-        const docId = `${monthName.toLowerCase()}_${currentYear}`;
+        const docId = `${monthName.toLowerCase()}_${selectedYear}`;
         const unsub = onSnapshot(doc(db, 'finanzas_mensuales', docId), (doc) => {
             if (doc.exists()) {
-                setMonthlyAdjustments(doc.data().adminCommissions || {});
+                const data = doc.data();
+                setMonthlyAdjustments(data.adminCommissions || {});
+                setMonthlyProductAdjustments(data.adminProductCommissions || {});
             } else {
                 setMonthlyAdjustments({});
+                setMonthlyProductAdjustments({});
             }
         });
         return () => unsub();
-    }, [monthName, currentYear]);
+    }, [monthName, selectedYear]);
 
     // --- CORRECCIÓN APLICADA AQUÍ ---
     // Eliminamos el cálculo predictivo. Solo mostramos lo que existe en la BD 'egresos'.
@@ -182,7 +211,29 @@ export default function FinanzasMensualesPage() {
 
 
     // Calculation logic
-    const ingresoTotal = useMemo(() => dailyIncome.reduce((sum, d) => sum + d.total, 0), [dailyIncome]);
+    const ingresoServiciosTotal = useMemo(() => {
+        if (!sales) return 0;
+        let total = 0;
+        sales.forEach(sale => {
+            const saleTotal = sale.total || 1;
+            const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
+            const ratio = realPaid / saleTotal;
+
+            sale.items?.forEach(item => {
+                if (item.tipo === 'servicio') {
+                    const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
+                    const itemDiscount = item.descuento?.monto || 0;
+                    const finalItemPrice = (itemSubtotal - itemDiscount) * ratio;
+                    total += finalItemPrice;
+                }
+            });
+        });
+        return total;
+    }, [sales]);
+
+    const ingresoTotal = useMemo(() => dailyIncome.reduce((sum, d) => sum + d.total, 0), [dailyIncome]); // Mantener por si acaso, pero usaremos el de servicios
 
     const productSummary = useMemo(() => {
         if (salesLoading || productsLoading || professionalsLoading) {
@@ -239,11 +290,11 @@ export default function FinanzasMensualesPage() {
     const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
 
     const commissionsSummary = useMemo(() => {
-        const summary: Record<string, { commission: number, tips: number, avatarUrl?: string, active?: boolean }> = {};
+        const summary: Record<string, { commissionServices: number, commissionProducts: number, tips: number, avatarUrl?: string, active?: boolean }> = {};
         const profIdToData: Record<string, { name: string, avatarUrl?: string, active?: boolean }> = {};
 
         professionals.forEach(prof => {
-            summary[prof.name] = { commission: 0, tips: 0, avatarUrl: prof.avatarUrl, active: prof.active };
+            summary[prof.name] = { commissionServices: 0, commissionProducts: 0, tips: 0, avatarUrl: prof.avatarUrl, active: prof.active };
             profIdToData[prof.id] = { name: prof.name, avatarUrl: prof.avatarUrl, active: prof.active };
         });
 
@@ -255,14 +306,42 @@ export default function FinanzasMensualesPage() {
                 // Try to find by ID (most common now) or fallback to name if legacy data
                 const profName = profData?.name || profId;
 
-                if (summary[profName]) {
-                    summary[profName].commission += egreso.monto;
+                let serviceAmount = 0;
+                let productAmount = 0;
+                let tipAmount = 0;
+
+                // Intentar parsear el comentario para separar servicios y productos
+                // Formato esperado: "Pago a X (Comisión Servicios: $70.00, Comisión Productos: $26.85, Propina: $0.00)..."
+                const serviceMatch = egreso.comentarios?.match(/Comisión Servicios: \$([0-9.,]+)/);
+                const productMatch = egreso.comentarios?.match(/Comisión Productos: \$([0-9.,]+)/);
+                const tipMatch = egreso.comentarios?.match(/Propina: \$([0-9.,]+)/);
+
+                if (serviceMatch || productMatch) {
+                    if (serviceMatch) serviceAmount = parseFloat(serviceMatch[1].replace(/,/g, ''));
+                    if (productMatch) productAmount = parseFloat(productMatch[1].replace(/,/g, ''));
+                    if (tipMatch) tipAmount = parseFloat(tipMatch[1].replace(/,/g, ''));
+
+                    // Si el monto total del egreso es mayor que la suma parseada (por ajuste manual u otro), 
+                    // asignamos la diferencia a Servicios por defecto o respetamos el parseo?
+                    // Respetamos el parseo para la división, pero si la suma no cuadra con egreso.monto,
+                    // podría haber un desbalance visual.
+                    // Para simplificar, asumimos que si hay desglose, es correcto.
+                    // Si NO hay desglose en el comentario pero es una "comisión", todo a servicios.
                 } else {
-                    // Fallback for direct names or legacy data not in current professionals list
+                    serviceAmount = egreso.monto;
+                }
+
+                if (summary[profName]) {
+                    summary[profName].commissionServices += serviceAmount;
+                    summary[profName].commissionProducts += productAmount;
+                    summary[profName].tips += tipAmount;
+                } else {
+                    // Fallback using parsed amounts or total to service
                     const legacyProf = professionals.find(p => p.name === profName);
                     summary[profName] = {
-                        commission: egreso.monto,
-                        tips: 0,
+                        commissionServices: serviceAmount,
+                        commissionProducts: productAmount,
+                        tips: tipAmount,
                         avatarUrl: profData?.avatarUrl || legacyProf?.avatarUrl,
                         active: profData?.active ?? legacyProf?.active ?? false
                     };
@@ -272,9 +351,8 @@ export default function FinanzasMensualesPage() {
 
         return Object.entries(summary)
             .filter(([_, data]) => {
-                // Mostrar si está activo O si tiene comisión > 0 (histórico)
-                // Si el profesional ya no trabaja (inactivo) y no generó comisión este mes, lo ocultamos.
-                return data.active || data.commission > 0 || data.tips > 0;
+                // Mostrar si tiene algún monto > 0 (histórico o actual)
+                return data.commissionServices > 0 || data.commissionProducts > 0 || data.tips > 0;
             })
             .map(([name, data]) => ({
                 name,
@@ -283,7 +361,9 @@ export default function FinanzasMensualesPage() {
 
     }, [calculatedEgresos, professionals]);
 
-    const totalComisiones = commissionsSummary.reduce((acc, curr) => acc + curr.commission + curr.tips, 0);
+    const totalComisionesServicios = commissionsSummary.reduce((acc, curr) => acc + curr.commissionServices + curr.tips, 0);
+    const totalComisionesProductos = commissionsSummary.reduce((acc, curr) => acc + curr.commissionProducts, 0);
+    const totalComisiones = totalComisionesServicios + totalComisionesProductos;
 
     const nominaTotal = useMemo(() => {
         return calculatedEgresos
@@ -297,8 +377,11 @@ export default function FinanzasMensualesPage() {
             .reduce((sum, e) => sum + e.monto, 0);
     }, [calculatedEgresos]);
 
-    const egresoTotal = totalComisiones + nominaTotal + costosFijosTotal;
-    const subtotalUtilidad = ingresoTotal - egresoTotal - ventaProductos;
+    const egresoTotal = (totalComisiones + nominaTotal + costosFijosTotal) - comisionProfesionales;
+
+    // Subtotal de Utilidad = Ingreso Servicios - Egreso (ajustado sin productos)
+    // NOTA: ventaProductos ya NO se resta aquí porque ingresoServiciosTotal NO incluye productos.
+    const subtotalUtilidad = ingresoServiciosTotal - egresoTotal;
 
     // Calculate Local Admin Commissions
     // Calculate Local Admin Commissions
@@ -338,21 +421,39 @@ export default function FinanzasMensualesPage() {
 
     const totalLocalAdminCommissions = localAdminCommissions.reduce((acc, curr) => acc + curr.amount, 0);
 
-    // Keep legacy Beatriz logic separate if she is NOT in the users list with a config, 
-    // OR migrate her to be just another admin if the user prefers. 
-    // For now, let's assume the "Comisión de Beatriz" hardcoded field is legacy and we might want to hide it if she is now a configured user,
-    // or just leave it as a manual override/legacy setting.
-    // The user request implies replacing/augmenting.
-    // "if I choose that I don't want to give him utility that section of commission that appears in the summaries of the months is hidden"
+    // Calculate Local Admin Product Commissions
+    const localAdminProductCommissions = useMemo(() => {
+        if (!users) return [];
+        return users
+            .filter(u => u.role === 'Administrador local')
+            .map(u => {
+                const adjustment = monthlyProductAdjustments[u.id];
+                // Default to none if not set specifically for products for this month
+                const type = adjustment ? adjustment.type : 'none';
+                const value = adjustment ? adjustment.value : 0;
 
-    // Let's assume we ADD these new commissions to the list.
+                if (!type || type === 'none') return null;
 
+                let amount = 0;
+                if (type === 'fixed') {
+                    amount = value || 0;
+                } else if (type === 'percentage') {
+                    amount = utilidadVatosAlfa * ((value || 0) / 100);
+                }
 
+                return {
+                    name: u.name,
+                    amount,
+                    type,
+                    value,
+                    id: u.id,
+                };
+            })
+            .filter((u): u is NonNullable<typeof u> => u !== null);
+    }, [users, utilidadVatosAlfa, monthlyProductAdjustments]);
 
-    // If we have dynamic admins, maybe we don't need the hardcoded Beatriz one? 
-    // But the user didn't explicitly say "remove Beatriz hardcoded field". 
-    // They just said "adjust in the summaries".
-    // I'll subtract BOTH for Utility Net.
+    const totalLocalAdminProductCommissions = localAdminProductCommissions.reduce((acc, curr) => acc + curr.amount, 0);
+    const utilidadNetaProductos = utilidadVatosAlfa - totalLocalAdminProductCommissions;
 
     const utilidadNeta = subtotalUtilidad - totalLocalAdminCommissions;
 
@@ -360,16 +461,17 @@ export default function FinanzasMensualesPage() {
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading || usersLoading;
     const totalResumenEgresos = totalComisiones + nominaTotal + costosFijosTotal;
 
-    const handleEditCommission = (admin: { id: string, name: string, type: 'fixed' | 'percentage' | 'none' | undefined, value: number | undefined }) => {
-        const type = (admin.type === 'fixed' || admin.type === 'percentage') ? admin.type : 'fixed';
+    const handleEditCommission = (admin: { id: string, name: string, type: 'fixed' | 'percentage' | 'none' | undefined, value: number | undefined }, type: 'service' | 'product') => {
+        const commType = (admin.type === 'fixed' || admin.type === 'percentage') ? admin.type : 'fixed';
         const value = admin.value || 0;
 
         setEditingCommissionUser({
             id: admin.id,
             name: admin.name,
-            type,
+            type: commType,
             value
         });
+        setEditingCommissionType(type);
         setIsCommissionModalOpen(true);
     };
 
@@ -377,19 +479,21 @@ export default function FinanzasMensualesPage() {
         if (!editingCommissionUser || !db) return;
 
         try {
-            const docId = `${monthName.toLowerCase()}_${currentYear}`;
+            const docId = `${monthName.toLowerCase()}_${selectedYear}`;
             const adjustmentData = {
                 type: editingCommissionUser.type,
                 value: editingCommissionUser.value
             };
 
+            const fieldToUpdate = editingCommissionType === 'service' ? 'adminCommissions' : 'adminProductCommissions';
+
             await setDoc(doc(db, 'finanzas_mensuales', docId), {
-                adminCommissions: {
+                [fieldToUpdate]: {
                     [editingCommissionUser.id]: adjustmentData
                 }
             }, { merge: true });
 
-            toast({ title: "Comisión actualizada", description: `Se ha actualizado la comisión para ${monthName}.` });
+            toast({ title: "Comisión actualizada", description: `Se ha actualizado la comisión de ${editingCommissionType === 'service' ? 'servicios' : 'productos'} para ${monthName}.` });
             setIsCommissionModalOpen(false);
         } catch (error) {
             console.error("Error saving commission adjustment:", error);
@@ -452,76 +556,157 @@ export default function FinanzasMensualesPage() {
         egresosPage * egresosPerPage
     );
 
+    const totalIncomesPages = Math.ceil(dailyIncome.length / incomesPerPage);
+    const paginatedIncomes = dailyIncome.slice(
+        (incomesPage - 1) * incomesPerPage,
+        incomesPage * incomesPerPage
+    );
+
     return (
         <>
             <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-                <h2 className="text-3xl font-bold tracking-tight">Resumen de {monthName.toLowerCase()}</h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-bold tracking-tight">Resumen de {monthName.toLowerCase()}</h2>
+                    <Select value={String(selectedYear)} onValueChange={(val) => setSelectedYear(Number(val))}>
+                        <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Año" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {years.map((y) => (
+                                <SelectItem key={y} value={String(y)}>
+                                    {y}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
                     <Card className="lg:col-span-4">
                         <CardHeader>
-                            <CardTitle>Resumen</CardTitle>
+                            <CardTitle>Resumen de servicios</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-1 text-sm">
                             {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
                                 <>
-                                    <ResumenGeneralItem label="Ingreso total" amount={ingresoTotal} />
-                                    <ResumenGeneralItem label="Egreso total" amount={egresoTotal} />
-                                    <ResumenGeneralItem label="Subtotal de utilidad" amount={subtotalUtilidad} isBold />
-                                    {localAdminCommissions.map(admin => (
-                                        <ResumenGeneralItem
-                                            key={admin.id}
-                                            label={`Comisión ${admin.name} (${admin.type === 'percentage' ? admin.value + '%' : 'Fijo'})`}
-                                            amount={admin.amount}
-                                        >
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleEditCommission(admin)}>
-                                                <Edit className="h-3 w-3" />
-                                            </Button>
-                                        </ResumenGeneralItem>
-                                    ))}
+                                    <ResumenGeneralItem
+                                        label="Ingreso total"
+                                        amount={ingresoServiciosTotal}
+                                        tooltipText="Total de ingresos provenientes exclusivamente de servicios."
+                                    />
+                                    <ResumenGeneralItem
+                                        label="Egreso total"
+                                        amount={egresoTotal}
+                                        tooltipText="Egreso total menos las comisiones de productos (solo gastos operativos y de servicios)."
+                                    />
+                                    <ResumenGeneralItem
+                                        label="Subtotal de utilidad"
+                                        amount={subtotalUtilidad}
+                                        isBold
+                                        tooltipText="Ingreso por servicios menos Egresos (sin considerar comisiones de productos)."
+                                    />
+                                    {users?.filter(u => u.role === 'Administrador local').map(admin => {
+                                        const commission = localAdminCommissions.find(c => c.id === admin.id);
+                                        const hasCommission = !!commission;
+                                        const type = commission?.type || 'none';
+                                        const value = commission?.value || 0;
+
+                                        return (
+                                            <ResumenGeneralItem
+                                                key={admin.id}
+                                                label={`Comisión ${admin.name} ${hasCommission ? `(${type === 'percentage' ? value + '%' : 'Fijo'})` : '(Configurar)'}`}
+                                                amount={commission?.amount || 0}
+                                                tooltipText="Si el dueño decide pagarle un porcentaje, se calcula del subtotal de la utilidad de servicios."
+                                            >
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleEditCommission({ id: admin.id, name: admin.name, type: type as any, value }, 'service')}>
+                                                    <Edit className="h-3 w-3" />
+                                                </Button>
+                                            </ResumenGeneralItem>
+                                        );
+                                    })}
 
 
 
-                                    <ResumenGeneralItem label="Utilidad neta" amount={utilidadNeta} isPrimary isBold className="text-xl" />
+                                    <ResumenGeneralItem
+                                        label="Utilidad neta"
+                                        amount={utilidadNeta}
+                                        isPrimary
+                                        isBold
+                                        className="text-xl"
+                                        tooltipText="Se considera la ganancia final del mes."
+                                    />
                                 </>
                             )}
                         </CardContent>
                     </Card>
-                    <Card className="lg:col-span-3">
+                    <Card className="lg:col-span-4">
                         <CardHeader>
-                            <CardTitle>Productos</CardTitle>
+                            <CardTitle>Resumen de productos</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            <div className="flex justify-between items-center text-base">
-                                <span className="text-muted-foreground">Venta de productos</span>
-                                <span className="font-semibold">${ventaProductos.toLocaleString('es-MX')}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-base">
-                                <span className="text-muted-foreground">Reinversión</span>
-                                <span className="font-semibold text-muted-foreground">-${reinversion.toLocaleString('es-MX')}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-base">
-                                <span className="text-muted-foreground">Comisión de profesionales</span>
-                                <span className="font-semibold text-muted-foreground">-${comisionProfesionales.toLocaleString('es-MX')}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-lg pt-2 border-t mt-2">
-                                <span className="font-bold text-primary flex items-center"><ShoppingCart className="mr-2 h-5 w-5" />Utilidad Vatos Alfa</span>
-                                <span className="font-extrabold text-primary">${utilidadVatosAlfa.toLocaleString('es-MX')}</span>
-                            </div>
+                        <CardContent className="space-y-1 text-sm">
+                            <ResumenGeneralItem
+                                label="Ingreso total"
+                                amount={ventaProductos}
+                            />
+                            <ResumenGeneralItem
+                                label="Reinversión"
+                                amount={-reinversion}
+                                className="text-muted-foreground"
+                            />
+                            <ResumenGeneralItem
+                                label="Comisión de profesionales"
+                                amount={-comisionProfesionales}
+                                className="text-muted-foreground"
+                            />
+                            <ResumenGeneralItem
+                                label="Subtotal de utilidad"
+                                amount={utilidadVatosAlfa}
+                                isBold
+                            />
+
+                            {/* Mostrar administradores locales para configurar comisión (si hay alguno) */}
+                            {users?.filter(u => u.role === 'Administrador local').map(admin => {
+                                const commission = localAdminProductCommissions.find(c => c.id === admin.id);
+                                const hasCommission = !!commission;
+                                const type = commission?.type || 'none';
+                                const value = commission?.value || 0;
+
+                                return (
+                                    <ResumenGeneralItem
+                                        key={admin.id}
+                                        label={`Comisión ${admin.name} ${hasCommission ? `(${type === 'percentage' ? value + '%' : 'Fijo'})` : '(Configurar)'}`}
+                                        amount={commission?.amount || 0}
+                                        tooltipText="Comisión del administrador sobre la utilidad de productos."
+                                    >
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleEditCommission({ id: admin.id, name: admin.name, type: type as any, value }, 'product')}>
+                                            <Edit className="h-3 w-3" />
+                                        </Button>
+                                    </ResumenGeneralItem>
+                                );
+                            })}
+
+
+                            <ResumenGeneralItem
+                                label="Utilidad neta"
+                                amount={utilidadNetaProductos}
+                                isPrimary
+                                isBold
+                                className="text-xl pt-2 border-t mt-2"
+                            />
                         </CardContent>
                     </Card>
-                    <Card className="lg:col-span-5">
+                    <Card className="lg:col-span-4">
                         <CardHeader>
                             <CardTitle>Egresos</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            <Accordion type="single" collapsible className="w-full">
-                                <AccordionItem value="comisiones" className="border-b-0">
+                            <Accordion type="multiple" className="w-full">
+                                <AccordionItem value="comisiones-servicios" className="border-b-0">
                                     <div className="flex justify-between items-center text-base py-1.5 border-b">
                                         <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
-                                            <span className="text-muted-foreground">Comisiones</span>
+                                            <span className="text-muted-foreground">Comisiones Servicios</span>
                                         </AccordionTrigger>
-                                        <span className="font-semibold mr-4">${totalComisiones.toLocaleString('es-MX')}</span>
+                                        <span className="font-semibold mr-4">${totalComisionesServicios.toLocaleString('es-MX')}</span>
                                     </div>
                                     <AccordionContent className="p-0">
                                         <Table>
@@ -534,7 +719,7 @@ export default function FinanzasMensualesPage() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {commissionsSummary.map(({ name, commission, tips, avatarUrl }) => (
+                                                {commissionsSummary.filter(c => c.commissionServices > 0 || c.tips > 0).map(({ name, commissionServices, tips, avatarUrl }) => (
                                                     <TableRow key={name}>
                                                         <TableCell className="font-medium flex items-center gap-2">
                                                             <Avatar className="h-8 w-8">
@@ -543,9 +728,42 @@ export default function FinanzasMensualesPage() {
                                                             </Avatar>
                                                             <span>{name}</span>
                                                         </TableCell>
-                                                        <TableCell className="text-right">${commission.toLocaleString('es-MX')}</TableCell>
+                                                        <TableCell className="text-right">${commissionServices.toLocaleString('es-MX')}</TableCell>
                                                         <TableCell className="text-right">${tips.toLocaleString('es-MX')}</TableCell>
-                                                        <TableCell className="text-right font-bold text-primary">${(commission + tips).toLocaleString('es-MX')}</TableCell>
+                                                        <TableCell className="text-right font-bold text-primary">${(commissionServices + tips).toLocaleString('es-MX')}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="comisiones-productos" className="border-b-0">
+                                    <div className="flex justify-between items-center text-base py-1.5 border-b">
+                                        <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
+                                            <span className="text-muted-foreground">Comisiones Productos</span>
+                                        </AccordionTrigger>
+                                        <span className="font-semibold mr-4">${totalComisionesProductos.toLocaleString('es-MX')}</span>
+                                    </div>
+                                    <AccordionContent className="p-0">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="hover:bg-transparent">
+                                                    <TableHead className="w-[60%]">Profesional</TableHead>
+                                                    <TableHead className="text-right">Comisión</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {commissionsSummary.filter(c => c.commissionProducts > 0).map(({ name, commissionProducts, avatarUrl }) => (
+                                                    <TableRow key={name}>
+                                                        <TableCell className="font-medium flex items-center gap-2">
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage src={avatarUrl} alt={name} />
+                                                                <AvatarFallback>{name.charAt(0)}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span>{name}</span>
+                                                        </TableCell>
+                                                        <TableCell className="text-right font-bold text-primary">${commissionProducts.toLocaleString('es-MX')}</TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
@@ -585,7 +803,7 @@ export default function FinanzasMensualesPage() {
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        dailyIncome.map((ingreso, i) => (
+                                        paginatedIncomes.map((ingreso, i) => (
                                             <TableRow key={i}>
                                                 <TableCell>{ingreso.fecha.split('-').reverse().join('/')}</TableCell>
                                                 <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
@@ -596,6 +814,52 @@ export default function FinanzasMensualesPage() {
                                     )}
                                 </TableBody>
                             </Table>
+                            {dailyIncome.length > 0 && (
+                                <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                    <div className="flex items-center space-x-2">
+                                        <p className="text-sm font-medium">Resultados por página</p>
+                                        <Select
+                                            value={`${incomesPerPage}`}
+                                            onValueChange={(value) => {
+                                                setIncomesPerPage(Number(value));
+                                                setIncomesPage(1);
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8 w-[70px]">
+                                                <SelectValue placeholder={incomesPerPage} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="20">20</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="text-sm font-medium">
+                                        Página {incomesPage} de {totalIncomesPages}
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Button
+                                            variant="outline"
+                                            className="h-8 w-8 p-0"
+                                            onClick={() => setIncomesPage(p => Math.max(1, p - 1))}
+                                            disabled={incomesPage === 1}
+                                        >
+                                            <span className="sr-only">Anterior</span>
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="h-8 w-8 p-0"
+                                            onClick={() => setIncomesPage(p => Math.min(totalIncomesPages, p + 1))}
+                                            disabled={incomesPage === totalIncomesPages}
+                                        >
+                                            <span className="sr-only">Siguiente</span>
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     <Card className="lg:col-span-7">
@@ -716,7 +980,7 @@ export default function FinanzasMensualesPage() {
             <Dialog open={isCommissionModalOpen} onOpenChange={setIsCommissionModalOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Ajustar Comisión Mensual</DialogTitle>
+                        <DialogTitle>Ajustar Comisión Mensual ({editingCommissionType === 'service' ? 'Servicios' : 'Productos'})</DialogTitle>
                         <DialogDescription>
                             Ajuste la comisión para <strong>{editingCommissionUser?.name}</strong> solo para el mes de <strong>{monthName}</strong>.
                         </DialogDescription>

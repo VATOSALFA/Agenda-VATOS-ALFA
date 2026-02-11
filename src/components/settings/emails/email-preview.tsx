@@ -119,7 +119,7 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
                         </h2>
 
                         <div style="text-align: center; margin-bottom: 30px;">
-                            <div style="display: inline-block; background-color: #000; color: #fff; padding: 8px 16px; border-radius: 4px; font-weight: 700;">
+                            <div style="display: inline-block; background-color: #314177; color: #fff; padding: 8px 16px; border-radius: 4px; font-weight: 700;">
                                 📅 ${new Date().toISOString().split('T')[0]}
                             </div>
                         </div>

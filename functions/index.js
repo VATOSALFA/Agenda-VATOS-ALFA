@@ -2113,62 +2113,75 @@ exports.sendCommissionReport = onCall(
       const senderEmail = 'contacto@vatosalfa.com';
       const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
 
-      // 3. Build HTML Table
+      // 3. Build HTML List (Mobile Friendly)
       const rowsHtml = details.map(item => `
-          <tr style="border-bottom: 1px solid #f0f0f0;">
-             <td style="padding: 10px; color: #333;">${item.itemName}</td>
-             <td style="padding: 10px; color: #666; font-size: 0.9em;">${item.clientName}</td>
-             <td style="padding: 10px; color: #666; font-size: 0.9em; text-transform: capitalize;">${item.itemType}</td>
-             <td style="padding: 10px; text-align: right; color: #333;">$${item.saleAmount.toLocaleString('es-MX')}</td>
-             <td style="padding: 10px; text-align: right; color: #666; font-size: 0.9em;">${item.commissionPercentage.toFixed(2)}%</td>
-             <td style="padding: 10px; text-align: right; font-weight: bold; color: #333;">$${item.commissionAmount.toLocaleString('es-MX')}</td>
-          </tr>
+          <div style="padding: 15px 0; border-bottom: 1px solid #eee;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                <span style="font-weight: 700; color: #333; font-size: 15px; width: 70%;">${item.itemName}</span>
+                <span style="font-weight: 700; color: #2563eb; font-size: 15px;">$${item.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666; margin-bottom: 2px;">
+                 <span>${item.clientName}</span>
+                 <span style="background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${item.itemType}</span>
+            </div>
+
+            <div style="font-size: 12px; color: #999; text-align: right;">
+                Venta: $${item.saleAmount.toLocaleString('es-MX')} (${item.commissionPercentage}%)
+            </div>
+          </div>
       `).join('');
 
       const totalSales = details.reduce((acc, item) => acc + item.saleAmount, 0);
       const totalCommission = details.reduce((acc, item) => acc + item.commissionAmount, 0);
 
       const htmlContent = `
-        <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-          <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+        </head>
+        <body style="font-family: 'Roboto', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+          
+          <div style="max-width: 480px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
             
-            <div style="text-align: center; margin-bottom: 20px;">
-              <img src="${logoUrl}" alt="${senderName}" style="max-width: 150px; height: auto;" />
-              <h2 style="margin-top: 10px; color: #333;">Reporte de Comisiones</h2>
-              <p style="color: #666; font-size: 0.9em;">Hola ${proData.name}, aquí tienes tu desglose de comisiones.</p>
-              ${dateRangeStr ? `<p style="color: #888; font-size: 0.8em; margin-top: 5px;">Periodo: ${dateRangeStr}</p>` : ''}
+            <!-- Header -->
+            <div style="background-color: #ffffff; padding: 30px 20px 20px 20px; text-align: center; border-bottom: 1px solid #f0f0f0;">
+              <img src="${logoUrl}" alt="${senderName}" style="max-width: 160px; height: auto; object-fit: contain;" />
+              <h2 style="margin-top: 20px; color: #314177; font-size: 20px; margin-bottom: 5px;">Reporte de Comisiones</h2>
+              <p style="color: #666; font-size: 14px; margin: 0;">Hola <strong>${proData.name || 'Profesional'}</strong></p>
+              ${dateRangeStr ? `<div style="display: inline-block; background-color: #f3f4f6; color: #555; padding: 4px 10px; border-radius: 20px; font-size: 12px; margin-top: 15px;">${dateRangeStr}</div>` : ''}
             </div>
 
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-              <thead>
-                <tr style="background-color: #f4f4f4;">
-                  <th style="padding: 10px; text-align: left;">Concepto</th>
-                  <th style="padding: 10px; text-align: left;">Cliente</th>
-                  <th style="padding: 10px; text-align: left;">Tipo</th>
-                  <th style="padding: 10px; text-align: right;">Venta</th>
-                  <th style="padding: 10px; text-align: right;">% Com.</th>
-                  <th style="padding: 10px; text-align: right;">Comisión</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsHtml}
-              </tbody>
-              <tfoot>
-                 <tr style="border-top: 2px solid #ddd;">
-                   <td colspan="3" style="padding: 10px; text-align: right; font-weight: bold;">Totales:</td>
-                   <td style="padding: 10px; text-align: right; font-weight: bold;">$${totalSales.toLocaleString('es-MX')}</td>
-                   <td></td>
-                   <td style="padding: 10px; text-align: right; font-weight: bold; color: #2563eb;">$${totalCommission.toLocaleString('es-MX')}</td>
-                 </tr>
-              </tfoot>
-            </table>
+            <!-- Content List -->
+            <div style="padding: 10px 20px;">
+              ${rowsHtml}
+            </div>
 
-            <div style="text-align: center; font-size: 0.8em; color: #999; margin-top: 30px;">
-              <p>${senderName}</p>
+            <!-- Totals -->
+            <div style="background-color: #f8fafc; padding: 20px; border-top: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #64748b;">
+                    <span>Ventas Totales</span>
+                    <span>$${totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: 700; color: #314177;">
+                    <span>Comisión Total</span>
+                    <span>$${totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 11px;">
+               ${senderName}
+               <br/>
+               Enviado automáticamente por el sistema.
             </div>
 
           </div>
-        </div>
+        </body>
+        </html>
       `;
 
       // 4. Send Email

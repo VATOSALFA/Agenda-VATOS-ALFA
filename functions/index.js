@@ -1780,7 +1780,7 @@ async function runDailySummary(dateStr) {
           return `
             <div style="padding: 15px 0; border-bottom: 1px solid #eee; text-align: left;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <span style="font-weight: 700; font-size: 16px; color: #333;">${formattedTime}</span>
+                    <span style="font-weight: 700; font-size: 16px; color: #000;">${formattedTime}</span>
                     <span style="background-color: ${bgColor}; color: ${fgColor}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">${res.estado}</span>
                 </div>
                 <div style="font-weight: 600; color: #444; margin-bottom: 2px;">${clientName}</div>
@@ -1841,8 +1841,9 @@ async function runDailySummary(dateStr) {
         const headlineTpl = dsConfig.headline || "Hola {nombre}, aquí está tu agenda programada para hoy.";
 
         // Personalize Text
-        const currentHeadline = headlineTpl.replace('{nombre}', proData.nombre || 'Profesional');
-        const currentSubject = subjectTpl.replace('{nombre}', proData.nombre || 'Profesional');
+        const proName = proData.name || proData.nombre || proData.publicName || 'Profesional';
+        const currentHeadline = headlineTpl.replace('{nombre}', proName);
+        const currentSubject = subjectTpl.replace('{nombre}', proName);
 
         const htmlContent = `
         <!DOCTYPE html>

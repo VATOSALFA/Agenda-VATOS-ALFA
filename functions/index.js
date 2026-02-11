@@ -1637,9 +1637,10 @@ async function runDailySummary(dateStr) {
 
   try {
     // 0. Check Settings Enable/Disable
+    let settings = {};
     const settingsDoc = await db.collection('settings').doc('website').get();
     if (settingsDoc.exists) {
-      const settings = settingsDoc.data();
+      settings = settingsDoc.data();
       if (settings.dailySummaryConfig && settings.dailySummaryConfig.enabled === false) {
         console.log("[DailySummary] Feature is disabled in settings. Aborting.");
         logResults.message = "Feature disabled.";

@@ -108,7 +108,9 @@ export default function EmailsSettingsPage() {
             reminderWhatsappText: 'Contáctanos por WhatsApp',
             // Daily Summary Settings
             enableDailySummary: true,
-            dailySummaryTimeBeforeOpen: 1,
+            dailySummaryTime: '08:00',
+            dailySummarySubject: 'Tu Agenda del Día',
+            dailySummaryHeadline: 'Hola {nombre}, aquí está tu agenda programada para hoy.',
         }
     });
 
@@ -176,7 +178,9 @@ export default function EmailsSettingsPage() {
                     const data = websiteDoc.data();
                     if (data.dailySummaryConfig) {
                         form.setValue('enableDailySummary', data.dailySummaryConfig.enabled ?? true);
-                        form.setValue('dailySummaryTimeBeforeOpen', data.dailySummaryConfig.timeBeforeOpen ?? 1);
+                        form.setValue('dailySummaryTime', data.dailySummaryConfig.time || '08:00');
+                        form.setValue('dailySummarySubject', data.dailySummaryConfig.subject || 'Tu Agenda del Día');
+                        form.setValue('dailySummaryHeadline', data.dailySummaryConfig.headline || 'Hola {nombre}, aquí está tu agenda programada para hoy.');
                     }
                 }
 
@@ -266,7 +270,9 @@ export default function EmailsSettingsPage() {
             await setDoc(doc(db, 'settings', 'website'), {
                 dailySummaryConfig: {
                     enabled: data.enableDailySummary,
-                    timeBeforeOpen: data.dailySummaryTimeBeforeOpen
+                    time: data.dailySummaryTime,
+                    subject: data.dailySummarySubject,
+                    headline: data.dailySummaryHeadline
                 }
             }, { merge: true });
 
@@ -851,22 +857,42 @@ export default function EmailsSettingsPage() {
 
                             {form.watch('enableDailySummary') && (
                                 <div className="space-y-4 pt-4 border-t">
-                                    <div className="space-y-2 p-4 border rounded-lg bg-card/50">
-                                        <Label htmlFor="dailySummaryTimeBeforeOpen">Tiempo antes de apertura (Horas)</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                id="dailySummaryTimeBeforeOpen"
-                                                type="number"
-                                                min={0}
-                                                max={12}
-                                                {...form.register('dailySummaryTimeBeforeOpen', { valueAsNumber: true })}
-                                                className="w-24"
-                                            />
-                                            <span className="text-sm text-muted-foreground">horas antes de abrir la sucursal.</span>
+                                    <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensaje</h4>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                                        <div className="space-y-4 order-2 xl:order-1">
+
+                                            <div className="space-y-2 p-4 border rounded-lg bg-card/50">
+                                                <Label htmlFor="dailySummaryTime">Hora de envío automático</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        id="dailySummaryTime"
+                                                        type="time"
+                                                        {...form.register('dailySummaryTime')}
+                                                        className="w-32"
+                                                    />
+                                                    <span className="text-sm text-muted-foreground">hora local.</span>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Se enviará todos los días a esta hora.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="dailySummarySubject">Asunto del Correo</Label>
+                                                <Input id="dailySummarySubject" {...form.register('dailySummarySubject')} />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="dailySummaryHeadline">Título Principal</Label>
+                                                <Input id="dailySummaryHeadline" {...form.register('dailySummaryHeadline')} />
+                                                <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del profesional.</p>
+                                            </div>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            Determina con cuánta anticipación recibirán los profesionales su agenda del día.
-                                        </p>
+
+                                        <div className="order-1 xl:order-2 xl:sticky xl:top-6">
+                                            <EmailPreview config={form.watch()} type="dailySummary" />
+                                        </div>
                                     </div>
                                 </div>
                             )}

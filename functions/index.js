@@ -1517,22 +1517,74 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
  * Sends an email to each professional with their appointments for the day.
  */
 exports.sendDailyAgendaSummary = onSchedule({
-  schedule: "every day 08:00",
+  schedule: "every 30 minutes",
   timezone: "America/Mexico_City",
   secrets: [resendApiKey]
 }, async (event) => {
-  console.log("[DailySummary] Starting daily agenda summary job... (Secrets Refreshed)");
+  console.log("[DailySummary] Cron triggered. Checking time and config...");
 
-  // 1. Determine "Today" in Mexico City
-  const today = new Date();
-  const options = { timeZone: "America/Mexico_City", year: 'numeric', month: '2-digit', day: '2-digit' };
-  const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(today);
-  const day = parts.find(p => p.type === 'day').value;
-  const month = parts.find(p => p.type === 'month').value;
-  const year = parts.find(p => p.type === 'year').value;
-  const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
+  const db = admin.firestore();
 
-  await runDailySummary(dateStr);
+  // 1. Determine "Today" and Current Time in Mexico City
+  const now = new Date();
+  const options = { timeZone: "America/Mexico_City", hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+  const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(now);
+  const day = parts.find(p => p.type === 'day')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const year = parts.find(p => p.type === 'year')?.value;
+  const hour = parts.find(p => p.type === 'hour')?.value;
+  const minute = parts.find(p => p.type === 'minute')?.value;
+
+  const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
+  const currentTimeVal = parseInt(hour) * 60 + parseInt(minute); // Minutes from midnight
+
+  // 2. Fetch Configuration
+  const settingsSnap = await db.collection('settings').doc('website').get();
+  if (!settingsSnap.exists) return;
+  const settings = settingsSnap.data();
+  const config = settings.dailySummaryConfig || {};
+
+  if (config.enabled === false) {
+    console.log("[DailySummary] Feature disabled in settings. Skipping.");
+    return;
+  }
+
+  // 3. Check Target Time
+  const targetTimeStr = config.time || "08:00";
+  const [targetH, targetM] = targetTimeStr.split(':').map(Number);
+  const targetTimeVal = targetH * 60 + targetM;
+
+  if (currentTimeVal < targetTimeVal) {
+    console.log(`[DailySummary] Too early. Current: ${hour}:${minute} (${currentTimeVal}), Target: ${targetTimeStr} (${targetTimeVal}). Waiting.`);
+    return;
+  }
+
+  // 4. Check if already sent today
+  const cronStateRef = db.collection('system').doc('cronState');
+  const cronStateSnap = await cronStateRef.get();
+  let lastSentDate = null;
+  if (cronStateSnap.exists) {
+    const state = cronStateSnap.data();
+    if (state && state.dailySummary) {
+      lastSentDate = state.dailySummary.lastSentDate;
+    }
+  }
+
+  if (lastSentDate === todayStr) {
+    console.log(`[DailySummary] Already sent for today (${todayStr}). Skipping.`);
+    return;
+  }
+
+  // 5. Execute and Update State
+  console.log(`[DailySummary] Time match! Executing summary for ${todayStr}.`);
+  await runDailySummary(todayStr);
+
+  await cronStateRef.set({
+    dailySummary: {
+      lastSentDate: todayStr,
+      sentAt: admin.firestore.FieldValue.serverTimestamp()
+    }
+  }, { merge: true });
 });
 
 /**
@@ -1714,26 +1766,21 @@ async function runDailySummary(dateStr) {
             if (servicesList) serviceName = servicesList;
           }
 
-          // Status Badge Style
-          let statusStyle = "background-color: #e3f2fd; color: #1e88e5;"; // Default Blue
-          if (res.estado === 'Confirmado') statusStyle = "background-color: #e8f5e9; color: #2e7d32;"; // Green
-          if (res.estado === 'Pendiente') statusStyle = "background-color: #fff3e0; color: #ef6c00;"; // Orange
+          // Status Badge Colors (Mobile Friendly)
+          let bgColor = "#e3f2fd"; let fgColor = "#1565c0"; // Blue (Default/Confirmado implicit)
+          if (res.estado === 'Pendiente') { bgColor = "#fff3e0"; fgColor = "#ef6c00"; }
+          if (res.estado === 'Cancelado') { bgColor = "#ffebee"; fgColor = "#c62828"; }
 
           return `
-               <tr style="border-bottom: 1px solid #eee;">
-                   <td style="padding: 16px; color: #333; font-weight: 500;">
-                        ${formattedTime} 
-                        <span style="display:block; font-size: 0.8em; color: #888;">${duration} min</span>
-                   </td>
-                   <td style="padding: 16px; color: #333;">
-                        <span style="display:block; font-weight: bold; font-size: 1.05em;">${clientName}</span>
-                        <span style="display:block; color: #666; margin-top: 4px;">${serviceName}</span>
-                   </td>
-                   <td style="padding: 16px;">
-                        <span style="font-size: 0.85em; padding: 4px 10px; border-radius: 20px; font-weight: 600; ${statusStyle}">${res.estado}</span>
-                   </td>
-               </tr>
-            `;
+            <div style="padding: 15px 0; border-bottom: 1px solid #eee; text-align: left;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-weight: 700; font-size: 16px; color: #333;">${formattedTime}</span>
+                    <span style="background-color: ${bgColor}; color: ${fgColor}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">${res.estado}</span>
+                </div>
+                <div style="font-weight: 600; color: #444; margin-bottom: 2px;">${clientName}</div>
+                <div style="font-size: 13px; color: #777;">${serviceName} <span style="color:#aaa">(${duration} min)</span></div>
+            </div>
+          `;
         }));
 
         // Determine Phone Number for this Professional's Context
@@ -1782,74 +1829,74 @@ async function runDailySummary(dateStr) {
         const cleanPhone = proLocalPhone.replace(/\D/g, '');
         const proWaLink = `https://wa.me/52${cleanPhone}`;
 
+        // Get Config Vars
+        const dsConfig = (settings && settings.dailySummaryConfig) || {};
+        const subjectTpl = dsConfig.subject || "Tu Agenda del Día";
+        const headlineTpl = dsConfig.headline || "Hola {nombre}, aquí está tu agenda programada para hoy.";
+
+        // Personalize Text
+        const currentHeadline = headlineTpl.replace('{nombre}', proData.nombre || 'Profesional');
+        const currentSubject = subjectTpl.replace('{nombre}', proData.nombre || 'Profesional');
+
         const htmlContent = `
-         <!DOCTYPE html>
-         <html>
-         <head>
-            <style>
-                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-                .header { background-color: #ffffff; padding: 40px 20px; text-align: center; border-bottom: 3px solid #000; }
-                .logo { max-width: 250px; height: auto; }
-                .content { padding: 40px 20px; }
-                .greeting { font-size: 18px; color: #333; margin-bottom: 20px; }
-                .date-badge { display: inline-block; background-color: #000; color: #fff; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 14px; margin-bottom: 30px; letter-spacing: 1px; }
-                table { width: 100%; border-collapse: collapse; }
-                th { text-align: left; color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
-                .footer { background-color: #ffffff; padding: 40px 20px; text-align: center; font-size: 13px; color: #999; border-top: 1px solid #f0f0f0; }
-                .whatsapp-link { display: inline-flex; align-items: center; justify-content: center; color: #25D366; text-decoration: none; font-weight: bold; font-size: 16px; margin-top: 5px; }
-                .whatsapp-icon { width: 24px; height: 24px; margin-right: 8px; }
-            </style>
-         </head>
-         <body>
-             <div class="container">
-                 <div class="header">
-                     <img src="${logoUrl}" alt="${senderName}" class="logo">
-                 </div>
-                 
-                 <div class="content">
-                     <p class="greeting">Hola <strong>${proData.name}</strong>,</p>
-                     <p style="color: #666; margin-top: -10px; margin-bottom: 30px; font-size: 15px;">Aquí está tu agenda programada para hoy.</p>
-                     
-                     <div style="text-align: center;">
-                        <span class="date-badge">📅  ${dateStr}</span>
-                     </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+        </head>
+        <body style="font-family: 'Roboto', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+            
+            <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                
+                <!-- Logo -->
+                <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                        <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 200px; height: auto; object-fit: contain;" />
+                </div>
 
-                     <table>
-                         <thead>
-                             <tr>
-                                 <th style="width: 20%;">Hora</th>
-                                 <th style="width: 55%;">Detalles</th>
-                                 <th style="width: 25%;">Estado</th>
-                             </tr>
-                         </thead>
-                         <tbody>
-                             ${rows.join('')}
-                         </tbody>
-                     </table>
-
-                     ${rows.length === 0 ? '<p style="text-align:center; color: #999; padding: 40px; font-style: italic;">No hay citas agendadas para hoy.</p>' : ''}
-                 </div>
-                 
-                 <div class="footer">
-                    <p style="margin-bottom: 15px; color: #333; font-weight: 600;">${senderName}</p>
+                <!-- Content -->
+                <div style="padding: 25px;">
                     
-                    <a href="${proWaLink}" class="whatsapp-link">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png" alt="WA" class="whatsapp-icon">
-                        ${proLocalPhone}
-                    </a>
+                    <h2 style="color: #314177; text-align: center; margin-top: 5px; margin-bottom: 25px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 20px; line-height: 1.3;">
+                        ${currentHeadline}
+                    </h2>
 
-                    <p style="margin-top: 30px; font-size: 11px; color: #bbb;">Mensaje automático del sistema de gestión.</p>
-                 </div>
-             </div>
-         </body>
-         </html>
-         `;
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <div style="display: inline-block; background-color: #000; color: #fff; padding: 8px 16px; border-radius: 4px; font-weight: 700;">
+                            📅 ${dateStr}
+                        </div>
+                    </div>
+
+                    <!-- Appointments List -->
+                    <div style="margin-top: 20px; border-top: 1px solid #eee;">
+                        ${rows.join('')}
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #f0f0f0; text-align: center;">
+                            <div style="font-weight: 700; margin-bottom: 10px; color: #333;">${senderName}</div>
+                            
+                            <a href="${proWaLink}" style="text-decoration: none; color: #25D366; display: inline-flex; align-items: center; justify-content: center;">
+                            <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="24" height="24" style="margin-right: 8px;" alt="WhatsApp" />
+                            <span style="font-weight: 700; font-size: 16px;">${proLocalPhone}</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+                Enviado automáticamente por el sistema de agenda.
+            </div>
+
+        </body>
+        </html>
+        `;
 
         await resend.emails.send({
           from: `${senderName} <${senderEmail}>`,
           to: [proData.email],
-          subject: `📅 Tu Agenda de Hoy (${dateStr})`,
+          subject: currentSubject,
           html: htmlContent
         });
 

@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EmailPreviewProps {
     config: any;
-    type: 'confirmation' | 'reminder' | 'professional';
+    type: 'confirmation' | 'reminder' | 'professional' | 'dailySummary';
 }
 
 export function EmailPreview({ config, type }: EmailPreviewProps) {
@@ -12,7 +12,8 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
     const typeLabels = {
         confirmation: 'Confirmación',
         reminder: 'Recordatorio',
-        professional: 'Profesional'
+        professional: 'Profesional',
+        dailySummary: 'Resumen Diario'
     };
 
     const getHtml = () => {
@@ -28,6 +29,7 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
         const whatsappLink = "#";
 
         if (type === 'confirmation') {
+            // ... (existing confirmation logic) ...
             const subject = config.confirmSubject || `Confirmación de Cita`;
             // Handle {nombre} replacement nicely
             let headline = config.confirmHeadline || `¡Hola {nombre}, tu cita está confirmada!`;
@@ -95,6 +97,82 @@ export function EmailPreview({ config, type }: EmailPreviewProps) {
                 </div>
             </div>
         </div>`;
+
+        } else if (type === 'dailySummary') {
+            const headline = (config.dailySummaryHeadline || 'Hola {nombre}, aquí está tu agenda para hoy.').replace('{nombre}', professionalName);
+            const whatsappText = 'Contáctanos por WhatsApp'; // Fixed per request or add config later
+
+            return `
+            <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px;">
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+                
+                <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    
+                    <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                         <img src="${logoUrl}" alt="${senderName}" style="width: 100%; max-width: 280px; height: auto; object-fit: contain;" />
+                    </div>
+
+                    <div style="padding: 25px;">
+                        
+                        <h2 style="color: ${secondaryColor}; text-align: center; margin-top: 5px; margin-bottom: 25px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 20px; line-height: 1.3;">
+                            ${headline}
+                        </h2>
+
+                        <div style="text-align: center; margin-bottom: 30px;">
+                            <div style="display: inline-block; background-color: #000; color: #fff; padding: 8px 16px; border-radius: 4px; font-weight: 700;">
+                                📅 ${new Date().toISOString().split('T')[0]}
+                            </div>
+                        </div>
+
+                        <!-- Simulated Appointments List -->
+                        <div style="margin-top: 20px; border-top: 1px solid #eee;">
+                            
+                            <!-- Appointment 1 -->
+                            <div style="padding: 15px 0; border-bottom: 1px solid #eee; text-align: left;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-weight: 700; font-size: 16px; color: #333;">10:00</span>
+                                    <span style="background-color: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Reservado</span>
+                                </div>
+                                <div style="font-weight: 600; color: #444; margin-bottom: 2px;">Juan Pérez</div>
+                                <div style="font-size: 13px; color: #777;">Corte de Cabello</div>
+                            </div>
+
+                            <!-- Appointment 2 -->
+                            <div style="padding: 15px 0; border-bottom: 1px solid #eee; text-align: left;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-weight: 700; font-size: 16px; color: #333;">12:00</span>
+                                    <span style="background-color: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Reservado</span>
+                                </div>
+                                <div style="font-weight: 600; color: #444; margin-bottom: 2px;">Rome Gonzalez</div>
+                                <div style="font-size: 13px; color: #777;">Arreglo de barba, Afeitado clásico...</div>
+                            </div>
+
+                             <!-- Appointment 3 -->
+                            <div style="padding: 15px 0; border-bottom: 1px solid #eee; text-align: left;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-weight: 700; font-size: 16px; color: #333;">16:30</span>
+                                    <span style="background-color: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Reservado</span>
+                                </div>
+                                <div style="font-weight: 600; color: #444; margin-bottom: 2px;">Pedro Martinez</div>
+                                <div style="font-size: 13px; color: #777;">Corte y Barba</div>
+                            </div>
+
+                        </div>
+
+                        <!-- Footer / WhatsApp -->
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #f0f0f0; text-align: center;">
+                             <div style="font-weight: 700; margin-bottom: 10px;">${senderName}</div>
+                             
+                             <a href="${whatsappLink}" style="text-decoration: none; color: #25D366; display: inline-flex; align-items: center; justify-content: center;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="24" height="24" style="margin-right: 8px;" alt="WhatsApp" />
+                                <span style="font-weight: 700; font-size: 16px;">${localPhone}</span>
+                            </a>
+                        </div>
+
+                    </div>
+                    
+                </div>
+            </div>`;
 
         } else if (type === 'reminder') {
             const headline = (config.reminderHeadline || '¡{nombre}, recordatorio de tu cita!').replace('{nombre}', clientName);

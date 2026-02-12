@@ -53,6 +53,7 @@ interface ReservationDetailModalProps {
   onPay: () => void;
   onUpdateStatus: (reservationId: string, status: string) => void;
   onEdit?: () => void;
+  onClientClick?: (clientId: string) => void;
 }
 
 const statusOptions = [
@@ -70,7 +71,8 @@ export function ReservationDetailModal({
   onOpenChange,
   onPay,
   onUpdateStatus,
-  onEdit
+  onEdit,
+  onClientClick
 }: ReservationDetailModalProps) {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
@@ -240,7 +242,12 @@ export function ReservationDetailModal({
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-start">
               <div>
-                <h4 className="font-semibold text-lg">{reservation.customer?.nombre} {reservation.customer?.apellido}</h4>
+                <h4
+                  className={cn("font-semibold text-lg hover:text-primary transition-colors", onClientClick && "cursor-pointer hover:underline")}
+                  onClick={() => onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
+                >
+                  {reservation.customer?.nombre} {reservation.customer?.apellido}
+                </h4>
                 <div className="flex items-center gap-2">
                   <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
                   {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica')) && (

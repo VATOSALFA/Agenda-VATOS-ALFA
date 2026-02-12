@@ -193,7 +193,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
         const commissionList = Object.values(commissionsByProfessional).filter(c => c.totalCommission > 0 || c.totalTips > 0);
         setCommissionData(commissionList);
-        setSelectedProfessionals(commissionList.map(c => c.professionalId));
+        setSelectedProfessionals([]);
 
     }, [isOpen, sales, professionals, services, products, isLoading, discountsAffectCommissions]);
 

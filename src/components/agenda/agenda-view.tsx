@@ -60,6 +60,7 @@ import { useAgendaEvents } from './use-agenda-events';
 import { getStatusColor } from './agenda-utils';
 
 import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
+import { ClientDetailModal } from '../clients/client-detail-modal';
 import { DndContext, closestCenter, PointerSensor, MouseSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -185,6 +186,10 @@ export default function AgendaView() {
   // New State for Enable Schedule
   const [isEnableScheduleModalOpen, setIsEnableScheduleModalOpen] = useState(false);
   const [enableScheduleInitialData, setEnableScheduleInitialData] = useState<any>(null);
+
+  // New State for Client Detail
+  const [isClientDetailModalOpen, setIsClientDetailModalOpen] = useState(false);
+  const [selectedClientForModal, setSelectedClientForModal] = useState<Client | null>(null);
 
   const handleNonWorkClick = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
     if (!canSee('bloquear_horarios')) return;
@@ -571,24 +576,28 @@ export default function AgendaView() {
         if (item.tipo === 'producto') {
           const product = products.find(p => p.nombre === item.nombre || p.id === item.id);
           return product ? {
-            ...product,
+            ...product, // Contains original product data
+            // We overwrite with specific sale item details
             id: product.id,
             nombre: product.nombre,
             precio: product.public_price,
             cantidad: item.cantidad,
-            tipo: 'producto' as const
+            tipo: 'producto' as const,
+            commissionPaid: (item as any).commissionPaid // Preserve commission status
           } : null;
         } else {
           // Default to service
           const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
           return service ? {
-            ...service,
+            ...service, // Contains original service data
+            // We overwrite with specific sale item details
             id: service.id,
             nombre: service.name,
             precio: service.price,
             cantidad: 1,
             tipo: 'servicio' as const,
-            barbero_id: item.barbero_id
+            barbero_id: item.barbero_id,
+            commissionPaid: (item as any).commissionPaid // Preserve commission status
           } : null;
         }
       }).filter((i): i is any => !!i);
@@ -680,6 +689,17 @@ export default function AgendaView() {
       });
     } finally {
       setBlockToDelete(null);
+    }
+  };
+
+  const handleViewClientFile = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId);
+    if (client) {
+      setSelectedClientForModal(client);
+      setIsClientDetailModalOpen(true);
+      setIsDetailModalOpen(false);
+    } else {
+      toast({ variant: "destructive", title: "Error", description: "No se encontró la información del cliente." });
     }
   };
 
@@ -1183,9 +1203,28 @@ export default function AgendaView() {
             onPay={handlePayFromDetail}
             onUpdateStatus={handleUpdateStatus}
             onEdit={canSee('editar_reservas') ? handleEditFromDetail : undefined}
+            onClientClick={handleViewClientFile}
           />
         )
       }
+
+      {selectedClientForModal && (
+        <ClientDetailModal
+          client={selectedClientForModal}
+          isOpen={isClientDetailModalOpen}
+          onOpenChange={setIsClientDetailModalOpen}
+          onNewReservation={() => {
+            setIsClientDetailModalOpen(false);
+            setReservationInitialData({
+              fecha: date || new Date(),
+              hora_inicio: '10:00',
+              local_id: selectedLocalId,
+              cliente_id: selectedClientForModal.id
+            });
+            setIsReservationModalOpen(true);
+          }}
+        />
+      )}
 
       <NewSaleSheet
         isOpen={isSaleSheetOpen}

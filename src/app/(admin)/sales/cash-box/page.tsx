@@ -592,8 +592,10 @@ export default function CashBoxPage() {
                                 <p className="text-sm text-muted-foreground">Efectivo en caja</p>
                                 {selectedLocalId === 'todos' ? (
                                     <p className="text-lg font-semibold text-muted-foreground">Seleccione sucursal</p>
+                                ) : liveCashLoading ? (
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                 ) : (
-                                    <p className="text-3xl font-extrabold text-primary">${(totalVentasFacturadas + ingresosManuales - totalEgresos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-3xl font-extrabold text-primary">${liveCashInBox.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 )}
                             </CardContent>
                         </Card>
@@ -907,7 +909,7 @@ export default function CashBoxPage() {
                     setIsClosingModalOpen(false);
                     handleSearch();
                 }}
-                initialCash={totalVentasFacturadas + ingresosManuales - totalEgresos}
+                initialCash={liveCashInBox}
                 localId={selectedLocalId}
             />
             <CommissionPaymentModal

@@ -79,6 +79,7 @@ interface CartItem {
     presentation_id?: string;
     discountValue?: string | number;
     discountType?: 'fixed' | 'percentage';
+    commissionPaid?: boolean;
 }
 
 const saleSchema = (total: number) => z.object({
@@ -589,6 +590,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     useEffect(() => {
         if (isOpen && initialData) {
+            // Reset payment identifiers and state from previous sessions
+            setAmountPaid(0);
+            setIsSendingToTerminal(false);
+            setIsWaitingForPayment(false);
+            saleIdRef.current = null;
+
+            // Reset form fields that should not persist across sales
+            form.setValue('metodo_pago', '');
+            form.setValue('pago_efectivo', 0);
+            form.setValue('pago_tarjeta', 0);
+            form.setValue('pago_transferencia', 0);
+            form.setValue('propina', 0);
+            form.setValue('notas', '');
+
             form.setValue('cliente_id', initialData.client.id);
             if (initialData.local_id) {
                 form.setValue('local_id', initialData.local_id);
@@ -610,6 +625,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     tipo: tipo,
                     presentation_id,
                     barbero_id: (item as any).barbero_id || undefined,
+                    commissionPaid: (item as any).commissionPaid,
+                    // If items come with discounts or other props, they would be handled here in future
                 };
             });
             setCart(initialCartItems);
@@ -804,7 +821,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             valor: itemDiscountValue,
                             tipo: itemDiscountType,
                             monto: itemDiscountAmount
-                        }
+                        },
+                        commissionPaid: item.commissionPaid
                     };
                 });
 
@@ -1132,7 +1150,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 // --- WRITES START HERE ---
                 // 3. WRITES: Ejecutar actualizaciones de stock pendientes
-                // 3. WRITES: Ejecutar actualizaciones de stock pendientes
+
                 for (const update of pendingStockUpdates) {
                     transaction.update(update.ref, { stock: update.newStock });
 
@@ -1193,7 +1211,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             valor: itemDiscountValue,
                             tipo: itemDiscountType,
                             monto: itemDiscountAmount
-                        }
+                        },
+                        commissionPaid: item.commissionPaid
                     };
                 });
 

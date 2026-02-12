@@ -36,8 +36,11 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
         if (dateRange.to) {
             constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
         }
+        if (localId !== 'todos') {
+            constraints.push(where('local_id', '==', localId));
+        }
         return constraints;
-    }, [dateRange]);
+    }, [dateRange, localId]);
 
     const ingresosQueryConstraints = useMemo(() => {
         if (!dateRange?.from) return [];
@@ -46,8 +49,11 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
         if (dateRange.to) {
             constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
         }
+        if (localId !== 'todos') {
+            constraints.push(where('local_id', '==', localId));
+        }
         return constraints;
-    }, [dateRange]);
+    }, [dateRange, localId]);
 
 
     // 2. Fetch Data

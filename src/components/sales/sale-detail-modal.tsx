@@ -198,6 +198,9 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                         {(sale.detalle_pago_combinado.tarjeta > 0) && (
                                             <div className="flex justify-between"><span>Tarjeta:</span> <span>${sale.detalle_pago_combinado.tarjeta.toLocaleString('es-MX')}</span></div>
                                         )}
+                                        {(sale.detalle_pago_combinado.transferencia && sale.detalle_pago_combinado.transferencia > 0) && (
+                                            <div className="flex justify-between"><span>Transferencia:</span> <span>${(sale.detalle_pago_combinado.transferencia || 0).toLocaleString('es-MX')}</span></div>
+                                        )}
                                         {(sale.detalle_pago_combinado.pagos_en_linea && sale.detalle_pago_combinado.pagos_en_linea > 0) && (
                                             <div className="flex justify-between"><span>Pagos en Linea:</span> <span>${sale.detalle_pago_combinado.pagos_en_linea.toLocaleString('es-MX')}</span></div>
                                         )}

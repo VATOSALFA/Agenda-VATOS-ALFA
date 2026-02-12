@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle, TrendingUp, DollarSign } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -43,6 +43,12 @@ import {
 const monthNameToNumber: { [key: string]: number } = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
+};
+
+const COLORS = {
+    primary: '#202A49',
+    secondary: '#314177',
+    accent: '#C9C9C9'
 };
 
 const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean }) => (
@@ -579,6 +585,47 @@ export default function FinanzasMensualesPage() {
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+
+                {/* KPI Cards */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+                    {/* Primary Color Card */}
+                    <Card style={{ backgroundColor: COLORS.primary }} className="text-white border-none shadow-lg">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium text-white/90">Ingresos Totales (Mes)</CardTitle>
+                            <DollarSign className="h-4 w-4 text-white/80" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">${(ingresoServiciosTotal + ventaProductos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <p className="text-xs text-white/70">Productos + Servicios</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Secondary Color Card */}
+                    <Card style={{ backgroundColor: COLORS.secondary }} className="text-white border-none shadow-lg">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium text-white/90">Utilidad Neta Total</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-white/80" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">${(utilidadNeta + utilidadNetaProductos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <p className="text-xs text-white/70">Después de todos los gastos</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Accent Color Card */}
+                    <Card style={{ backgroundColor: COLORS.accent }} className="text-slate-900 border-none shadow-lg">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium text-slate-800">Margen Promedio</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-slate-700" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-slate-900">
+                                {((ingresoServiciosTotal + ventaProductos) > 0 ? ((utilidadNeta + utilidadNetaProductos) / (ingresoServiciosTotal + ventaProductos) * 100) : 0).toFixed(1)}%
+                            </div>
+                            <p className="text-xs text-slate-700">Rendimiento mensual</p>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">

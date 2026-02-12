@@ -14,67 +14,130 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar as CalendarIcon, Search, Download, Eye, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CashClosing, User as AppUser } from '@/lib/types';
 import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
+const denominations = [
+    { value: 1000, label: '$1,000.00' },
+    { value: 500, label: '$500.00' },
+    { value: 200, label: '$200.00' },
+    { value: 100, label: '$100.00' },
+    { value: 50, label: '$50.00' },
+    { value: 20, label: '$20.00' },
+    { value: 10, label: '$10.00' },
+    { value: 5, label: '$5.00' },
+    { value: 2, label: '$2.00' },
+    { value: 1, label: '$1.00' },
+    { value: 0.5, label: '$0.50' },
+];
+
 const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashClosing | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) => {
     if (!closing) return null;
 
-    const sortedDenominations = useMemo(() => {
-        return Object.entries(closing.detalle_conteo).sort(([valA], [valB]) => Number(valB) - Number(valA));
-    }, [closing.detalle_conteo]);
+    // Helper to safely get count; handle potential missing keys if structure changed
+    const getCount = (val: number) => {
+        if (!closing.detalle_conteo) return 0;
+        // Try exact number key, or string key
+        return closing.detalle_conteo[val] || closing.detalle_conteo[String(val)] || 0;
+    };
+
+    const totalEntregadoneto = closing.total_calculado - closing.fondo_base;
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="sm:max-w-5xl max-h-[95vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Detalle del Cierre de Caja #{closing.id.slice(0, 6)}</DialogTitle>
                     <DialogDescription>
                         Realizado el {format(closing.fecha_corte.toDate(), "dd 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-2 gap-6 py-4">
-                    <div>
-                        <h4 className="font-semibold mb-2">Resumen</h4>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between"><span>Entregado por:</span> <span className="font-medium">{closing.persona_entrega_nombre}</span></div>
-                            <div className="flex justify-between"><span>Recibido por:</span> <span className="font-medium">{closing.persona_recibe}</span></div>
-                            <div className="flex justify-between border-t pt-2 mt-2"><span>Total en sistema:</span> <span className="font-medium">${closing.total_sistema.toLocaleString('es-MX')}</span></div>
-                            <div className="flex justify-between"><span>Fondo base:</span> <span className="font-medium">${closing.fondo_base.toLocaleString('es-MX')}</span></div>
-                            <div className="flex justify-between"><span>Total contado:</span> <span className="font-medium">${closing.total_calculado.toLocaleString('es-MX')}</span></div>
-                            <div className={cn("flex justify-between font-bold", closing.diferencia !== 0 ? 'text-primary' : 'text-secondary')}><span>Diferencia:</span> <span>${closing.diferencia.toLocaleString('es-MX')}</span></div>
-                            <div className="pt-2">
-                                <h5 className="font-semibold">Comentarios:</h5>
-                                <p className="text-muted-foreground">{closing.comentarios || 'Sin comentarios.'}</p>
+
+                <div className="flex-grow overflow-y-auto py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Column Left: Calculator */}
+                        <div className="space-y-4 flex flex-col">
+                            <h3 className="font-semibold">Calculadora de Efectivo</h3>
+                            <div className="h-[300px] border rounded-lg overflow-hidden flex flex-col">
+                                <ScrollArea className="h-full">
+                                    <div className="p-4 space-y-3">
+                                        {denominations.map(d => {
+                                            const count = getCount(d.value);
+                                            return (
+                                                <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
+                                                    <Label className="text-right">{d.label}</Label>
+                                                    <Input
+                                                        readOnly
+                                                        value={count}
+                                                        className="h-8 text-center bg-muted/20"
+                                                    />
+                                                    <p className="font-medium text-sm text-center">= ${(d.value * count).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </ScrollArea>
+                            </div>
+                        </div>
+
+                        {/* Column Right: Details */}
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Fondo base en caja</Label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <Input readOnly value={closing.fondo_base} className="pl-6 bg-muted/20" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Total contado</Label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <Input readOnly value={closing.total_calculado} className="pl-6 font-bold bg-muted/20" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Efectivo en caja (Sistema)</Label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <Input readOnly value={closing.total_sistema} className="pl-6 bg-muted/20" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Nombre de quien recibe</Label>
+                                <Input readOnly value={closing.persona_recibe} className="bg-muted/20" />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Comentarios</Label>
+                                <Input readOnly value={closing.comentarios || 'Sin comentarios'} className="bg-muted/20" />
+                            </div>
+
+                            <div className="space-y-2 pt-4 border-t">
+                                <div className="p-4 bg-primary rounded-lg text-primary-foreground text-center shadow-md">
+                                    <p className="text-sm font-medium opacity-90 uppercase tracking-widest">Total entregado</p>
+                                    <p className="text-4xl font-extrabold mt-1">
+                                        ${totalEntregadoneto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div>
-                        <h4 className="font-semibold mb-2">Desglose de efectivo</h4>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="py-2">Denominación</TableHead>
-                                    <TableHead className="text-right py-2">Cantidad</TableHead>
-                                    <TableHead className="text-right py-2">Total</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {sortedDenominations.map(([value, count]) => (
-                                    <TableRow key={value}>
-                                        <TableCell className="py-2">${Number(value).toLocaleString('es-MX')}</TableCell>
-                                        <TableCell className="text-right py-2">{count}</TableCell>
-                                        <TableCell className="text-right py-2">${(Number(value) * count).toLocaleString('es-MX')}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
                 </div>
+
+                <DialogFooter>
+                    <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
@@ -189,7 +252,7 @@ export default function CashClosingsPage() {
                                     <TableHead>Recibe</TableHead>
                                     <TableHead className="text-right">Total sistema</TableHead>
                                     <TableHead className="text-right">Total contado</TableHead>
-                                    <TableHead className="text-right">Diferencia</TableHead>
+                                    <TableHead className="text-right">Total entregado</TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -208,8 +271,8 @@ export default function CashClosingsPage() {
                                             <TableCell>{closing.persona_recibe}</TableCell>
                                             <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-MX')}</TableCell>
                                             <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className={cn("text-right font-bold", closing.diferencia !== 0 ? 'text-primary' : 'text-secondary')}>
-                                                ${closing.diferencia.toLocaleString('es-MX')}
+                                            <TableCell className="text-right font-bold">
+                                                ${(closing.total_calculado - closing.fondo_base).toLocaleString('es-MX')}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="outline" size="sm" onClick={() => setSelectedClosing(closing)}><Eye className="mr-2 h-4 w-4" /> Ver Detalle</Button>

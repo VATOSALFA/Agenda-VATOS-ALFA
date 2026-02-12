@@ -114,13 +114,14 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   async function onSubmit(data: ClosingFormData) {
     setIsSubmitting(true);
     try {
+      const montoNetoEntregado = totalContado - fondoBase;
       await addDoc(collection(db, 'cortes_caja'), {
         fecha_corte: Timestamp.now(),
         persona_entrega_id: user?.uid,
         persona_entrega_nombre: user?.displayName,
         persona_recibe: data.persona_recibe,
         fondo_base: fondoBase,
-        monto_entregado: data.monto_entregado,
+        monto_entregado: montoNetoEntregado,
         total_calculado: totalContado,
         total_sistema: initialCash,
         diferencia: diferencia,
@@ -239,7 +240,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                       name="monto_entregado"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Monto entregado</FormLabel>
+                          <FormLabel>Total contado</FormLabel>
                           <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                             <FormControl><Input type="number" {...field} readOnly className="pl-6 font-bold" /></FormControl>
@@ -248,6 +249,13 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                         </FormItem>
                       )}
                     />
+                    <div className="space-y-2">
+                      <Label>Efectivo en caja</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                        <Input value={initialCash} readOnly className="pl-6 bg-muted/20" type="number" />
+                      </div>
+                    </div>
                     <FormField
                       control={form.control}
                       name="persona_recibe"
@@ -284,21 +292,11 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                       )}
                     />
                     <div className="space-y-2 pt-4 border-t flex-shrink-0">
-                      <div className="flex justify-between items-center text-sm font-semibold">
-                        <p>Total Contado</p>
-                        <p>${totalContado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <p>Efectivo en caja (Sistema)</p>
-                        <p>${initialCash.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <p>Fondo Base</p>
-                        <p>- ${fondoBase.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className={cn("flex justify-between items-center font-bold text-sm pt-2 border-t", diferencia >= 0 ? 'text-primary' : 'text-muted-foreground')}>
-                        <p>Diferencia</p>
-                        <p>{diferencia < 0 ? '' : '+'}${diferencia.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                      <div className="p-4 bg-primary rounded-lg text-primary-foreground text-center shadow-md">
+                        <p className="text-sm font-medium opacity-90 uppercase tracking-widest">Total entregado</p>
+                        <p className="text-4xl font-extrabold mt-1">
+                          ${(totalContado - fondoBase).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
                       </div>
                     </div>
                   </div>

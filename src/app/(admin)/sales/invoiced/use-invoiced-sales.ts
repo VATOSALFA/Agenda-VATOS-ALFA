@@ -111,6 +111,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
             if (sale.metodo_pago === 'combinado') {
                 acc['efectivo'] = (acc['efectivo'] || 0) + (sale.detalle_pago_combinado?.efectivo || 0);
                 acc['tarjeta'] = (acc['tarjeta'] || 0) + (sale.detalle_pago_combinado?.tarjeta || 0);
+                acc['transferencia'] = (acc['transferencia'] || 0) + (sale.detalle_pago_combinado?.transferencia || 0);
 
                 // Add online payments if present in combined
                 const onlineAmount = sale.detalle_pago_combinado?.pagos_en_linea || 0;

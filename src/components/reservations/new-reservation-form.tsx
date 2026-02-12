@@ -858,7 +858,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Fecha</FormLabel>
-                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>

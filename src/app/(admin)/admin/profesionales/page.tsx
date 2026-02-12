@@ -104,11 +104,11 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
       {...attributes}
       {...listeners}
       className={cn(
-        "flex items-center justify-between p-4 bg-card hover:bg-muted/50 list-none cursor-grab active:cursor-grabbing touch-none",
+        "flex flex-col sm:flex-row items-center justify-between p-4 bg-card hover:bg-muted/50 list-none cursor-grab active:cursor-grabbing touch-none gap-4",
         isDragging && "shadow-xl ring-2 ring-primary ring-opacity-50 rounded-md bg-accent"
       )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 w-full sm:w-auto">
         <div className="p-2">
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
@@ -118,12 +118,12 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </Avatar>
         <span className="font-medium">{prof.name}</span>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto justify-end">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
               <Clock className="mr-2 h-4 w-4" />
-              Ver horario
+              <span className="hidden sm:inline">Ver horario</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -152,15 +152,16 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </Tooltip>
 
         <Badge variant={prof.active ? 'default' : 'destructive'} className={cn(
-          prof.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50'
+          prof.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50',
+          "shrink-0"
         )}>
           <Circle className={cn("mr-2 h-2 w-2 fill-current", prof.active ? 'text-primary' : 'text-accent-foreground')} />
           {prof.active ? 'Activo' : 'Inactivo'}
         </Badge>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" onPointerDown={(e) => e.stopPropagation()}>
-              Opciones <ChevronDown className="ml-2 h-4 w-4" />
+            <Button variant="outline" size="sm" onPointerDown={(e) => e.stopPropagation()} className="shrink-0">
+              <span className="hidden sm:inline">Opciones</span> <ChevronDown className="ml-0 sm:ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -170,9 +171,9 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="sm" onClick={() => onEdit(prof)} onPointerDown={(e) => e.stopPropagation()}>
+        <Button variant="outline" size="sm" onClick={() => onEdit(prof)} onPointerDown={(e) => e.stopPropagation()} className="shrink-0">
           <Pencil className="mr-2 h-4 w-4" />
-          Editar
+          <span className="hidden sm:inline">Editar</span>
         </Button>
       </div>
     </li>
@@ -380,7 +381,7 @@ export default function ProfesionalesPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h2 className="text-3xl font-bold tracking-tight">Profesionales</h2>
           <Button onClick={() => handleOpenModal('new')}>
             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Profesional
@@ -389,6 +390,7 @@ export default function ProfesionalesPage() {
 
         <div className="space-y-4">
           <div className="py-2">
+            {/* Filter Popover content remains same, just ensuring parent spacing */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline">

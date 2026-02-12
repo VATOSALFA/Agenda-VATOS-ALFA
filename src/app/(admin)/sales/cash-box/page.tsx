@@ -509,9 +509,9 @@ export default function CashBoxPage() {
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
                     <h2 className="text-3xl font-bold tracking-tight">Caja</h2>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap gap-2">
                         <Button variant="outline" onClick={() => setIsCommissionModalOpen(true)}><Percent className="mr-2 h-4 w-4" />Pago de Comisiones</Button>
                         <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4" />Realizar corte de caja</Button>
                         <Button variant="outline" onClick={() => { setEditingIngreso(null); setIsIngresoModalOpen(true); }}>Agregar Ingreso</Button>
@@ -609,7 +609,7 @@ export default function CashBoxPage() {
                     </div>
 
                     {/* Detailed Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-4 items-center">
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-4 items-center">
                         <SummaryCard title="Ventas Facturadas" amount={totalVentasFacturadas} />
                         <IconSeparator icon={Plus} />
                         <SummaryCard title="Otros Ingresos" amount={ingresosManuales} />
@@ -623,80 +623,82 @@ export default function CashBoxPage() {
                     <Card>
                         <CardContent className="pt-6">
                             <Tabs defaultValue="ventas-facturadas">
-                                <TabsList>
-                                    <TabsTrigger value="ventas-facturadas">Flujo de Ventas Facturadas</TabsTrigger>
-                                    <TabsTrigger value="otros-ingresos">Otros Ingresos</TabsTrigger>
-                                    <TabsTrigger value="egresos">Egresos</TabsTrigger>
+                                <TabsList className="w-full h-auto flex flex-wrap justify-start bg-muted p-1">
+                                    <TabsTrigger value="ventas-facturadas" className="flex-grow sm:flex-grow-0">Flujo de Ventas Facturadas</TabsTrigger>
+                                    <TabsTrigger value="otros-ingresos" className="flex-grow sm:flex-grow-0">Otros Ingresos</TabsTrigger>
+                                    <TabsTrigger value="egresos" className="flex-grow sm:flex-grow-0">Egresos</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="ventas-facturadas" className="mt-4">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>ID</TableHead>
-                                                <TableHead>Fecha De Pago</TableHead>
-                                                <TableHead>Local</TableHead>
-                                                <TableHead>Cliente</TableHead>
-                                                <TableHead>Profesional</TableHead>
-                                                <TableHead>Detalle</TableHead>
-                                                <TableHead className="text-right">Monto Facturado</TableHead>
-                                                <TableHead className="text-right">Flujo Del Periodo</TableHead>
-                                                <TableHead className="text-right">Opciones</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {isLoading ? (
-                                                Array.from({ length: 3 }).map((_, i) => (
-                                                    <TableRow key={i}>
-                                                        <TableCell colSpan={9}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
-                                                    </TableRow>
-                                                ))
-                                            ) : paginatedSales.length === 0 ? (
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
                                                 <TableRow>
-                                                    <TableCell colSpan={9} className="text-center h-24">No hay ventas para el período seleccionado.</TableCell>
+                                                    <TableHead>ID</TableHead>
+                                                    <TableHead>Fecha De Pago</TableHead>
+                                                    <TableHead>Local</TableHead>
+                                                    <TableHead>Cliente</TableHead>
+                                                    <TableHead>Profesional</TableHead>
+                                                    <TableHead>Detalle</TableHead>
+                                                    <TableHead className="text-right">Monto Facturado</TableHead>
+                                                    <TableHead className="text-right">Flujo Del Periodo</TableHead>
+                                                    <TableHead className="text-right">Opciones</TableHead>
                                                 </TableRow>
-                                            ) : (
-                                                paginatedSales.map((sale) => (
-                                                    <TableRow key={sale.id} onClick={() => setSelectedSale(sale)} className={cn("cursor-pointer", selectedSale?.id === sale.id && "bg-muted")}>
-                                                        <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
-                                                        <TableCell>{sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A'}</TableCell>
-                                                        <TableCell>{localMap.get(sale.local_id ?? '') || sale.local_id}</TableCell>
-                                                        <TableCell>{sale.client?.nombre} {sale.client?.apellido}</TableCell>
-                                                        <TableCell>{Array.from(new Set(sale.items?.map(i => professionalMap.get(i.barbero_id) || 'N/A').filter(Boolean))).join(', ')}</TableCell>
-                                                        <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
-                                                        <TableCell className="text-right font-medium">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                        <TableCell className="text-right font-medium text-primary">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
-                                                                    <Eye className="mr-2 h-4 w-4" /> Ver
-                                                                </Button>
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="outline" size="sm">
-                                                                            Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
-                                                                            <Mail className="mr-2 h-4 w-4 text-primary" />
-                                                                            <span className="text-primary">Enviar Comprobante</span>
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem onSelect={() => window.print()}>
-                                                                            <Printer className="mr-2 h-4 w-4 text-secondary" />
-                                                                            <span className="text-secondary">Imprimir</span>
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem onSelect={() => handleOpenDeleteSaleModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </div>
-                                                        </TableCell>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {isLoading ? (
+                                                    Array.from({ length: 3 }).map((_, i) => (
+                                                        <TableRow key={i}>
+                                                            <TableCell colSpan={9}><div className="h-8 w-full bg-muted animate-pulse rounded-md" /></TableCell>
+                                                        </TableRow>
+                                                    ))
+                                                ) : paginatedSales.length === 0 ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={9} className="text-center h-24">No hay ventas para el período seleccionado.</TableCell>
                                                     </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
+                                                ) : (
+                                                    paginatedSales.map((sale) => (
+                                                        <TableRow key={sale.id} onClick={() => setSelectedSale(sale)} className={cn("cursor-pointer", selectedSale?.id === sale.id && "bg-muted")}>
+                                                            <TableCell className="font-mono text-xs">{sale.id.slice(0, 8)}...</TableCell>
+                                                            <TableCell>{sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A'}</TableCell>
+                                                            <TableCell>{localMap.get(sale.local_id ?? '') || sale.local_id}</TableCell>
+                                                            <TableCell>{sale.client?.nombre} {sale.client?.apellido}</TableCell>
+                                                            <TableCell>{Array.from(new Set(sale.items?.map(i => professionalMap.get(i.barbero_id) || 'N/A').filter(Boolean))).join(', ')}</TableCell>
+                                                            <TableCell>{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
+                                                            <TableCell className="text-right font-medium">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                            <TableCell className="text-right font-medium text-primary">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <Button variant="outline" size="sm" onClick={() => handleViewDetails(sale)}>
+                                                                        <Eye className="mr-2 h-4 w-4" /> Ver
+                                                                    </Button>
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild>
+                                                                            <Button variant="outline" size="sm">
+                                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end">
+                                                                            <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada" })}>
+                                                                                <Mail className="mr-2 h-4 w-4 text-primary" />
+                                                                                <span className="text-primary">Enviar Comprobante</span>
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem onSelect={() => window.print()}>
+                                                                                <Printer className="mr-2 h-4 w-4 text-secondary" />
+                                                                                <span className="text-secondary">Imprimir</span>
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem onSelect={() => handleOpenDeleteSaleModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                                            </DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
                                     {paginatedSales.length > 0 && (
                                         <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
                                             <div className="flex items-center space-x-2">
@@ -729,46 +731,48 @@ export default function CashBoxPage() {
                                         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
                                     ) : (
                                         <>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Fecha</TableHead>
-                                                        <TableHead>Concepto</TableHead>
-                                                        <TableHead>Comentarios</TableHead>
-                                                        <TableHead className="text-right">Monto</TableHead>
-                                                        <TableHead className="text-right">Opciones</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {paginatedIngresos.length === 0 ? (
-                                                        <TableRow><TableCell colSpan={5} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
-                                                    ) : paginatedIngresos.map((ingreso) => (
-                                                        <TableRow key={ingreso.id}>
-                                                            <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
-                                                            <TableCell>{ingreso.concepto}</TableCell>
-                                                            <TableCell>{ingreso.comentarios}</TableCell>
-                                                            <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                            <TableCell className="text-right">
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="outline" size="sm">
-                                                                            Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent>
-                                                                        <DropdownMenuItem onSelect={() => handleOpenEditIngreso(ingreso)}>
-                                                                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem onSelect={() => handleOpenDeleteIngresoModal(ingreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </TableCell>
+                                            <div className="overflow-x-auto">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Fecha</TableHead>
+                                                            <TableHead>Concepto</TableHead>
+                                                            <TableHead>Comentarios</TableHead>
+                                                            <TableHead className="text-right">Monto</TableHead>
+                                                            <TableHead className="text-right">Opciones</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {paginatedIngresos.length === 0 ? (
+                                                            <TableRow><TableCell colSpan={5} className="text-center h-24">No hay otros ingresos para el período seleccionado.</TableCell></TableRow>
+                                                        ) : paginatedIngresos.map((ingreso) => (
+                                                            <TableRow key={ingreso.id}>
+                                                                <TableCell>{format(ingreso.fecha.toDate(), 'dd-MM-yyyy')}</TableCell>
+                                                                <TableCell>{ingreso.concepto}</TableCell>
+                                                                <TableCell>{ingreso.comentarios}</TableCell>
+                                                                <TableCell className="text-right font-medium">${ingreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                                <TableCell className="text-right">
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild>
+                                                                            <Button variant="outline" size="sm">
+                                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent>
+                                                                            <DropdownMenuItem onSelect={() => handleOpenEditIngreso(ingreso)}>
+                                                                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem onSelect={() => handleOpenDeleteIngresoModal(ingreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                                            </DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
                                             {paginatedIngresos.length > 0 && (
                                                 <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
                                                     <div className="flex items-center space-x-2">
@@ -803,51 +807,53 @@ export default function CashBoxPage() {
                                         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
                                     ) : (
                                         <>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Fecha</TableHead>
-                                                        <TableHead>Local</TableHead>
-                                                        <TableHead>Concepto</TableHead>
-                                                        <TableHead>A quién se entrega</TableHead>
-                                                        <TableHead>Comentarios</TableHead>
-                                                        <TableHead className="text-right">Monto</TableHead>
-                                                        <TableHead className="text-right">Opciones</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {paginatedEgresos.length === 0 ? (
-                                                        <TableRow><TableCell colSpan={7} className="text-center h-24">No hay egresos para el período seleccionado.</TableCell></TableRow>
-                                                    ) : paginatedEgresos.map((egreso) => (
-                                                        <TableRow key={egreso.id}>
-                                                            <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd-MM-yyyy') : format(egreso.fecha, 'dd-MM-yyyy')}</TableCell>
-                                                            <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
-                                                            <TableCell>{egreso.concepto}</TableCell>
-                                                            <TableCell>{egreso.aQuienNombre || egreso.aQuien}</TableCell>
-                                                            <TableCell>{egreso.comentarios}</TableCell>
-                                                            <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                            <TableCell className="text-right">
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="outline" size="sm">
-                                                                            Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        <DropdownMenuItem onSelect={() => handleOpenEditEgreso(egreso)}>
-                                                                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                                                                        </DropdownMenuItem>
-
-                                                                        <DropdownMenuItem onSelect={() => handleOpenDeleteEgresoModal(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </TableCell>
+                                            <div className="overflow-x-auto">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Fecha</TableHead>
+                                                            <TableHead>Local</TableHead>
+                                                            <TableHead>Concepto</TableHead>
+                                                            <TableHead>A quién se entrega</TableHead>
+                                                            <TableHead>Comentarios</TableHead>
+                                                            <TableHead className="text-right">Monto</TableHead>
+                                                            <TableHead className="text-right">Opciones</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {paginatedEgresos.length === 0 ? (
+                                                            <TableRow><TableCell colSpan={7} className="text-center h-24">No hay egresos para el período seleccionado.</TableCell></TableRow>
+                                                        ) : paginatedEgresos.map((egreso) => (
+                                                            <TableRow key={egreso.id}>
+                                                                <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd-MM-yyyy') : format(egreso.fecha, 'dd-MM-yyyy')}</TableCell>
+                                                                <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
+                                                                <TableCell>{egreso.concepto}</TableCell>
+                                                                <TableCell>{egreso.aQuienNombre || egreso.aQuien}</TableCell>
+                                                                <TableCell>{egreso.comentarios}</TableCell>
+                                                                <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                                <TableCell className="text-right">
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild>
+                                                                            <Button variant="outline" size="sm">
+                                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end">
+                                                                            <DropdownMenuItem onSelect={() => handleOpenEditEgreso(egreso)}>
+                                                                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                                            </DropdownMenuItem>
+
+                                                                            <DropdownMenuItem onSelect={() => handleOpenDeleteEgresoModal(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                                            </DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
                                             {paginatedEgresos.length > 0 && (
                                                 <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4">
                                                     <div className="flex items-center space-x-2">
@@ -879,7 +885,7 @@ export default function CashBoxPage() {
                                 </TabsContent>
                             </Tabs>
                         </CardContent>
-                    </Card>
+                    </Card >
                 </div >
             </div >
 

@@ -307,8 +307,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         Calcula y registra el pago para los profesionales para el día de hoy.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-4">
-                    <Alert>
+                <div className="py-2 sm:py-4 flex-1 overflow-y-auto">
+                    <Alert className="mb-4">
                         <Info className="h-4 w-4" />
                         <AlertTitle>Revisión de Pagos</AlertTitle>
                         <AlertDescription>
@@ -316,22 +316,22 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         </AlertDescription>
                     </Alert>
 
-                    <div className="mt-4 max-h-96">
-                        <ScrollArea className="h-full">
-                            <Table>
+                    <div className="max-h-[50vh] sm:max-h-96 w-full">
+                        <div className="overflow-x-auto w-full border rounded-md">
+                            <Table className="min-w-[600px] sm:min-w-full">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-[50px]">
                                             <Checkbox
                                                 checked={commissionData.length > 0 && selectedProfessionals.length === commissionData.length}
-                                                onCheckedChange={handleSelectAll}
+                                                onCheckedChange={(checked) => handleSelectAll(!!checked)}
                                             />
                                         </TableHead>
                                         <TableHead>Profesional</TableHead>
-                                        <TableHead className="text-right">Comisión Servicios</TableHead>
-                                        <TableHead className="text-right">Comisión Productos</TableHead>
-                                        <TableHead className="text-right">Propina</TableHead>
-                                        <TableHead className="text-right">Total a Pagar</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Comisión Servicios</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Comisión Productos</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Propina</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Total a Pagar</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -347,7 +347,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                                     onCheckedChange={(checked) => handleSelectProfessional(row.professionalId, checked)}
                                                 />
                                             </TableCell>
-                                            <TableCell className="font-medium">{row.professionalName}</TableCell>
+                                            <TableCell className="font-medium whitespace-nowrap">{row.professionalName}</TableCell>
                                             <TableCell className="text-right">${row.totalServiceCommission.toLocaleString('es-MX')}</TableCell>
                                             <TableCell className="text-right">${row.totalProductCommission.toLocaleString('es-MX')}</TableCell>
                                             <TableCell className="text-right">${row.totalTips.toLocaleString('es-MX')}</TableCell>
@@ -357,12 +357,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                 </TableBody>
                                 <TableFooter>
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-right font-bold text-lg">Total a Pagar Seleccionado</TableCell>
-                                        <TableCell className="text-right font-bold text-lg text-primary">${overallTotalToPay.toLocaleString('es-MX')}</TableCell>
+                                        <TableCell colSpan={5} className="text-right font-bold text-lg whitespace-nowrap">Total a Pagar Seleccionado</TableCell>
+                                        <TableCell className="text-right font-bold text-lg text-primary whitespace-nowrap">${overallTotalToPay.toLocaleString('es-MX')}</TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>
-                        </ScrollArea>
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>

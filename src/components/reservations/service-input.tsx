@@ -1,21 +1,7 @@
 
-import { useState, useMemo } from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 import type { Service as ServiceType, Product } from '@/lib/types';
 
 interface ServiceInputProps {
@@ -29,8 +15,11 @@ interface ServiceInputProps {
 
 export const ServiceInput = ({ value, onChange, groupedServices, products, isProduct, loading }: ServiceInputProps) => {
     const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // Helper to find the name for the current value (ID)
+    // Resolve displayed name from current value (ID)
     const displayLabel = useMemo(() => {
         if (!value) return "";
         for (const group of groupedServices) {
@@ -42,76 +31,148 @@ export const ServiceInput = ({ value, onChange, groupedServices, products, isPro
             const foundProduct = products.find((p: Product) => p.id === value);
             if (foundProduct) return foundProduct.nombre;
         }
-        return value; // Fallback
+        return "";
     }, [value, groupedServices, products]);
+
+    // Sync search text when value changes externally
+    useEffect(() => {
+        setSearch(displayLabel);
+    }, [displayLabel]);
+
+    // Close on outside click
+    useEffect(() => {
+        if (!open) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [open]);
 
     const handleSelect = (id: string, name: string) => {
         onChange(id);
+        setSearch(name);
         setOpen(false);
     };
 
+    // Filter services based on search text
+    const filteredGroups = useMemo(() => {
+        const lowerSearch = search.toLowerCase().trim();
+        if (!lowerSearch || lowerSearch === displayLabel.toLowerCase()) return groupedServices;
+
+        return groupedServices
+            .map((group: any) => ({
+                ...group,
+                items: group.items.filter((s: ServiceType) =>
+                    s.name.toLowerCase().includes(lowerSearch)
+                )
+            }))
+            .filter((group: any) => group.items.length > 0);
+    }, [search, groupedServices, displayLabel]);
+
+    const filteredProducts = useMemo(() => {
+        if (!isProduct || !products) return [];
+        const lowerSearch = search.toLowerCase().trim();
+        if (!lowerSearch || lowerSearch === displayLabel.toLowerCase()) return products;
+        return products.filter(p => p.nombre.toLowerCase().includes(lowerSearch));
+    }, [search, products, isProduct, displayLabel]);
+
+    const hasResults = filteredGroups.some((g: any) => g.items.length > 0) || filteredProducts.length > 0;
+
     return (
-        <Popover open={open} onOpenChange={setOpen} modal={true}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className="w-full justify-between font-normal"
+        <div ref={containerRef} className="relative">
+            <div
+                className="flex items-center border rounded-md px-3 border-input bg-background ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-text"
+                onClick={() => {
+                    setOpen(true);
+                    setTimeout(() => inputRef.current?.focus(), 0);
+                }}
+            >
+                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                <input
+                    ref={inputRef}
+                    value={search}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        if (!open) setOpen(true);
+                    }}
+                    onFocus={() => setOpen(true)}
+                    placeholder="Buscar servicio..."
+                    className="border-none focus:ring-0 h-9 p-0 bg-transparent flex-grow outline-none placeholder:text-muted-foreground w-full py-2 text-sm"
+                    disabled={loading}
+                />
+            </div>
+
+            {open && (
+                <div
+                    className="absolute left-0 right-0 top-full mt-1 z-[200] rounded-md border bg-popover text-popover-foreground shadow-md"
+                    onWheel={(e) => e.stopPropagation()}
                 >
-                    {displayLabel || (loading ? "Cargando..." : "Buscar servicio...")}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0" align="start">
-                <Command>
-                    <CommandInput placeholder="Buscar servicio..." />
-                    <CommandList className="max-h-[300px] overflow-y-auto overflow-x-hidden">
-                        <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-                        {groupedServices.map((group: any) => (
-                            <CommandGroup heading={group.name} key={group.name}>
+                    <div
+                        className="max-h-[250px] overflow-y-auto overscroll-contain p-1"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                    >
+                        {!hasResults && (
+                            <p className="py-6 text-center text-sm text-muted-foreground">No se encontraron resultados.</p>
+                        )}
+                        {filteredGroups.map((group: any) => (
+                            <div key={group.name}>
+                                <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{group.name}</p>
                                 {group.items.map((s: ServiceType) => (
-                                    <CommandItem
+                                    <div
                                         key={s.id}
-                                        value={s.name}
-                                        onSelect={() => handleSelect(s.id, s.name)}
-                                        className="cursor-pointer"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(s.id, s.name);
+                                        }}
+                                        className={cn(
+                                            "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                                            value === s.id && "bg-accent text-accent-foreground"
+                                        )}
                                     >
                                         <Check
                                             className={cn(
-                                                "mr-2 h-4 w-4",
+                                                "mr-2 h-4 w-4 flex-shrink-0",
                                                 value === s.id ? "opacity-100" : "opacity-0"
                                             )}
                                         />
                                         {s.name}
-                                    </CommandItem>
+                                    </div>
                                 ))}
-                            </CommandGroup>
+                            </div>
                         ))}
 
-                        {isProduct && products && products.length > 0 && (
-                            <CommandGroup heading="Productos">
-                                {products.map((p: Product) => (
-                                    <CommandItem
+                        {isProduct && filteredProducts.length > 0 && (
+                            <div>
+                                <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Productos</p>
+                                {filteredProducts.map((p: Product) => (
+                                    <div
                                         key={p.id}
-                                        value={p.nombre}
-                                        onSelect={() => handleSelect(p.id, p.nombre)}
-                                        className="cursor-pointer"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(p.id, p.nombre);
+                                        }}
+                                        className={cn(
+                                            "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                                            value === p.id && "bg-accent text-accent-foreground"
+                                        )}
                                     >
                                         <Check
                                             className={cn(
-                                                "mr-2 h-4 w-4",
+                                                "mr-2 h-4 w-4 flex-shrink-0",
                                                 value === p.id ? "opacity-100" : "opacity-0"
                                             )}
                                         />
                                         {p.nombre}
-                                    </CommandItem>
+                                    </div>
                                 ))}
-                            </CommandGroup>
+                            </div>
                         )}
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };

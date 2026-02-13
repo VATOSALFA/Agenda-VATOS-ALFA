@@ -66,6 +66,22 @@ import { Combobox } from '../ui/combobox';
 import { Skeleton } from '../ui/skeleton';
 
 
+// Helper to strip undefined values from objects before saving to Firestore
+function removeUndefinedFields(obj: any): any {
+    if (obj === null || obj === undefined) return null;
+    if (typeof obj !== 'object') return obj;
+    if (obj instanceof Date || (obj && typeof obj.toDate === 'function')) return obj;
+    if (Array.isArray(obj)) return obj.map(removeUndefinedFields);
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+            cleaned[key] = typeof value === 'object' && value !== null && !(value instanceof Date) && !(value && typeof (value as any).toDate === 'function')
+                ? removeUndefinedFields(value)
+                : value;
+        }
+    }
+    return cleaned;
+}
 
 
 interface CartItem {
@@ -141,13 +157,14 @@ const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountC
     )
 }
 
-const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
+const ClientCombobox = React.memo(({ clients, loading, value, onChange, onSearchChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void, onSearchChange?: (val: string) => void }) => {
     return (
         <ClientInput
             value={value}
             onChange={onChange}
             clients={clients}
             loading={loading}
+            onSearchChange={onSearchChange}
         />
     );
 });
@@ -367,6 +384,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [step, setStep] = useState(1);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [clientSearchTerm, setClientSearchTerm] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
@@ -855,7 +873,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
 
                 // D. Guardar Venta
-                transaction.set(saleDocRef, saleDataToSave);
+                transaction.set(saleDocRef, removeUndefinedFields(saleDataToSave));
             });
 
             // 3. Llamar a la Cloud Function con el ID del documento que ACABAMOS de crear
@@ -1303,12 +1321,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     };
                     saleDataToSave.metodo_pago = 'combinado'; // Always combined when merging multiple payments
 
-                    transaction.update(saleDocRef, saleDataToSave);
+                    transaction.update(saleDocRef, removeUndefinedFields(saleDataToSave));
                 } else {
                     if (reservationId) {
                         saleDataToSave.reservationId = reservationId;
                     }
-                    transaction.set(saleDocRef, saleDataToSave);
+                    transaction.set(saleDocRef, removeUndefinedFields(saleDataToSave));
                 }
 
                 if (reservationId) {
@@ -1389,6 +1407,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         loading={clientsLoading}
                                                         value={field.value}
                                                         onChange={field.onChange}
+                                                        onSearchChange={setClientSearchTerm}
                                                     />
                                                     <FormMessage />
                                                 </FormItem>
@@ -1520,6 +1539,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         loading={clientsLoading}
                                                         value={field.value}
                                                         onChange={field.onChange}
+                                                        onSearchChange={setClientSearchTerm}
                                                     />
                                                     <FormMessage />
                                                 </FormItem>
@@ -1869,7 +1889,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             Completa la información para registrar un nuevo cliente en el sistema.
                         </DialogDescription>
                     </DialogHeader>
-                    <NewClientForm onFormSubmit={handleClientCreated} onCancel={() => setIsClientModalOpen(false)} />
+                    <NewClientForm onFormSubmit={handleClientCreated} onCancel={() => setIsClientModalOpen(false)} initialName={clientSearchTerm} />
                 </DialogContent>
             </Dialog>
             <AddItemDialog

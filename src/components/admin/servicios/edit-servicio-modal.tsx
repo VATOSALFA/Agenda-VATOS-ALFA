@@ -140,24 +140,28 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
     if (!db) return;
     setIsSubmitting(true);
     try {
+      const commissionValue = Number(data.commission_value) || 0;
+      const commissionType = data.commission_type || '%';
+
+      // Prepare the object to save, excluding UI-only fields
       const dataToSave = {
-        ...data,
-        price: Number(data.price),
+        name: data.name,
         description: data.description || '',
+        price: Number(data.price),
         duration: Number(data.duration),
-        payment_amount_value: Number(data.payment_amount_value) || 0,
-        payment_amount_type: data.payment_amount_type || '%',
+        category: data.category,
+        include_vat: data.include_vat,
+        payment_type: data.payment_type || 'no-payment',
+        // Only save payment amount if type is online-deposit
+        payment_amount_value: data.payment_type === 'online-deposit' ? (Number(data.payment_amount_value) || 0) : 0,
+        payment_amount_type: data.payment_type === 'online-deposit' ? (data.payment_amount_type || '%') : '%',
         defaultCommission: {
-          value: Number(data.commission_value) || 0,
-          type: data.commission_type || '%'
+          value: commissionValue,
+          type: commissionType
         },
+        professionals: data.professionals || [],
         images: data.images?.map(img => img.value).filter(Boolean) || [],
       };
-
-      // @ts-ignore
-      delete dataToSave.commission_value;
-      // @ts-ignore
-      delete dataToSave.commission_type;
 
       // Sync professionals logic
       const syncProfessionals = async (serviceId: string, newProfessionals: string[]) => {
@@ -168,20 +172,30 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         const batch = writeBatch(db);
         let batchCount = 0;
 
+        // Create a Set of existing professional IDs for fast lookup
+        // We use allProfessionals (raw from query) to ensure we have the latest list
+        const existingProfIds = new Set(allProfessionals.map(p => p.id));
+
         for (const profId of addedPros) {
-          const profRef = doc(db, 'profesionales', profId);
-          batch.update(profRef, {
-            services: arrayUnion(serviceId)
-          });
-          batchCount++;
+          if (existingProfIds.has(profId)) {
+            const profRef = doc(db, 'profesionales', profId);
+            batch.update(profRef, {
+              services: arrayUnion(serviceId)
+            });
+            batchCount++;
+          }
         }
 
         for (const profId of removedPros) {
-          const profRef = doc(db, 'profesionales', profId);
-          batch.update(profRef, {
-            services: arrayRemove(serviceId)
-          });
-          batchCount++;
+          if (existingProfIds.has(profId)) {
+            const profRef = doc(db, 'profesionales', profId);
+            batch.update(profRef, {
+              services: arrayRemove(serviceId)
+            });
+            batchCount++;
+          } else {
+            console.warn(`Attempted to unlink service from non-existent professional: ${profId}`);
+          }
         }
 
         if (batchCount > 0) {
@@ -191,7 +205,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
 
       if (service) {
         const serviceRef = doc(db, 'servicios', service.id);
-        await updateDoc(serviceRef, dataToSave as any);
+        await updateDoc(serviceRef, dataToSave);
 
         // Sync professionals
         await syncProfessionals(service.id, data.professionals || []);
@@ -390,35 +404,35 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                         <div className="flex items-center gap-2">
                           <Checkbox
                             id="select-all-professionals"
-                            checked={selectedProfessionals?.length === professionals.length}
+                            checked={professionals.length > 0 && professionals.every(p => selectedProfessionals?.includes(p.id))}
                             onCheckedChange={handleSelectAll}
                           />
                           <Label htmlFor="select-all-professionals">Seleccionar todos</Label>
                         </div>
                       </div>
-                      <Accordion type="single" collapsible defaultValue="item-1">
+                      <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
                         <AccordionItem value="item-1">
                           <AccordionTrigger>Ver/Ocultar lista de profesionales</AccordionTrigger>
                           <AccordionContent>
                             <Controller
                               name="professionals"
                               control={control}
-                              defaultValue={[]}
                               render={({ field }) => (
-                                <div className="grid grid-cols-3 gap-x-4 gap-y-2 pt-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
                                   {professionals.map(prof => (
                                     <div key={prof.id} className="flex items-center space-x-2">
                                       <Checkbox
                                         id={prof.id}
-                                        checked={Array.isArray(field.value) && field.value.includes(prof.id)}
+                                        checked={field.value?.includes(prof.id)}
                                         onCheckedChange={(checked) => {
                                           const currentValue = field.value || [];
-                                          return checked
-                                            ? field.onChange([...currentValue, prof.id])
-                                            : field.onChange(currentValue.filter((value: string) => value !== prof.id))
+                                          const newValue = checked
+                                            ? [...currentValue, prof.id]
+                                            : currentValue.filter((id) => id !== prof.id);
+                                          field.onChange(newValue);
                                         }}
                                       />
-                                      <Label htmlFor={prof.id} className="font-normal">{prof.name}</Label>
+                                      <Label htmlFor={prof.id} className="font-normal cursor-pointer">{prof.name}</Label>
                                     </div>
                                   ))}
                                 </div>
@@ -428,6 +442,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                         </AccordionItem>
                       </Accordion>
                     </div>
+
                     <Card>
                       <CardHeader>
                         <CardTitle>Pago en línea</CardTitle>

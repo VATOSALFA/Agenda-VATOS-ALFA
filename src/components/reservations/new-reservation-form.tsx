@@ -145,114 +145,20 @@ const statusOptions = [
   { value: 'En espera', label: 'En Espera', color: 'bg-green-500' },
 ];
 
-const ClientCombobox = React.memo(({ clients, loading, value, onChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void }) => {
+const ClientCombobox = React.memo(({ clients, loading, value, onChange, onSearchChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void, onSearchChange?: (val: string) => void }) => {
   return (
     <ClientInput
       clients={clients}
       value={value}
       onChange={onChange}
       loading={loading}
+      onSearchChange={onSearchChange}
     />
   );
 });
 
 ClientCombobox.displayName = 'ClientCombobox';
 
-const ServiceCombobox = ({ value, onChange, groupedServices, products, isProduct, loading }: any) => {
-  const [open, setOpen] = useState(false);
-
-  // Helper to find label
-  const getLabel = () => {
-    if (!value) return null;
-    if (loading) return "Cargando...";
-
-    // Search in groups
-    for (const group of groupedServices) {
-      const found = group.items.find((s: ServiceType) => s.id === value);
-      if (found) return found.name;
-    }
-
-    // Search in products
-    if (products) {
-      const foundProduct = products.find((p: Product) => p.id === value);
-      if (foundProduct) return foundProduct.nombre;
-    }
-
-    return "Seleccionar servicio...";
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen} modal={true}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between disabled:opacity-50"
-          disabled={isProduct}
-        >
-          <span className="truncate">
-            {getLabel() || (loading ? "Cargando..." : "Buscar servicio...")}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Buscar servicio..." />
-          <CommandList>
-            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-            {groupedServices.map((group: any) => (
-              <CommandGroup heading={group.name} key={group.name}>
-                {group.items.map((s: ServiceType) => (
-                  <CommandItem
-                    key={s.id}
-                    value={s.name}
-                    onSelect={() => {
-                      onChange(s.id);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === s.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {s.name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-
-            {isProduct && products && products.length > 0 && (
-              <CommandGroup heading="Productos">
-                {products.map((p: Product) => (
-                  <CommandItem
-                    key={p.id}
-                    value={p.nombre}
-                    onSelect={() => {
-                      onChange(p.id);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === p.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {p.nombre}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-};
 
 // Helper function to safely parse date from various formats
 const safeParseDate = (rawDate: any): Date | null => {
@@ -272,6 +178,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
   const [isProfessionalLocked, setIsProfessionalLocked] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
   const { user, db } = useAuth();
 
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
@@ -929,8 +836,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                         </div>
                       </div>
                     </CardContent>
@@ -949,6 +856,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         loading={clientsLoading}
                         value={field.value}
                         onChange={field.onChange}
+                        onSearchChange={setClientSearchTerm}
                       />
                       <FormMessage />
                     </FormItem>
@@ -1118,7 +1026,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               Completa la información para registrar un nuevo cliente en el sistema.
             </DialogDescription>
           </DialogHeader>
-          <NewClientForm onFormSubmit={handleClientCreated} client={selectedClient} />
+          <NewClientForm onFormSubmit={handleClientCreated} client={selectedClient} initialName={clientSearchTerm} />
         </DialogContent>
       </Dialog>
     </>

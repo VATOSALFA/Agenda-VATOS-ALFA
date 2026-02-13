@@ -24,9 +24,10 @@ interface ClientInputProps {
     onChange: (value: string) => void;
     clients: Client[];
     loading?: boolean;
+    onSearchChange?: (value: string) => void;
 }
 
-export const ClientInput = ({ value, onChange, clients, loading }: ClientInputProps) => {
+export const ClientInput = ({ value, onChange, clients, loading, onSearchChange }: ClientInputProps) => {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
 
@@ -45,6 +46,7 @@ export const ClientInput = ({ value, onChange, clients, loading }: ClientInputPr
     const handleSelect = (id: string, name: string) => {
         onChange(id);
         setSearch(name);
+        if (onSearchChange) onSearchChange(name);
         setOpen(false);
     };
 
@@ -61,10 +63,11 @@ export const ClientInput = ({ value, onChange, clients, loading }: ClientInputPr
                             value={search}
                             onValueChange={(val) => {
                                 setSearch(val);
+                                if (onSearchChange) onSearchChange(val);
                                 if (!open) setOpen(true);
                             }}
                             onFocus={() => setOpen(true)}
-                            placeholder="Busca o selecciona un cliente..."
+                            placeholder="Buscar cliente por nombre o teléfono..."
                             className="border-none focus:ring-0 h-9 p-0 bg-transparent flex-grow outline-none placeholder:text-muted-foreground w-full py-2 text-sm"
                             disabled={loading}
                         />
@@ -80,10 +83,11 @@ export const ClientInput = ({ value, onChange, clients, loading }: ClientInputPr
                         <CommandGroup>
                             {clients.map((client) => {
                                 const fullName = `${client.nombre} ${client.apellido || ''}`.trim();
+                                const searchTerms = `${fullName} ${client.telefono || ''}`.trim();
                                 return (
                                     <CommandItem
                                         key={client.id} // Use ID as key
-                                        value={fullName} // Use Name as value for filtering
+                                        value={searchTerms} // Use Name + Phone for filtering
                                         onSelect={() => handleSelect(client.id, fullName)}
                                         onMouseDown={(e) => {
                                             e.preventDefault();

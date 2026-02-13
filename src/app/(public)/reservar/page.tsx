@@ -453,6 +453,16 @@ export default function BookingPage() {
                     setTempSlotMap(newMap);
 
                     if (availableTimes.length === 0 && errorFound) {
+                        // Handle Server Action mismatch (deployment) errors
+                        if ((errorFound as string).includes("Server Action") || (errorFound as string).includes("not found on the server")) {
+                            toast({
+                                title: 'Actualización en curso',
+                                description: 'Detectamos una nueva versión del sistema. Recargando la página...',
+                                duration: 3000
+                            });
+                            setTimeout(() => window.location.reload(), 2000);
+                            return;
+                        }
                         toast({ variant: 'destructive', title: 'Error de Disponibilidad', description: errorFound });
                     }
                 } catch (e) {

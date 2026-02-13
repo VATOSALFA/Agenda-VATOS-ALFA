@@ -9,8 +9,9 @@ import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { CustomLoader } from "@/components/ui/custom-loader";
-import AppLayout from '@/components/layout/app-layout';
+
 import { FirebaseErrorListener } from '@/components/firebase/FirebaseErrorListener';
+
 
 export interface CustomUser extends FirebaseUser {
   role?: string;
@@ -203,6 +204,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     storage,
   };
 
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
@@ -217,19 +219,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return null; // Don't render anything while redirecting
   }
 
-  // If there's a user and we are inside the app
-  if (user && !isPublicPage && !isAuthPage) {
-    return (
-      <AuthContext.Provider value={value as AuthContextType}>
-        <AppLayout>
-          {children}
-        </AppLayout>
-        <FirebaseErrorListener />
-      </AuthContext.Provider>
-    );
-  }
-
-  // Default return (Login page, Public pages)
+  // Common return for both authenticated and public/auth pages
+  // The layout wrapper (sidebar/header) is now handled by AuthGuard in the root layout
   return (
     <AuthContext.Provider value={value as AuthContextType}>
       {children}

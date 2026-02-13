@@ -48,6 +48,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -192,7 +198,7 @@ export default function Header() {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0">
+              <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0 [&>button]:text-white hover:[&>button]:text-white/80">
                 <SheetHeader className="p-4 bg-primary text-primary-foreground">
                   <SheetTitle className="text-white flex items-center gap-2">
                     <img src="/logo-header-blanco.png" alt="VATOS ALFA" className="h-8 w-auto object-contain" />
@@ -200,158 +206,225 @@ export default function Header() {
                 </SheetHeader>
                 <ScrollArea className="h-[calc(100vh-64px)]">
                   <div className="flex flex-col gap-1 p-4 pb-16">
-                    <div className="mb-4">
-                      <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Menú Principal</h4>
-                      <div className="flex flex-col space-y-1">
-                        {mainNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                          canSee(permission) && (
-                            <Link
-                              key={href}
-                              href={href}
-                              onClick={handleLinkClick}
-                              className={cn(
-                                'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'))
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'text-foreground hover:bg-muted'
-                              )}
-                            >
-                              <Icon className="mr-3 h-4 w-4" />
-                              {label}
-                            </Link>
-                          )
-                        ))}
-                      </div>
-                    </div>
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="website" className="border-b-0">
+                        <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                          Sitio Web
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="pt-2 pb-2">
+                            <div className="rounded-md border bg-muted/30 p-3">
+                              <p className="mb-3 break-all text-xs text-muted-foreground">
+                                {displayUrl}
+                              </p>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 flex-1 text-xs"
+                                  onClick={() => {
+                                    if (displayUrl) window.open(displayUrl, '_blank');
+                                  }}
+                                >
+                                  <ExternalLink className="mr-2 h-3 w-3" />
+                                  Visitar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(displayUrl);
+                                    toast({
+                                      title: 'Link copiado',
+                                      description: 'El enlace se ha copiado al portapapeles.',
+                                    });
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                      <AccordionItem value="main" className="border-b-0">
+                        <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                          Menú Principal
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="flex flex-col space-y-1 pt-1">
+                            {mainNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                              canSee(permission) && (
+                                <Link
+                                  key={href}
+                                  href={href}
+                                  onClick={handleLinkClick}
+                                  className={cn(
+                                    'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                    (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'))
+                                      ? 'bg-primary/10 text-primary'
+                                      : 'text-foreground hover:bg-muted'
+                                  )}
+                                >
+                                  <Icon className="mr-3 h-4 w-4" />
+                                  {label}
+                                </Link>
+                              )
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
 
-                    {canSeeAny(salesNavLinks.map(l => l.permission)) && (
-                      <div className="mb-4">
-                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Ventas</h4>
-                        <div className="flex flex-col space-y-1">
-                          {salesNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                            canSee(permission!) && (
-                              <Link
-                                key={href}
-                                href={href!}
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === href
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
-                                )}
-                              >
-                                <Icon className="mr-3 h-4 w-4" />
-                                {label}
-                              </Link>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      {canSeeAny(salesNavLinks.map(l => l.permission)) && (
+                        <AccordionItem value="sales" className="border-b-0">
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                            Ventas
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              {salesNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                                canSee(permission!) && (
+                                  <Link
+                                    key={href}
+                                    href={href!}
+                                    onClick={handleLinkClick}
+                                    className={cn(
+                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                      pathname === href
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-foreground hover:bg-muted'
+                                    )}
+                                  >
+                                    <Icon className="mr-3 h-4 w-4" />
+                                    {label}
+                                  </Link>
+                                )
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
 
-                    {canSeeAny(productsNavLinks.map(l => l.permission)) && (
-                      <div className="mb-4">
-                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Productos</h4>
-                        <div className="flex flex-col space-y-1">
-                          {productsNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                            canSee(permission!) && (
-                              <Link
-                                key={href}
-                                href={href!}
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === href
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
-                                )}
-                              >
-                                <Icon className="mr-3 h-4 w-4" />
-                                {label}
-                              </Link>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      {canSeeAny(productsNavLinks.map(l => l.permission)) && (
+                        <AccordionItem value="products" className="border-b-0">
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                            Productos
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              {productsNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                                canSee(permission!) && (
+                                  <Link
+                                    key={href}
+                                    href={href!}
+                                    onClick={handleLinkClick}
+                                    className={cn(
+                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                      pathname === href
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-foreground hover:bg-muted'
+                                    )}
+                                  >
+                                    <Icon className="mr-3 h-4 w-4" />
+                                    {label}
+                                  </Link>
+                                )
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
 
-                    {canSeeAny(reportsNavLinks.map(l => l.permission)) && (
-                      <div className="mb-4">
-                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Reportes</h4>
-                        <div className="flex flex-col space-y-1">
-                          {reportsNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                            canSee(permission!) && (
-                              <Link
-                                key={href}
-                                href={href!}
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === href
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
-                                )}
-                              >
-                                <Icon className="mr-3 h-4 w-4" />
-                                {label}
-                              </Link>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      {canSeeAny(reportsNavLinks.map(l => l.permission)) && (
+                        <AccordionItem value="reports" className="border-b-0">
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                            Reportes
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              {reportsNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                                canSee(permission!) && (
+                                  <Link
+                                    key={href}
+                                    href={href!}
+                                    onClick={handleLinkClick}
+                                    className={cn(
+                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                      pathname === href
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-foreground hover:bg-muted'
+                                    )}
+                                  >
+                                    <Icon className="mr-3 h-4 w-4" />
+                                    {label}
+                                  </Link>
+                                )
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
 
-                    {canSee('ver_finanzas') && (
-                      <div className="mb-4">
-                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Finanzas</h4>
-                        <div className="flex flex-col space-y-1">
-                          {finanzasNavLinks.map((item, index) => (
-                            !item.isSeparator && canSee(item.permission!) && (
-                              <Link
-                                key={item.href}
-                                href={item.href!}
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === item.href
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
-                                )}
-                              >
-                                <span className="ml-7">{item.label}</span>
-                              </Link>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      {canSee('ver_finanzas') && (
+                        <AccordionItem value="finances" className="border-b-0">
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                            Finanzas
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              {finanzasNavLinks.map((item, index) => (
+                                !item.isSeparator && canSee(item.permission!) && (
+                                  <Link
+                                    key={item.href}
+                                    href={item.href!}
+                                    onClick={handleLinkClick}
+                                    className={cn(
+                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                      pathname === item.href
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-foreground hover:bg-muted'
+                                    )}
+                                  >
+                                    <span className="ml-7">{item.label}</span>
+                                  </Link>
+                                )
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
 
-                    {canSeeAny(['ver_administracion', 'ver_profesionales', 'ver_servicios', 'ver_comisiones']) && (
-                      <div className="mb-4">
-                        <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">Administración</h4>
-                        <div className="flex flex-col space-y-1">
-                          {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                            (canSee(permission!) || canSee('ver_administracion')) && (
-                              <Link
-                                key={href}
-                                href={href!}
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === href
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
-                                )}
-                              >
-                                <Icon className="mr-3 h-4 w-4" />
-                                {label}
-                              </Link>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      {canSeeAny(['ver_administracion', 'ver_profesionales', 'ver_servicios', 'ver_comisiones']) && (
+                        <AccordionItem value="admin" className="border-b-0">
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                            Administración
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
+                                (canSee(permission!) || canSee('ver_administracion')) && (
+                                  <Link
+                                    key={href}
+                                    href={href!}
+                                    onClick={handleLinkClick}
+                                    className={cn(
+                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                      pathname === href
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-foreground hover:bg-muted'
+                                    )}
+                                  >
+                                    <Icon className="mr-3 h-4 w-4" />
+                                    {label}
+                                  </Link>
+                                )
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
+                    </Accordion>
                   </div>
                 </ScrollArea>
               </SheetContent>

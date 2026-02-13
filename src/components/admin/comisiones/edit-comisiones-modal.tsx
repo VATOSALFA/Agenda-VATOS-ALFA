@@ -38,11 +38,11 @@ interface EditComisionesModalProps {
 }
 
 const getDefaultValues = (professional: Professional, services: Service[]) => {
-    const values: { [key: string]: Commission } = {};
-    services.forEach(service => {
-        values[service.id] = professional.comisionesPorServicio?.[service.id] || professional.defaultCommission || { value: 0, type: '%' };
-    });
-    return values;
+  const values: { [key: string]: Commission } = {};
+  services.forEach(service => {
+    values[service.id] = professional.comisionesPorServicio?.[service.id] || service.defaultCommission || professional.defaultCommission || { value: 0, type: '%' };
+  });
+  return values;
 }
 
 export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved, services }: EditComisionesModalProps) {
@@ -51,14 +51,14 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [masterValue, setMasterValue] = useState<number | ''>('');
   const [masterType, setMasterType] = useState<'%' | '$'>('%');
-  
+
   const { control, handleSubmit, reset, setValue } = useForm({
     defaultValues: getDefaultValues(professional, services),
   });
 
   useEffect(() => {
     if (isOpen) {
-        reset(getDefaultValues(professional, services));
+      reset(getDefaultValues(professional, services));
     }
   }, [professional, services, isOpen, reset]);
 
@@ -66,25 +66,38 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
   const onSubmit = async (data: Record<string, Commission>) => {
     if (!db) return;
     setIsSubmitting(true);
-    
-    // Data is already mapped by service ID, so we can use it directly
-    const comisionesPorServicio = data;
+
+    // Clean data: remove entries that match the service default to enable dynamic inheritance
+    const comisionesPorServicio = { ...data };
+    services.forEach(service => {
+      const defaultComm = service.defaultCommission;
+      const currentComm = comisionesPorServicio[service.id];
+
+      // If current value matches service default, remove it from the map
+      // so the system falls back to the service default (dynamic inheritance)
+      if (defaultComm && currentComm && defaultComm.value === currentComm.value && defaultComm.type === currentComm.type) {
+        delete comisionesPorServicio[service.id];
+      }
+
+      // Also remove if 0 and no default (optional cleanup)
+      // if (currentComm.value === 0 && !defaultComm) { delete comisionesPorServicio[service.id]; }
+    });
 
     try {
-        const professionalRef = doc(db, 'profesionales', professional.id);
-        await updateDoc(professionalRef, {
-            comisionesPorServicio
-        });
-        toast({
-            title: 'Comisiones guardadas con éxito',
-            description: `Las comisiones para ${professional.name} han sido actualizadas.`,
-        });
-        onDataSaved();
-        onClose();
+      const professionalRef = doc(db, 'profesionales', professional.id);
+      await updateDoc(professionalRef, {
+        comisionesPorServicio
+      });
+      toast({
+        title: 'Comisiones guardadas con éxito',
+        description: `Las comisiones para ${professional.name} han sido actualizadas.`,
+      });
+      onDataSaved();
+      onClose();
 
     } catch (error) {
-       console.error("Error al guardar comisiones:", error);
-       toast({
+      console.error("Error al guardar comisiones:", error);
+      toast({
         variant: "destructive",
         title: 'Error al guardar',
         description: 'No se pudieron guardar las comisiones. Inténtalo de nuevo.',
@@ -126,29 +139,29 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
           <div className="py-4 space-y-4">
             <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
               <Label className="font-semibold">Aplicar a todos</Label>
-               <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Valor"
-                    value={masterValue}
-                    onChange={e => setMasterValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    className="flex-grow"
-                  />
-                  <Select value={masterType} onValueChange={(v: '%' | '$') => setMasterType(v)}>
-                    <SelectTrigger className="w-[80px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="%">%</SelectItem>
-                      <SelectItem value="$">$</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button type="button" onClick={applyToAll}>Aplicar</Button>
-               </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  placeholder="Valor"
+                  value={masterValue}
+                  onChange={e => setMasterValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="flex-grow"
+                />
+                <Select value={masterType} onValueChange={(v: '%' | '$') => setMasterType(v)}>
+                  <SelectTrigger className="w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="%">%</SelectItem>
+                    <SelectItem value="$">$</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button type="button" onClick={applyToAll}>Aplicar</Button>
+              </div>
             </div>
 
             <Separator />
-            
+
             <div className="max-h-[40vh] overflow-y-auto px-1 space-y-4">
               {services.map((service) => (
                 <div key={service.id} className="space-y-1">
@@ -168,19 +181,19 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
                       )}
                     />
                     <Controller
-                        name={`${service.id}.type`}
-                        control={control}
-                        render={({ field }) => (
-                             <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger className="w-[80px]">
-                                    <SelectValue placeholder="Tipo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="%">%</SelectItem>
-                                    <SelectItem value="$">$</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        )}
+                      name={`${service.id}.type`}
+                      control={control}
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <SelectTrigger className="w-[80px]">
+                            <SelectValue placeholder="Tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="%">%</SelectItem>
+                            <SelectItem value="$">$</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     />
                   </div>
                 </div>

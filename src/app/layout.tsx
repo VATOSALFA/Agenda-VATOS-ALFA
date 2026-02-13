@@ -9,6 +9,8 @@ import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { getDb } from '@/lib/firebase-server';
 import { Metadata } from 'next';
+
+
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 
 export const revalidate = 60; // Revalidate every 60 seconds
@@ -50,6 +52,8 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+import { AuthGuard } from '@/components/layout/auth-guard';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -60,14 +64,16 @@ export default function RootLayout({
       <body>
         <LocalProvider>
           <AuthProvider>
-            <ThemeProvider>
-              <MercadoPagoProvider>
-                <RecaptchaProvider>
-                  {children}
-                  <Toaster />
-                </RecaptchaProvider>
-              </MercadoPagoProvider>
-            </ThemeProvider>
+            <AuthGuard>
+              <ThemeProvider>
+                <MercadoPagoProvider>
+                  <RecaptchaProvider>
+                    {children}
+                    <Toaster />
+                  </RecaptchaProvider>
+                </MercadoPagoProvider>
+              </ThemeProvider>
+            </AuthGuard>
           </AuthProvider>
         </LocalProvider>
       </body>

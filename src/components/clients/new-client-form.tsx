@@ -68,6 +68,7 @@ interface NewClientFormProps {
   onFormSubmit: (clientId: string) => void;
   onCancel?: () => void;
   client?: Client | null;
+  initialName?: string;
 }
 
 const SpellingSuggestion = ({ suggestion, onAccept }: { suggestion: SpellCheckOutput, onAccept: (text: string) => void }) => {
@@ -91,7 +92,7 @@ const months = Array.from({ length: 12 }, (_, i) => ({
 }));
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClientFormProps) {
+export function NewClientForm({ onFormSubmit, onCancel, client = null, initialName = '' }: NewClientFormProps) {
   const { toast } = useToast();
   const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,7 +117,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
     resolver: zodResolver(clientSchema),
     mode: 'onBlur',
     defaultValues: {
-      nombre: '',
+      nombre: initialName,
       apellido: '',
       telefono: '',
       correo: '',
@@ -209,10 +210,17 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
     if (type === 'nombre') { setIsCheckingNombre(true); setNombreSuggestion(null); }
     else { setIsCheckingApellido(true); setApellidoSuggestion(null); }
     try {
+      console.log(`Checking spelling for ${type}: "${text}"`);
       const result = await spellCheck(text);
+      console.log(`Spell check result for ${type}:`, result);
+
       if (result.hasCorrection) {
         if (type === 'nombre') setNombreSuggestion(result);
         else setApellidoSuggestion(result);
+      } else {
+        // If no correction, clear any existing suggestion (important if user corrects manually)
+        if (type === 'nombre') setNombreSuggestion(null);
+        else setApellidoSuggestion(null);
       }
     } catch (error) { console.error("Spell check failed:", error); }
     finally { if (type === 'nombre') setIsCheckingNombre(false); else setIsCheckingApellido(false); }
@@ -237,7 +245,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
       });
     } else {
       form.reset({
-        nombre: '',
+        nombre: initialName,
         apellido: '',
         telefono: '',
         correo: '',
@@ -245,7 +253,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
         fecha_nacimiento: undefined,
       });
     }
-  }, [client, isEditMode, form]);
+  }, [client, isEditMode, form, initialName]);
 
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
@@ -399,7 +407,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
             <FormField control={form.control} name="nombre" render={({ field }) => (
               <FormItem>
                 <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Nombre <span className="text-red-500 ml-1">*</span></FormLabel>
-                <FormControl><Input placeholder="Juan" {...field} /></FormControl>
+                <FormControl><Input placeholder="Juan" {...field} className={cn(nombreSuggestion ? "border-red-500 focus-visible:ring-red-500" : "")} /></FormControl>
                 <div className="min-h-[24px]">
                   {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
                   {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
@@ -411,7 +419,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null }: NewClie
             <FormField control={form.control} name="apellido" render={({ field }) => (
               <FormItem>
                 <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido <span className="text-red-500 ml-1">*</span></FormLabel>
-                <FormControl><Input placeholder="Pérez" {...field} /></FormControl>
+                <FormControl><Input placeholder="Pérez" {...field} className={cn(apellidoSuggestion ? "border-red-500 focus-visible:ring-red-500" : "")} /></FormControl>
                 <div className="min-h-[24px]">
                   {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
                   {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}

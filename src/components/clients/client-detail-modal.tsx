@@ -126,7 +126,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-6xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-6xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center gap-2">
             <User className="h-6 w-6 text-primary" /> Ficha de Cliente: {client.nombre} {client.apellido}

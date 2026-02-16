@@ -49,10 +49,10 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const json: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          
+
           if (json.length < 2) {
-              toast({ variant: 'destructive', title: 'Archivo vacío', description: 'El archivo no contiene datos para importar.' });
-              return;
+            toast({ variant: 'destructive', title: 'Archivo vacío', description: 'El archivo no contiene datos para importar.' });
+            return;
           }
 
           const headers: string[] = json[0].map((h: any) => String(h).toLowerCase().trim());
@@ -60,50 +60,50 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
           const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
 
           if (missingHeaders.length > 0) {
-              toast({ variant: 'destructive', title: 'Faltan columnas requeridas', description: `Asegúrate de que el archivo contenga las columnas: ${missingHeaders.join(', ')}.` });
-              return;
+            toast({ variant: 'destructive', title: 'Faltan columnas requeridas', description: `Asegúrate de que el archivo contenga las columnas: ${missingHeaders.join(', ')}.` });
+            return;
           }
 
           const getIndex = (name: string) => headers.indexOf(name);
 
           const data: ParsedProduct[] = json.slice(1).map((row: any[]) => {
-              const commissionValue = Number(row[getIndex('comision de venta (valor)')]) || 0;
-              const commissionTypeFromSheet = String(row[getIndex('comision de venta (tipo)')]);
-              
-              const commission: Commission = {
-                value: commissionValue,
-                type: commissionTypeFromSheet === '$' ? '$' : '%',
-              };
-              
-              return {
-                nombre: row[getIndex('nombre')] || '',
-                barcode: row[getIndex('codigo de barras')] ? String(row[getIndex('codigo de barras')]) : undefined,
-                brand_id: row[getIndex('marca')] || '',
-                category_id: row[getIndex('categoria')] || '',
-                presentation_id: row[getIndex('formato/presentacion')] || '',
-                public_price: Number(row[getIndex('precio de venta al publico')]) || 0,
-                stock: Number(row[getIndex('cantidad en stock')]) || 0,
-                purchase_cost: Number(row[getIndex('costo de compra')]) || undefined,
-                internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
-                commission: commission,
-                includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
-                description: row[getIndex('descripcion')] || undefined,
-                stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,
-                notification_email: row[getIndex('email para notificaciones')] || undefined,
-                images: row[getIndex('imagenes')] ? String(row[getIndex('imagenes')]).split(',').map(s => s.trim()) : []
-              }
+            const commissionValue = Number(row[getIndex('comision de venta (valor)')]) || 0;
+            const commissionTypeFromSheet = String(row[getIndex('comision de venta (tipo)')]);
+
+            const commission: Commission = {
+              value: commissionValue,
+              type: commissionTypeFromSheet === '$' ? '$' : '%',
+            };
+
+            return {
+              nombre: row[getIndex('nombre')] || '',
+              barcode: row[getIndex('codigo de barras')] ? String(row[getIndex('codigo de barras')]) : undefined,
+              brand_id: row[getIndex('marca')] || '',
+              category_id: row[getIndex('categoria')] || '',
+              presentation_id: row[getIndex('formato/presentacion')] || '',
+              public_price: Number(row[getIndex('precio de venta al publico')]) || 0,
+              stock: Number(row[getIndex('cantidad en stock')]) || 0,
+              purchase_cost: Number(row[getIndex('costo de compra')]) || undefined,
+              internal_price: Number(row[getIndex('precio de venta interna')]) || undefined,
+              commission: commission,
+              includes_vat: String(row[getIndex('precio incluye iva')]).toLowerCase() === 'si',
+              description: row[getIndex('descripcion')] || undefined,
+              stock_alarm_threshold: Number(row[getIndex('alarma de stock (umbral)')]) || undefined,
+              notification_email: row[getIndex('email para notificaciones')] || undefined,
+              images: row[getIndex('imagenes')] ? String(row[getIndex('imagenes')]).split(',').map(s => s.trim()) : []
+            }
           }).filter(product => product.nombre && product.brand_id && product.category_id && product.presentation_id);
 
           if (data.length === 0) {
             toast({ variant: 'destructive', title: 'No se encontraron datos válidos', description: 'Revisa el contenido del archivo y asegúrate de que los datos requeridos estén presentes.' });
             return;
           }
-          
+
           setParsedData(data);
 
         } catch (error) {
-            console.error("Error parsing file:", error);
-            toast({ variant: 'destructive', title: 'Error al leer el archivo', description: 'Asegúrate de que sea un archivo de Excel válido y que los nombres de las columnas coincidan con la plantilla.' });
+          console.error("Error parsing file:", error);
+          toast({ variant: 'destructive', title: 'Error al leer el archivo', description: 'Asegúrate de que sea un archivo de Excel válido y que los nombres de las columnas coincidan con la plantilla.' });
         }
       };
       reader.readAsBinaryString(file);
@@ -123,31 +123,31 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
   const handleUpload = async () => {
     if (!db) return;
     if (parsedData.length === 0) {
-        toast({ variant: 'destructive', title: 'No hay datos', description: 'No hay productos válidos para importar.' });
-        return;
+      toast({ variant: 'destructive', title: 'No hay datos', description: 'No hay productos válidos para importar.' });
+      return;
     }
     setIsProcessing(true);
     try {
-        const batch = writeBatch(db);
-        parsedData.forEach(productData => {
-            const productRef = doc(collection(db, 'productos'));
-            const dataToSave = {
-              ...productData,
-              active: true,
-              order: 99,
-              created_at: Timestamp.now(),
-            };
-            batch.set(productRef, dataToSave);
-        });
-        await batch.commit();
-        toast({ title: '¡Éxito!', description: `${parsedData.length} productos han sido importados.` });
-        onUploadComplete();
-        handleClose();
+      const batch = writeBatch(db);
+      parsedData.forEach(productData => {
+        const productRef = doc(collection(db, 'productos'));
+        const dataToSave = {
+          ...productData,
+          active: true,
+          order: 99,
+          created_at: Timestamp.now(),
+        };
+        batch.set(productRef, dataToSave);
+      });
+      await batch.commit();
+      toast({ title: '¡Éxito!', description: `${parsedData.length} productos han sido importados.` });
+      onUploadComplete();
+      handleClose();
     } catch (error) {
-        console.error("Error uploading products:", error);
-        toast({ variant: 'destructive', title: 'Error de Carga', description: 'No se pudieron guardar los productos.' });
+      console.error("Error uploading products:", error);
+      toast({ variant: 'destructive', title: 'Error de Carga', description: 'No se pudieron guardar los productos.' });
     } finally {
-        setIsProcessing(false);
+      setIsProcessing(false);
     }
   }
 
@@ -159,7 +159,7 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Cargar Productos desde Excel o CSV</DialogTitle>
           <DialogDescription>
@@ -169,53 +169,53 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
         {parsedData.length === 0 ? (
           <div className="py-8 space-y-6">
-             <div {...getRootProps()} className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/5' : ''}`}>
-                <input {...getInputProps()} />
-                <UploadCloud className="h-12 w-12 text-muted-foreground" />
-                <p className="mt-4 text-center text-muted-foreground">
-                    Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo.
-                </p>
-             </div>
-             <Alert>
-                <FileSpreadsheet className="h-4 w-4" />
-                <AlertTitle>Formato del archivo</AlertTitle>
-                <AlertDescription>
-                   Asegúrate de que tu archivo tenga todas las columnas del formulario de "Nuevo Producto".
-                    <a href="/plantilla-productos.csv" download="plantilla-productos.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
-                </AlertDescription>
-             </Alert>
+            <div {...getRootProps()} className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/5' : ''}`}>
+              <input {...getInputProps()} />
+              <UploadCloud className="h-12 w-12 text-muted-foreground" />
+              <p className="mt-4 text-center text-muted-foreground">
+                Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo.
+              </p>
+            </div>
+            <Alert>
+              <FileSpreadsheet className="h-4 w-4" />
+              <AlertTitle>Formato del archivo</AlertTitle>
+              <AlertDescription>
+                Asegúrate de que tu archivo tenga todas las columnas del formulario de "Nuevo Producto".
+                <a href="/plantilla-productos.csv" download="plantilla-productos.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+              </AlertDescription>
+            </Alert>
           </div>
         ) : (
-            <div className="flex-grow flex flex-col overflow-hidden">
-                <p className="text-sm font-semibold mb-2">Vista previa de la importación ({parsedData.length} productos)</p>
-                <ScrollArea className="border rounded-md flex-grow">
-                    <Table>
-                        <TableHeader className="sticky top-0 bg-muted">
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Marca</TableHead>
-                                <TableHead>Categoría</TableHead>
-                                <TableHead>Precio</TableHead>
-                                <TableHead>Stock</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {parsedData.slice(0, 100).map((product, index) => (
-                                <TableRow key={index}>
-                                    <TableCell>{product.nombre}</TableCell>
-                                    <TableCell>{product.brand_id}</TableCell>
-                                    <TableCell>{product.category_id}</TableCell>
-                                    <TableCell>${(product.public_price || 0).toLocaleString('es-CL')}</TableCell>
-                                    <TableCell>{product.stock}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {parsedData.length > 100 && <p className="text-center text-sm text-muted-foreground p-4">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
-                </ScrollArea>
-            </div>
+          <div className="flex-grow flex flex-col overflow-hidden">
+            <p className="text-sm font-semibold mb-2">Vista previa de la importación ({parsedData.length} productos)</p>
+            <ScrollArea className="border rounded-md flex-grow">
+              <Table>
+                <TableHeader className="sticky top-0 bg-muted">
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Marca</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead>Precio</TableHead>
+                    <TableHead>Stock</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedData.slice(0, 100).map((product, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{product.nombre}</TableCell>
+                      <TableCell>{product.brand_id}</TableCell>
+                      <TableCell>{product.category_id}</TableCell>
+                      <TableCell>${(product.public_price || 0).toLocaleString('es-CL')}</TableCell>
+                      <TableCell>{product.stock}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {parsedData.length > 100 && <p className="text-center text-sm text-muted-foreground p-4">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
+            </ScrollArea>
+          </div>
         )}
-        
+
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isProcessing}>Cancelar</Button>
           <Button onClick={handleUpload} disabled={parsedData.length === 0 || isProcessing}>

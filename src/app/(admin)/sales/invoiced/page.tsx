@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight, Pencil, Check, ChevronsUpDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -16,10 +16,19 @@ import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery, writeBatch, increment, getDoc, Timestamp } from "firebase/firestore";
+import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery, writeBatch, increment, getDoc, Timestamp, updateDoc } from "firebase/firestore";
 import type { Client, Local, Profesional, Service, AuthCode, Sale, User, Role } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { SaleDetailModal } from "@/components/sales/sale-detail-modal";
+import { cn } from "@/lib/utils";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -72,7 +81,24 @@ export default function InvoicedSalesPage() {
 
     const [queryKey, setQueryKey] = useState(0);
 
-    const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
+    // Edit sale state
+    const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        fecha_hora_venta: '',
+        cliente_id: '',
+        detalle: '',
+        barbero_id: '',
+        metodo_pago: '',
+        total: 0,
+        descuento_valor: 0,
+        descuento_tipo: 'percentage' as 'fixed' | 'percentage',
+    });
+    const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+
+
+
+
 
 
 
@@ -96,6 +122,11 @@ export default function InvoicedSalesPage() {
 
     const { sales: populatedSales, loading: salesLoading, salesData } = useInvoicedSales(activeFilters, queryKey);
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+    const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+
+    const professionalOptions = useMemo(() => {
+        return professionals?.map(p => ({ value: p.id, label: p.name })) || [];
+    }, [professionals]);
 
     const totalPages = Math.ceil(populatedSales.length / itemsPerPage);
     const paginatedSales = populatedSales.slice(
@@ -217,7 +248,6 @@ export default function InvoicedSalesPage() {
                 title: "Venta Eliminada",
                 description: "La venta ha sido eliminada y el stock revertido.",
             });
-            setQueryKey(prevKey => prevKey + 1);
         } catch (error) {
             console.error("Error deleting sale: ", error);
             toast({
@@ -298,6 +328,7 @@ export default function InvoicedSalesPage() {
             // This prevents race conditions with body lock/pointer-events
             setTimeout(() => {
                 setAuthAction(() => action);
+                setAuthPermissionField('cashbox');
                 setIsAuthModalOpen(true);
             }, 100);
         }
@@ -312,7 +343,7 @@ export default function InvoicedSalesPage() {
             collection(db, 'codigos_autorizacion'),
             where('code', '==', authCode),
             where('active', '==', true),
-            where('cashbox', '==', true)
+            where(authPermissionField, '==', true)
         );
         const querySnapshot = await getDocs(authCodeQuery);
         if (querySnapshot.empty) {
@@ -337,11 +368,96 @@ export default function InvoicedSalesPage() {
         return 'N/A';
     }
 
+    const handleOpenEditModal = (sale: Sale) => {
+        const action = () => {
+            setSaleToEdit(sale);
+            // Parse date for the input
+            let dateStr = '';
+            if (sale.fecha_hora_venta?.seconds) {
+                const d = new Date(sale.fecha_hora_venta.seconds * 1000);
+                dateStr = format(d, "yyyy-MM-dd'T'HH:mm");
+            } else if (typeof sale.fecha_hora_venta === 'string') {
+                dateStr = sale.fecha_hora_venta;
+            }
+            setEditForm({
+                fecha_hora_venta: dateStr,
+                cliente_id: sale.cliente_id || '',
+                detalle: sale.items?.map(i => i.nombre).join(', ') || '',
+                barbero_id: sale.items?.[0]?.barbero_id || '',
+                metodo_pago: sale.metodo_pago || '',
+                total: sale.total || 0,
+                descuento_valor: sale.descuento?.valor || 0,
+                descuento_tipo: sale.descuento?.tipo || 'percentage',
+            });
+            setIsEditModalOpen(true);
+        };
+        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
+            action();
+        } else {
+            setTimeout(() => {
+                setAuthAction(() => action);
+                setAuthPermissionField('invoiced_sales');
+                setIsAuthModalOpen(true);
+            }, 100);
+        }
+    };
+
+    const handleEditSubmit = async () => {
+        if (!saleToEdit || !db) return;
+        setIsEditSubmitting(true);
+        try {
+            const saleRef = doc(db, 'ventas', saleToEdit.id);
+            const newDate = new Date(editForm.fecha_hora_venta);
+
+            const updateData: any = {
+                fecha_hora_venta: Timestamp.fromDate(newDate),
+                cliente_id: editForm.cliente_id,
+                metodo_pago: editForm.metodo_pago,
+                total: editForm.total,
+                descuento: {
+                    valor: editForm.descuento_valor,
+                    tipo: editForm.descuento_tipo,
+                },
+            };
+
+            // Update item names if detalle changed
+            if (saleToEdit.items && saleToEdit.items.length > 0) {
+                const detalleNames = editForm.detalle.split(',').map(d => d.trim());
+                const updatedItems = saleToEdit.items.map((item, idx) => ({
+                    ...item,
+                    nombre: detalleNames[idx] || item.nombre,
+                    barbero_id: editForm.barbero_id || item.barbero_id,
+                }));
+                updateData.items = updatedItems;
+            }
+
+            await updateDoc(saleRef, updateData);
+
+            toast({
+                title: 'Venta actualizada',
+                description: 'Los cambios han sido guardados correctamente.',
+            });
+            setIsEditModalOpen(false);
+            setSaleToEdit(null);
+        } catch (error) {
+            console.error('Error updating sale:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'No se pudo actualizar la venta.',
+            });
+        } finally {
+            setIsEditSubmitting(false);
+        }
+    };
+
+    const [authPermissionField, setAuthPermissionField] = useState<string>('cashbox');
+
     const isLocalAdmin = user?.role !== 'Administrador general';
 
 
     const { data: roles } = useFirestoreQuery<Role>('roles');
-    const userRole = roles.find(r => r.title === user?.role);
+    const userRole = roles?.find(r => r.title === user?.role);
     const historyLimit = userRole?.historyRestrictionDays;
 
     return (
@@ -486,7 +602,7 @@ export default function InvoicedSalesPage() {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX')}
+                                                ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
                                             <TableCell>0.00%</TableCell>
                                             <TableCell className="text-right">
@@ -501,6 +617,10 @@ export default function InvoicedSalesPage() {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem onSelect={() => handleOpenEditModal(sale)}>
+                                                                <Pencil className="mr-2 h-4 w-4 text-blue-500" />
+                                                                <span className="text-blue-500">Editar</span>
+                                                            </DropdownMenuItem>
                                                             <DropdownMenuItem onSelect={() => window.print()}>
                                                                 <Printer className="mr-2 h-4 w-4 text-secondary" />
                                                                 <span className="text-secondary">Imprimir</span>
@@ -533,7 +653,7 @@ export default function InvoicedSalesPage() {
                                                     ? sale.monto_pagado_real
                                                     : (sale.total || 0);
                                                 return acc + actualRevenue;
-                                            }, 0).toLocaleString('es-MX')}
+                                            }, 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell colSpan={2}></TableCell>
                                     </TableRow>
@@ -594,11 +714,15 @@ export default function InvoicedSalesPage() {
             {selectedSale && (
                 <SaleDetailModal
                     isOpen={isDetailModalOpen}
-                    onOpenChange={setIsDetailModalOpen}
+                    onOpenChange={(open) => {
+                        setIsDetailModalOpen(open);
+                        if (!open) setSelectedSale(null);
+                    }}
                     sale={selectedSale}
                 />
             )
             }
+
             {
                 saleToDelete && (
                     <Dialog open={!!saleToDelete} onOpenChange={(open) => {
@@ -671,7 +795,7 @@ export default function InvoicedSalesPage() {
                             Requiere Autorización
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Para realizar esta acción, es necesario un código con permisos de caja.
+                            Para realizar esta acción, es necesario un código de autorización.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="py-4">
@@ -684,6 +808,115 @@ export default function InvoicedSalesPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Edit Sale Modal */}
+            {saleToEdit && (
+                <Dialog open={isEditModalOpen} onOpenChange={(open) => { if (!open) { setIsEditModalOpen(false); setSaleToEdit(null); } }}>
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Editar Venta</DialogTitle>
+                            <DialogDescription>Modifica los datos de la venta facturada.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-date">Fecha de pago</Label>
+                                <Input
+                                    id="edit-date"
+                                    type="datetime-local"
+                                    value={editForm.fecha_hora_venta}
+                                    onChange={e => setEditForm(prev => ({ ...prev, fecha_hora_venta: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-client">Cliente</Label>
+                                <Input
+                                    id="edit-client"
+                                    value={saleToEdit.client ? `${saleToEdit.client.nombre} ${saleToEdit.client.apellido || ''}`.trim() : 'Cliente desconocido'}
+                                    disabled
+                                    className="bg-muted"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-detalle">Detalle (servicios/productos)</Label>
+                                <Input
+                                    id="edit-detalle"
+                                    value={editForm.detalle}
+                                    onChange={e => setEditForm(prev => ({ ...prev, detalle: e.target.value }))}
+                                    placeholder="Ej: Corte de cabello, Barba"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-professional">Profesional</Label>
+                                <Select value={editForm.barbero_id} onValueChange={v => setEditForm(prev => ({ ...prev, barbero_id: v }))}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccionar profesional" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {professionals?.map(pro => (
+                                            <SelectItem key={pro.id} value={pro.id}>{pro.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-payment">Método de pago</Label>
+                                <Select value={editForm.metodo_pago} onValueChange={v => setEditForm(prev => ({ ...prev, metodo_pago: v }))}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccionar método" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="efectivo">Efectivo</SelectItem>
+                                        <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                                        <SelectItem value="transferencia">Transferencia</SelectItem>
+                                        <SelectItem value="combinado">Combinado</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-total">Total ($)</Label>
+                                <Input
+                                    id="edit-total"
+                                    type="number"
+                                    step="0.01"
+                                    value={editForm.total}
+                                    onChange={e => setEditForm(prev => ({ ...prev, total: parseFloat(e.target.value) || 0 }))}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-discount-value">Descuento</Label>
+                                    <Input
+                                        id="edit-discount-value"
+                                        type="number"
+                                        step="0.01"
+                                        value={editForm.descuento_valor}
+                                        onChange={e => setEditForm(prev => ({ ...prev, descuento_valor: parseFloat(e.target.value) || 0 }))}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-discount-type">Tipo descuento</Label>
+                                    <Select value={editForm.descuento_tipo} onValueChange={(v: 'fixed' | 'percentage') => setEditForm(prev => ({ ...prev, descuento_tipo: v }))}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="percentage">Porcentaje (%)</SelectItem>
+                                            <SelectItem value="fixed">Fijo ($)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => { setIsEditModalOpen(false); setSaleToEdit(null); }}>Cancelar</Button>
+                            <Button onClick={handleEditSubmit} disabled={isEditSubmitting}>
+                                {isEditSubmitting && <span className="mr-2 h-4 w-4 animate-spin inline-block border-2 border-current border-t-transparent rounded-full" />}
+                                Guardar cambios
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
         </>
     );
 }

@@ -8,7 +8,7 @@ import { LocalProvider } from '@/contexts/local-context';
 import { AuthProvider } from '@/contexts/firebase-auth-context';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { getDb } from '@/lib/firebase-server';
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 
 
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
@@ -51,6 +51,12 @@ export async function generateMetadata(): Promise<Metadata> {
     }
   };
 }
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 import { AuthGuard } from '@/components/layout/auth-guard';
 

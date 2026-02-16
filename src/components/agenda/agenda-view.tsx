@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -190,6 +190,9 @@ export default function AgendaView() {
   // New State for Client Detail
   const [isClientDetailModalOpen, setIsClientDetailModalOpen] = useState(false);
   const [selectedClientForModal, setSelectedClientForModal] = useState<Client | null>(null);
+
+  // Sidebar collapse state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const handleNonWorkClick = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
     if (!canSee('bloquear_horarios')) return;
@@ -760,16 +763,16 @@ export default function AgendaView() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col md:grid md:grid-cols-[288px_1fr] h-[calc(100vh-4rem)] bg-muted/40 gap-2">
+      <div className={cn("flex flex-col md:grid h-[calc(100vh-4rem)] bg-muted/40 gap-2 overflow-hidden", isSidebarCollapsed ? 'md:grid-cols-[0px_1fr]' : 'md:grid-cols-[288px_1fr]')} style={{ transition: 'grid-template-columns 0.3s ease' }}>
         {/* Left Panel */}
-        <aside className="bg-white border-r flex flex-col flex-shrink-0">
-          <div className="p-4 space-y-4">
+        <aside className={cn("bg-white border-r flex flex-col flex-shrink-0 min-h-0 overflow-y-auto scrollbar-thin transition-all duration-300", isSidebarCollapsed && 'hidden md:flex md:w-0 md:overflow-hidden md:p-0 md:opacity-0')}>
+          <div className="p-4 space-y-2">
             {user?.role === 'Administrador general' && (
-              <div className="space-y-2">
-                <Label htmlFor="branch-select">Sucursal</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="branch-select" className="text-xs flex-shrink-0">Sucursal</Label>
                 <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
-                  <SelectTrigger id="branch-select">
-                    <SelectValue placeholder="Seleccionar sucursal..." />
+                  <SelectTrigger id="branch-select" className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
                   <SelectContent>
                     {locales.map(local => (
@@ -779,10 +782,10 @@ export default function AgendaView() {
                 </Select>
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="professional-select">Profesional</Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="professional-select" className="text-xs flex-shrink-0">Profesional</Label>
               <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
-                <SelectTrigger id="professional-select">
+                <SelectTrigger id="professional-select" className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -805,7 +808,7 @@ export default function AgendaView() {
               />
             </div>
           )}
-          <div className="mt-8 p-4 hidden md:flex justify-center">
+          <div className="mt-4 p-4 hidden md:flex justify-center">
             {empresaLoading ? (
               <Skeleton className="h-[200px] w-full" />
             ) : logoUrl ? (
@@ -815,7 +818,7 @@ export default function AgendaView() {
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
+        <div className="flex-1 flex flex-col bg-background min-h-0 overflow-hidden">
           {/* Agenda Header */}
           <div className="flex-shrink-0 flex items-center justify-between gap-4 p-4 border-b">
             <div className="flex items-center gap-4">
@@ -831,12 +834,127 @@ export default function AgendaView() {
                 </p>
               </div>
             </div>
+            <div className="flex items-center gap-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <HelpCircle className="h-5 w-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <div className="p-4 border-b">
+                    <h4 className="font-semibold text-sm">Guía de la agenda</h4>
+                    <p className="text-xs text-muted-foreground">Significado de colores e íconos</p>
+                  </div>
+                  <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                    {/* Status Colors */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Estados</p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-blue-300/80 border-l-[3px] border-blue-500 flex-shrink-0" />
+                          <span className="text-sm">Reservado</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-yellow-300/80 border-l-[3px] border-yellow-500 flex-shrink-0" />
+                          <span className="text-sm">Confirmado</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-green-300/80 border-l-[3px] border-green-500 flex-shrink-0" />
+                          <span className="text-sm">En espera</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-pink-300/80 border-l-[3px] border-pink-500 flex-shrink-0" />
+                          <span className="text-sm">Asiste</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-orange-300/80 border-l-[3px] border-orange-500 flex-shrink-0" />
+                          <span className="text-sm">No asiste</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-red-300/80 border-l-[3px] border-red-500 flex-shrink-0" />
+                          <span className="text-sm">Pendiente de pago</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-gray-300/80 border-l-[3px] border-gray-500 flex-shrink-0 line-through" />
+                          <span className="text-sm">Cancelado</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Icons */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Íconos</p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded bg-green-500 flex items-center justify-center flex-shrink-0">
+                            <DollarSign className="w-3.5 h-3.5 text-black" />
+                          </div>
+                          <span className="text-sm">Pago completo</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded bg-orange-500 flex items-center justify-center flex-shrink-0">
+                            <span className="text-black font-bold text-[10px]">A</span>
+                          </div>
+                          <span className="text-sm">Anticipo pagado</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white font-bold text-[10px]">P</span>
+                          </div>
+                          <span className="text-sm">Incluye producto</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Globe className="w-5 h-5 text-primary flex-shrink-0" />
+                          <span className="text-sm">Reserva desde la web pública</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm">Profesional fijo (no reasignable)</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Other indicators */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Otros</p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-0.5 bg-red-500 flex-shrink-0 rounded" />
+                          <span className="text-sm">Hora actual</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded bg-striped-gray border border-gray-400 flex-shrink-0" />
+                          <span className="text-sm">Horario bloqueado</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={() => window.open('/agenda/display', '_blank')} className="hidden md:flex">
+                    <Cast className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Transmitir agenda en pantalla</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hidden md:flex">
+                    {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isSidebarCollapsed ? 'Mostrar panel lateral' : 'Ocultar panel lateral'}
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
 
           {/* Esta es la linea que genera el scroll vertical */}
           <div className="flex-grow overflow-auto">
             {/* Professional Headers */}
-            <div className="sticky top-0 z-40 grid gap-2 bg-background" style={{ gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
+            <div className="sticky top-0 z-40 grid gap-2 bg-background" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
               <div className="sticky left-0 bg-background z-50">
                 <div className="h-28 flex items-center justify-center p-2 border-b">
                   <DropdownMenu>
@@ -862,7 +980,7 @@ export default function AgendaView() {
               </DndContext>
             </div>
 
-            <div className="grid gap-2" style={{ gridTemplateColumns: `96px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
+            <div className="grid gap-2 pb-8" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
               {/* Time Column */}
               <div className="flex-shrink-0 sticky left-0 z-10 bg-white">
                 <div className="flex flex-col">

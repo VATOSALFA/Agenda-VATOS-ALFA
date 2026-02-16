@@ -168,6 +168,7 @@ export default function AuthCodesSettingsPage() {
                                     <TableHead>Reservas</TableHead>
                                     <TableHead>Caja</TableHead>
                                     <TableHead>Descarga De Archivos</TableHead>
+                                    <TableHead>Ventas Facturadas</TableHead>
                                     <TableHead className="text-right">Opciones</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -175,12 +176,12 @@ export default function AuthCodesSettingsPage() {
                                 {loading ? (
                                     Array.from({ length: 3 }).map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
+                                            <TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell>
                                         </TableRow>
                                     ))
                                 ) : authCodes.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center h-24">
+                                        <TableCell colSpan={8} className="text-center h-24">
                                             No hay códigos creados.
                                         </TableCell>
                                     </TableRow>
@@ -192,6 +193,7 @@ export default function AuthCodesSettingsPage() {
                                         <TableCell><PermissionBadge permitted={code.reserves} /></TableCell>
                                         <TableCell><PermissionBadge permitted={code.cashbox} /></TableCell>
                                         <TableCell><PermissionBadge permitted={code.download} /></TableCell>
+                                        <TableCell><PermissionBadge permitted={code.invoiced_sales ?? false} /></TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex gap-2 justify-end">
                                                 <Button variant="outline" size="sm" className="bg-primary text-primary-foreground border-primary hover:bg-primary/90" onClick={() => openModalForEdit(code)}>

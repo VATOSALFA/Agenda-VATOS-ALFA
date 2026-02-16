@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where, orderBy, limit, Timestamp, type QueryConstraint } from 'firebase/firestore';
 import type { Sale, Egreso, IngresoManual, CashClosing } from '@/lib/types';
+import { roundMoney } from '@/lib/utils';
 
 export function useLiveCash(selectedLocalId: string, queryKey: number) {
     // 1. Get Last Cut
@@ -81,7 +82,7 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
         const ingresosCash = liveIngresos.reduce((sum, i) => sum + i.monto, 0);
         const egresosCash = liveEgresos.reduce((sum, e) => sum + e.monto, 0);
 
-        return baseCash + salesCash + ingresosCash - egresosCash;
+        return roundMoney(baseCash + salesCash + ingresosCash - egresosCash);
     }, [baseCash, liveSales, liveIngresos, liveEgresos]);
 
     return {

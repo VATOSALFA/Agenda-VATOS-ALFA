@@ -165,7 +165,7 @@ export default function InventoryPage() {
                       <TableCell className="font-medium">{product.nombre}</TableCell>
                       <TableCell>{catalogMap.categories.get(product.category_id) || 'N/A'}</TableCell>
                       <TableCell>{catalogMap.brands.get(product.brand_id) || 'N/A'}</TableCell>
-                      <TableCell>${product.public_price?.toLocaleString('es-MX') || '0'}</TableCell>
+                      <TableCell>${product.public_price?.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0'}</TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" onClick={() => handleStockUpdate(product)}>
                           {product.stock}

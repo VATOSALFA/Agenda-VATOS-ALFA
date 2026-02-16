@@ -891,18 +891,26 @@ export default function CashBoxPage() {
 
             <AddEgresoModal
                 isOpen={isEgresoModalOpen}
-                onOpenChange={setIsEgresoModalOpen}
+                onOpenChange={(open) => {
+                    setIsEgresoModalOpen(open);
+                    if (!open) setEditingEgreso(null);
+                }}
                 onFormSubmit={() => {
                     setIsEgresoModalOpen(false)
+                    setEditingEgreso(null);
                     handleSearch()
                 }}
                 egreso={editingEgreso}
             />
             <AddIngresoModal
                 isOpen={isIngresoModalOpen}
-                onOpenChange={setIsIngresoModalOpen}
+                onOpenChange={(open) => {
+                    setIsIngresoModalOpen(open);
+                    if (!open) setEditingIngreso(null);
+                }}
                 onFormSubmit={() => {
                     setIsIngresoModalOpen(false)
+                    setEditingIngreso(null);
                     handleSearch()
                 }}
                 ingreso={editingIngreso}
@@ -932,11 +940,15 @@ export default function CashBoxPage() {
                 selectedSale && (
                     <SaleDetailModal
                         isOpen={isDetailModalOpen}
-                        onOpenChange={setIsDetailModalOpen}
+                        onOpenChange={(open) => {
+                            setIsDetailModalOpen(open);
+                            if (!open) setSelectedSale(null);
+                        }}
                         sale={selectedSale}
                     />
                 )
             }
+
             {
                 saleToDelete && (
                     <AlertDialog open={!!saleToDelete} onOpenChange={(open) => {

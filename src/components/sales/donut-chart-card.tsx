@@ -54,7 +54,7 @@ export const DonutChartCard = ({ title, data, total, dataLabels }: DonutChartCar
                                     backgroundColor: 'hsl(var(--background))',
                                     border: '1px solid hsl(var(--border))'
                                 }}
-                                formatter={(value: number) => `$${value.toLocaleString('es-MX')}`}
+                                formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                             />}
                         </RechartsPieChart>
                     </ResponsiveContainer>

@@ -101,7 +101,7 @@ const SortableServiceItem = ({
       <TableCell className="font-medium">{service.name}</TableCell>
       <TableCell>{categoryName}</TableCell>
       <TableCell>{service.duration} min</TableCell>
-      <TableCell>${service.price.toLocaleString('es-MX')}</TableCell>
+      <TableCell>${service.price.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
       <TableCell>
         <Badge variant={service.active ? 'default' : 'secondary'} className={service.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50'}>
           <Circle className={`mr-2 h-2 w-2 fill-current ${service.active ? 'text-primary' : 'text-accent-foreground'}`} />

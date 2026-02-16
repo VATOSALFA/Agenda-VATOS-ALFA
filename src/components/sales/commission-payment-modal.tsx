@@ -348,17 +348,17 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                                 />
                                             </TableCell>
                                             <TableCell className="font-medium whitespace-nowrap">{row.professionalName}</TableCell>
-                                            <TableCell className="text-right">${row.totalServiceCommission.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className="text-right">${row.totalProductCommission.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className="text-right">${row.totalTips.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className="text-right font-semibold text-primary">${(row.totalCommission + row.totalTips).toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="text-right">${row.totalServiceCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right">${row.totalProductCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right">${row.totalTips.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right font-semibold text-primary">${(row.totalCommission + row.totalTips).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                                 <TableFooter>
                                     <TableRow>
                                         <TableCell colSpan={5} className="text-right font-bold text-lg whitespace-nowrap">Total a Pagar Seleccionado</TableCell>
-                                        <TableCell className="text-right font-bold text-lg text-primary whitespace-nowrap">${overallTotalToPay.toLocaleString('es-MX')}</TableCell>
+                                        <TableCell className="text-right font-bold text-lg text-primary whitespace-nowrap">${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>

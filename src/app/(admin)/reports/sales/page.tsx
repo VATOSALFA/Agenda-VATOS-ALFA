@@ -38,7 +38,7 @@ const CustomBarLabel = (props: any) => {
     const { x, y, width, value } = props;
     return (
         <text x={x + width + 10} y={y + 10} fill="hsl(var(--foreground))" textAnchor="start" fontSize={12}>
-            {`$${value.toLocaleString('es-MX')}`}
+            {`$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         </text>
     );
 };
@@ -234,7 +234,7 @@ export default function SalesReportPage() {
                     <div className="lg:col-span-1">
                         <h3 className="text-xl font-semibold mb-4">Resumen</h3>
                         <div className="space-y-6">
-                            <KpiCard title="Total" value={aggregatedData.totalSales.toLocaleString('es-MX')} prefix="$" />
+                            <KpiCard title="Total" value={aggregatedData.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
                             <KpiCard title="Cantidad de ventas" value={aggregatedData.salesCount.toLocaleString()} />
                             <KpiCard title="Venta promedio" value={aggregatedData.averageSale.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
                         </div>
@@ -247,7 +247,7 @@ export default function SalesReportPage() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                                     <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} />
-                                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
                                     <Legend iconSize={10} wrapperStyle={{ fontSize: "12px" }} />
                                     <Line type="monotone" name="Periodo seleccionado" dataKey="current" stroke="hsl(var(--primary))" strokeWidth={2} />
                                 </LineChart>
@@ -268,7 +268,7 @@ export default function SalesReportPage() {
                                 <BarChart data={aggregatedData.salesByCategory} layout="vertical" margin={{ left: 60 }}>
                                     <XAxis type="number" hide />
                                     <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                    <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
                                     <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
                                         {aggregatedData.salesByCategory.map((_, index) => (
                                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />
@@ -289,7 +289,7 @@ export default function SalesReportPage() {
                                 <BarChart data={aggregatedData.salesByService} layout="vertical" margin={{ left: 120 }}>
                                     <XAxis type="number" hide />
                                     <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                    <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX')}`} />
+                                    <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
                                     <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} label={<CustomBarLabel value={0} x={0} y={0} width={0} />}>
                                         {aggregatedData.salesByService.map((_, index) => (
                                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary))'} />

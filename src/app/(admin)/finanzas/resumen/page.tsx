@@ -36,9 +36,10 @@ export default function FinanzasResumenPage() {
     const [isDepositoModalOpen, setIsDepositoModalOpen] = useState(false);
     const [year, setYear] = useState(new Date().getFullYear()); // Dynamic year state
 
-    // Generate array of years starting from 2025 + 10 years
-    const startYear = 2025;
-    const years = Array.from({ length: 11 }, (_, i) => startYear + i);
+    // Generate array of years starting from 2024
+    const startYear = 2024;
+    const currentYearNow = new Date().getFullYear();
+    const years = Array.from({ length: (currentYearNow + 1) - startYear + 1 }, (_, i) => startYear + i);
 
     const [monthlyAdjustments, setMonthlyAdjustments] = useState<Record<string, {
         adminCommissions?: Record<string, { type: 'fixed' | 'percentage', value: number }>,
@@ -391,7 +392,7 @@ export default function FinanzasResumenPage() {
                             <DollarSign className="h-4 w-4 text-white/80" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${(annualTotals.ingresosServicios + annualTotals.ventaProductos).toLocaleString('es-MX')}</div>
+                            <div className="text-2xl font-bold">${(annualTotals.ingresosServicios + annualTotals.ventaProductos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             <p className="text-xs text-white/70">Productos + Servicios</p>
                         </CardContent>
                     </Card>
@@ -403,7 +404,7 @@ export default function FinanzasResumenPage() {
                             <TrendingUp className="h-4 w-4 text-white/80" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${(annualTotals.utilidadNetaServicios + annualTotals.utilidadNetaProductos).toLocaleString('es-MX')}</div>
+                            <div className="text-2xl font-bold">${(annualTotals.utilidadNetaServicios + annualTotals.utilidadNetaProductos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             <p className="text-xs text-white/70">Después de todos los gastos</p>
                         </CardContent>
                     </Card>
@@ -541,7 +542,7 @@ export default function FinanzasResumenPage() {
                                         <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: '#333' }} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                                            formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, '']}
+                                            formatter={(value: number) => [`$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '']}
                                         />
                                         <Legend wrapperStyle={{ paddingTop: '10px' }} />
                                         <Line type="monotone" dataKey="totalIngresos" name="Ingresos Totales" stroke={COLORS.primary} strokeWidth={3} dot={{ r: 4, fill: COLORS.primary }} activeDot={{ r: 6 }} />
@@ -567,7 +568,7 @@ export default function FinanzasResumenPage() {
                                         <Tooltip
                                             cursor={{ fill: 'rgba(0,0,0,0.1)' }}
                                             contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                                            formatter={(value: number) => [`$${value.toLocaleString('es-MX')}`, '']}
+                                            formatter={(value: number) => [`$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '']}
                                         />
                                         <Legend wrapperStyle={{ paddingTop: '10px' }} />
                                         <Bar dataKey="ingresosServicios" name="Servicios" stackId="a" fill={COLORS.primary} radius={[0, 0, 0, 0]} />

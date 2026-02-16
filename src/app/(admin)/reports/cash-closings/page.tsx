@@ -269,10 +269,10 @@ export default function CashClosingsPage() {
                                             <TableCell>{format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}</TableCell>
                                             <TableCell>{closing.persona_entrega_nombre}</TableCell>
                                             <TableCell>{closing.persona_recibe}</TableCell>
-                                            <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-MX')}</TableCell>
-                                            <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-MX')}</TableCell>
+                                            <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                             <TableCell className="text-right font-bold">
-                                                ${(closing.total_calculado - closing.fondo_base).toLocaleString('es-MX')}
+                                                ${(closing.total_calculado - closing.fondo_base).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="outline" size="sm" onClick={() => setSelectedClosing(closing)}><Eye className="mr-2 h-4 w-4" /> Ver Detalle</Button>

@@ -37,6 +37,7 @@ const authCodeSchema = z.object({
   reserves: z.boolean(),
   cashbox: z.boolean(),
   download: z.boolean(),
+  invoiced_sales: z.boolean(),
 });
 
 type AuthCodeFormData = z.infer<typeof authCodeSchema>;
@@ -55,6 +56,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
       reserves: true,
       cashbox: true,
       download: true,
+      invoiced_sales: true,
     },
   });
 
@@ -69,6 +71,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
         reserves: true,
         cashbox: true,
         download: true,
+        invoiced_sales: true,
       });
     }
   }, [code, form, isOpen]);
@@ -76,23 +79,23 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
   const onSubmit = async (data: AuthCodeFormData) => {
     setIsSubmitting(true);
     try {
-        if(isEditMode && code) {
-            const codeRef = doc(db, 'codigos_autorizacion', code.id);
-            await updateDoc(codeRef, data);
-            toast({ title: 'Código actualizado con éxito' });
-        } else {
-            await addDoc(collection(db, 'codigos_autorizacion'), {
-                ...data,
-                created_at: Timestamp.now(),
-            });
-            toast({ title: 'Código creado con éxito' });
-        }
-        onSave();
+      if (isEditMode && code) {
+        const codeRef = doc(db, 'codigos_autorizacion', code.id);
+        await updateDoc(codeRef, data);
+        toast({ title: 'Código actualizado con éxito' });
+      } else {
+        await addDoc(collection(db, 'codigos_autorizacion'), {
+          ...data,
+          created_at: Timestamp.now(),
+        });
+        toast({ title: 'Código creado con éxito' });
+      }
+      onSave();
     } catch (error) {
-        console.error("Error saving auth code:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el código.' });
+      console.error("Error saving auth code:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el código.' });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -135,7 +138,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                 )}
               />
               <div className="space-y-3 pt-4 border-t">
-                 <FormField
+                <FormField
                   control={form.control}
                   name="reserves"
                   render={({ field }) => (
@@ -145,7 +148,7 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                     </FormItem>
                   )}
                 />
-                 <FormField
+                <FormField
                   control={form.control}
                   name="cashbox"
                   render={({ field }) => (
@@ -155,12 +158,22 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                     </FormItem>
                   )}
                 />
-                 <FormField
+                <FormField
                   control={form.control}
                   name="download"
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between">
                       <FormLabel>Permiso de Descarga de Archivos</FormLabel>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="invoiced_sales"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between">
+                      <FormLabel>Permiso de Ventas Facturadas</FormLabel>
                       <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     </FormItem>
                   )}

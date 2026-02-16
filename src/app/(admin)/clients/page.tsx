@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2 } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
@@ -197,6 +197,11 @@ export default function ClientsPage() {
   const [authCode, setAuthCode] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | null;
+  type SortDirection = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const { toast } = useToast();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -427,8 +432,72 @@ export default function ClientsPage() {
     return filtered;
   }, [clients, sales, searchTerm, activeFilters, allSales, allReservations]);
 
-  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
-  const paginatedClients = filteredClients.slice(
+  const getDateValue = (date: any): number => {
+    if (!date) return 0;
+    if (date instanceof Timestamp) return date.toDate().getTime();
+    if (date?.seconds) return date.seconds * 1000;
+    if (typeof date === 'string') return parseISO(date).getTime();
+    return 0;
+  };
+
+  const sortedClients = useMemo(() => {
+    if (!sortField) return filteredClients;
+
+    return [...filteredClients].sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      switch (sortField) {
+        case 'numero_cliente':
+          valA = Number(a.numero_cliente) || 0;
+          valB = Number(b.numero_cliente) || 0;
+          break;
+        case 'nombre':
+          valA = (a.nombre || '').toLowerCase();
+          valB = (b.nombre || '').toLowerCase();
+          break;
+        case 'apellido':
+          valA = (a.apellido || '').toLowerCase();
+          valB = (b.apellido || '').toLowerCase();
+          break;
+        case 'creado_en':
+          valA = getDateValue(a.creado_en);
+          valB = getDateValue(b.creado_en);
+          break;
+        default:
+          return 0;
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredClients, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        // Third click: remove sort
+        setSortField(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50" />;
+    if (sortDirection === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+    return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+  };
+
+  const totalPages = Math.ceil(sortedClients.length / itemsPerPage);
+  const paginatedClients = sortedClients.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -644,12 +713,20 @@ export default function ClientsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nº Cliente</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Apellido</TableHead>
+                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('numero_cliente')}>
+                        <span className="flex items-center">Nº Cliente <SortIcon field="numero_cliente" /></span>
+                      </TableHead>
+                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('nombre')}>
+                        <span className="flex items-center">Nombre <SortIcon field="nombre" /></span>
+                      </TableHead>
+                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('apellido')}>
+                        <span className="flex items-center">Apellido <SortIcon field="apellido" /></span>
+                      </TableHead>
                       <TableHead>Correo</TableHead>
                       <TableHead>Teléfono</TableHead>
-                      <TableHead>Cliente desde</TableHead>
+                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
+                        <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
+                      </TableHead>
                       <TableHead className="w-[50px]">Mensaje</TableHead>
                       <TableHead className="text-right">Opciones</TableHead>
                     </TableRow>
@@ -722,6 +799,12 @@ export default function ClientsPage() {
                     {searchTerm ? "No se encontraron clientes." : "No hay clientes que coincidan con los filtros."}
                   </p>
                 )}
+                {!isLoading && sortedClients.length > 0 && (
+                  <div className="px-4 py-2 text-xs text-muted-foreground border-t">
+                    {sortedClients.length} cliente{sortedClients.length !== 1 ? 's' : ''} encontrado{sortedClients.length !== 1 ? 's' : ''}
+                    {sortField && ` · Ordenado por ${sortField === 'numero_cliente' ? 'Nº cliente' : sortField === 'nombre' ? 'nombre' : sortField === 'apellido' ? 'apellido' : 'fecha de registro'} (${sortDirection === 'asc' ? '↑' : '↓'})`}
+                  </div>
+                )}
               </CardContent>
             </Card>
             <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
@@ -770,7 +853,10 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+      <Dialog open={isClientModalOpen} onOpenChange={(open) => {
+        setIsClientModalOpen(open);
+        if (!open) setEditingClient(null);
+      }}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingClient ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
@@ -784,6 +870,7 @@ export default function ClientsPage() {
             client={editingClient}
             onFormSubmit={() => {
               setIsClientModalOpen(false);
+              setEditingClient(null);
               handleDataUpdated();
             }}
           />
@@ -794,13 +881,17 @@ export default function ClientsPage() {
         <ClientDetailModal
           client={selectedClient}
           isOpen={isDetailModalOpen}
-          onOpenChange={setIsDetailModalOpen}
+          onOpenChange={(open) => {
+            setIsDetailModalOpen(open);
+            if (!open) setSelectedClient(null);
+          }}
           onNewReservation={() => {
             setIsDetailModalOpen(false);
             setIsReservationModalOpen(true);
           }}
         />
       )}
+
 
       {isReservationModalOpen && (
         <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>

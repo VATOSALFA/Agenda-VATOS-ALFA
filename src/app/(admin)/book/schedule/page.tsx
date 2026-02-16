@@ -221,7 +221,7 @@ function SchedulePageContent() {
                             {selectedServices.map(service => (
                                 <div key={service.id} className="text-sm">
                                     <p className="font-medium">{service.name}</p>
-                                    <p className="text-muted-foreground">${service.price.toLocaleString('es-MX')}</p>
+                                    <p className="text-muted-foreground">${service.price.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                             ))}
                         </div>
@@ -251,7 +251,7 @@ function SchedulePageContent() {
                             </div>
                             <div className="flex justify-between font-bold text-lg">
                                 <span>Total</span>
-                                <span>${totalPrice.toLocaleString('es-MX')}</span>
+                                <span>${totalPrice.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
 

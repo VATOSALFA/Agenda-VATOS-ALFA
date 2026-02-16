@@ -1,11 +1,11 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle, TrendingUp, DollarSign } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle, TrendingUp, DollarSign, FileEdit, X } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product, User } from '@/lib/types';
 import { where, Timestamp, doc, deleteDoc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase-client';
 import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,26 @@ const monthNameToNumber: { [key: string]: number } = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
 };
+
+const numberToMonthName: { [key: number]: string } = {
+    0: 'enero', 1: 'febrero', 2: 'marzo', 3: 'abril', 4: 'mayo', 5: 'junio',
+    6: 'julio', 7: 'agosto', 8: 'septiembre', 9: 'octubre', 10: 'noviembre', 11: 'diciembre'
+};
+
+const monthLabels = [
+    { value: 'enero', label: 'Enero' },
+    { value: 'febrero', label: 'Febrero' },
+    { value: 'marzo', label: 'Marzo' },
+    { value: 'abril', label: 'Abril' },
+    { value: 'mayo', label: 'Mayo' },
+    { value: 'junio', label: 'Junio' },
+    { value: 'julio', label: 'Julio' },
+    { value: 'agosto', label: 'Agosto' },
+    { value: 'septiembre', label: 'Septiembre' },
+    { value: 'octubre', label: 'Octubre' },
+    { value: 'noviembre', label: 'Noviembre' },
+    { value: 'diciembre', label: 'Diciembre' },
+];
 
 const COLORS = {
     primary: '#202A49',
@@ -83,15 +104,69 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
 
 export default function FinanzasMensualesPage() {
     const params = useParams();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const monthName = typeof params.month === 'string' ? params.month : 'enero';
     const monthNumber = monthNameToNumber[monthName.toLowerCase()];
     const currentYear = new Date().getFullYear();
-    const [selectedYear, setSelectedYear] = useState(currentYear);
+
+    // Read year from URL query param, fallback to current year
+    const yearFromUrl = searchParams.get('year');
+    const [selectedYear, setSelectedYear] = useState(() => {
+        if (yearFromUrl) return parseInt(yearFromUrl, 10);
+        return currentYear;
+    });
     const [queryKey, setQueryKey] = useState(0);
 
-    // Dynamic year range: 2025 to 2035 (11 years)
-    const startYear = 2025;
-    const years = Array.from({ length: 11 }, (_, i) => startYear + i);
+    // Sync year from URL when it changes (e.g. browser back/forward)
+    useEffect(() => {
+        if (yearFromUrl) {
+            const parsed = parseInt(yearFromUrl, 10);
+            if (!isNaN(parsed) && parsed !== selectedYear) {
+                setSelectedYear(parsed);
+            }
+        }
+    }, [yearFromUrl]);
+
+    // Dynamic year range: from 2024 to current year + 1
+    const startYear = 2024;
+    const years = Array.from({ length: (currentYear + 1) - startYear + 1 }, (_, i) => startYear + i);
+
+    // Navigation helpers — year is always included in the URL
+    const navigateToMonth = (newMonthName: string, yearOverride?: number) => {
+        const yearToUse = yearOverride ?? selectedYear;
+        router.push(`/finanzas/${newMonthName}?year=${yearToUse}`);
+    };
+
+    const goToPrevMonth = () => {
+        const currentIdx = monthNumber;
+        if (currentIdx === 0) {
+            // Go to December of previous year
+            const newYear = selectedYear - 1;
+            setSelectedYear(newYear);
+            router.push(`/finanzas/diciembre?year=${newYear}`);
+        } else {
+            router.push(`/finanzas/${numberToMonthName[currentIdx - 1]}?year=${selectedYear}`);
+        }
+    };
+
+    const goToNextMonth = () => {
+        const currentIdx = monthNumber;
+        if (currentIdx === 11) {
+            // Go to January of next year
+            const newYear = selectedYear + 1;
+            setSelectedYear(newYear);
+            router.push(`/finanzas/enero?year=${newYear}`);
+        } else {
+            router.push(`/finanzas/${numberToMonthName[currentIdx + 1]}?year=${selectedYear}`);
+        }
+    };
+
+    const handleYearChange = (newYear: string) => {
+        const yr = Number(newYear);
+        setSelectedYear(yr);
+        router.push(`/finanzas/${monthName}?year=${yr}`);
+    };
 
     const { toast } = useToast();
     const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
@@ -131,8 +206,8 @@ export default function FinanzasMensualesPage() {
         ]
     }, [startDate, endDate]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}-${queryKey}`, ...salesQueryConstraints);
-    const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-${monthName}-${queryKey}`, ...egresosQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}-${selectedYear}-${queryKey}`, ...salesQueryConstraints);
+    const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-${monthName}-${selectedYear}-${queryKey}`, ...egresosQueryConstraints);
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
@@ -179,22 +254,149 @@ export default function FinanzasMensualesPage() {
         return Object.values(groupedByDay).sort((a, b) => a.fecha.localeCompare(b.fecha));
     }, [sales]);
 
-    // Fetch monthly adjustments
+    // --- Manual Override State ---
+    interface ManualOverrideData {
+        servicios_ingreso: number;
+        servicios_egreso: number;
+        servicios_subtotal: number;
+        servicios_comision_admin: number;
+        servicios_utilidad: number;
+        productos_ingreso: number;
+        productos_reinversion: number;
+        productos_comision_prof: number;
+        productos_subtotal: number;
+        productos_utilidad: number;
+        egresos_comisiones_servicios: { nombre: string; monto: number }[];
+        egresos_comisiones_productos: number;
+        egresos_nomina: number;
+        egresos_costos_fijos: number;
+    }
+    const [manualOverride, setManualOverride] = useState<ManualOverrideData | null>(null);
+    const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
+    const [overrideForm, setOverrideForm] = useState<ManualOverrideData>({
+        servicios_ingreso: 0,
+        servicios_egreso: 0,
+        servicios_subtotal: 0,
+        servicios_comision_admin: 0,
+        servicios_utilidad: 0,
+        productos_ingreso: 0,
+        productos_reinversion: 0,
+        productos_comision_prof: 0,
+        productos_subtotal: 0,
+        productos_utilidad: 0,
+        egresos_comisiones_servicios: [],
+        egresos_comisiones_productos: 0,
+        egresos_nomina: 0,
+        egresos_costos_fijos: 0,
+    });
+    const [isSavingOverride, setIsSavingOverride] = useState(false);
+
+    // Fetch monthly adjustments + manual override
     useEffect(() => {
         if (!db) return;
         const docId = `${monthName.toLowerCase()}_${selectedYear}`;
-        const unsub = onSnapshot(doc(db, 'finanzas_mensuales', docId), (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
+        const unsub = onSnapshot(doc(db, 'finanzas_mensuales', docId), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
                 setMonthlyAdjustments(data.adminCommissions || {});
                 setMonthlyProductAdjustments(data.adminProductCommissions || {});
+                if (data.manualOverride) {
+                    setManualOverride(data.manualOverride as ManualOverrideData);
+                } else {
+                    setManualOverride(null);
+                }
             } else {
                 setMonthlyAdjustments({});
                 setMonthlyProductAdjustments({});
+                setManualOverride(null);
             }
         });
         return () => unsub();
     }, [monthName, selectedYear]);
+
+    const openOverrideModal = () => {
+        if (manualOverride) {
+            setOverrideForm({ ...manualOverride });
+        } else {
+            setOverrideForm({
+                servicios_ingreso: ingresoServiciosTotal,
+                servicios_egreso: egresoTotal,
+                servicios_subtotal: subtotalUtilidad,
+                servicios_comision_admin: totalLocalAdminCommissions,
+                servicios_utilidad: utilidadNeta,
+                productos_ingreso: ventaProductos,
+                productos_reinversion: reinversion,
+                productos_comision_prof: comisionProfesionales,
+                productos_subtotal: utilidadVatosAlfa,
+                productos_utilidad: utilidadNetaProductos,
+                egresos_comisiones_servicios: commissionsSummary.filter(c => c.commissionServices > 0).map(c => ({ nombre: c.name, monto: c.commissionServices })),
+                egresos_comisiones_productos: totalComisionesProductos,
+                egresos_nomina: nominaTotal,
+                egresos_costos_fijos: costosFijosTotal,
+            });
+        }
+        setIsOverrideModalOpen(true);
+    };
+
+    const handleSaveOverride = async () => {
+        if (!db) return;
+        setIsSavingOverride(true);
+        try {
+            const docId = `${monthName.toLowerCase()}_${selectedYear}`;
+            await setDoc(doc(db, 'finanzas_mensuales', docId), {
+                manualOverride: overrideForm
+            }, { merge: true });
+            toast({ title: 'Datos guardados', description: `Se han guardado los datos manuales para ${monthName} ${selectedYear}.` });
+            setIsOverrideModalOpen(false);
+        } catch (error) {
+            console.error('Error saving override:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los datos.' });
+        } finally {
+            setIsSavingOverride(false);
+        }
+    };
+
+    const handleDeleteOverride = async () => {
+        if (!db) return;
+        try {
+            const docId = `${monthName.toLowerCase()}_${selectedYear}`;
+            // We use setDoc with merge to remove just the manualOverride field
+            const docRef = doc(db, 'finanzas_mensuales', docId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = { ...docSnap.data() };
+                delete data.manualOverride;
+                await setDoc(docRef, data);
+            }
+            toast({ title: 'Override eliminado', description: 'Se han restaurado los datos automáticos.' });
+            setIsOverrideModalOpen(false);
+        } catch (error) {
+            console.error('Error deleting override:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el override.' });
+        }
+    };
+
+    const addComisionServicio = () => {
+        setOverrideForm(prev => ({
+            ...prev,
+            egresos_comisiones_servicios: [...prev.egresos_comisiones_servicios, { nombre: '', monto: 0 }]
+        }));
+    };
+
+    const removeComisionServicio = (index: number) => {
+        setOverrideForm(prev => ({
+            ...prev,
+            egresos_comisiones_servicios: prev.egresos_comisiones_servicios.filter((_, i) => i !== index)
+        }));
+    };
+
+    const updateComisionServicio = (index: number, field: 'nombre' | 'monto', value: string | number) => {
+        setOverrideForm(prev => {
+            const updated = [...prev.egresos_comisiones_servicios];
+            updated[index] = { ...updated[index], [field]: value };
+            return { ...prev, egresos_comisiones_servicios: updated };
+        });
+    };
 
     // --- CORRECCIÓN APLICADA AQUÍ ---
     // Eliminamos el cálculo predictivo. Solo mostramos lo que existe en la BD 'egresos'.
@@ -467,6 +669,34 @@ export default function FinanzasMensualesPage() {
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading || usersLoading;
     const totalResumenEgresos = totalComisiones + nominaTotal + costosFijosTotal;
 
+    // --- Apply manual overrides ---
+    const hasOverride = !!manualOverride;
+    const display = {
+        servicios_ingreso: hasOverride ? manualOverride!.servicios_ingreso : ingresoServiciosTotal,
+        servicios_egreso: hasOverride ? manualOverride!.servicios_egreso : egresoTotal,
+        servicios_subtotal: hasOverride ? manualOverride!.servicios_subtotal : subtotalUtilidad,
+        servicios_comision_admin: hasOverride ? manualOverride!.servicios_comision_admin : totalLocalAdminCommissions,
+        servicios_utilidad: hasOverride ? manualOverride!.servicios_utilidad : utilidadNeta,
+        productos_ingreso: hasOverride ? manualOverride!.productos_ingreso : ventaProductos,
+        productos_reinversion: hasOverride ? manualOverride!.productos_reinversion : reinversion,
+        productos_comision_prof: hasOverride ? manualOverride!.productos_comision_prof : comisionProfesionales,
+        productos_subtotal: hasOverride ? manualOverride!.productos_subtotal : utilidadVatosAlfa,
+        productos_utilidad: hasOverride ? manualOverride!.productos_utilidad : utilidadNetaProductos,
+        egresos_comisiones_servicios_total: hasOverride
+            ? manualOverride!.egresos_comisiones_servicios.reduce((sum, c) => sum + c.monto, 0)
+            : totalComisionesServicios,
+        egresos_comisiones_servicios_list: hasOverride
+            ? manualOverride!.egresos_comisiones_servicios
+            : commissionsSummary.filter(c => c.commissionServices > 0 || c.tips > 0).map(c => ({ nombre: c.name, monto: c.commissionServices + c.tips })),
+        egresos_comisiones_productos: hasOverride ? manualOverride!.egresos_comisiones_productos : totalComisionesProductos,
+        egresos_nomina: hasOverride ? manualOverride!.egresos_nomina : nominaTotal,
+        egresos_costos_fijos: hasOverride ? manualOverride!.egresos_costos_fijos : costosFijosTotal,
+    };
+    const display_totalEgresos = display.egresos_comisiones_servicios_total + display.egresos_comisiones_productos + display.egresos_nomina + display.egresos_costos_fijos;
+    const display_ingresosTotalesMes = display.servicios_ingreso + display.productos_ingreso;
+    const display_utilidadNetaTotal = display.servicios_utilidad + display.productos_utilidad;
+    const display_margen = display_ingresosTotalesMes > 0 ? (display_utilidadNetaTotal / display_ingresosTotalesMes * 100) : 0;
+
     const handleEditCommission = (admin: { id: string, name: string, type: 'fixed' | 'percentage' | 'none' | undefined, value: number | undefined }, type: 'service' | 'product') => {
         const commType = (admin.type === 'fixed' || admin.type === 'percentage') ? admin.type : 'fixed';
         const value = admin.value || 0;
@@ -571,9 +801,28 @@ export default function FinanzasMensualesPage() {
     return (
         <>
             <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-3xl font-bold tracking-tight">Resumen de {monthName.toLowerCase()}</h2>
-                    <Select value={String(selectedYear)} onValueChange={(val) => setSelectedYear(Number(val))}>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" onClick={goToPrevMonth} className="h-9 w-9">
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Select value={monthName.toLowerCase()} onValueChange={(val) => navigateToMonth(val)}>
+                            <SelectTrigger className="w-[160px] text-lg font-bold capitalize">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {monthLabels.map((m) => (
+                                    <SelectItem key={m.value} value={m.value}>
+                                        {m.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <Select value={String(selectedYear)} onValueChange={handleYearChange}>
                         <SelectTrigger className="w-[120px]">
                             <SelectValue placeholder="Año" />
                         </SelectTrigger>
@@ -585,6 +834,14 @@ export default function FinanzasMensualesPage() {
                             ))}
                         </SelectContent>
                     </Select>
+                    {hasOverride && (
+                        <Badge variant="outline" className="text-xs border-amber-500 text-amber-600 bg-amber-50">
+                            📋 Datos manuales
+                        </Badge>
+                    )}
+                    <Button variant="outline" size="sm" onClick={openOverrideModal}>
+                        <FileEdit className="h-4 w-4 mr-2" /> Editar datos
+                    </Button>
                 </div>
 
                 {/* KPI Cards */}
@@ -596,7 +853,7 @@ export default function FinanzasMensualesPage() {
                             <DollarSign className="h-4 w-4 text-white/80" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${(ingresoServiciosTotal + ventaProductos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <div className="text-2xl font-bold">${display_ingresosTotalesMes.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             <p className="text-xs text-white/70">Productos + Servicios</p>
                         </CardContent>
                     </Card>
@@ -608,7 +865,7 @@ export default function FinanzasMensualesPage() {
                             <TrendingUp className="h-4 w-4 text-white/80" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${(utilidadNeta + utilidadNetaProductos).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <div className="text-2xl font-bold">${display_utilidadNetaTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             <p className="text-xs text-white/70">Después de todos los gastos</p>
                         </CardContent>
                     </Card>
@@ -621,7 +878,7 @@ export default function FinanzasMensualesPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-slate-900">
-                                {((ingresoServiciosTotal + ventaProductos) > 0 ? ((utilidadNeta + utilidadNetaProductos) / (ingresoServiciosTotal + ventaProductos) * 100) : 0).toFixed(1)}%
+                                {display_margen.toFixed(1)}%
                             </div>
                             <p className="text-xs text-slate-700">Rendimiento mensual</p>
                         </CardContent>
@@ -638,17 +895,17 @@ export default function FinanzasMensualesPage() {
                                 <>
                                     <ResumenGeneralItem
                                         label="Ingreso total"
-                                        amount={ingresoServiciosTotal}
+                                        amount={display.servicios_ingreso}
                                         tooltipText="Total de ingresos provenientes exclusivamente de servicios."
                                     />
                                     <ResumenGeneralItem
                                         label="Egreso total"
-                                        amount={egresoTotal}
+                                        amount={display.servicios_egreso}
                                         tooltipText="Egreso total menos las comisiones de productos (solo gastos operativos y de servicios)."
                                     />
                                     <ResumenGeneralItem
                                         label="Subtotal de utilidad"
-                                        amount={subtotalUtilidad}
+                                        amount={display.servicios_subtotal}
                                         isBold
                                         tooltipText="Ingreso por servicios menos Egresos (sin considerar comisiones de productos)."
                                     />
@@ -676,7 +933,7 @@ export default function FinanzasMensualesPage() {
 
                                     <ResumenGeneralItem
                                         label="Utilidad neta"
-                                        amount={utilidadNeta}
+                                        amount={display.servicios_utilidad}
                                         isPrimary
                                         isBold
                                         className="text-xl"
@@ -693,21 +950,21 @@ export default function FinanzasMensualesPage() {
                         <CardContent className="space-y-1 text-sm">
                             <ResumenGeneralItem
                                 label="Ingreso total"
-                                amount={ventaProductos}
+                                amount={display.productos_ingreso}
                             />
                             <ResumenGeneralItem
                                 label="Reinversión"
-                                amount={-reinversion}
+                                amount={-display.productos_reinversion}
                                 className="text-muted-foreground"
                             />
                             <ResumenGeneralItem
                                 label="Comisión de profesionales"
-                                amount={-comisionProfesionales}
+                                amount={-display.productos_comision_prof}
                                 className="text-muted-foreground"
                             />
                             <ResumenGeneralItem
                                 label="Subtotal de utilidad"
-                                amount={utilidadVatosAlfa}
+                                amount={display.productos_subtotal}
                                 isBold
                             />
 
@@ -735,7 +992,7 @@ export default function FinanzasMensualesPage() {
 
                             <ResumenGeneralItem
                                 label="Utilidad neta"
-                                amount={utilidadNetaProductos}
+                                amount={display.productos_utilidad}
                                 isPrimary
                                 isBold
                                 className="text-xl pt-2 border-t mt-2"
@@ -753,31 +1010,23 @@ export default function FinanzasMensualesPage() {
                                         <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
                                             <span className="text-muted-foreground">Comisiones Servicios</span>
                                         </AccordionTrigger>
-                                        <span className="font-semibold mr-4">${totalComisionesServicios.toLocaleString('es-MX')}</span>
+                                        <span className="font-semibold mr-4">${display.egresos_comisiones_servicios_total.toLocaleString('es-MX')}</span>
                                     </div>
                                     <AccordionContent className="p-0">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow className="hover:bg-transparent">
-                                                    <TableHead className="w-[40%]">Profesional</TableHead>
-                                                    <TableHead className="text-right">Comisión</TableHead>
-                                                    <TableHead className="text-right">Propinas</TableHead>
-                                                    <TableHead className="text-right">Total</TableHead>
+                                                    <TableHead className="w-[60%]">Profesional</TableHead>
+                                                    <TableHead className="text-right">Monto</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {commissionsSummary.filter(c => c.commissionServices > 0 || c.tips > 0).map(({ name, commissionServices, tips, avatarUrl }) => (
-                                                    <TableRow key={name}>
-                                                        <TableCell className="font-medium flex items-center gap-2">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={avatarUrl} alt={name} />
-                                                                <AvatarFallback>{name.charAt(0)}</AvatarFallback>
-                                                            </Avatar>
-                                                            <span>{name}</span>
+                                                {display.egresos_comisiones_servicios_list.map((item) => (
+                                                    <TableRow key={item.nombre}>
+                                                        <TableCell className="font-medium">
+                                                            <span>{item.nombre}</span>
                                                         </TableCell>
-                                                        <TableCell className="text-right">${commissionServices.toLocaleString('es-MX')}</TableCell>
-                                                        <TableCell className="text-right">${tips.toLocaleString('es-MX')}</TableCell>
-                                                        <TableCell className="text-right font-bold text-primary">${(commissionServices + tips).toLocaleString('es-MX')}</TableCell>
+                                                        <TableCell className="text-right font-bold text-primary">${item.monto.toLocaleString('es-MX')}</TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
@@ -790,7 +1039,7 @@ export default function FinanzasMensualesPage() {
                                         <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
                                             <span className="text-muted-foreground">Comisiones Productos</span>
                                         </AccordionTrigger>
-                                        <span className="font-semibold mr-4">${totalComisionesProductos.toLocaleString('es-MX')}</span>
+                                        <span className="font-semibold mr-4">${display.egresos_comisiones_productos.toLocaleString('es-MX')}</span>
                                     </div>
                                     <AccordionContent className="p-0">
                                         <Table>
@@ -818,11 +1067,11 @@ export default function FinanzasMensualesPage() {
                                     </AccordionContent>
                                 </AccordionItem>
                             </Accordion>
-                            <ResumenEgresoItem label="Nómina" amount={nominaTotal} />
-                            <ResumenEgresoItem label="Costos fijos" amount={costosFijosTotal} />
+                            <ResumenEgresoItem label="Nómina" amount={display.egresos_nomina} />
+                            <ResumenEgresoItem label="Costos fijos" amount={display.egresos_costos_fijos} />
                             <div className="flex justify-between items-center text-lg pt-2 mt-2">
                                 <span className="font-bold text-primary">Total</span>
-                                <span className="font-extrabold text-primary text-lg">${totalResumenEgresos.toLocaleString('es-MX')}</span>
+                                <span className="font-extrabold text-primary text-lg">${display_totalEgresos.toLocaleString('es-MX')}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -1062,6 +1311,137 @@ export default function FinanzasMensualesPage() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsCommissionModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSaveCommission}>Guardar Ajuste</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Manual Override Dialog */}
+            <Dialog open={isOverrideModalOpen} onOpenChange={setIsOverrideModalOpen}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Editar datos financieros — {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {selectedYear}</DialogTitle>
+                        <DialogDescription>
+                            Ingresa los datos manuales para este mes. Los datos automáticos serán reemplazados.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 py-4">
+                        {/* Resumen de Servicios */}
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-sm text-primary border-b pb-1">Resumen de Servicios</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-xs">Ingreso total</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.servicios_ingreso} onChange={e => setOverrideForm(f => ({ ...f, servicios_ingreso: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Egreso total</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.servicios_egreso} onChange={e => setOverrideForm(f => ({ ...f, servicios_egreso: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Subtotal de utilidad</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.servicios_subtotal} onChange={e => setOverrideForm(f => ({ ...f, servicios_subtotal: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Comisión admin</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.servicios_comision_admin} onChange={e => setOverrideForm(f => ({ ...f, servicios_comision_admin: Number(e.target.value) }))} />
+                                </div>
+                                <div className="col-span-2">
+                                    <Label className="text-xs">Utilidad neta</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.servicios_utilidad} onChange={e => setOverrideForm(f => ({ ...f, servicios_utilidad: Number(e.target.value) }))} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Resumen de Productos */}
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-sm text-primary border-b pb-1">Resumen de Productos</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-xs">Ingreso total</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.productos_ingreso} onChange={e => setOverrideForm(f => ({ ...f, productos_ingreso: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Reinversión</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.productos_reinversion} onChange={e => setOverrideForm(f => ({ ...f, productos_reinversion: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Comisión profesionales</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.productos_comision_prof} onChange={e => setOverrideForm(f => ({ ...f, productos_comision_prof: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Subtotal utilidad</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.productos_subtotal} onChange={e => setOverrideForm(f => ({ ...f, productos_subtotal: Number(e.target.value) }))} />
+                                </div>
+                                <div className="col-span-2">
+                                    <Label className="text-xs">Utilidad neta</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.productos_utilidad} onChange={e => setOverrideForm(f => ({ ...f, productos_utilidad: Number(e.target.value) }))} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Egresos */}
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-sm text-primary border-b pb-1">Egresos</h4>
+
+                            <div>
+                                <Label className="text-xs font-medium">Comisiones Servicios (por profesional)</Label>
+                                <div className="space-y-2 mt-2">
+                                    {overrideForm.egresos_comisiones_servicios.map((item, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <Input
+                                                placeholder="Nombre"
+                                                value={item.nombre}
+                                                onChange={e => updateComisionServicio(index, 'nombre', e.target.value)}
+                                                className="flex-1"
+                                            />
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="Monto"
+                                                value={item.monto}
+                                                onChange={e => updateComisionServicio(index, 'monto', Number(e.target.value))}
+                                                className="w-32"
+                                            />
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeComisionServicio(index)}>
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    <Button variant="outline" size="sm" onClick={addComisionServicio}>
+                                        <PlusCircle className="h-4 w-4 mr-1" /> Agregar profesional
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <Label className="text-xs">Comisiones Productos</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.egresos_comisiones_productos} onChange={e => setOverrideForm(f => ({ ...f, egresos_comisiones_productos: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Nómina</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.egresos_nomina} onChange={e => setOverrideForm(f => ({ ...f, egresos_nomina: Number(e.target.value) }))} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">Costos fijos</Label>
+                                    <Input type="number" step="0.01" value={overrideForm.egresos_costos_fijos} onChange={e => setOverrideForm(f => ({ ...f, egresos_costos_fijos: Number(e.target.value) }))} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2">
+                        {hasOverride && (
+                            <Button variant="destructive" size="sm" onClick={handleDeleteOverride} className="mr-auto">
+                                <Trash2 className="h-4 w-4 mr-1" /> Restaurar datos automáticos
+                            </Button>
+                        )}
+                        <Button variant="outline" onClick={() => setIsOverrideModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSaveOverride} disabled={isSavingOverride}>
+                            {isSavingOverride ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                            Guardar datos
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -332,6 +332,7 @@ export interface AuthCode {
   reserves: boolean;
   cashbox: boolean;
   download: boolean;
+  invoiced_sales?: boolean;
 }
 
 export interface CashClosing {

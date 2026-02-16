@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney, roundMoney } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -88,13 +88,13 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   });
 
   const totalContado = useMemo(() => {
-    return denominations.reduce((total, d) => {
+    return roundMoney(denominations.reduce((total, d) => {
       const count = denominationCounts[d.value] || 0;
       return total + (count * d.value);
-    }, 0);
+    }, 0));
   }, [denominationCounts, denominations]);
 
-  const diferencia = totalContado - fondoBase - initialCash;
+  const diferencia = roundMoney(totalContado - fondoBase - initialCash);
 
   useEffect(() => {
     if (isOpen) {
@@ -179,7 +179,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-5xl max-h-[95vh] flex flex-col">
+        <DialogContent className="sm:max-w-5xl max-h-[90dvh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Realizar Corte de Caja</DialogTitle>
             <DialogDescription>
@@ -207,7 +207,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                                 onChange={(e) => handleDenominationChange(d.value, e.target.value)}
                                 className="h-8 text-center"
                               />
-                              <p className="font-medium text-sm text-center">= ${(d.value * (denominationCounts[d.value] || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                              <p className="font-medium text-sm text-center">= ${formatMoney(d.value * (denominationCounts[d.value] || 0))}</p>
                             </div>
                           ))}
                         </div>
@@ -232,7 +232,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                           <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
                         </div>
                       ) : (
-                        <p className="font-semibold text-lg">$ {fondoBase.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                        <p className="font-semibold text-lg">$ {formatMoney(fondoBase)}</p>
                       )}
                     </div>
                     <FormField
@@ -253,7 +253,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                       <Label>Efectivo en caja</Label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                        <Input value={initialCash} readOnly className="pl-6 bg-muted/20" type="number" />
+                        <Input value={formatMoney(initialCash)} readOnly className="pl-6 bg-muted/20" />
                       </div>
                     </div>
                     <FormField
@@ -295,7 +295,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                       <div className="p-4 bg-primary rounded-lg text-primary-foreground text-center shadow-md">
                         <p className="text-sm font-medium opacity-90 uppercase tracking-widest">Total entregado</p>
                         <p className="text-4xl font-extrabold mt-1">
-                          ${(totalContado - fondoBase).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          ${formatMoney(totalContado - fondoBase)}
                         </p>
                       </div>
                     </div>

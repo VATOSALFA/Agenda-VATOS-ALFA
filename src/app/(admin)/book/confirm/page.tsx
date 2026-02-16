@@ -245,7 +245,7 @@ function ConfirmPageContent() {
                                 </div>
                                 <div className="flex justify-between font-bold text-lg">
                                     <span>Total</span>
-                                    <span>${totalPrice.toLocaleString('es-MX')}</span>
+                                    <span>${totalPrice.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                             </div>
                             <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>

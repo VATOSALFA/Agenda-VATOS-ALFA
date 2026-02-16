@@ -13,13 +13,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos';
     const isAuthPage = pathname === '/login';
+    const isFullscreenPage = pathname === '/agenda/display';
 
     // If we are waiting for a redirect (not user, not auth page, not public), likely handled by AuthProvider's useEffect,
     // but we can doubly ensure we don't render protected content here.
     // However, AuthProvider usually returns null in this state.
 
     // If user is logged in and acts like an app user (not on a public landing page)
-    if (user && !isPublicPage && !isAuthPage) {
+    if (user && !isPublicPage && !isAuthPage && !isFullscreenPage) {
         return (
             <AppLayout>
                 {children}

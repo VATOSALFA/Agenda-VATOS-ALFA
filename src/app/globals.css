@@ -105,4 +105,26 @@
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+
+  /* Thin subtle scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-thin:hover {
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+  }
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+  }
 }

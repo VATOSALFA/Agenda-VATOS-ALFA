@@ -114,7 +114,7 @@ const saleSchema = (total: number) => z.object({
     }
     return true;
 }, {
-    message: `La suma debe ser exactamente $${total.toLocaleString('es-MX')}`,
+    message: `La suma debe ser exactamente $${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     path: ['pago_tarjeta'],
 });
 
@@ -185,7 +185,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                     <div key={item.uniqueId} className="flex items-start justify-between p-2 rounded-md hover:bg-muted/50">
                         <div className="flex-grow pr-2">
                             <p className="font-medium capitalize">{item.nombre}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-MX') || '0'}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{item.tipo} &middot; ${item.precio?.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0'}</p>
                             <div className="flex items-center gap-2 mt-2">
                                 <Button size="icon" variant="outline" className="h-6 w-6 rounded-full" onClick={() => updateQuantity(item.uniqueId, item.cantidad - 1)}><Minus className="h-3 w-3" /></Button>
                                 <span className="w-5 text-center font-bold">{item.cantidad}</span>
@@ -218,7 +218,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                             </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                            <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</p>
+                            <p className="font-semibold">${((item.precio || 0) * item.cantidad).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             <Button variant="ghost" size="icon" className="h-7 w-7 mt-1 text-destructive/70 hover:text-destructive" onClick={() => removeFromCart(item.uniqueId)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -231,11 +231,11 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
             <div className="p-4 border-t space-y-2 text-sm flex-shrink-0">
                 <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>${subtotal.toLocaleString('es-MX')}</span>
+                    <span>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-destructive">
                     <span>Descuento:</span>
-                    <span>-${totalDiscount.toLocaleString('es-MX')}</span>
+                    <span>-${totalDiscount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 {/* This is passed as a prop, but ResumenCarrito doesn't have access to the state 'anticipoPagado' directly unless passed. 
                     I need to add 'anticipoPagado' to the props of ResumenCarrito. 
@@ -244,12 +244,12 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                 {anticipoPagado > 0 && (
                     <div className="flex justify-between text-green-600 font-medium">
                         <span>Anticipo Pagado:</span>
-                        <span>-${anticipoPagado.toLocaleString('es-MX')}</span>
+                        <span>-${anticipoPagado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 )}
                 <div className="flex justify-between font-bold text-xl pt-2 border-t">
                     <span>Total:</span>
-                    <span className="text-primary">${total.toLocaleString('es-MX')}</span>
+                    <span className="text-primary">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
             </div>
         )}
@@ -316,7 +316,7 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
                                                     <Card className="cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
                                                         <CardContent className="p-3">
                                                             <p className="font-semibold text-sm leading-tight mb-1">{service.name}</p>
-                                                            <p className="text-xs text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                            <p className="text-xs text-primary font-medium">${(service.price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                         </CardContent>
                                                     </Card>
                                                 </DialogClose>
@@ -334,7 +334,7 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
                                                         <Card className="cursor-pointer hover:border-primary bg-blue-50/30 transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
                                                             <CardContent className="p-3">
                                                                 <p className="font-semibold text-sm leading-tight mb-1">{service.name}</p>
-                                                                <p className="text-xs text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                                <p className="text-xs text-primary font-medium">${(service.price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                             </CardContent>
                                                         </Card>
                                                     </DialogClose>
@@ -362,7 +362,7 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
                                             <Card className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                                 <CardContent className="p-3">
                                                     <p className="font-semibold text-sm">{product.nombre}</p>
-                                                    <p className="text-xs text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                    <p className="text-xs text-primary">${(product.public_price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                     <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                                 </CardContent>
                                             </Card>
@@ -1442,7 +1442,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                     <Card key={service.id} className="cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
                                                                         <CardContent className="p-4">
                                                                             <p className="font-semibold leading-tight mb-1">{service.name}</p>
-                                                                            <p className="text-sm text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                                            <p className="text-sm text-primary font-medium">${(service.price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                                         </CardContent>
                                                                     </Card>
                                                                 ))}
@@ -1458,7 +1458,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         <Card key={service.id} className="cursor-pointer hover:border-primary bg-blue-50/30 transition-all shadow-sm hover:shadow-md" onClick={() => addToCart(service, 'servicio')}>
                                                                             <CardContent className="p-4">
                                                                                 <p className="font-semibold leading-tight mb-1">{service.name}</p>
-                                                                                <p className="text-sm text-primary font-medium">${(service.price || 0).toLocaleString('es-MX')}</p>
+                                                                                <p className="text-sm text-primary font-medium">${(service.price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                                             </CardContent>
                                                                         </Card>
                                                                     ))}
@@ -1485,7 +1485,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             <Card key={product.id} className="cursor-pointer hover:border-primary transition-all" onClick={() => addToCart(product, 'producto')}>
                                                                 <CardContent className="p-4">
                                                                     <p className="font-semibold">{product.nombre}</p>
-                                                                    <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX')}</p>
+                                                                    <p className="text-sm text-primary">${(product.public_price || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                                     <p className="text-xs text-muted-foreground">{product.stock} en stock</p>
                                                                 </CardContent>
                                                             </Card>
@@ -1666,7 +1666,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         ) : (
                                                             <>
                                                                 <Send className="mr-2 h-4 w-4" />
-                                                                Cobrar ${total.toLocaleString('es-MX')} en Terminal
+                                                                Cobrar ${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en Terminal
                                                             </>
                                                         )}
                                                     </Button>
@@ -1758,7 +1758,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         </FormItem>
                                                         <div className="text-center">
                                                             <p className="text-xs text-muted-foreground">Cambio</p>
-                                                            <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - total).toLocaleString('es-MX')}</p>
+                                                            <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1802,11 +1802,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <div className="mt-4 space-y-1 text-sm">
                                                     <div className="flex justify-between">
                                                         <span className="text-muted-foreground">Total Ingresado:</span>
-                                                        <span className="font-medium">${combinedTotal.toLocaleString('es-MX')}</span>
+                                                        <span className="font-medium">${combinedTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     </div>
                                                     <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-primary" : "text-destructive")}>
                                                         <span>Faltante:</span>
-                                                        <span>${remainingAmount.toLocaleString('es-MX')}</span>
+                                                        <span>${remainingAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     </div>
                                                 </div>
                                                 <FormMessage className="mt-2 text-center text-xs">
@@ -1851,7 +1851,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         form.handleSubmit(onSubmit)(e);
                                     }}>
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Finalizar Venta por ${total.toLocaleString('es-MX')}
+                                        Finalizar Venta por ${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </Button>
                                 </SheetFooter>
                             </div>

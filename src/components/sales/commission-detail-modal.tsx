@@ -84,18 +84,18 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                     <TableCell className="font-medium">{detail.itemName}</TableCell>
                     <TableCell>{detail.clientName}</TableCell>
                     <TableCell className="capitalize">{detail.itemType}</TableCell>
-                    <TableCell className="text-right">${detail.saleAmount.toLocaleString('es-MX')}</TableCell>
+                    <TableCell className="text-right">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{detail.commissionPercentage.toFixed(2)}%</TableCell>
-                    <TableCell className="text-right font-semibold text-primary">${detail.commissionAmount.toLocaleString('es-MX')}</TableCell>
+                    <TableCell className="text-right font-semibold text-primary">${detail.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
               <TableFooter>
                 <TableRow>
                   <TableCell colSpan={3} className="text-right font-bold">Total</TableCell>
-                  <TableCell className="text-right font-bold">${summary.totalSales.toLocaleString('es-MX')}</TableCell>
+                  <TableCell className="text-right font-bold">${summary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   <TableCell colSpan={1}></TableCell>
-                  <TableCell className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-MX')}</TableCell>
+                  <TableCell className="text-right font-bold text-primary">${summary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

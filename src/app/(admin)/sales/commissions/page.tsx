@@ -274,8 +274,8 @@ export default function CommissionsPage() {
                             <Briefcase className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${serviceSummary.serviceSales.toLocaleString('es-MX')}</div>
-                            <p className="text-xs text-muted-foreground">Comisión: ${serviceSummary.serviceCommission.toLocaleString('es-MX')}</p>
+                            <div className="text-2xl font-bold">${serviceSummary.serviceSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <p className="text-xs text-muted-foreground">Comisión: ${serviceSummary.serviceCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                     </Card>
                     <Card>
@@ -284,8 +284,8 @@ export default function CommissionsPage() {
                             <ShoppingBag className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${productSummary.productSales.toLocaleString('es-MX')}</div>
-                            <p className="text-xs text-muted-foreground">Comisión: ${productSummary.productCommission.toLocaleString('es-MX')}</p>
+                            <div className="text-2xl font-bold">${productSummary.productSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <p className="text-xs text-muted-foreground">Comisión: ${productSummary.productCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                     </Card>
                     <Card>
@@ -294,8 +294,8 @@ export default function CommissionsPage() {
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${overallSummary.totalCommission.toLocaleString('es-MX')}</div>
-                            <p className="text-xs text-muted-foreground">Sobre un total de ${overallSummary.totalSales.toLocaleString('es-MX')} en ventas</p>
+                            <div className="text-2xl font-bold">${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <p className="text-xs text-muted-foreground">Sobre un total de ${overallSummary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en ventas</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -328,8 +328,8 @@ export default function CommissionsPage() {
                                     <TableRow key={row.professionalId}>
                                         <TableCell className="font-medium">{row.professionalName}</TableCell>
                                         <TableCell>{periodString}</TableCell>
-                                        <TableCell className="text-right">${row.totalSales.toLocaleString('es-MX')}</TableCell>
-                                        <TableCell className="text-right text-primary font-semibold">${row.totalCommission.toLocaleString('es-MX')}</TableCell>
+                                        <TableCell className="text-right">${row.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        <TableCell className="text-right text-primary font-semibold">${row.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="outline" size="sm" onClick={() => handleViewDetails(row)}>
                                                 <Eye className="mr-2 h-4 w-4" /> Ver detalles
@@ -342,8 +342,8 @@ export default function CommissionsPage() {
                                 <TableRow className="bg-muted/50">
                                     <TableHead className="text-right font-bold">Totales</TableHead>
                                     <TableHead></TableHead>
-                                    <TableHead className="text-right font-bold">${overallSummary.totalSales.toLocaleString('es-MX')}</TableHead>
-                                    <TableHead className="text-right font-bold text-primary">${overallSummary.totalCommission.toLocaleString('es-MX')}</TableHead>
+                                    <TableHead className="text-right font-bold">${overallSummary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableHead>
+                                    <TableHead className="text-right font-bold text-primary">${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableHead>
                                     <TableHead></TableHead>
                                 </TableRow>
                             </TableFooter>
@@ -355,11 +355,15 @@ export default function CommissionsPage() {
             {selectedProfessionalSummary && (
                 <CommissionDetailModal
                     isOpen={isDetailModalOpen}
-                    onOpenChange={setIsDetailModalOpen}
+                    onOpenChange={(open) => {
+                        setIsDetailModalOpen(open);
+                        if (!open) setSelectedProfessionalSummary(null);
+                    }}
                     summary={selectedProfessionalSummary}
                     dateRangeStr={dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yyyy", { locale: es })} - ${format(dateRange.to, "dd/MM/yyyy", { locale: es })}` : format(dateRange.from, "dd/MM/yyyy", { locale: es })) : "Periodo no definido"}
                 />
             )}
+
 
             <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
                 <AlertDialogContent>

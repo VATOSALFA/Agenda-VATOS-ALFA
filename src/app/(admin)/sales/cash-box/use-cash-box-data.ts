@@ -5,6 +5,7 @@ import { startOfDay, endOfDay } from "date-fns";
 import { where, Timestamp, type QueryConstraint } from 'firebase/firestore';
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Egreso, IngresoManual, Client, Profesional, Local } from "@/lib/types";
+import { roundMoney } from '@/lib/utils';
 
 export interface CashBoxFilters {
     dateRange: DateRange | undefined;
@@ -148,16 +149,16 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
 
 
     // 5. Calculate Totals
-    const ingresosManualesTotal = useMemo(() => ingresos.reduce((sum, i) => sum + i.monto, 0), [ingresos]);
+    const ingresosManualesTotal = useMemo(() => roundMoney(ingresos.reduce((sum, i) => sum + i.monto, 0)), [ingresos]);
 
-    const totalVentasFacturadas = useMemo(() => salesWithClientData.reduce((sum, sale) => {
+    const totalVentasFacturadas = useMemo(() => roundMoney(salesWithClientData.reduce((sum, sale) => {
         const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
             ? sale.monto_pagado_real
             : (sale.total || 0);
         return sum + amount;
-    }, 0), [salesWithClientData]);
+    }, 0)), [salesWithClientData]);
 
-    const totalEgresos = useMemo(() => egresos.reduce((sum, egreso) => sum + egreso.monto, 0), [egresos]);
+    const totalEgresos = useMemo(() => roundMoney(egresos.reduce((sum, egreso) => sum + egreso.monto, 0)), [egresos]);
 
     return {
         sales: salesWithClientData,
@@ -168,7 +169,7 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
             ventas: totalVentasFacturadas,
             ingresosManuales: ingresosManualesTotal,
             egresos: totalEgresos,
-            flujo: totalVentasFacturadas + ingresosManualesTotal - totalEgresos
+            flujo: roundMoney(totalVentasFacturadas + ingresosManualesTotal - totalEgresos)
         },
         maps: {
             client: clientMap,

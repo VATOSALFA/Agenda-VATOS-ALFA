@@ -85,21 +85,12 @@ const reportsNavLinks = [
   { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet, permission: 'ver_cierres_caja' },
 ];
 
+const monthNamesNav = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const getCurrentMonthName = () => monthNamesNav[new Date().getMonth()];
+
 const finanzasNavLinks = [
-  { href: '/finanzas/resumen', label: 'Resumen', permission: 'ver_finanzas' },
-  { isSeparator: true },
-  { href: '/finanzas/enero', label: 'Enero', permission: 'ver_finanzas' },
-  { href: '/finanzas/febrero', label: 'Febrero', permission: 'ver_finanzas' },
-  { href: '/finanzas/marzo', label: 'Marzo', permission: 'ver_finanzas' },
-  { href: '/finanzas/abril', label: 'Abril', permission: 'ver_finanzas' },
-  { href: '/finanzas/mayo', label: 'Mayo', permission: 'ver_finanzas' },
-  { href: '/finanzas/junio', label: 'Junio', permission: 'ver_finanzas' },
-  { href: '/finanzas/julio', label: 'Julio', permission: 'ver_finanzas' },
-  { href: '/finanzas/agosto', label: 'Agosto', permission: 'ver_finanzas' },
-  { href: '/finanzas/septiembre', label: 'Septiembre', permission: 'ver_finanzas' },
-  { href: '/finanzas/octubre', label: 'Octubre', permission: 'ver_finanzas' },
-  { href: '/finanzas/noviembre', label: 'Noviembre', permission: 'ver_finanzas' },
-  { href: '/finanzas/diciembre', label: 'Diciembre', permission: 'ver_finanzas' },
+  { href: '/finanzas/resumen', label: 'Resumen Anual', icon: LineChart, permission: 'ver_finanzas' },
+  { href: `/finanzas/${getCurrentMonthName()}`, label: 'Vista Mensual', icon: DollarSign, permission: 'ver_finanzas' },
 ];
 
 const adminNavLinks = [
@@ -373,20 +364,21 @@ export default function Header() {
                           </AccordionTrigger>
                           <AccordionContent>
                             <div className="flex flex-col space-y-1 pt-1">
-                              {finanzasNavLinks.map((item, index) => (
-                                !item.isSeparator && canSee(item.permission!) && (
+                              {finanzasNavLinks.map((item) => (
+                                canSee(item.permission!) && (
                                   <Link
                                     key={item.href}
                                     href={item.href!}
                                     onClick={handleLinkClick}
                                     className={cn(
                                       'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                      pathname === item.href
+                                      pathname === item.href || (item.label === 'Vista Mensual' && pathname.startsWith('/finanzas/') && pathname !== '/finanzas/resumen')
                                         ? 'bg-primary/10 text-primary'
                                         : 'text-foreground hover:bg-muted'
                                     )}
                                   >
-                                    <span className="ml-7">{item.label}</span>
+                                    {item.icon && <item.icon className="mr-3 h-4 w-4" />}
+                                    <span>{item.label}</span>
                                   </Link>
                                 )
                               ))}
@@ -431,8 +423,8 @@ export default function Header() {
             </Sheet>
           </div>
 
-          <Link href="/agenda" className="mr-6 flex items-center">
-            <div className="relative h-14 w-32 md:w-64">
+          <Link href="/agenda" className="mr-4 flex items-center flex-shrink-0">
+            <div className="relative h-14 w-32 md:w-40 lg:w-52">
               <Image
                 src="/logo-header-blanco.png"
                 alt="VATOS ALFA"
@@ -442,7 +434,7 @@ export default function Header() {
               />
             </div>
           </Link>
-          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-medium">
+          <nav className="hidden md:flex items-center min-w-0 flex-1 text-sm font-medium">
             {mainNavLinks.map(({ href, label, permission }) => {
               const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
               return (
@@ -451,7 +443,7 @@ export default function Header() {
                     key={href}
                     href={href}
                     className={cn(
-                      'px-3 py-2 rounded-md transition-colors',
+                      'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm whitespace-nowrap',
                       isActive
                         ? 'bg-secondary text-secondary-foreground'
                         : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -467,7 +459,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
                     pathname.startsWith('/sales')
                       ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -494,7 +486,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
                     pathname.startsWith('/products')
                       ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -521,7 +513,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
                     pathname.startsWith('/reports')
                       ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -548,7 +540,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
                     pathname.startsWith('/finanzas')
                       ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -557,17 +549,14 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
-                  {finanzasNavLinks.map((item, index) => (
-                    item.isSeparator ? (
-                      <DropdownMenuSeparator key={`sep-${index}`} />
-                    ) : (
-                      canSee(item.permission!) && (
-                        <DropdownMenuItem key={item.href} asChild>
-                          <Link href={item.href!}>
-                            <span>{item.label}</span>
-                          </Link>
-                        </DropdownMenuItem>
-                      )
+                  {finanzasNavLinks.map((item) => (
+                    canSee(item.permission!) && (
+                      <DropdownMenuItem key={item.href} asChild>
+                        <Link href={item.href!}>
+                          {item.icon && <item.icon className="mr-2 h-4 w-4" />}
+                          <span>{item.label}</span>
+                        </Link>
+                      </DropdownMenuItem>
                     )
                   ))}
                 </DropdownMenuContent>
@@ -578,7 +567,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
                     pathname.startsWith('/admin')
                       ? 'bg-secondary text-secondary-foreground'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -602,11 +591,11 @@ export default function Header() {
             )}
 
           </nav>
-          <div className="ml-auto flex items-center space-x-2">
+          <div className="ml-auto flex items-center space-x-1.5 flex-shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="secondary">
-                  <Plus className="mr-2 h-4 w-4" /> Nuevo
+                  Nuevo
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -629,7 +618,7 @@ export default function Header() {
               <PopoverTrigger asChild>
                 <Button variant="secondary" size="sm" className="hidden sm:flex">
                   <Globe className="mr-2 h-4 w-4" />
-                  Sitio web
+                  Web
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-4" align="end">

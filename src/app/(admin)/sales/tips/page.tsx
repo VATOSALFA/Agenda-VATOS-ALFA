@@ -275,14 +275,14 @@ export default function TipsPage() {
                                     <TableCell>{tip.localName}</TableCell>
                                     <TableCell>{tip.clientName}</TableCell>
                                     <TableCell>{tip.professionalName}</TableCell>
-                                    <TableCell className="text-right font-semibold text-secondary">+${tip.tip.toLocaleString('es-MX')}</TableCell>
+                                    <TableCell className="text-right font-semibold text-secondary">+${tip.tip.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                         <TableFooter>
                             <TableRow className="bg-muted/50">
                                 <TableHead colSpan={5} className="text-right font-bold text-lg">Total Propinas</TableHead>
-                                <TableHead className="text-right font-bold text-lg text-primary">${totalTips.toLocaleString('es-MX')}</TableHead>
+                                <TableHead className="text-right font-bold text-lg text-primary">${totalTips.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableHead>
                             </TableRow>
                         </TableFooter>
                     </Table>

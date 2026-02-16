@@ -81,7 +81,7 @@ const DonutChartCard = ({ title, data, total, dataLabels }: { title: string, dat
                                     backgroundColor: 'hsl(var(--background))',
                                     border: '1px solid hsl(var(--border))'
                                 }}
-                                formatter={(value: number) => `$${value.toLocaleString('es-MX')}`}
+                                formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                             />}
                         </RechartsPieChart>
                     </ResponsiveContainer>
@@ -546,10 +546,10 @@ export default function InvoicedSalesPage() {
                                     <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                     <TableCell>{sale.professionalNames}</TableCell>
                                     <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                    <TableCell>${(sale.total || 0).toLocaleString('es-MX')}</TableCell>
+                                    <TableCell>${(sale.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     <TableCell>
                                         {sale.descuento?.valor > 0 
-                                            ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-MX')}`)
+                                            ? (sale.descuento.tipo === 'percentage' ? `${sale.descuento.valor}%` : `$${sale.descuento.valor.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
                                             : '0.00%'
                                         }
                                     </TableCell>
@@ -596,7 +596,7 @@ export default function InvoicedSalesPage() {
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-right font-bold">Total</TableCell>
                                     <TableCell className="font-bold">
-                                        ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-MX')}
+                                        ${populatedSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </TableCell>
                                     <TableCell colSpan={2}></TableCell>
                                 </TableRow>

@@ -195,7 +195,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Cargar Clientes desde Excel o CSV</DialogTitle>
           <DialogDescription>

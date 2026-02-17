@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where, orderBy, limit, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { startOfDay } from "date-fns";
 import type { Sale, Egreso, IngresoManual, CashClosing } from '@/lib/types';
 import { roundMoney } from '@/lib/utils';
 
@@ -42,32 +43,41 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
     }, [lastCut]);
 
     // 2. Fetch Live Data (Transactions SINCE last cut)
+    // We use a safe query (StartOfDay) to ensure we fetch all relevant docs even if timestamp index is slightly off slightly,
+    // then filter strictly in memory.
     const liveQueryKey = `live-${selectedLocalId}-${liveStartDate.getTime()}-${queryKey}`;
 
     const { data: liveSales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${liveQueryKey}`, ...useMemo(() => {
         const c: QueryConstraint[] = [];
         if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
-        c.push(where('fecha_hora_venta', '>', Timestamp.fromDate(liveStartDate)));
+        // Safe fetch: Get everything from the start of the day of the last cut
+        c.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(liveStartDate))));
         return c;
-    }, [selectedLocalId, liveStartDate]));
+    }, [selectedLocalId, liveStartDate, queryKey]));
 
     const { data: liveIngresos, loading: ingresosLoading } = useFirestoreQuery<IngresoManual>('ingresos_manuales', `ingresos-${liveQueryKey}`, ...useMemo(() => {
         const c: QueryConstraint[] = [];
         if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
-        c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
+        c.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(liveStartDate))));
         return c;
-    }, [selectedLocalId, liveStartDate]));
+    }, [selectedLocalId, liveStartDate, queryKey]));
 
     const { data: liveEgresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-${liveQueryKey}`, ...useMemo(() => {
         const c: QueryConstraint[] = [];
         if (selectedLocalId !== 'todos') c.push(where('local_id', '==', selectedLocalId));
-        c.push(where('fecha', '>', Timestamp.fromDate(liveStartDate)));
+        c.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(liveStartDate))));
         return c;
-    }, [selectedLocalId, liveStartDate]));
+    }, [selectedLocalId, liveStartDate, queryKey]));
 
     // 3. Calculate Live Cash
     const liveCashInBox = useMemo(() => {
+        const isAfterCut = (date: Date | Timestamp) => {
+            const d = date instanceof Timestamp ? date.toDate() : date;
+            return d > liveStartDate;
+        };
+
         const salesCash = liveSales
+            .filter(s => isAfterCut(s.fecha_hora_venta))
             .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
             .reduce((sum, sale) => {
                 if (sale.metodo_pago === 'efectivo') {
@@ -79,11 +89,16 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
                 return sum + (sale.detalle_pago_combinado?.efectivo || 0);
             }, 0);
 
-        const ingresosCash = liveIngresos.reduce((sum, i) => sum + i.monto, 0);
-        const egresosCash = liveEgresos.reduce((sum, e) => sum + e.monto, 0);
+        const ingresosCash = liveIngresos
+            .filter(i => isAfterCut(i.fecha))
+            .reduce((sum, i) => sum + i.monto, 0);
+
+        const egresosCash = liveEgresos
+            .filter(e => isAfterCut(e.fecha))
+            .reduce((sum, e) => sum + e.monto, 0);
 
         return roundMoney(baseCash + salesCash + ingresosCash - egresosCash);
-    }, [baseCash, liveSales, liveIngresos, liveEgresos]);
+    }, [baseCash, liveSales, liveIngresos, liveEgresos, liveStartDate]);
 
     return {
         liveCashInBox,

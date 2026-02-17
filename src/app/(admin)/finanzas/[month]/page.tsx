@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle, TrendingUp, DollarSign, FileEdit, X } from 'lucide-react';
+import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle, TrendingUp, DollarSign, FileEdit, X, ArrowUpDown } from 'lucide-react';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -219,6 +219,8 @@ export default function FinanzasMensualesPage() {
     const [egresosPerPage, setEgresosPerPage] = useState(10);
     const [incomesPage, setIncomesPage] = useState(1);
     const [incomesPerPage, setIncomesPerPage] = useState(10);
+    const [sortIngresosAsc, setSortIngresosAsc] = useState(true);
+    const [sortEgresosAsc, setSortEgresosAsc] = useState(true);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -251,8 +253,10 @@ export default function FinanzasMensualesPage() {
             return acc;
         }, {} as Record<string, { fecha: string; efectivo: number; deposito: number; total: number }>);
 
-        return Object.values(groupedByDay).sort((a, b) => a.fecha.localeCompare(b.fecha));
-    }, [sales]);
+        return Object.values(groupedByDay).sort((a, b) =>
+            sortIngresosAsc ? a.fecha.localeCompare(b.fecha) : b.fecha.localeCompare(a.fecha)
+        );
+    }, [sales, sortIngresosAsc]);
 
     // --- Manual Override State ---
     interface ManualOverrideData {
@@ -411,10 +415,12 @@ export default function FinanzasMensualesPage() {
         return manualEgresos.sort((a, b) => {
             const dateA = a.fecha instanceof Date ? a.fecha : new Date();
             const dateB = b.fecha instanceof Date ? b.fecha : new Date();
-            return dateA.getTime() - dateB.getTime();
+            return sortEgresosAsc
+                ? dateA.getTime() - dateB.getTime()
+                : dateB.getTime() - dateA.getTime();
         });
 
-    }, [egresos, egresosLoading]);
+    }, [egresos, egresosLoading, sortEgresosAsc]);
     // ---------------------------------
 
 
@@ -1084,7 +1090,18 @@ export default function FinanzasMensualesPage() {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Efectivo</TableHead><TableHead>Depósito</TableHead><TableHead>Total venta</TableHead></TableRow></TableHeader>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => setSortIngresosAsc(!sortIngresosAsc)}>
+                                                Fecha <ArrowUpDown className="h-4 w-4" />
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>Efectivo</TableHead>
+                                        <TableHead>Depósito</TableHead>
+                                        <TableHead>Total venta</TableHead>
+                                    </TableRow>
+                                </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
                                         <TableRow>
@@ -1167,7 +1184,20 @@ export default function FinanzasMensualesPage() {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead>A quién se entrega</TableHead><TableHead>Monto</TableHead><TableHead>Comentarios</TableHead><TableHead className="text-right">Opciones</TableHead></TableRow></TableHeader>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => setSortEgresosAsc(!sortEgresosAsc)}>
+                                                Fecha <ArrowUpDown className="h-4 w-4" />
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>Concepto</TableHead>
+                                        <TableHead>A quién se entrega</TableHead>
+                                        <TableHead>Monto</TableHead>
+                                        <TableHead>Comentarios</TableHead>
+                                        <TableHead className="text-right">Opciones</TableHead>
+                                    </TableRow>
+                                </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
                                         <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>

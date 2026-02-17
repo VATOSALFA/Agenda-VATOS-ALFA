@@ -898,7 +898,7 @@ export default function CashBoxPage() {
                 onFormSubmit={() => {
                     setIsEgresoModalOpen(false)
                     setEditingEgreso(null);
-                    handleSearch()
+                    setTimeout(() => handleSearch(), 500);
                 }}
                 egreso={editingEgreso}
             />
@@ -911,7 +911,7 @@ export default function CashBoxPage() {
                 onFormSubmit={() => {
                     setIsIngresoModalOpen(false)
                     setEditingIngreso(null);
-                    handleSearch()
+                    setTimeout(() => handleSearch(), 500);
                 }}
                 ingreso={editingIngreso}
                 localId={selectedLocalId}

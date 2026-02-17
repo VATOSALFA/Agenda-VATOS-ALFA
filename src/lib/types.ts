@@ -426,6 +426,11 @@ export interface CommissionRowData {
   saleAmount: number;
   commissionAmount: number;
   commissionPercentage: number;
+  discountDetails?: {
+    value: number;
+    type: 'fixed' | 'percentage';
+    amount: number;
+  };
 }
 
 export interface ProfessionalCommissionSummary {

@@ -29,6 +29,7 @@ import { ImageUploader } from '../shared/image-uploader';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { useLocal } from '@/contexts/local-context';
 
 const requiredNumberSchema = z.coerce.string().min(1, 'Este campo es requerido.').pipe(z.coerce.number({ invalid_type_error: 'Debe ser un número válido.' }).min(0, 'Debe ser un número positivo.'));
 
@@ -66,7 +67,8 @@ interface NewProductModalProps {
 
 export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewProductModalProps) {
   const { toast } = useToast();
-  const { db } = useAuth();
+  const { db, user } = useAuth(); // Get user for audit
+  const { selectedLocalId } = useLocal(); // Get active local for context
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -93,6 +95,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
   const { data: categories } = useFirestoreQuery<ProductCategory>('categorias_productos', queryKey);
   const { data: brands } = useFirestoreQuery<ProductBrand>('marcas_productos', queryKey);
   const { data: presentations } = useFirestoreQuery<ProductPresentation>('formatos_productos', queryKey);
+  const { data: locales } = useFirestoreQuery<any>('locales', queryKey);
 
   const form = useForm<NewProductFormData>({
     resolver: zodResolver(newProductSchema),
@@ -175,6 +178,45 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       };
 
       if (product) {
+        // Stock Movement Tracking Logic
+        const oldStock = product.stock || 0;
+        const newStock = Number(restOfData.stock);
+
+        if (oldStock !== newStock) {
+          const activeLocalId = selectedLocalId || 'unknown_local';
+
+          // Find local name
+          let localName = 'Local no especificado';
+          if (selectedLocalId) {
+            const foundLocal = locales?.find((l: any) => l.id === selectedLocalId);
+            if (foundLocal) localName = foundLocal.name;
+          } else if (activeLocalId === 'unknown_local') {
+            localName = 'Inventario Global / Admin';
+          }
+
+          try {
+            await addDoc(collection(db, 'movimientos_inventario'), {
+              date: Timestamp.now(),
+              local_id: activeLocalId,
+              product_id: product.id,
+              presentation_id: product.presentation_id || 'default',
+              from: oldStock,
+              to: newStock,
+              cause: 'Manual Adjustment (Edit)',
+              staff_id: user?.uid || 'unknown',
+              staff_name: user?.displayName || user?.email || 'Desconocido',
+              comment: 'Ajuste realizado desde "Editar Producto"',
+              product_name: product.nombre,
+              local_name: localName,
+              concepto: 'Cambio de stock - Edición',
+            });
+            console.log("Stock movement recorded with local:", localName);
+          } catch (err) {
+            console.error("Failed to record stock movement:", err);
+            // Non-blocking error
+          }
+        }
+
         const productRef = doc(db, 'productos', product.id);
         await updateDoc(productRef, dataToSave as any);
         toast({ title: "Producto actualizado con éxito" });

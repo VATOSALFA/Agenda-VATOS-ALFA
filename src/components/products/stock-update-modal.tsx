@@ -11,6 +11,7 @@ import { db } from '@/firebase';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useLocal } from '@/contexts/local-context';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +48,7 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
   const { toast } = useToast();
   const { user } = useAuth();
   const { selectedLocalId } = useLocal();
+  const { data: locales } = useFirestoreQuery<any>('locales');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<StockUpdateFormData>({
@@ -114,11 +116,20 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
         comment: data.comment || '',
       };
 
+
+      let localName = 'Local no especificado';
+      if (selectedLocalId) {
+        const foundLocal = locales?.find((l: any) => l.id === selectedLocalId);
+        if (foundLocal) localName = foundLocal.name;
+      } else if (activeLocalId === 'unknown_local') {
+        localName = 'Inventario Global / Admin';
+      }
+
       await addDoc(collection(db, 'movimientos_inventario'), {
         ...movement,
         product_name: product.nombre,
         staff_name: user?.displayName || user?.email || 'Desconocido',
-        local_name: activeLocalId, // Fallback to ID
+        local_name: localName,
         concepto: 'Cambio de stock',
       });
 

@@ -81,7 +81,14 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                   <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t">
                     <div>
                       <span className="text-muted-foreground block">Venta</span>
-                      <div className="font-medium">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="font-medium flex items-center gap-1">
+                        ${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {detail.discountDetails && (
+                          <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full whitespace-nowrap font-medium border border-blue-200">
+                            {detail.discountDetails.type === 'percentage' ? `${detail.discountDetails.value}%` : `$${detail.discountDetails.value}`} dcto
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <span className="text-muted-foreground block">Comisión ({detail.commissionPercentage.toFixed(0)}%)</span>
@@ -129,7 +136,16 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                         {detail.itemType}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end justify-center">
+                        <span>${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        {detail.discountDetails && (
+                          <span className="text-[10px] text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full mt-1 whitespace-nowrap border border-blue-100">
+                            {detail.discountDetails.type === 'percentage' ? `${detail.discountDetails.value}%` : `$${detail.discountDetails.value}`} dcto
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{detail.commissionPercentage.toFixed(2)}%</TableCell>
                     <TableCell className="text-right font-semibold text-primary">${detail.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   </TableRow>

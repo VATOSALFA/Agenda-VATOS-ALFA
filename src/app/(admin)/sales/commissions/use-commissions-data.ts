@@ -102,7 +102,12 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
 
                 const itemPrice = item.subtotal || item.precio || 0;
                 const itemDiscount = item.descuento?.monto || 0;
-                const finalItemPrice = discountsAffectCommissions ? (itemPrice - itemDiscount) : itemPrice;
+
+                // 1. Real money collected (what should be shown in "Venta")
+                const realSaleAmount = itemPrice - itemDiscount;
+
+                // 2. Base for commission calculation (depends on setting)
+                const commissionBaseAmount = discountsAffectCommissions ? realSaleAmount : itemPrice;
 
                 let commissionConfig = null;
                 let itemName = item.nombre;
@@ -122,7 +127,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
 
                 if (commissionConfig) {
                     const commissionAmount = commissionConfig.type === '%'
-                        ? finalItemPrice * (commissionConfig.value / 100)
+                        ? commissionBaseAmount * (commissionConfig.value / 100)
                         : commissionConfig.value;
 
                     commissionRows.push({
@@ -131,9 +136,14 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                         clientName: clientName,
                         itemName: itemName,
                         itemType: item.tipo,
-                        saleAmount: finalItemPrice,
+                        saleAmount: realSaleAmount,
                         commissionAmount: commissionAmount,
-                        commissionPercentage: commissionConfig.type === '%' ? commissionConfig.value : (finalItemPrice > 0 ? (commissionAmount / finalItemPrice) * 100 : 0)
+                        commissionPercentage: commissionConfig.type === '%' ? commissionConfig.value : (realSaleAmount > 0 ? (commissionAmount / realSaleAmount) * 100 : 0),
+                        discountDetails: (item.descuento && itemDiscount > 0) ? {
+                            value: item.descuento.valor,
+                            type: item.descuento.tipo,
+                            amount: item.descuento.monto
+                        } : undefined
                     });
                 }
             });

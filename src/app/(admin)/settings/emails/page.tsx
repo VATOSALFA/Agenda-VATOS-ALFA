@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import { Loader2, PlusCircle, Trash2, Edit, MoreHorizontal, CheckCircle, Mail, Cake, ChevronDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AddSenderModal } from '@/components/settings/emails/add-sender-modal';
 import { EmailPreview } from '@/components/settings/emails/email-preview';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -865,11 +866,28 @@ export default function EmailsSettingsPage() {
                                             <div className="space-y-2 p-4 border rounded-lg bg-card/50">
                                                 <Label htmlFor="dailySummaryTime">Hora de envío automático</Label>
                                                 <div className="flex items-center gap-2">
-                                                    <Input
-                                                        id="dailySummaryTime"
-                                                        type="time"
-                                                        {...form.register('dailySummaryTime')}
-                                                        className="w-32"
+                                                    <Controller
+                                                        control={form.control}
+                                                        name="dailySummaryTime"
+                                                        render={({ field }) => (
+                                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                                <SelectTrigger className="w-[180px]">
+                                                                    <SelectValue placeholder="Selecciona hora" />
+                                                                </SelectTrigger>
+                                                                <SelectContent className="max-h-[300px]">
+                                                                    {Array.from({ length: 48 }).map((_, i) => {
+                                                                        const hour = Math.floor(i / 2);
+                                                                        const minute = i % 2 === 0 ? '00' : '30';
+                                                                        const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
+                                                                        return (
+                                                                            <SelectItem key={timeString} value={timeString}>
+                                                                                {timeString}
+                                                                            </SelectItem>
+                                                                        );
+                                                                    })}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
                                                     />
                                                     <span className="text-sm text-muted-foreground">hora local.</span>
                                                 </div>

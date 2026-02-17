@@ -47,7 +47,10 @@ export default function CommissionsPage() {
 
 
     const { toast } = useToast();
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: new Date(),
+        to: new Date()
+    });
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
 
@@ -77,7 +80,10 @@ export default function CommissionsPage() {
         local: string;
         professional: string;
     }>({
-        dateRange: undefined,
+        dateRange: {
+            from: new Date(),
+            to: new Date()
+        },
         local: 'todos',
         professional: 'todos'
     });

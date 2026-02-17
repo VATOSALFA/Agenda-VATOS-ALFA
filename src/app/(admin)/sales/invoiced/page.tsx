@@ -591,7 +591,7 @@ export default function InvoicedSalesPage() {
                                     paginatedSales.map((sale) => (
                                         <TableRow key={sale.id}>
                                             <TableCell>{formatDate(sale.fecha_hora_venta)}</TableCell>
-                                            <TableCell>{sale.client?.nombre || 'Desconocido'}</TableCell>
+                                            <TableCell>{sale.client?.nombre ? `${sale.client.nombre} ${sale.client.apellido || ''}`.trim() : 'Desconocido'}</TableCell>
                                             <TableCell className="capitalize">{getSaleConcept(sale)}</TableCell>
                                             <TableCell>{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                             <TableCell>{sale.professionalNames}</TableCell>

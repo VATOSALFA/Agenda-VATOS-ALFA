@@ -1550,12 +1550,27 @@ exports.sendDailyAgendaSummary = onSchedule({
   }
 
   // 3. Check Target Time
-  const targetTimeStr = config.time || "08:00";
-  const [targetH, targetM] = targetTimeStr.split(':').map(Number);
+  let targetTimeStr = (config.time || "08:00").toString().trim();
+
+  // Cleanup basic formatting issues just in case
+  // If user somehow saved "9:00" instead of "09:00", split works.
+  // If saved "09:00 PM", we want to be careful.
+
+  let [targetH, targetM] = targetTimeStr.split(':').map(Number);
+
+  // Validation Check
+  if (isNaN(targetH) || isNaN(targetM)) {
+    console.warn(`[DailySummary] WARNING: Invalid time format in config: "${targetTimeStr}". Fallback to 08:00.`);
+    targetH = 8;
+    targetM = 0;
+  }
+
   const targetTimeVal = targetH * 60 + targetM;
 
+  console.log(`[DailySummary] Time Check: Current Mexico Time: ${hour}:${minute} (${currentTimeVal} min). Target Config: ${targetTimeStr} (${targetTimeVal} min).`);
+
   if (currentTimeVal < targetTimeVal) {
-    console.log(`[DailySummary] Too early. Current: ${hour}:${minute} (${currentTimeVal}), Target: ${targetTimeStr} (${targetTimeVal}). Waiting.`);
+    console.log(`[DailySummary] Too early. Waiting for ${targetH}:${String(targetM).padStart(2, '0')}.`);
     return;
   }
 

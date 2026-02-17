@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -166,8 +165,10 @@ const FiltersSidebar = ({
           </div>
         </div>
         <div className="space-y-2 pt-4 border-t">
-          <Button className="w-full" onClick={onApply}>Buscar</Button>
-          <Button variant="ghost" className="w-full" onClick={onReset}>Restablecer</Button>
+          <Button className="w-full" onClick={onApply} disabled={isLoading}>
+            {isLoading ? "Cargando..." : "Buscar"}
+          </Button>
+          <Button variant="ghost" className="w-full" onClick={onReset} disabled={isLoading}>Restablecer</Button>
         </div>
       </div>
       <div className="mt-auto pt-6 flex justify-center pb-4">
@@ -239,10 +240,13 @@ export default function ClientsPage() {
 
   const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${queryKey}`, ...historyQueryConstraints);
 
-  const { data: allReservations, loading: allReservationsLoading } = useFirestoreQuery<Reservation>('reservas');
-  const { data: allSales, loading: allSalesLoading } = useFirestoreQuery<Sale>('ventas');
+  // LAZY LOAD STATE: Store history only when needed
+  const [historicalSales, setHistoricalSales] = useState<Sale[]>([]);
+  const [historicalReservations, setHistoricalReservations] = useState<Reservation[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
 
-  const isLoading = clientsLoading || localesLoading || salesLoading || professionalsLoading;
+  const isLoading = clientsLoading || localesLoading || professionalsLoading || isHistoryLoading;
 
   const canViewPhone = useMemo(() => {
     if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
@@ -256,7 +260,44 @@ export default function ClientsPage() {
     }
   }, [user]);
 
-  const handleApplyFilters = () => {
+  const handleApplyFilters = async () => {
+    if (!db) return;
+
+    // Check if we need historical data for the selected filters
+    const needsHistory =
+      inactiveTimeFilter !== 'todos' ||
+      professionalFilter !== 'todos' ||
+      localFilter !== 'todos' ||
+      dateRange !== undefined;
+
+    if (needsHistory && !hasLoadedHistory) {
+      setIsHistoryLoading(true);
+      toast({ title: "Cargando historial...", description: "Obteniendo datos para filtros avanzados." });
+
+      try {
+        const [salesSnap, reservationsSnap] = await Promise.all([
+          getDocs(collection(db, 'ventas')),
+          getDocs(collection(db, 'reservas'))
+        ]);
+
+        const salesData = salesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
+        const reservationsData = reservationsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+
+        setHistoricalSales(salesData);
+        setHistoricalReservations(reservationsData);
+        setHasLoadedHistory(true);
+      } catch (error) {
+        console.error("Error loading history for filters:", error);
+        toast({
+          variant: "destructive",
+          title: "Error al cargar filtros",
+          description: "No se pudo obtener el historial completo."
+        });
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    }
+
     setActiveFilters({
       dateRange,
       local: localFilter,
@@ -265,7 +306,6 @@ export default function ClientsPage() {
       inactiveTime: inactiveTimeFilter
     });
     setCurrentPage(1);
-    setQueryKey(prev => prev + 1);
     toast({ title: "Filtros aplicados" });
   };
 
@@ -304,66 +344,65 @@ export default function ClientsPage() {
         const monthsInactive = parseInt(activeFilters.inactiveTime, 10);
         const thresholdDate = subMonths(new Date(), monthsInactive);
 
-        filtered = filtered.filter(client => {
-          // Find last visit date
-          let lastVisit: Date | null = null;
+        if (hasLoadedHistory) {
+          filtered = filtered.filter(client => {
+            let lastVisit: Date | null = null;
 
-          // Checks sales
-          allSales.forEach(s => {
-            if (s.cliente_id !== client.id) return;
-            let saleDate: Date | null = null;
-            if (s.fecha_hora_venta instanceof Timestamp) {
-              saleDate = s.fecha_hora_venta.toDate();
-            } else if (typeof s.fecha_hora_venta === 'string') {
-              saleDate = parseISO(s.fecha_hora_venta);
-            } else if (s.fecha_hora_venta && typeof (s.fecha_hora_venta as any).toDate === 'function') {
-              // Defensive check
-              saleDate = (s.fecha_hora_venta as any).toDate();
-            }
+            historicalSales.forEach(s => {
+              if (s.cliente_id !== client.id) return;
+              let saleDate: Date | null = null;
+              if (s.fecha_hora_venta instanceof Timestamp) {
+                saleDate = s.fecha_hora_venta.toDate();
+              } else if (typeof s.fecha_hora_venta === 'string') {
+                saleDate = parseISO(s.fecha_hora_venta);
+              } else if (s.fecha_hora_venta && typeof (s.fecha_hora_venta as any).toDate === 'function') {
+                saleDate = (s.fecha_hora_venta as any).toDate();
+              }
 
-            if (saleDate && (!lastVisit || saleDate > lastVisit)) {
-              lastVisit = saleDate;
+              if (saleDate && (!lastVisit || saleDate > lastVisit)) {
+                lastVisit = saleDate;
+              }
+            });
+
+            historicalReservations.forEach(r => {
+              if (r.cliente_id !== client.id) return;
+              if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
+
+              const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : null;
+              if (resDate && (!lastVisit || resDate > lastVisit)) {
+                lastVisit = resDate;
+              }
+            });
+
+            if (lastVisit) {
+              return (lastVisit as Date) < thresholdDate;
+            } else {
+              let createdDate: Date = new Date();
+              if (client.creado_en instanceof Timestamp) {
+                createdDate = client.creado_en.toDate();
+              } else if ((client.creado_en as any)?.seconds) {
+                createdDate = new Date((client.creado_en as any).seconds * 1000);
+              }
+              return createdDate < thresholdDate;
             }
           });
-
-          // Check reservations (attended or paid)
-          allReservations.forEach(r => {
-            if (r.cliente_id !== client.id) return;
-            if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
-
-            const resDate = parseISO(r.fecha);
-            if (resDate && (!lastVisit || resDate > lastVisit)) {
-              lastVisit = resDate;
-            }
-          });
-
-          if (lastVisit) {
-            return (lastVisit as Date) < thresholdDate;
-          } else {
-            // Determine creation date safely
-            let createdDate: Date = new Date();
-            if (client.creado_en instanceof Timestamp) {
-              createdDate = client.creado_en.toDate();
-            } else if ((client.creado_en as any)?.seconds) {
-              createdDate = new Date((client.creado_en as any).seconds * 1000);
-            }
-            return createdDate < thresholdDate;
-          }
-        });
+        }
       }
 
-
-      if (activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.dateRange) {
+      if ((activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.dateRange) && (sales.length > 0 || hasLoadedHistory)) {
         const clientIdsFromHistory = new Set<string>();
         let hasHistoryFilter = false;
 
-        const salesToCheck = sales;
+        // Use historicalSales if loaded, otherwise maybe sales? 
+        // But for consistency let's rely on historicalSales when strict filtering is needed.
+        const salesToCheck = hasLoadedHistory ? historicalSales : sales;
+
         salesToCheck.forEach(s => {
           if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
 
           let matchesProfessional = true;
           if (activeFilters.professional !== 'todos') {
-            matchesProfessional = s.items.some(item => item.barbero_id === activeFilters.professional);
+            matchesProfessional = s.items?.some(item => item.barbero_id === activeFilters.professional);
           }
 
           if (matchesProfessional) {
@@ -372,13 +411,14 @@ export default function ClientsPage() {
           }
         });
 
-        if (activeFilters.professional !== 'todos') {
-          allReservations.forEach(r => {
+        if (activeFilters.professional !== 'todos' && hasLoadedHistory) {
+          historicalReservations.forEach(r => {
             if (r.estado === 'Cancelado') return;
             if (activeFilters.local !== 'todos' && r.local_id !== activeFilters.local) return;
             if (activeFilters.dateRange) {
-              const resDate = parseISO(r.fecha);
-              if (resDate < activeFilters.dateRange.from! || (activeFilters.dateRange.to && resDate > activeFilters.dateRange.to)) return;
+              const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : new Date();
+              if (activeFilters.dateRange.from && resDate < activeFilters.dateRange.from) return;
+              if (activeFilters.dateRange.to && resDate > activeFilters.dateRange.to) return;
             }
 
             const matchesProf = r.items?.some(i => i.barbero_id === activeFilters.professional) || r.barbero_id === activeFilters.professional;
@@ -393,7 +433,7 @@ export default function ClientsPage() {
           filtered = filtered.filter(c => clientIdsFromHistory.has(c.id));
         } else if (activeFilters.dateRange && hasHistoryFilter) {
           const dateFilteredIds = new Set<string>();
-          sales.forEach(s => {
+          salesToCheck.forEach(s => {
             if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
             dateFilteredIds.add(s.cliente_id);
           });
@@ -430,7 +470,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, searchTerm, activeFilters, allSales, allReservations]);
+  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory]);
 
   const getDateValue = (date: any): number => {
     if (!date) return 0;
@@ -479,7 +519,6 @@ export default function ClientsPage() {
       if (sortDirection === 'asc') {
         setSortDirection('desc');
       } else {
-        // Third click: remove sort
         setSortField(null);
         setSortDirection('asc');
       }
@@ -560,7 +599,7 @@ export default function ClientsPage() {
     return format(dateObj, formatString, { locale: es });
   };
 
-  const triggerDownload = () => {
+  const triggerDownload = async () => {
     if (filteredClients.length === 0) {
       toast({
         title: "No hay datos para exportar",
@@ -570,17 +609,37 @@ export default function ClientsPage() {
       return;
     }
 
-    if (allReservationsLoading || allSalesLoading) {
-      toast({
-        title: "Cargando datos...",
-        description: "El historial completo se está cargando, por favor inténtalo de nuevo en unos momentos.",
-      });
-      return;
+    toast({
+      title: "Generando reporte...",
+      description: "Esto puede tardar unos segundos.",
+    });
+
+    // Ensure history is loaded for accurate report (total spent, visits)
+    let salesForReport = historicalSales;
+    let reservationsForReport = historicalReservations;
+
+    if (!hasLoadedHistory && db) {
+      toast({ title: "Cargando historial completo...", description: "Necesario para el reporte." });
+      try {
+        const [salesSnap, reservationsSnap] = await Promise.all([
+          getDocs(collection(db, 'ventas')),
+          getDocs(collection(db, 'reservas'))
+        ]);
+        salesForReport = salesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
+        reservationsForReport = reservationsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+
+        setHistoricalSales(salesForReport);
+        setHistoricalReservations(reservationsForReport);
+        setHasLoadedHistory(true);
+      } catch (e) {
+        console.error("Error fetching for export", e);
+        toast({ variant: "destructive", title: "Error en reporte", description: "No se pudieron cargar todos los datos." })
+      }
     }
 
     const dataForExcel = filteredClients.map(client => {
-      const clientReservations = allReservations.filter(r => r.cliente_id === client.id);
-      const clientSales = allSales.filter(s => s.cliente_id === client.id);
+      const clientReservations = reservationsForReport.filter(r => r.cliente_id === client.id);
+      const clientSales = salesForReport.filter(s => s.cliente_id === client.id);
 
       const totalAppointments = clientReservations.length;
       const attendedAppointments = clientReservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
@@ -747,9 +806,6 @@ export default function ClientsPage() {
                       ))
                     ) : paginatedClients.map((client) => {
                       const hasPhone = client.telefono && client.telefono.trim().length > 0;
-                      // Simple formatting: remove non-digits. Assuming MX (+52) default if not provided, 
-                      // but usually local numbers are 10 digits.
-                      // Adjust based on your region's needs. For now, just strip non-digits.
                       const cleanPhone = client.telefono?.replace(/\D/g, '') || '';
                       const whatsappUrl = hasPhone
                         ? `https://wa.me/${cleanPhone.length === 10 ? '52' + cleanPhone : cleanPhone}?text=Hola+${client.nombre},+te+extrañamos+en+VATOS+ALFA!`
@@ -799,148 +855,121 @@ export default function ClientsPage() {
                     {searchTerm ? "No se encontraron clientes." : "No hay clientes que coincidan con los filtros."}
                   </p>
                 )}
-                {!isLoading && sortedClients.length > 0 && (
-                  <div className="px-4 py-2 text-xs text-muted-foreground border-t">
-                    {sortedClients.length} cliente{sortedClients.length !== 1 ? 's' : ''} encontrado{sortedClients.length !== 1 ? 's' : ''}
-                    {sortField && ` · Ordenado por ${sortField === 'numero_cliente' ? 'Nº cliente' : sortField === 'nombre' ? 'nombre' : sortField === 'apellido' ? 'apellido' : 'fecha de registro'} (${sortDirection === 'asc' ? '↑' : '↓'})`}
-                  </div>
-                )}
               </CardContent>
             </Card>
-            <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm font-medium">Resultados por página</p>
-                <Select
-                  value={`${itemsPerPage}`}
-                  onValueChange={(value) => {
-                    setItemsPerPage(Number(value))
-                    setCurrentPage(1)
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[70px]">
-                    <SelectValue placeholder={itemsPerPage} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            {!isLoading && paginatedClients.length > 0 && (
+              <div className="flex items-center justify-end space-x-2 py-4">
+                <div className="flex-1 text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+                </div>
+                <div className="space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
               </div>
-              <div className="text-sm font-medium">
-                Página {currentPage} de {totalPages}
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
+            )}
           </main>
         </div>
       </div>
 
-      <Dialog open={isClientModalOpen} onOpenChange={(open) => {
-        setIsClientModalOpen(open);
-        if (!open) setEditingClient(null);
-      }}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{editingClient ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
-            <DialogDescription>
-              {editingClient
-                ? "Actualiza la información del cliente."
-                : "Completa la información para registrar un nuevo cliente en el sistema."}
-            </DialogDescription>
+            <DialogTitle>{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
           </DialogHeader>
           <NewClientForm
-            client={editingClient}
-            onFormSubmit={() => {
+            onClientCreated={() => {
               setIsClientModalOpen(false);
               setEditingClient(null);
-              handleDataUpdated();
+              setQueryKey(prev => prev + 1);
             }}
+            onCancel={() => {
+              setIsClientModalOpen(false);
+              setEditingClient(null);
+            }}
+            initialData={editingClient}
           />
         </DialogContent>
       </Dialog>
 
       {selectedClient && (
-        <ClientDetailModal
-          client={selectedClient}
-          isOpen={isDetailModalOpen}
-          onOpenChange={(open) => {
-            setIsDetailModalOpen(open);
-            if (!open) setSelectedClient(null);
-          }}
-          onNewReservation={() => {
-            setIsDetailModalOpen(false);
-            setIsReservationModalOpen(true);
-          }}
-        />
+        <>
+          <ClientDetailModal
+            client={selectedClient}
+            isOpen={isDetailModalOpen}
+            onClose={() => setIsDetailModalOpen(false)}
+            onOpenReservation={() => {
+              setIsDetailModalOpen(false);
+              setIsReservationModalOpen(true);
+            }}
+            onEdit={(client) => {
+              setIsDetailModalOpen(false);
+              setEditingClient(client);
+              setIsClientModalOpen(true);
+            }}
+          />
+
+          <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Nueva Reserva para {selectedClient.nombre}</DialogTitle>
+              </DialogHeader>
+              <NewReservationForm
+                preSelectedClientId={selectedClient.id}
+                onReservationCreated={() => {
+                  setIsReservationModalOpen(false);
+                  toast({ title: "Reserva creada exitosamente" });
+                }}
+                onCancel={() => setIsReservationModalOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
+        </>
       )}
 
-
-      {isReservationModalOpen && (
-        <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-          <DialogContent className="sm:max-w-xl p-0">
-            <DialogHeader className="p-6 pb-0">
-              <DialogTitle>Nueva Reserva</DialogTitle>
-              <DialogDescription>
-                Crea una nueva reserva para {selectedClient?.nombre} {selectedClient?.apellido}.
-              </DialogDescription>
-            </DialogHeader>
-            <NewReservationForm
-              onFormSubmit={() => {
-                setIsReservationModalOpen(false);
-                handleDataUpdated();
-              }}
-              initialData={{ cliente_id: selectedClient?.id }}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+      <CombineClientsModal
+        isOpen={isCombineModalOpen}
+        onClose={() => setIsCombineModalOpen(false)}
+        onClientsCombined={handleDataUpdated}
+      />
 
       <UploadClientsModal
         isOpen={isUploadModalOpen}
-        onOpenChange={setIsUploadModalOpen}
-        onUploadComplete={handleDataUpdated}
+        onClose={() => setIsUploadModalOpen(false)}
+        onClientsUploaded={handleDataUpdated}
       />
 
-      {isCombineModalOpen && (
-        <CombineClientsModal
-          isOpen={isCombineModalOpen}
-          onOpenChange={setIsCombineModalOpen}
-          onClientsCombined={handleDataUpdated}
-        />
-      )}
-
       {clientToDelete && (
-        <AlertDialog open={!!clientToDelete} onOpenChange={(open) => {
+        <Dialog open={!!clientToDelete} onOpenChange={(open) => {
           if (!open) {
             setClientToDelete(null);
             setDeleteConfirmationText('');
           }
         }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás seguro de eliminar el cliente seleccionado?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta acción no se puede revertir. Se eliminará permanentemente al cliente <span className="font-bold">{clientToDelete.nombre} {clientToDelete.apellido}</span> y todo su historial.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</DialogTitle>
+              <DialogDescription>
+                Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente <strong>{clientToDelete.nombre} {clientToDelete.apellido}</strong> y toda la información asociada.
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-2 py-2">
               <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
               <Input
@@ -950,50 +979,44 @@ export default function ClientsPage() {
                 placeholder="ELIMINAR"
               />
             </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setClientToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteClient}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setClientToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</Button>
+              <Button
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteClient();
+                }}
                 disabled={deleteConfirmationText !== 'ELIMINAR'}
                 className="bg-destructive hover:bg-destructive/90"
               >
-                Eliminar
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                Sí, eliminar cliente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
-      <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+      <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-6 w-6 text-yellow-500" />
               Requiere Autorización
-            </DialogTitle>
-            <DialogDescription>
-              Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Para descargar este listado completo con información sensible, es necesario un código de autorización.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="py-4">
             <Label htmlFor="auth-code">Código de Autorización</Label>
             <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
           </div>
-          <DialogFooter>
-            <Button
-              type="button" // Agrega esto por seguridad
-              variant="outline"
-              onClick={() => {
-                setAuthCode('');
-                setIsDownloadModalOpen(false);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={handleDownloadRequest}>Aceptar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

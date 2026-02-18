@@ -912,12 +912,19 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
             }
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error de Terminal', description: error.message });
+            console.error("Error sending to terminal:", error);
+            toast({ variant: 'destructive', title: 'Error de conexión con Terminal', description: error.message || "No se pudo conectar. Verifica que la terminal esté encendida y vinculada." });
+
+            // Revertir la venta creada si falla la terminal
+            if (saleIdRef.current) {
+                await revertPendingSale(saleIdRef.current);
+            }
+
             setIsSendingToTerminal(false);
             setIsWaitingForPayment(false);
             saleIdRef.current = null;
         }
-    }
+    };
 
     const handleNextStep = () => {
         if (cart.length === 0) {
@@ -990,21 +997,50 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [isOpen, initialData, resetComponentsState]);
 
+    const revertPendingSale = async (saleId: string) => {
+        if (!db) return;
+        try {
+            await runTransaction(db, async (transaction) => {
+                const saleRef = doc(db, 'ventas', saleId);
+                const saleDoc = await transaction.get(saleRef);
+                if (!saleDoc.exists()) return;
+
+                const saleData = saleDoc.data();
+                if (saleData.pago_estado !== 'Pendiente') return;
+
+                // Restaurar Stock
+                const items = saleData.items || [];
+                for (const item of items) {
+                    if (item.tipo === 'producto') {
+                        const productRef = doc(db, 'productos', item.id);
+                        const productDoc = await transaction.get(productRef);
+                        if (productDoc.exists()) {
+                            const currentStock = productDoc.data().stock || 0;
+                            // Aseguramos que es número
+                            const qtyToRestore = Number(item.cantidad) || 0;
+                            transaction.update(productRef, { stock: currentStock + qtyToRestore });
+                        }
+                    }
+                }
+
+                // Eliminar la venta fallida para no dejar basura
+                transaction.delete(saleRef);
+            });
+            console.log("Venta revertida y stock restaurado:", saleId);
+        } catch (e) {
+            console.error("Error revirtiendo venta:", e);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo revertir la venta automáticamente. Por favor revisa el inventario." });
+        }
+    };
+
     const cancelPendingSale = useCallback(async () => {
         if (saleIdRef.current && db && isWaitingForPayment) {
-            console.log("Cancelling pending sale due to modal close:", saleIdRef.current);
-            try {
-                const docRef = doc(db, 'ventas', saleIdRef.current);
-                // Mark as Cancelled so it doesn't show as a valid sale
-                await updateDoc(docRef, {
-                    pago_estado: 'Cancelado',
-                    notas: 'Operación cancelada por el usuario antes de completar el pago.'
-                });
-            } catch (e) {
-                console.error("Error cancelling pending sale:", e);
-            }
+            console.log("Cancelling pending sale due to modal close/user cancel:", saleIdRef.current);
+            await revertPendingSale(saleIdRef.current);
+            toast({ title: "Venta cancelada", description: "La operación ha sido cancelada y el stock restaurado." });
         }
     }, [db, isWaitingForPayment]);
+
 
     const handleOpenChange = (open: boolean) => {
         if (!open) {

@@ -42,6 +42,7 @@ const serviceSchema = z.object({
   category: z.string().min(1, 'La categoría es requerida.'),
   description: z.string().max(200, 'La descripción no puede exceder los 200 caracteres.').optional(),
   include_vat: z.boolean().default(false),
+  visible_en_web: z.boolean().default(true),
   commission_value: requiredNumberSchema,
   commission_type: z.enum(['%', '$']).default('%'),
   professionals: z.array(z.string()).optional(),
@@ -66,7 +67,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
-      name: '', description: '', price: '' as any, duration: '' as any, category: '', include_vat: false, commission_value: '' as any, commission_type: '%', professionals: [], images: []
+      name: '', description: '', price: '' as any, duration: '' as any, category: '', include_vat: false, visible_en_web: true, commission_value: '' as any, commission_type: '%', professionals: [], images: []
     }
   });
 
@@ -85,6 +86,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         commission_type: service.defaultCommission?.type || '%',
         description: service.description || '',
         include_vat: service.include_vat || false, // Ensure boolean
+        visible_en_web: service.visible_en_web ?? true,
         price: (service.price ?? '') as any,
         duration: (service.duration ?? '') as any,
         images: Array.isArray(service.images) ? service.images.map(imgUrl => ({ value: imgUrl })) : [],
@@ -100,6 +102,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         duration: '' as any,
         category: '',
         include_vat: false,
+        visible_en_web: true,
         professionals: [],
         payment_type: 'no-payment',
         commission_value: '' as any,
@@ -151,6 +154,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         duration: Number(data.duration),
         category: data.category,
         include_vat: data.include_vat,
+        visible_en_web: data.visible_en_web,
         payment_type: data.payment_type || 'no-payment',
         // Only save payment amount if type is online-deposit
         payment_amount_value: data.payment_type === 'online-deposit' ? (Number(data.payment_amount_value) || 0) : 0,
@@ -340,11 +344,12 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                       </div>
                     </div>
                     <div className="space-y-4 rounded-lg border p-4">
+
                       <div className="flex items-center space-x-2">
-                        <Controller name="include_vat" control={control} render={({ field }) => (
-                          <Checkbox id="include-vat" checked={field.value} onCheckedChange={field.onChange} />
+                        <Controller name="visible_en_web" control={control} render={({ field }) => (
+                          <Checkbox id="visible-en-web" checked={field.value} onCheckedChange={field.onChange} />
                         )} />
-                        <Label htmlFor="include-vat" className="font-normal">Precio incluye IVA</Label>
+                        <Label htmlFor="visible-en-web" className="font-normal">Mostrar en sitio web</Label>
                       </div>
                       <div className="space-y-2">
                         <FormField

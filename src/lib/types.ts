@@ -161,6 +161,7 @@ export interface Product {
   payment_type?: 'online-deposit' | 'full-payment' | 'no-payment';
   payment_amount_value?: number;
   payment_amount_type?: '%' | '$';
+  visible_en_web?: boolean;
 }
 
 export interface ProductCategory {
@@ -201,6 +202,7 @@ export interface Service {
   payment_amount_type?: '%' | '$';
   payment_amount_value?: number;
   description?: string; // Optional description if needed
+  visible_en_web?: boolean;
 }
 
 export interface CartItem {

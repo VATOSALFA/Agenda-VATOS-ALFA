@@ -30,7 +30,7 @@ export default function LandingPage() {
     const activePromotions = promotions?.filter((p: any) => p.active) || [];
 
     // Sort and filter services
-    const sortedServices = services?.filter((s: any) => s.active).sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999)) || [];
+    const sortedServices = services?.filter((s: any) => s.active && s.visible_en_web !== false).sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999)) || [];
 
     // Identify Package Categories
     const packageCategoryIds = categories?.filter((c: any) => c.name.toLowerCase().includes('paquete') || c.name.toLowerCase().includes('package')).map((c: any) => c.id) || [];
@@ -461,7 +461,7 @@ export default function LandingPage() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-                            {products.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined)).map((product: any) => {
+                            {products.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false).map((product: any) => {
                                 const pCount = getProductCount(product.id);
                                 const isPSelected = pCount > 0;
 

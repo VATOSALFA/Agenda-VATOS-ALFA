@@ -46,6 +46,7 @@ const newProductSchema = z.object({
   commission_value: requiredNumberSchema,
   commission_type: z.enum(['%', '$']).default('%'),
   includes_vat: z.boolean().default(false),
+  visible_en_web: z.boolean().default(true),
   description: z.string().optional(),
   stock_alarm_threshold: z.coerce.number().optional().nullable(),
   notification_email: z.string().email('Email inválido').optional().or(z.literal('')),
@@ -102,6 +103,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     defaultValues: {
       stock: 0,
       includes_vat: false,
+      visible_en_web: true,
       commission_type: '%',
 
       images: [],
@@ -118,6 +120,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
     if (product) {
       form.reset({
         ...product,
+        visible_en_web: product.visible_en_web ?? true,
         public_price: product.public_price || 0,
         stock: product.stock || 0,
         commission_value: product.commission?.value,
@@ -132,7 +135,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
       form.reset({
         nombre: '', barcode: '', brand_id: '', category_id: '', presentation_id: '',
         public_price: '' as any, stock: '' as any, purchase_cost: '' as any, internal_price: null, commission_value: '' as any,
-        commission_type: '%', includes_vat: false, description: '', stock_alarm_threshold: null, notification_email: '',
+        commission_type: '%', includes_vat: false, visible_en_web: true, description: '', stock_alarm_threshold: null, notification_email: '',
 
         images: [], payment_type: 'no-payment', payment_amount_value: '' as any, payment_amount_type: '%'
       });
@@ -161,6 +164,7 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
 
       const dataToSave: Partial<Product> = {
         ...restOfData,
+        visible_en_web: restOfData.visible_en_web,
         public_price: Number(restOfData.public_price),
         stock: Number(restOfData.stock),
         purchase_cost: parseOptionalNumber(restOfData.purchase_cost) ?? undefined,
@@ -340,7 +344,8 @@ export function NewProductModal({ isOpen, onClose, onDataSaved, product }: NewPr
                       <FormField name="internal_price" control={form.control} render={({ field }) => (<FormItem><FormLabel>Precio de venta interna</FormLabel><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span><FormControl><Input type="number" placeholder="0" className="pl-6" {...field} value={field.value ?? ''} /></FormControl></div><FormMessage /></FormItem>)} />
                     </div>
                     <FormField name="commission_value" control={form.control} render={({ field }) => (<FormItem><FormLabel>Comisión de venta *</FormLabel><div className="flex gap-2"><FormControl><Input type="number" placeholder="0" className="flex-grow" {...field} value={field.value ?? ''} /></FormControl><Controller name="commission_type" control={form.control} render={({ field: selectField }) => (<Select onValueChange={selectField.onChange} value={selectField.value}><SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="%">%</SelectItem><SelectItem value="$">$</SelectItem></SelectContent></Select>)} /></div><FormMessage /></FormItem>)} />
-                    <FormField name="includes_vat" control={form.control} render={({ field }) => (<FormItem className="flex items-center space-x-2 pt-2"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} id="includes_vat" /></FormControl><FormLabel htmlFor="includes_vat" className="!mt-0 font-normal">Precio incluye IVA en comprobante de caja</FormLabel></FormItem>)} />
+
+                    <FormField name="visible_en_web" control={form.control} render={({ field }) => (<FormItem className="flex items-center space-x-2 pt-2"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} id="visible_en_web" /></FormControl><FormLabel htmlFor="visible_en_web" className="!mt-0 font-normal">Mostrar en sitio web</FormLabel></FormItem>)} />
 
                     <FormField name="description" control={form.control} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Textarea placeholder="Describe el producto..." {...field} /></FormControl><FormMessage /></FormItem>)} />
 

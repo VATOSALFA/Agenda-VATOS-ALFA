@@ -355,10 +355,15 @@ export default function AgendaView() {
   const reservationsQueryKey = useMemo(() => `reservations-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, selectedLocalId, queryKey]);
   const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, selectedLocalId, queryKey]);
 
-  const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
-  const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
+  const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
+  const { data: timeBlocks, loading: timeBlocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
 
-  const isLoading = professionalsLoading || clientsLoading || servicesLoading || localesLoading || usersLoading || productsLoading;
+  // Determine if we are in a 'critical' loading state (initial load or date change)
+  // We exclude some non-critical loads if we want optimistic UI, but for now we block to prevent empty grid.
+  const isLoading = professionalsLoading || localesLoading || reservationsLoading || timeBlocksLoading;
+
+  // Non-blocking background loads (optional to block)
+  // clientsLoading, usersLoading, productsLoading might take longer but don't prevent rendering the grid structure.
 
   const filteredProfessionals = useMemo(() => {
     let professionalsOfLocal = professionals.filter(p => !p.deleted && p.local_id === selectedLocalId);
@@ -382,6 +387,8 @@ export default function AgendaView() {
   }, [professionals, selectedProfessionalFilter, selectedLocalId, user]);
 
   const { allEvents, eventsWithLayout } = useAgendaEvents(reservations, timeBlocks, clients, professionals);
+
+
 
 
   const handleSetToday = () => setDate(new Date());
@@ -760,6 +767,15 @@ export default function AgendaView() {
   const getProfessionalAvatar = (profesional: Profesional): string | undefined => {
     return profesional.avatarUrl;
   };
+
+  if (isLoading || !isClientMounted) {
+    return (
+      <div className="flex h-[calc(100vh-4rem)] w-full flex-col items-center justify-center gap-4 bg-muted/40">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium animate-pulse">Cargando agenda...</p>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>

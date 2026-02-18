@@ -275,7 +275,7 @@ export default function BookingPage() {
 
     // --- SORTED SERVICES ---
     const { visibleRegularServices, visiblePackageServices } = useMemo(() => {
-        let available = services.filter((s: any) => s.active && !s.deleted);
+        let available = services.filter((s: any) => s.active && !s.deleted && s.visible_en_web !== false);
 
         if (preSelectedProId) {
             available = available.filter((s: any) => {

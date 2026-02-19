@@ -70,6 +70,7 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'ver_reporte_reservas', label: 'Ver Reporte de Reservas' },
             { key: 'ver_reporte_ventas', label: 'Ver Reporte de Ventas' },
             { key: 'ver_cierres_caja', label: 'Ver Cierres de Caja' },
+            { key: 'ver_auditoria', label: 'Ver Auditoría' },
         ]
     },
     {
@@ -121,7 +122,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
             'ver_clientes', 'ver_numero_telefono',
             'ver_ventas', 'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'registrar_ventas', 'ver_propinas',
             'ver_productos', 'ver_inventario', 'ver_movimiento_stock', 'ver_venta_productos',
-            'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja',
+            'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria',
             'ver_finanzas',
             'ver_administracion',
 

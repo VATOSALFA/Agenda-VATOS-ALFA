@@ -13,7 +13,10 @@ interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   }[]
 }
 
-export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
+import React from "react"
+// ...
+
+export const SidebarNav = React.memo(function SidebarNav({ className, items, ...props }: SidebarNavProps) {
   const pathname = usePathname()
 
   return (
@@ -41,4 +44,4 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
       ))}
     </nav>
   )
-}
+})

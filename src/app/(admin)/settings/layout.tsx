@@ -14,7 +14,7 @@ const sidebarNavItems = [
   { title: "Empresa", href: "/settings/empresa" },
   { title: "Locales", href: "/settings/locales" },
   { title: "Sitio Web", href: "/settings/sitio-web" },
-  { title: "Agenda", href: "/settings/agenda" },
+
   { title: "Pagos", href: "/settings/pagos" },
 
   { title: "Emails", href: "/settings/emails" },

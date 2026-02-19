@@ -120,6 +120,7 @@ service cloud.firestore {
     
     // Payments (Generic catch-all if needed, though usually covered by sales/caja)
     match /pagos/{document=**} { allow read, write: if isAuthenticated(); }
+    match /audit_logs/{document=**} { allow read, write: if isAuthenticated(); }
 
     // DENY ALL OTHERS BY DEFAULT
     // No catch-all rule here.

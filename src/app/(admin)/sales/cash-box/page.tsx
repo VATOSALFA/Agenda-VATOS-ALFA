@@ -103,6 +103,7 @@ import { Switch } from '@/components/ui/switch';
 import { useCashBoxData } from './use-cash-box-data';
 import { useLiveCash } from './use-live-cash';
 import { useLocal } from '@/contexts/local-context';
+import { logAuditAction } from '@/lib/audit-logger';
 
 
 const SummaryCard = ({
@@ -367,6 +368,16 @@ export default function CashBoxPage() {
                 description: "La venta ha sido eliminada y el stock revertido.",
             });
             setQueryKey(prevKey => prevKey + 1);
+
+            await logAuditAction({
+                action: 'Eliminar Venta',
+                details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total}. Local: ${saleToDelete.local_id}`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'critical',
+                entityId: saleToDelete.id,
+                localId: saleToDelete.local_id || 'unknown'
+            });
         } catch (error) {
             console.error("Error deleting sale: ", error);
             toast({
@@ -504,6 +515,16 @@ export default function CashBoxPage() {
                 description: "El egreso ha sido eliminado y, si era un pago de comisión, se ha revertido.",
             });
             setQueryKey(prevKey => prevKey + 1);
+
+            await logAuditAction({
+                action: 'Eliminar Egreso',
+                details: `Egreso ID: ${egresoToDelete.id} eliminado. Monto: $${egresoToDelete.monto}. Concepto: ${egresoToDelete.concepto}`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'warning',
+                entityId: egresoToDelete.id,
+                localId: egresoToDelete.local_id || 'unknown'
+            });
         } catch (error) {
             console.error("Error deleting egreso: ", error);
             toast({
@@ -547,6 +568,16 @@ export default function CashBoxPage() {
                 description: "El ingreso ha sido eliminado permanentemente.",
             });
             setQueryKey(prevKey => prevKey + 1);
+
+            await logAuditAction({
+                action: 'Eliminar Ingreso',
+                details: `Ingreso ID: ${ingresoToDelete.id} eliminado. Monto: $${ingresoToDelete.monto}. Concepto: ${ingresoToDelete.concepto}`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'warning',
+                entityId: ingresoToDelete.id,
+                localId: ingresoToDelete.local_id || 'unknown'
+            });
         } catch (error) {
             console.error("Error deleting ingreso: ", error);
             toast({
@@ -649,6 +680,15 @@ export default function CashBoxPage() {
             toast({ title: 'Código correcto' });
             authAction?.(); // Execute the stored action
             setIsAuthModalOpen(false);
+
+            await logAuditAction({
+                action: 'Código Autorización Usado',
+                details: `Código de autorización utilizado para acción de caja.`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'info',
+                localId: selectedLocalId
+            });
         }
         setAuthCode('');
         setAuthAction(null);

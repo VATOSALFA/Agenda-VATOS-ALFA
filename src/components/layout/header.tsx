@@ -32,6 +32,7 @@ import {
   Store,
   User,
   Menu,
+  ShieldCheck,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -83,6 +84,7 @@ const reportsNavLinks = [
   { href: '/reports/reservations', label: 'Reporte de reservas', icon: FileText, permission: 'ver_reporte_reservas' },
   { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart, permission: 'ver_reporte_ventas' },
   { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet, permission: 'ver_cierres_caja' },
+  { href: '/reports/audit', label: 'Auditoría', icon: ShieldCheck, permission: 'ver_auditoria' },
 ];
 
 const monthNamesNav = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -97,6 +99,7 @@ const adminNavLinks = [
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
+  { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
 ];
 
 export default function Header() {

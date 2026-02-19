@@ -133,6 +133,7 @@ interface NewSaleSheetProps {
         anticipoPagado?: number; // Added field
     };
     onSaleComplete?: () => void;
+    forceMaximize?: number;
 }
 
 const DiscountInput = ({ item, onDiscountChange }: { item: CartItem, onDiscountChange: (itemId: string, value: string, type: 'fixed' | 'percentage') => void }) => {
@@ -379,17 +380,27 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
     );
 }
 
-export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete }: NewSaleSheetProps) {
+export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete, forceMaximize }: NewSaleSheetProps) {
     const { toast } = useToast();
     const { user, db } = useAuth();
     const [step, setStep] = useState(1);
     const [isMinimized, setIsMinimized] = useState(false);
 
+    const openTimeRef = useRef(0);
+
     useEffect(() => {
         if (isOpen) {
             setIsMinimized(false);
+            openTimeRef.current = Date.now();
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (forceMaximize) {
+            setIsMinimized(false);
+            openTimeRef.current = Date.now();
+        }
+    }, [forceMaximize]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [clientSearchTerm, setClientSearchTerm] = useState('');
@@ -1413,11 +1424,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     onCloseAutoFocus={(e) => e.preventDefault()}
                     onInteractOutside={(e) => {
                         e.preventDefault();
-                        setIsMinimized(true);
+                        if (Date.now() - openTimeRef.current > 500) {
+                            setIsMinimized(true);
+                        }
                     }}
                     onPointerDownOutside={(e) => {
                         e.preventDefault();
-                        setIsMinimized(true);
+                        if (Date.now() - openTimeRef.current > 500) {
+                            setIsMinimized(true);
+                        }
                     }}
                 >
                     <div

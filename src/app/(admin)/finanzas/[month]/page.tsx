@@ -219,8 +219,11 @@ export default function FinanzasMensualesPage() {
     const [egresosPerPage, setEgresosPerPage] = useState(10);
     const [incomesPage, setIncomesPage] = useState(1);
     const [incomesPerPage, setIncomesPerPage] = useState(10);
-    const [sortIngresosAsc, setSortIngresosAsc] = useState(true);
-    const [sortEgresosAsc, setSortEgresosAsc] = useState(true);
+
+    // Sort configurations
+    type SortDirection = 'asc' | 'desc';
+    const [ingresosSortConfig, setIngresosSortConfig] = useState<{ key: string; direction: SortDirection }>({ key: 'fecha', direction: 'asc' });
+    const [egresosSortConfig, setEgresosSortConfig] = useState<{ key: string; direction: SortDirection }>({ key: 'fecha', direction: 'asc' });
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -253,10 +256,22 @@ export default function FinanzasMensualesPage() {
             return acc;
         }, {} as Record<string, { fecha: string; efectivo: number; deposito: number; total: number }>);
 
-        return Object.values(groupedByDay).sort((a, b) =>
-            sortIngresosAsc ? a.fecha.localeCompare(b.fecha) : b.fecha.localeCompare(a.fecha)
-        );
-    }, [sales, sortIngresosAsc]);
+        return Object.values(groupedByDay).sort((a, b) => {
+            const { key, direction } = ingresosSortConfig;
+            const dir = direction === 'asc' ? 1 : -1;
+
+            if (key === 'fecha') {
+                return a.fecha.localeCompare(b.fecha) * dir;
+            } else if (key === 'efectivo') {
+                return (a.efectivo - b.efectivo) * dir;
+            } else if (key === 'deposito') {
+                return (a.deposito - b.deposito) * dir;
+            } else if (key === 'total') {
+                return (a.total - b.total) * dir;
+            }
+            return 0;
+        });
+    }, [sales, ingresosSortConfig]);
 
     // --- Manual Override State ---
     interface ManualOverrideData {
@@ -402,6 +417,11 @@ export default function FinanzasMensualesPage() {
         });
     };
 
+    // Helper to get name from ID outside of existing helper to use in useMemo
+    // But since getNameFromId relies on professionals/users state which are dependencies anyway, 
+    // we can use the same logic inside the sort function or ensure getNameFromId is stable.
+    // The existing getNameFromId uses state, so let's stick to using data maps or helper within sort.
+
     // --- CORRECCIÓN APLICADA AQUÍ ---
     // Eliminamos el cálculo predictivo. Solo mostramos lo que existe en la BD 'egresos'.
     const calculatedEgresos = useMemo(() => {
@@ -413,14 +433,32 @@ export default function FinanzasMensualesPage() {
         }));
 
         return manualEgresos.sort((a, b) => {
-            const dateA = a.fecha instanceof Date ? a.fecha : new Date();
-            const dateB = b.fecha instanceof Date ? b.fecha : new Date();
-            return sortEgresosAsc
-                ? dateA.getTime() - dateB.getTime()
-                : dateB.getTime() - dateA.getTime();
+            const { key, direction } = egresosSortConfig;
+            const dir = direction === 'asc' ? 1 : -1;
+
+            if (key === 'fecha') {
+                const dateA = a.fecha instanceof Date ? a.fecha : new Date();
+                const dateB = b.fecha instanceof Date ? b.fecha : new Date();
+                return (dateA.getTime() - dateB.getTime()) * dir;
+            } else if (key === 'monto') {
+                return (a.monto - b.monto) * dir;
+            } else if (key === 'concepto') {
+                return (a.concepto || '').localeCompare(b.concepto || '') * dir;
+            } else if (key === 'aQuien') {
+                // We need to resolve names
+                const getName = (id: string) => {
+                    const professional = professionals?.find(p => p.id === id);
+                    if (professional) return professional.name;
+                    const user = users?.find(u => u.id === id);
+                    if (user) return user.name;
+                    return id || '';
+                };
+                return getName(a.aQuien).localeCompare(getName(b.aQuien)) * dir;
+            }
+            return 0;
         });
 
-    }, [egresos, egresosLoading, sortEgresosAsc]);
+    }, [egresos, egresosLoading, egresosSortConfig, professionals, users]);
     // ---------------------------------
 
 
@@ -792,6 +830,20 @@ export default function FinanzasMensualesPage() {
     };
 
 
+    const handleIngresosSort = (key: string) => {
+        setIngresosSortConfig(current => ({
+            key,
+            direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const handleEgresosSort = (key: string) => {
+        setEgresosSortConfig(current => ({
+            key,
+            direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
     const totalEgresosPages = Math.ceil(calculatedEgresos.length / egresosPerPage);
     const paginatedEgresos = calculatedEgresos.slice(
         (egresosPage - 1) * egresosPerPage,
@@ -1093,13 +1145,25 @@ export default function FinanzasMensualesPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => setSortIngresosAsc(!sortIngresosAsc)}>
-                                                Fecha <ArrowUpDown className="h-4 w-4" />
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('fecha')}>
+                                                Fecha {ingresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
-                                        <TableHead>Efectivo</TableHead>
-                                        <TableHead>Depósito</TableHead>
-                                        <TableHead>Total venta</TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('efectivo')}>
+                                                Efectivo {ingresosSortConfig.key === 'efectivo' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('deposito')}>
+                                                Depósito {ingresosSortConfig.key === 'deposito' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('total')}>
+                                                Total venta {ingresosSortConfig.key === 'total' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -1187,13 +1251,25 @@ export default function FinanzasMensualesPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => setSortEgresosAsc(!sortEgresosAsc)}>
-                                                Fecha <ArrowUpDown className="h-4 w-4" />
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('fecha')}>
+                                                Fecha {egresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
-                                        <TableHead>Concepto</TableHead>
-                                        <TableHead>A quién se entrega</TableHead>
-                                        <TableHead>Monto</TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('concepto')}>
+                                                Concepto {egresosSortConfig.key === 'concepto' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('aQuien')}>
+                                                A quién se entrega {egresosSortConfig.key === 'aQuien' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('monto')}>
+                                                Monto {egresosSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
                                         <TableHead>Comentarios</TableHead>
                                         <TableHead className="text-right">Opciones</TableHead>
                                     </TableRow>

@@ -23,6 +23,7 @@ export default function AppInitializer() {
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
 
+  const [saleTrigger, setSaleTrigger] = useState(0);
   const [queryKey, setQueryKey] = useState(0);
   const onDataRefresh = () => setQueryKey(prev => prev + 1);
 
@@ -52,6 +53,7 @@ export default function AppInitializer() {
     const handleNewSale = () => {
       setSaleInitialData(null);
       setIsSaleSheetOpen(true);
+      setSaleTrigger(prev => prev + 1);
     };
 
     document.addEventListener('new-reservation', handleNewReservation);
@@ -88,6 +90,7 @@ export default function AppInitializer() {
         onOpenChange={setIsSaleSheetOpen}
         initialData={saleInitialData}
         onSaleComplete={onDataRefresh}
+        forceMaximize={saleTrigger}
       />
     </>
   );

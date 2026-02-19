@@ -1525,18 +1525,33 @@ exports.sendDailyAgendaSummary = onSchedule({
 
   const db = admin.firestore();
 
-  // 1. Determine "Today" and Current Time in Mexico City
+  // 1. Determine "Today" and Current Time in Mexico City using reliable locale (en-US)
   const now = new Date();
   const options = { timeZone: "America/Mexico_City", hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-  const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(now);
-  const day = parts.find(p => p.type === 'day')?.value;
-  const month = parts.find(p => p.type === 'month')?.value;
-  const year = parts.find(p => p.type === 'year')?.value;
-  const hour = parts.find(p => p.type === 'hour')?.value;
-  const minute = parts.find(p => p.type === 'minute')?.value;
+  const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(now);
+
+  const findPart = (type) => parts.find(p => p.type === type)?.value;
+
+  const day = findPart('day');
+  const month = findPart('month');
+  const year = findPart('year');
+  const hourStr = findPart('hour');
+  const minuteStr = findPart('minute');
+
+  if (!day || !month || !year || !hourStr || !minuteStr) {
+    console.error(`[DailySummary] CRITICAL: Could not parse date/time parts. Raw parts: ${JSON.stringify(parts)}`);
+    return;
+  }
 
   const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
-  const currentTimeVal = parseInt(hour) * 60 + parseInt(minute); // Minutes from midnight
+  const currentHour = parseInt(hourStr, 10);
+  const currentMinute = parseInt(minuteStr, 10);
+  const currentTimeVal = currentHour * 60 + currentMinute; // Minutes from midnight
+
+  if (isNaN(currentTimeVal)) {
+    console.error(`[DailySummary] CRITICAL: Time calculation resulted in NaN. Hour: ${hourStr}, Minute: ${minuteStr}`);
+    return;
+  }
 
   // 2. Fetch Configuration
   const settingsSnap = await db.collection('settings').doc('website').get();
@@ -1554,8 +1569,6 @@ exports.sendDailyAgendaSummary = onSchedule({
 
   // Cleanup basic formatting issues just in case
   // If user somehow saved "9:00" instead of "09:00", split works.
-  // If saved "09:00 PM", we want to be careful.
-
   let [targetH, targetM] = targetTimeStr.split(':').map(Number);
 
   // Validation Check
@@ -1567,7 +1580,7 @@ exports.sendDailyAgendaSummary = onSchedule({
 
   const targetTimeVal = targetH * 60 + targetM;
 
-  console.log(`[DailySummary] Time Check: Current Mexico Time: ${hour}:${minute} (${currentTimeVal} min). Target Config: ${targetTimeStr} (${targetTimeVal} min).`);
+  console.log(`[DailySummary] Time Check: Current Mexico Time: ${currentHour}:${String(currentMinute).padStart(2, '0')} (${currentTimeVal} min). Target Config: ${targetTimeStr} (${targetTimeVal} min).`);
 
   if (currentTimeVal < targetTimeVal) {
     console.log(`[DailySummary] Too early. Waiting for ${targetH}:${String(targetM).padStart(2, '0')}.`);
@@ -1622,10 +1635,11 @@ exports.triggerDailyAgendaSummary = onCall(
     if (!dateStr) {
       const today = new Date();
       const options = { timeZone: "America/Mexico_City", year: 'numeric', month: '2-digit', day: '2-digit' };
-      const parts = new Intl.DateTimeFormat('es-MX', options).formatToParts(today);
-      const day = parts.find(p => p.type === 'day').value;
-      const month = parts.find(p => p.type === 'month').value;
-      const year = parts.find(p => p.type === 'year').value;
+      const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(today);
+      const findPart = (type) => parts.find(p => p.type === type)?.value;
+      const day = findPart('day');
+      const month = findPart('month');
+      const year = findPart('year');
       dateStr = `${year}-${month}-${day}`;
     }
 

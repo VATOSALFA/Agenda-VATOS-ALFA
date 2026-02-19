@@ -38,6 +38,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
+import { useDebounce } from "@/hooks/use-debounce";
 import Image from 'next/image';
 
 interface EmpresaSettings {
@@ -185,6 +186,7 @@ const FiltersSidebar = ({
 export default function ClientsPage() {
   const { user, db } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -339,6 +341,47 @@ export default function ClientsPage() {
 
     if (hasAdvancedFilters) {
 
+      // --- OPTIMIZATION: Pre-calculate Last Visit Map ---
+      // Instead of iterating historicalSales for EVERY client (O(NxM)), 
+      // we iterate history ONCE (O(M)) and map outcomes.
+      const clientLastVisitMap = new Map<string, Date>();
+
+      if (activeFilters.inactiveTime !== 'todos' && hasLoadedHistory) {
+        historicalSales.forEach(s => {
+          const clientId = s.cliente_id;
+          if (!clientId) return;
+
+          let saleDate: Date | null = null;
+          if (s.fecha_hora_venta instanceof Timestamp) {
+            saleDate = s.fecha_hora_venta.toDate();
+          } else if (typeof s.fecha_hora_venta === 'string') {
+            saleDate = parseISO(s.fecha_hora_venta);
+          }
+
+          if (saleDate) {
+            const currentLast = clientLastVisitMap.get(clientId);
+            if (!currentLast || saleDate > currentLast) {
+              clientLastVisitMap.set(clientId, saleDate);
+            }
+          }
+        });
+
+        historicalReservations.forEach(r => {
+          const clientId = r.cliente_id;
+          if (!clientId) return;
+          if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
+
+          const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : null;
+          if (resDate) {
+            const currentLast = clientLastVisitMap.get(clientId);
+            if (!currentLast || resDate > currentLast) {
+              clientLastVisitMap.set(clientId, resDate);
+            }
+          }
+        });
+      }
+      // ----------------------------------------------------
+
       // Filter by Inactive Time
       if (activeFilters.inactiveTime !== 'todos') {
         const monthsInactive = parseInt(activeFilters.inactiveTime, 10);
@@ -346,37 +389,12 @@ export default function ClientsPage() {
 
         if (hasLoadedHistory) {
           filtered = filtered.filter(client => {
-            let lastVisit: Date | null = null;
-
-            historicalSales.forEach(s => {
-              if (s.cliente_id !== client.id) return;
-              let saleDate: Date | null = null;
-              if (s.fecha_hora_venta instanceof Timestamp) {
-                saleDate = s.fecha_hora_venta.toDate();
-              } else if (typeof s.fecha_hora_venta === 'string') {
-                saleDate = parseISO(s.fecha_hora_venta);
-              } else if (s.fecha_hora_venta && typeof (s.fecha_hora_venta as any).toDate === 'function') {
-                saleDate = (s.fecha_hora_venta as any).toDate();
-              }
-
-              if (saleDate && (!lastVisit || saleDate > lastVisit)) {
-                lastVisit = saleDate;
-              }
-            });
-
-            historicalReservations.forEach(r => {
-              if (r.cliente_id !== client.id) return;
-              if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
-
-              const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : null;
-              if (resDate && (!lastVisit || resDate > lastVisit)) {
-                lastVisit = resDate;
-              }
-            });
+            const lastVisit = clientLastVisitMap.get(client.id);
 
             if (lastVisit) {
-              return (lastVisit as Date) < thresholdDate;
+              return lastVisit < thresholdDate;
             } else {
+              // If never visited, check creation date
               let createdDate: Date = new Date();
               if (client.creado_en instanceof Timestamp) {
                 createdDate = client.creado_en.toDate();
@@ -393,10 +411,9 @@ export default function ClientsPage() {
         const clientIdsFromHistory = new Set<string>();
         let hasHistoryFilter = false;
 
-        // Use historicalSales if loaded, otherwise maybe sales? 
-        // But for consistency let's rely on historicalSales when strict filtering is needed.
         const salesToCheck = hasLoadedHistory ? historicalSales : sales;
 
+        // Optimization: Use Sets for faster lookup if list is large
         salesToCheck.forEach(s => {
           if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
 
@@ -415,6 +432,7 @@ export default function ClientsPage() {
           historicalReservations.forEach(r => {
             if (r.estado === 'Cancelado') return;
             if (activeFilters.local !== 'todos' && r.local_id !== activeFilters.local) return;
+            // Date logic optimization: Convert string to Date once if heavily reused, but here simple comparison is OK.
             if (activeFilters.dateRange) {
               const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : new Date();
               if (activeFilters.dateRange.from && resDate < activeFilters.dateRange.from) return;
@@ -429,15 +447,8 @@ export default function ClientsPage() {
           });
         }
 
-        if (activeFilters.professional !== 'todos') {
+        if (hasHistoryFilter) {
           filtered = filtered.filter(c => clientIdsFromHistory.has(c.id));
-        } else if (activeFilters.dateRange && hasHistoryFilter) {
-          const dateFilteredIds = new Set<string>();
-          salesToCheck.forEach(s => {
-            if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
-            dateFilteredIds.add(s.cliente_id);
-          });
-          filtered = filtered.filter(c => dateFilteredIds.has(c.id));
         }
       }
 
@@ -445,6 +456,7 @@ export default function ClientsPage() {
         const monthToFilter = parseInt(activeFilters.birthdayMonth, 10);
         filtered = filtered.filter(client => {
           if (!client.fecha_nacimiento) return false;
+          // Optimization: Check type once (most clients follow same pattern)
           const birthDate = typeof client.fecha_nacimiento === 'string'
             ? parseISO(client.fecha_nacimiento)
             : new Date((client.fecha_nacimiento as Timestamp).seconds * 1000);
@@ -454,8 +466,8 @@ export default function ClientsPage() {
     }
 
 
-    if (searchTerm) {
-      const searchTerms = searchTerm.toLowerCase().split(' ').filter(Boolean);
+    if (debouncedSearchTerm) {
+      const searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(Boolean);
       filtered = filtered.filter(client => {
         const clientDataString = [
           client.nombre,
@@ -470,7 +482,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory]);
+  }, [clients, sales, debouncedSearchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory]);
 
   const getDateValue = (date: any): number => {
     if (!date) return 0;

@@ -17,7 +17,7 @@ import { Loader2, Copy, Info } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 
-import { BluetoothPrinter } from '@/lib/printer';
+
 import { httpsCallable, functions } from '@/lib/firebase-client';
 import { writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -35,15 +35,13 @@ interface PagosSettings {
     mercadoPagoPublicKey: string;
     mercadoPagoAccessToken: string;
     mercadoPagoUserId: string;
-    ticketPrinterEnabled: boolean;
-    ticketPrinterDeviceName: string;
 }
 
 export default function PagosAgendaProPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [isConnectingPrinter, setIsConnectingPrinter] = useState(false);
+
 
     // Terminal Settings State
     const { user } = useAuth();
@@ -65,8 +63,6 @@ export default function PagosAgendaProPage() {
             mercadoPagoPublicKey: '',
             mercadoPagoAccessToken: '',
             mercadoPagoUserId: '',
-            ticketPrinterEnabled: false,
-            ticketPrinterDeviceName: '',
         }
     });
 
@@ -97,8 +93,6 @@ export default function PagosAgendaProPage() {
                     bank: pagosData.bank || '',
                     accountHolder: pagosData.accountHolder || '',
                     clabe: pagosData.clabe || '',
-                    ticketPrinterEnabled: pagosData.ticketPrinterEnabled ?? false,
-                    ticketPrinterDeviceName: pagosData.ticketPrinterDeviceName || '',
                 } as PagosSettings);
 
             } catch (error) {
@@ -182,48 +176,7 @@ export default function PagosAgendaProPage() {
         });
     }
 
-    const handleConnectPrinter = async () => {
-        setIsConnectingPrinter(true);
-        try {
-            const printer = BluetoothPrinter.getInstance();
-            const deviceName = await printer.connect();
-            form.setValue('ticketPrinterDeviceName', deviceName);
-            form.setValue('ticketPrinterEnabled', true);
-            toast({
-                title: "Impresora Conectada",
-                description: `Se ha vinculado correctamente con: ${deviceName}`,
-            });
-        } catch (error: any) {
-            console.error("Printer connection error:", error);
-            toast({
-                variant: "destructive",
-                title: "Error de conexión",
-                description: error.message || "No se pudo conectar con la impresora.",
-            });
-        } finally {
-            setIsConnectingPrinter(false);
-        }
-    };
 
-    const handleTestPrint = async () => {
-        try {
-            const printer = BluetoothPrinter.getInstance();
-            if (!printer.isConnected()) {
-                await printer.connect();
-            }
-            await printer.print(`
-            PRUEBA DE IMPRESION
-            -------------------
-            Agenda VATOS ALFA
-            Sistema Profesional
-            -------------------
-            Funcionando correctamente.
-            \n\n\n`);
-            toast({ title: "Imprimiendo..." });
-        } catch (error: any) {
-            toast({ variant: "destructive", title: "Error", description: error.message });
-        }
-    }
 
     const onSubmit = async (data: PagosSettings) => {
         setIsSubmitting(true);
@@ -238,8 +191,6 @@ export default function PagosAgendaProPage() {
                 bank: data.bank,
                 accountHolder: data.accountHolder,
                 clabe: data.clabe,
-                ticketPrinterEnabled: data.ticketPrinterEnabled,
-                ticketPrinterDeviceName: data.ticketPrinterDeviceName,
             };
             await setDoc(pagosRef, pagosData, { merge: true });
 
@@ -391,49 +342,7 @@ export default function PagosAgendaProPage() {
                         </AccordionContent>
                     </AccordionItem>
 
-                    <AccordionItem value="item-4" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6 font-semibold text-base">Impresora de tickets</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-6">
-                            <div className="flex flex-col gap-4">
-                                <p className="text-sm text-muted-foreground">
-                                    Conecta una impresora térmica Bluetooth para imprimir tickets automáticamente al realizar cobros en efectivo.
-                                </p>
 
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-base">Habilitar impresión automática</Label>
-                                        <p className="text-sm text-muted-foreground">Se imprimirá un ticket al finalizar una venta en efectivo.</p>
-                                    </div>
-                                    <Controller name="ticketPrinterEnabled" control={form.control} render={({ field }) => (
-                                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                    )} />
-                                </div>
-
-                                {form.watch('ticketPrinterEnabled') && (
-                                    <Card className="bg-muted/50 border-dashed">
-                                        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`h-3 w-3 rounded-full ${form.watch('ticketPrinterDeviceName') ? 'bg-green-500' : 'bg-red-500'}`} />
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium text-sm">Dispositivo Vinculado</span>
-                                                    <span className="text-xs text-muted-foreground">{form.watch('ticketPrinterDeviceName') || 'Ninguno'}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2 w-full sm:w-auto">
-                                                <Button type="button" variant="secondary" size="sm" onClick={handleTestPrint} disabled={!form.watch('ticketPrinterDeviceName')}>
-                                                    Prueba
-                                                </Button>
-                                                <Button type="button" size="sm" onClick={handleConnectPrinter} disabled={isConnectingPrinter}>
-                                                    {isConnectingPrinter && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                    {form.watch('ticketPrinterDeviceName') ? 'Cambiar Impresora' : 'Buscar Impresora'}
-                                                </Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
                 </Accordion>
 
                 <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">

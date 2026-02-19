@@ -212,7 +212,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             local_id: data.local_id,
             comentarios: data.comentarios,
             persona_entrega_id: user?.uid,
-            persona_entrega_nombre: user?.displayName
+            persona_entrega_nombre: user?.displayName,
+            ...(isEditMode && egreso?.commission_payment_details ? { commission_payment_details: egreso.commission_payment_details } : {})
         };
 
         try {
@@ -244,7 +245,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col overflow-hidden">
                         <DialogHeader>
                             <DialogTitle>{isEditMode ? "Editar Egreso" : "Registrar Salida de Dinero"}</DialogTitle>
                             <DialogDescription>
@@ -252,7 +253,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="space-y-5 px-1 py-6 max-h-[75vh] overflow-y-auto">
+                        <div className="space-y-5 px-1 py-6 flex-1 overflow-y-auto min-h-0">
 
                             {/* Fila 1: Monto y Fecha */}
                             <div className="grid grid-cols-2 gap-4">

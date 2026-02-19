@@ -7,7 +7,7 @@ import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowRight, Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ArrowRight, Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Timestamp, where } from "firebase/firestore";
 import type { StockMovement, Product, ProductCategory } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ export default function StockMovementPage() {
     const [statusFilter, setStatusFilter] = useState('todos');
     const [categoryFilter, setCategoryFilter] = useState('todos');
     const [productFilter, setProductFilter] = useState('todos');
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [queryKey, setQueryKey] = useState(0);
 
     // Pagination State
@@ -92,13 +93,75 @@ export default function StockMovementPage() {
             filtered = filtered.filter(m => m.product_id === productFilter);
         }
 
-        // Sort by date desc
-        return filtered.sort((a, b) => {
-            const dateA = a.date instanceof Timestamp ? a.date.toMillis() : new Date(a.date).getTime();
-            const dateB = b.date instanceof Timestamp ? b.date.toMillis() : new Date(b.date).getTime();
-            return dateB - dateA;
-        });
-    }, [movements, products, statusFilter, categoryFilter, productFilter]);
+        // Sort
+        if (sortConfig !== null) {
+            filtered.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfig.key) {
+                    case 'date':
+                        aValue = a.date instanceof Timestamp ? a.date.toMillis() : new Date(a.date).getTime();
+                        bValue = b.date instanceof Timestamp ? b.date.toMillis() : new Date(b.date).getTime();
+                        break;
+                    case 'local':
+                        aValue = (a.local_name || a.local_id || '').toLowerCase();
+                        bValue = (b.local_name || b.local_id || '').toLowerCase();
+                        break;
+                    case 'product':
+                        aValue = (a.product_name || '').toLowerCase();
+                        bValue = (b.product_name || '').toLowerCase();
+                        break;
+                    case 'adjustment':
+                        // Sort by absolute difference or just the change amount? Let's do algebraic difference.
+                        aValue = (a.to || 0) - (a.from || 0);
+                        bValue = (b.to || 0) - (b.from || 0);
+                        break;
+                    case 'concept':
+                        aValue = (a.concepto || a.cause || '').toLowerCase();
+                        bValue = (b.concepto || b.cause || '').toLowerCase();
+                        break;
+                    case 'staff':
+                        aValue = (a.staff_name || '').toLowerCase();
+                        bValue = (b.staff_name || '').toLowerCase();
+                        break;
+                    case 'comment':
+                        aValue = (a.comment || '').toLowerCase();
+                        bValue = (b.comment || '').toLowerCase();
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        } else {
+            // Sort by date desc (default)
+            filtered.sort((a, b) => {
+                const dateA = a.date instanceof Timestamp ? a.date.toMillis() : new Date(a.date).getTime();
+                const dateB = b.date instanceof Timestamp ? b.date.toMillis() : new Date(b.date).getTime();
+                return dateB - dateA;
+            });
+        }
+
+        return filtered;
+    }, [movements, products, statusFilter, categoryFilter, productFilter, sortConfig]);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ field }: { field: string }) => {
+        if (!sortConfig || sortConfig.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+        if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+    };
 
     // Pagination Logic
     useEffect(() => {
@@ -215,13 +278,48 @@ export default function StockMovementPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>FECHA</TableHead>
-                                <TableHead>LOCAL</TableHead>
-                                <TableHead>PRODUCTO</TableHead>
-                                <TableHead>AJUSTE</TableHead>
-                                <TableHead>CONCEPTO</TableHead>
-                                <TableHead>STAFF</TableHead>
-                                <TableHead>COMENTARIOS</TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('date')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        FECHA
+                                        <SortIcon field="date" />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('local')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        LOCAL
+                                        <SortIcon field="local" />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('product')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        PRODUCTO
+                                        <SortIcon field="product" />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('adjustment')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        AJUSTE
+                                        <SortIcon field="adjustment" />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('concept')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        CONCEPTO
+                                        <SortIcon field="concept" />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('staff')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        STAFF
+                                        <SortIcon field="staff" />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('comment')}>
+                                    <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                        COMENTARIOS
+                                        <SortIcon field="comment" />
+                                    </div>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>

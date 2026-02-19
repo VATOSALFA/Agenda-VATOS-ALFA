@@ -70,7 +70,10 @@ import {
     ChevronRight,
     DollarSign,
     CreditCard,
-    Settings
+    Settings,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -99,6 +102,7 @@ import { CommissionPaymentModal } from '@/components/sales/commission-payment-mo
 import { Switch } from '@/components/ui/switch';
 import { useCashBoxData } from './use-cash-box-data';
 import { useLiveCash } from './use-live-cash';
+import { useLocal } from '@/contexts/local-context';
 
 
 const SummaryCard = ({
@@ -176,19 +180,33 @@ export default function CashBoxPage() {
     const [itemsPerPageEgresos, setItemsPerPageEgresos] = useState(10);
     const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
     const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
     const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', 'caja-settings', where('__name__', '==', 'caja'));
     const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
+
+    const { selectedLocalId: contextSelectedLocalId } = useLocal();
 
     useEffect(() => {
         setIsClientMounted(true);
         const today = new Date();
         const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
         setDateRange(initialDateRange);
-        const initialLocalId = user?.local_id || 'todos';
+
+        let initialLocalId = 'todos';
+        if (user?.role === 'Administrador general') {
+            if (contextSelectedLocalId) {
+                initialLocalId = contextSelectedLocalId;
+            } else if (user.local_id) {
+                initialLocalId = user.local_id;
+            }
+        } else if (user?.local_id) {
+            initialLocalId = user.local_id;
+        }
+
         setSelectedLocalId(initialLocalId);
         setActiveFilters({ dateRange: initialDateRange, localId: initialLocalId });
-    }, [user]);
+    }, [user, contextSelectedLocalId]);
 
     const {
         sales: salesWithClientData,
@@ -199,6 +217,73 @@ export default function CashBoxPage() {
         maps: { local: localMap, professional: professionalMap },
         raw: { locales }
     } = useCashBoxData(activeFilters, queryKey);
+
+    const sortedSales = useMemo(() => {
+        let sortableItems = [...salesWithClientData];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfig.key) {
+                    case 'id':
+                        aValue = a.id;
+                        bValue = b.id;
+                        break;
+                    case 'fecha_hora_venta':
+                        aValue = a.fecha_hora_venta?.seconds || 0;
+                        bValue = b.fecha_hora_venta?.seconds || 0;
+                        break;
+                    case 'local':
+                        aValue = (localMap.get(a.local_id ?? '') || a.local_id || '').toLowerCase();
+                        bValue = (localMap.get(b.local_id ?? '') || b.local_id || '').toLowerCase();
+                        break;
+                    case 'client':
+                        aValue = `${a.client?.nombre || ''} ${a.client?.apellido || ''}`.trim().toLowerCase();
+                        bValue = `${b.client?.nombre || ''} ${b.client?.apellido || ''}`.trim().toLowerCase();
+                        break;
+                    case 'professional':
+                        const getProfNames = (s: Sale) => Array.from(new Set(s.items?.map(i => professionalMap.get(i.barbero_id) || '').filter(Boolean))).join(', ').toLowerCase();
+                        aValue = getProfNames(a);
+                        bValue = getProfNames(b);
+                        break;
+                    case 'items':
+                        aValue = (a.items?.map(i => i.nombre).join(', ') || '').toLowerCase();
+                        bValue = (b.items?.map(i => i.nombre).join(', ') || '').toLowerCase();
+                        break;
+                    case 'total':
+                        aValue = (a.monto_pagado_real !== undefined && a.monto_pagado_real < a.total) ? a.monto_pagado_real : a.total;
+                        bValue = (b.monto_pagado_real !== undefined && b.monto_pagado_real < b.total) ? b.monto_pagado_real : b.total;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [salesWithClientData, sortConfig, localMap, professionalMap]);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ field }: { field: string }) => {
+        if (!sortConfig || sortConfig.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+        if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+    };
 
     // We already have loading state from hook
     const localesLoading = dataLoading;
@@ -307,10 +392,116 @@ export default function CashBoxPage() {
     const handleDeleteEgreso = async () => {
         if (!egresoToDelete || egresoDeleteConfirmationText !== 'ELIMINAR' || !db) return;
         try {
-            await deleteDoc(doc(db, 'egresos', egresoToDelete.id));
+            const batch = writeBatch(db);
+            const egresoRef = doc(db, 'egresos', egresoToDelete.id);
+
+            // SPECIAL LOGIC: Revert Commission Payment
+            if (egresoToDelete.concepto === 'Pago de Comisión y Propinas') {
+                const professionalId = egresoToDelete.aQuien;
+
+                // Case A: Structured details exist (New payments)
+                if (egresoToDelete.commission_payment_details) {
+                    const { saleItemIds, tipSaleIds } = egresoToDelete.commission_payment_details;
+
+                    // Group item updates by saleId
+                    const salesToUpdate = new Map<string, { itemsToUnpay: number[], unpayTip: boolean }>();
+
+                    saleItemIds?.forEach((detail: { saleId: string, itemIndex: number }) => { // Type check safety
+                        if (!salesToUpdate.has(detail.saleId)) {
+                            salesToUpdate.set(detail.saleId, { itemsToUnpay: [], unpayTip: false });
+                        }
+                        salesToUpdate.get(detail.saleId)?.itemsToUnpay.push(detail.itemIndex);
+                    });
+
+                    tipSaleIds?.forEach((saleId: string) => { // Type check safety
+                        if (!salesToUpdate.has(saleId)) {
+                            salesToUpdate.set(saleId, { itemsToUnpay: [], unpayTip: false });
+                        }
+                        const data = salesToUpdate.get(saleId);
+                        if (data) data.unpayTip = true;
+                    });
+
+                    // Fetch and update each sale
+                    for (const [saleId, changes] of Array.from(salesToUpdate.entries())) {
+                        const saleRef = doc(db, 'ventas', saleId);
+                        const saleSnap = await getDoc(saleRef);
+                        if (saleSnap.exists()) {
+                            const saleData = saleSnap.data() as Sale;
+                            const newItems = [...(saleData.items || [])];
+                            let modified = false;
+
+                            changes.itemsToUnpay.forEach(index => {
+                                if (newItems[index]) {
+                                    newItems[index].commissionPaid = false;
+                                    modified = true;
+                                }
+                            });
+
+                            const updateData: any = {};
+                            if (modified) updateData.items = newItems;
+                            if (changes.unpayTip) updateData.tipPaid = false;
+
+                            if (Object.keys(updateData).length > 0) {
+                                batch.update(saleRef, updateData);
+                            }
+                        }
+                    }
+
+                } else {
+                    // Case B: Heuristic fallback (Old/Current payments)
+                    // Find sales on the same day as the expense
+                    const expenseDate = egresoToDelete.fecha instanceof Timestamp ? egresoToDelete.fecha.toDate() : new Date(egresoToDelete.fecha);
+                    const start = startOfDay(expenseDate);
+                    const end = endOfDay(expenseDate);
+
+                    const salesQuery = query(
+                        collection(db, 'ventas'),
+                        where('fecha_hora_venta', '>=', Timestamp.fromDate(start)),
+                        where('fecha_hora_venta', '<=', Timestamp.fromDate(end))
+                    );
+
+                    const salesSnap = await getDocs(salesQuery);
+
+                    salesSnap.forEach(docSnap => {
+                        const sale = docSnap.data() as Sale;
+                        let modified = false;
+                        const newItems = [...(sale.items || [])];
+
+                        // Revert item commissions
+                        newItems.forEach((item, index) => {
+                            if (item.barbero_id === professionalId && item.commissionPaid) {
+                                newItems[index].commissionPaid = false;
+                                modified = true;
+                            }
+                        });
+
+                        const updateData: any = {};
+                        if (modified) updateData.items = newItems;
+
+                        // Revert tips if this professional is involved
+                        // Use heuristic: if professional is in the sale items item.barbero_id, assume they were part of the tip payout
+                        if (sale.tipPaid) {
+                            const isProfessionalInvolved = sale.items?.some(i => i.barbero_id === professionalId);
+                            if (isProfessionalInvolved) {
+                                updateData.tipPaid = false;
+                            }
+                        }
+
+                        if (Object.keys(updateData).length > 0) {
+                            batch.update(docSnap.ref, updateData);
+                        }
+                    });
+                }
+            }
+
+            // Delete Egreso
+            batch.delete(egresoRef);
+
+            await batch.commit();
+
             toast({
                 title: "Egreso Eliminado",
-                description: "El egreso ha sido eliminado permanentemente.",
+                description: "El egreso ha sido eliminado y, si era un pago de comisión, se ha revertido.",
             });
             setQueryKey(prevKey => prevKey + 1);
         } catch (error) {
@@ -484,8 +675,9 @@ export default function CashBoxPage() {
 
     const isLocalAdmin = user?.role !== 'Administrador general';
 
-    const totalPagesSales = Math.ceil(salesWithClientData.length / itemsPerPageSales);
-    const paginatedSales = salesWithClientData.slice(
+    // Use sortedSales instead of salesWithClientData
+    const totalPagesSales = Math.ceil(sortedSales.length / itemsPerPageSales);
+    const paginatedSales = sortedSales.slice(
         (currentPageSales - 1) * itemsPerPageSales,
         currentPageSales * itemsPerPageSales
     );
@@ -633,14 +825,54 @@ export default function CashBoxPage() {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>ID</TableHead>
-                                                    <TableHead>Fecha De Pago</TableHead>
-                                                    <TableHead>Local</TableHead>
-                                                    <TableHead>Cliente</TableHead>
-                                                    <TableHead>Profesional</TableHead>
-                                                    <TableHead>Detalle</TableHead>
-                                                    <TableHead className="text-right">Monto Facturado</TableHead>
-                                                    <TableHead className="text-right">Flujo Del Periodo</TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('id')}>
+                                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            ID
+                                                            <SortIcon field="id" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('fecha_hora_venta')}>
+                                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Fecha De Pago
+                                                            <SortIcon field="fecha_hora_venta" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('local')}>
+                                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Local
+                                                            <SortIcon field="local" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('client')}>
+                                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Cliente
+                                                            <SortIcon field="client" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('professional')}>
+                                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Profesional
+                                                            <SortIcon field="professional" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('items')}>
+                                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Detalle
+                                                            <SortIcon field="items" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total')}>
+                                                        <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Monto Facturado
+                                                            <SortIcon field="total" />
+                                                        </div>
+                                                    </TableHead>
+                                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total')}>
+                                                        <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                                            Flujo Del Periodo
+                                                            <SortIcon field="total" />
+                                                        </div>
+                                                    </TableHead>
                                                     <TableHead className="text-right">Opciones</TableHead>
                                                 </TableRow>
                                             </TableHeader>

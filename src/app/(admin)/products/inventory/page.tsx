@@ -5,7 +5,7 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Filter, Search, Edit, Trash2, Upload, Settings } from 'lucide-react';
+import { Plus, Filter, Search, Edit, Trash2, Upload, Settings, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -61,6 +61,8 @@ export default function InventoryPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [stockUpdateProduct, setStockUpdateProduct] = useState<Product | null>(null);
 
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
   const catalogMap = useMemo(() => {
     if (categoriesLoading || brandsLoading || presentationsLoading) return { categories: new Map(), brands: new Map(), presentations: new Map() };
     return {
@@ -72,10 +74,73 @@ export default function InventoryPage() {
 
 
   const filteredProducts = useMemo(() => {
-    const sortedProducts = [...allProducts].sort((a, b) => (a.order || 99) - (b.order || 99));
-    if (!searchTerm) return sortedProducts;
-    return sortedProducts.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [allProducts, searchTerm]);
+    let result = [...allProducts];
+
+    // Filter by search term
+    if (searchTerm) {
+      result = result.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+
+    // Sort
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortConfig.key) {
+          case 'nombre':
+            aValue = (a.nombre || '').toLowerCase();
+            bValue = (b.nombre || '').toLowerCase();
+            break;
+          case 'categoria':
+            aValue = (catalogMap.categories.get(a.category_id) || '').toLowerCase();
+            bValue = (catalogMap.categories.get(b.category_id) || '').toLowerCase();
+            break;
+          case 'marca':
+            aValue = (catalogMap.brands.get(a.brand_id) || '').toLowerCase();
+            bValue = (catalogMap.brands.get(b.brand_id) || '').toLowerCase();
+            break;
+          case 'precio':
+            aValue = a.public_price || 0;
+            bValue = b.public_price || 0;
+            break;
+          case 'stock':
+            aValue = a.stock || 0;
+            bValue = b.stock || 0;
+            break;
+          default:
+            return 0;
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      // Default sort by order
+      result.sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 9999;
+        const orderB = b.order !== undefined ? b.order : 9999;
+        return orderA - orderB;
+      });
+    }
+
+    return result;
+  }, [allProducts, searchTerm, sortConfig, catalogMap]);
+
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ field }: { field: string }) => {
+    if (!sortConfig || sortConfig.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+    if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+    return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+  };
 
 
   const handleDataUpdated = (newEntityId?: string) => {
@@ -139,11 +204,36 @@ export default function InventoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead>Marca</TableHead>
-                    <TableHead>Precio de venta al público</TableHead>
-                    <TableHead>Stock</TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('nombre')}>
+                      <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                        Nombre
+                        <SortIcon field="nombre" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('categoria')}>
+                      <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                        Categoría
+                        <SortIcon field="categoria" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('marca')}>
+                      <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                        Marca
+                        <SortIcon field="marca" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('precio')}>
+                      <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                        Precio de venta al público
+                        <SortIcon field="precio" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('stock')}>
+                      <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                        Stock
+                        <SortIcon field="stock" />
+                      </div>
+                    </TableHead>
                     <TableHead className="text-right">Opciones</TableHead>
                   </TableRow>
                 </TableHeader>

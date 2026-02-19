@@ -65,16 +65,20 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
     const todayEnd = endOfDay(new Date());
 
     const salesQueryConstraints = useMemo(() => {
+        const start = dateRange?.from ? startOfDay(dateRange.from) : todayStart;
+        const end = dateRange?.to ? endOfDay(dateRange.to) : (dateRange?.from ? endOfDay(dateRange.from) : todayEnd);
+
         const constraints = [];
-        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(todayStart)));
-        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(todayEnd)));
+        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(start)));
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(end)));
         if (localId && localId !== 'todos') {
             constraints.push(where('local_id', '==', localId));
         }
         return constraints;
-    }, [todayStart, todayEnd, localId]);
+    }, [dateRange, todayStart, todayEnd, localId]);
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints ? `sales-commissions-${format(todayStart, 'yyyy-MM-dd')}-${localId}` : undefined, ...(salesQueryConstraints || []));
+    const startKey = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : format(todayStart, 'yyyy-MM-dd');
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', salesQueryConstraints ? `sales-commissions-${startKey}-${localId}` : undefined, ...(salesQueryConstraints || []));
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
@@ -238,6 +242,11 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         aQuien: comm.professionalId,
                         local_id: localId,
                         comentarios: `Pago a ${comm.professionalName} (Comisión Servicios: $${comm.totalServiceCommission.toFixed(2)}, Comisión Productos: $${comm.totalProductCommission.toFixed(2)}, Propina: $${comm.totalTips.toFixed(2)}) el ${formattedDate}`,
+                        commission_payment_details: {
+                            professionalId: comm.professionalId,
+                            saleItemIds: comm.saleItemIds,
+                            tipSaleIds: comm.tipSaleIds
+                        }
                     });
 
                     // Mark items as paid
@@ -302,9 +311,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-4xl">
                 <DialogHeader>
-                    <DialogTitle>Pago de Comisiones y Propinas del Día</DialogTitle>
+                    <DialogTitle>Pago de Comisiones y Propinas</DialogTitle>
                     <DialogDescription>
-                        Calcula y registra el pago para los profesionales para el día de hoy.
+                        Calcula y registra el pago para los profesionales en el periodo seleccionado.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-2 sm:py-4 flex-1 overflow-y-auto">
@@ -312,7 +321,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         <Info className="h-4 w-4" />
                         <AlertTitle>Revisión de Pagos</AlertTitle>
                         <AlertDescription>
-                            El sistema ha calculado las comisiones y propinas pendientes de pago para hoy. Al presionar "Pagar", se generará un egreso por el total para cada profesional seleccionado.
+                            El sistema ha calculado las comisiones y propinas pendientes de pago para el periodo seleccionado. Al presionar "Pagar", se generará un egreso por el total para cada profesional seleccionado.
                         </AlertDescription>
                     </Alert>
 
@@ -338,7 +347,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                     {isLoading ? (
                                         <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                     ) : commissionData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24">No hay comisiones ni propinas pendientes para hoy.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24">No hay comisiones ni propinas pendientes para el periodo seleccionado.</TableCell></TableRow>
                                     ) : commissionData.map((row) => (
                                         <TableRow key={row.professionalId}>
                                             <TableCell>

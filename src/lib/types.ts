@@ -277,6 +277,11 @@ export interface Egreso {
   aQuienId?: string;
   comentarios?: string;
   local_id?: string;
+  commission_payment_details?: {
+    professionalId: string;
+    saleItemIds: { saleId: string; itemIndex: number }[];
+    tipSaleIds: string[];
+  };
 }
 
 export interface IngresoManual {

@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar as CalendarIcon, Search, Download, Eye, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, Download, Eye, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CashClosing, User as AppUser } from '@/lib/types';
 import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
@@ -145,12 +145,16 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
 
 
 export default function CashClosingsPage() {
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: new Date(),
+        to: new Date(),
+    });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [deliveredByFilter, setDeliveredByFilter] = useState('todos');
     const [receivedByFilter, setReceivedByFilter] = useState('todos');
     const [queryKey, setQueryKey] = useState(0);
     const [selectedClosing, setSelectedClosing] = useState<CashClosing | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
     const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
 
@@ -173,12 +177,80 @@ export default function CashClosingsPage() {
 
     const { data: closings, loading: closingsLoading } = useFirestoreQuery<CashClosing>('cortes_caja', queryKey, ...queryConstraints);
 
+    const sortedClosings = useMemo(() => {
+        let sortableItems = [...closings];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfig.key) {
+                    case 'fecha':
+                        aValue = a.fecha_corte?.seconds || 0;
+                        bValue = b.fecha_corte?.seconds || 0;
+                        break;
+                    case 'entrega':
+                        aValue = (a.persona_entrega_nombre || '').toLowerCase();
+                        bValue = (b.persona_entrega_nombre || '').toLowerCase();
+                        break;
+                    case 'recibe':
+                        aValue = (a.persona_recibe || '').toLowerCase();
+                        bValue = (b.persona_recibe || '').toLowerCase();
+                        break;
+                    case 'total_sistema':
+                        aValue = a.total_sistema || 0;
+                        bValue = b.total_sistema || 0;
+                        break;
+                    case 'total_contado':
+                        aValue = a.total_calculado || 0;
+                        bValue = b.total_calculado || 0;
+                        break;
+                    case 'total_entregado':
+                        aValue = (a.total_calculado || 0) - (a.fondo_base || 0);
+                        bValue = (b.total_calculado || 0) - (b.fondo_base || 0);
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        } else {
+            // Default sort by date desc if no sort is applied (usually firestore does this but good to enforce in UI if mixing/matching)
+            // Actually firestore query doesn't have orderBy here, so we should probably add default sort.
+            sortableItems.sort((a, b) => (b.fecha_corte?.seconds || 0) - (a.fecha_corte?.seconds || 0));
+        }
+        return sortableItems;
+    }, [closings, sortConfig]);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ field }: { field: string }) => {
+        if (!sortConfig || sortConfig.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+        if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+    };
+
     const isLoading = usersLoading || closingsLoading;
 
     return (
         <>
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-                <h2 className="text-3xl font-bold tracking-tight">Reporte de cierres de caja</h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-bold tracking-tight">Reporte de cierres de caja</h2>
+                </div>
 
                 <Card>
                     <CardHeader>
@@ -247,12 +319,42 @@ export default function CashClosingsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Fecha</TableHead>
-                                    <TableHead>Entrega</TableHead>
-                                    <TableHead>Recibe</TableHead>
-                                    <TableHead className="text-right">Total sistema</TableHead>
-                                    <TableHead className="text-right">Total contado</TableHead>
-                                    <TableHead className="text-right">Total entregado</TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('fecha')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Fecha
+                                            <SortIcon field="fecha" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('entrega')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Entrega
+                                            <SortIcon field="entrega" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('recibe')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Recibe
+                                            <SortIcon field="recibe" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_sistema')}>
+                                        <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Total sistema
+                                            <SortIcon field="total_sistema" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_contado')}>
+                                        <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Total contado
+                                            <SortIcon field="total_contado" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_entregado')}>
+                                        <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Total entregado
+                                            <SortIcon field="total_entregado" />
+                                        </div>
+                                    </TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -261,10 +363,10 @@ export default function CashClosingsPage() {
                                     Array.from({ length: 5 }).map((_, i) => (
                                         <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                                     ))
-                                ) : closings.length === 0 ? (
+                                ) : sortedClosings.length === 0 ? (
                                     <TableRow><TableCell colSpan={7} className="text-center h-24">No se encontraron cierres de caja.</TableCell></TableRow>
                                 ) : (
-                                    closings.map(closing => (
+                                    sortedClosings.map(closing => (
                                         <TableRow key={closing.id}>
                                             <TableCell>{format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}</TableCell>
                                             <TableCell>{closing.persona_entrega_nombre}</TableCell>

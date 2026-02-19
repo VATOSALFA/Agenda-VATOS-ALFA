@@ -26,6 +26,7 @@ import {
     SheetDescription,
     SheetFooter,
 } from '@/components/ui/sheet';
+import { ChevronLeft } from 'lucide-react'; // Import ChevronLeft
 import {
     Dialog,
     DialogContent,
@@ -382,6 +383,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const { toast } = useToast();
     const { user, db } = useAuth();
     const [step, setStep] = useState(1);
+    const [isMinimized, setIsMinimized] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setIsMinimized(false);
+        }
+    }, [isOpen]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [clientSearchTerm, setClientSearchTerm] = useState('');
@@ -1394,12 +1402,37 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     return (
         <>
-            <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+            <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={!isMinimized}>
                 <SheetContent
-                    className="w-full sm:max-w-[1100px] flex flex-col p-0 gap-0"
+                    className={cn(
+                        "w-full sm:max-w-[1100px] flex flex-col p-0 gap-0 transition-transform duration-300 ease-in-out",
+                        isMinimized && "translate-x-[100%] shadow-none border-none pointer-events-none"
+                    )}
                     hideCloseButton
+                    hideOverlay={isMinimized}
                     onCloseAutoFocus={(e) => e.preventDefault()}
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                        setIsMinimized(true);
+                    }}
+                    onPointerDownOutside={(e) => {
+                        e.preventDefault();
+                        setIsMinimized(true);
+                    }}
                 >
+                    <div
+                        className={cn(
+                            "absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 flex h-24 w-10 items-center justify-center rounded-l-lg bg-primary text-primary-foreground shadow-lg transition-all cursor-pointer z-[101] hover:pl-2 pointer-events-auto",
+                            !isMinimized && "hidden"
+                        )}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsMinimized(false);
+                        }}
+                        title="Restaurar venta"
+                    >
+                        <ChevronLeft className="h-6 w-6 animate-pulse" />
+                    </div>
                     <SheetHeader className="p-6 border-b">
                         <SheetTitle>Registrar Nueva Venta</SheetTitle>
                         <SheetDescription>

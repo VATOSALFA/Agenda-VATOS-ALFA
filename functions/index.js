@@ -1518,7 +1518,7 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
  */
 exports.sendDailyAgendaSummary = onSchedule({
   schedule: "every 30 minutes",
-  timezone: "America/Mexico_City",
+  timeZone: "America/Mexico_City",
   secrets: [resendApiKey]
 }, async (event) => {
   console.log("[DailySummary] Cron triggered. Checking time and config...");

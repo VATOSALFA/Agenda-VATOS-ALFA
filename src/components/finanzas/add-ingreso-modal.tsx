@@ -200,7 +200,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col overflow-hidden">
             <DialogHeader>
               <DialogTitle>{isEditMode ? 'Editar Ingreso Manual' : 'Registrar Ingreso de Caja'}</DialogTitle>
               <DialogDescription>
@@ -208,7 +208,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-5 px-1 py-6">
+            <div className="space-y-5 px-1 py-6 flex-1 overflow-y-auto min-h-0">
 
               {/* Fila 1: Monto y Fecha */}
               <div className="grid grid-cols-2 gap-4">

@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight, Pencil, Check, ChevronsUpDown } from "lucide-react";
+import { MoreHorizontal, Search, Download, Plus, Calendar as CalendarIcon, ChevronDown, ChevronUp, Eye, Send, Printer, Trash2, AlertTriangle, Info, ChevronLeft, ChevronRight, Pencil, Check, ChevronsUpDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -15,6 +15,7 @@ import { format, startOfDay, endOfDay, parseISO, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, doc, deleteDoc, getDocs, collection, query as firestoreQuery, writeBatch, increment, getDoc, Timestamp, updateDoc } from "firebase/firestore";
 import type { Client, Local, Profesional, Service, AuthCode, Sale, User, Role } from "@/lib/types";
@@ -120,6 +121,8 @@ export default function InvoicedSalesPage() {
     }, [user]); // Removed isReceptionist dependency as logic is now uniform
 
 
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
     const { sales: populatedSales, loading: salesLoading, salesData } = useInvoicedSales(activeFilters, queryKey);
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
@@ -128,8 +131,78 @@ export default function InvoicedSalesPage() {
         return professionals?.map(p => ({ value: p.id, label: p.name })) || [];
     }, [professionals]);
 
-    const totalPages = Math.ceil(populatedSales.length / itemsPerPage);
-    const paginatedSales = populatedSales.slice(
+    const sortedSales = useMemo(() => {
+        let sortableItems = [...populatedSales];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfig.key) {
+                    case 'fecha_hora_venta':
+                        aValue = a.fecha_hora_venta?.seconds || 0;
+                        bValue = b.fecha_hora_venta?.seconds || 0;
+                        break;
+                    case 'client':
+                        aValue = `${a.client?.nombre || ''} ${a.client?.apellido || ''}`.trim().toLowerCase();
+                        bValue = `${b.client?.nombre || ''} ${b.client?.apellido || ''}`.trim().toLowerCase();
+                        break;
+                    case 'concepto':
+                        aValue = getSaleConcept(a).toLowerCase();
+                        bValue = getSaleConcept(b).toLowerCase();
+                        break;
+                    case 'professional':
+                        aValue = (a.professionalNames || '').toLowerCase();
+                        bValue = (b.professionalNames || '').toLowerCase();
+                        break;
+                    case 'metodo_pago':
+                        aValue = (a.metodo_pago || '').toLowerCase();
+                        bValue = (b.metodo_pago || '').toLowerCase();
+                        break;
+                    case 'total':
+                        aValue = (a.monto_pagado_real !== undefined && a.monto_pagado_real < a.total) ? a.monto_pagado_real : a.total;
+                        bValue = (b.monto_pagado_real !== undefined && b.monto_pagado_real < b.total) ? b.monto_pagado_real : b.total;
+                        break;
+                    case 'detalle':
+                        aValue = (a.items?.map(i => i.nombre).join(', ') || '').toLowerCase();
+                        bValue = (b.items?.map(i => i.nombre).join(', ') || '').toLowerCase();
+                        break;
+                    case 'descuento':
+                        aValue = a.descuento?.valor || 0;
+                        bValue = b.descuento?.valor || 0;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [populatedSales, sortConfig]);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ field }: { field: string }) => {
+        if (!sortConfig || sortConfig.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+        if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+    };
+
+    const totalPages = Math.ceil(sortedSales.length / itemsPerPage);
+    const paginatedSales = sortedSales.slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
@@ -558,7 +631,12 @@ export default function InvoicedSalesPage() {
                 <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <div>
-                            <CardTitle>Pagos</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                Pagos
+                                <Badge variant="secondary" className="font-normal">
+                                    {populatedSales.length} {populatedSales.length === 1 ? 'venta' : 'ventas'}
+                                </Badge>
+                            </CardTitle>
                             <CardDescription>Listado de ventas facturadas en el período seleccionado.</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
@@ -569,14 +647,54 @@ export default function InvoicedSalesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Fecha de pago</TableHead>
-                                    <TableHead>Cliente</TableHead>
-                                    <TableHead>Concepto</TableHead>
-                                    <TableHead>Detalle</TableHead>
-                                    <TableHead>Profesional</TableHead>
-                                    <TableHead>Método de Pago</TableHead>
-                                    <TableHead>Total</TableHead>
-                                    <TableHead>Descuento</TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('fecha_hora_venta')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Fecha de pago
+                                            <SortIcon field="fecha_hora_venta" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('client')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Cliente
+                                            <SortIcon field="client" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('concepto')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Concepto
+                                            <SortIcon field="concepto" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('detalle')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Detalle
+                                            <SortIcon field="detalle" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('professional')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Profesional
+                                            <SortIcon field="professional" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('metodo_pago')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Método de Pago
+                                            <SortIcon field="metodo_pago" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('total')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Total
+                                            <SortIcon field="total" />
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('descuento')}>
+                                        <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
+                                            Descuento
+                                            <SortIcon field="descuento" />
+                                        </div>
+                                    </TableHead>
                                     <TableHead className="text-right">Opciones</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -604,7 +722,13 @@ export default function InvoicedSalesPage() {
                                             <TableCell>
                                                 ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
-                                            <TableCell>0.00%</TableCell>
+                                            <TableCell>
+                                                {sale.descuento?.valor ? (
+                                                    sale.descuento.tipo === 'percentage'
+                                                        ? `${sale.descuento.valor}%`
+                                                        : `$${sale.descuento.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                                                ) : '0.00%'}
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="ghost" size="icon" onClick={() => handleViewDetails(sale)}>

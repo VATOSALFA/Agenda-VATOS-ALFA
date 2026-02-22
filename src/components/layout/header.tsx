@@ -33,6 +33,7 @@ import {
   User,
   Menu,
   ShieldCheck,
+  LayoutDashboard,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -56,16 +57,18 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { ExternalLink, WifiOff } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ExternalLink } from 'lucide-react';
+import { useFeatures } from '@/hooks/use-features';
+import { useMemo } from 'react';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 
-const mainNavLinks = [
-  { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
-  { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
-];
+// Removed top-level mainNavLinks
+
+
+
 
 const salesNavLinks = [
   { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard, permission: 'ver_ventas_facturadas' },
@@ -108,6 +111,14 @@ export default function Header() {
   const { user, signOut, db } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { data: empresaData } = useFirestoreQuery<any>('empresa');
+  const { enableBarberDashboard } = useFeatures();
+  const isOnline = useNetworkStatus();
+
+  const mainNavLinks = useMemo(() => [
+    ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
+    { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
+    { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
+  ], [enableBarberDashboard]);
 
   // Get website URL from settings or fallback to current origin
   const configuredWebsiteUrl = empresaData?.[0]?.website_slug;
@@ -183,6 +194,13 @@ export default function Header() {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-border/40 backdrop-blur-sm">
         <div className="flex h-16 items-center px-4 md:px-6">
+
+          {!isOnline && (
+            <div className="bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-xs font-bold mr-4 flex items-center animate-pulse">
+              <WifiOff className="h-3 w-3 mr-1" />
+              OFFLINE
+            </div>
+          )}
 
           {/* Mobile Menu Trigger */}
           <div className="md:hidden mr-2">

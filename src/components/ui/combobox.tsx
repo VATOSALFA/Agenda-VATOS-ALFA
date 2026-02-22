@@ -37,7 +37,9 @@ export function Combobox({ options, value, onChange, placeholder = "Select an op
 
   const defaultFilter = (value: string, search: string) => {
     const label = optionsMap.get(value);
-    if (label?.includes(search.toLowerCase())) return 1;
+    if (!label || !search) return 1;
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (normalize(label).includes(normalize(search))) return 1;
     return 0;
   }
 

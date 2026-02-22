@@ -39,7 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { useCommissionsData } from './use-commissions-data';
 import type { ProfessionalCommissionSummary } from "@/lib/types";
-
+import { logAuditAction } from '@/lib/audit-logger';
 
 export default function CommissionsPage() {
     const { user } = useAuth();
@@ -95,9 +95,18 @@ export default function CommissionsPage() {
         overallSummary,
         serviceSummary,
         productSummary,
+        tipSummary,
         loading: isLoading,
         raw: { locales, professionals }
     } = useCommissionsData(activeFilters, queryKey);
+
+    const breakdownParts = [];
+    if (serviceSummary.serviceSales > 0) breakdownParts.push(`$${serviceSummary.serviceSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por venta de servicios`);
+    if (productSummary.productSales > 0) breakdownParts.push(`$${productSummary.productSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por venta de productos`);
+    if (tipSummary && tipSummary.tipAmount > 0) breakdownParts.push(`$${tipSummary.tipAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} de propinas`);
+
+    // Fallback just in case everything is 0
+    const breakdownText = breakdownParts.length > 0 ? breakdownParts.join(' + ') : `$${overallSummary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en ventas`;
 
     // Derived loading states for UI compatibility (though isLoading covers all)
     const localesLoading = isLoading;
@@ -173,6 +182,14 @@ export default function CommissionsPage() {
             triggerDownload();
             setIsDownloadModalOpen(false);
             setAuthCode('');
+            await logAuditAction({
+                action: 'Autorización por Código',
+                details: 'Acción autorizada: Descargar reporte de comisiones filtrado.',
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'info',
+                localId: localFilter !== 'todos' ? localFilter : 'unknown'
+            });
         }
     };
 
@@ -301,7 +318,7 @@ export default function CommissionsPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                            <p className="text-xs text-muted-foreground">Sobre un total de ${overallSummary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en ventas</p>
+                            <p className="text-xs text-muted-foreground mt-1 leading-snug">Sobre un total de {breakdownText}</p>
                         </CardContent>
                     </Card>
                 </div>

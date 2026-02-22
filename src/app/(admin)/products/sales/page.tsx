@@ -39,6 +39,7 @@ import { db } from "@/lib/firebase-client";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { useProductSalesData } from './use-product-sales-data';
 import type { AggregatedProductSale, AggregatedSellerSale } from "@/lib/types";
+import { logAuditAction } from '@/lib/audit-logger';
 
 
 
@@ -176,6 +177,14 @@ export default function ProductSalesPage() {
             triggerDownload();
             setIsDownloadModalOpen(false);
             setAuthCode('');
+            await logAuditAction({
+                action: 'Autorización por Código',
+                details: 'Acción autorizada: Descargar reporte detallado de ventas de productos.',
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'info',
+                localId: 'unknown'
+            });
         }
     };
 

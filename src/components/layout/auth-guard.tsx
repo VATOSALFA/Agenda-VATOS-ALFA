@@ -2,7 +2,6 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import AppLayout from '@/components/layout/app-layout';
 import React from 'react';
 
 // Defines the logic for when to show the AppLayout (Sidebar, Header, etc.)
@@ -19,15 +18,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     // but we can doubly ensure we don't render protected content here.
     // However, AuthProvider usually returns null in this state.
 
-    // If user is logged in and acts like an app user (not on a public landing page)
-    if (user && !isPublicPage && !isAuthPage && !isFullscreenPage) {
-        return (
-            <AppLayout>
-                {children}
-            </AppLayout>
-        );
-    }
-
-    // Default: Render children without layout (Login, Landing, booking flow)
+    // Default: Render children without layout wrapper (since app/(admin)/layout.tsx handles AppLayout now)
     return <>{children}</>;
 }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
@@ -39,7 +39,9 @@ import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useFeatures } from "@/hooks/use-features";
 import Image from 'next/image';
+import { logAuditAction } from '@/lib/audit-logger';
 
 interface EmpresaSettings {
   receipt_logo_url?: string;
@@ -185,6 +187,7 @@ const FiltersSidebar = ({
 
 export default function ClientsPage() {
   const { user, db } = useAuth();
+  const { enableMarketing } = useFeatures();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -706,6 +709,15 @@ export default function ClientsPage() {
       triggerDownload();
       setIsDownloadModalOpen(false);
       setAuthCode('');
+
+      await logAuditAction({
+        action: 'Autorización por Código',
+        details: `Acción autorizada: Descargar reporte de clientes filtrado.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        severity: 'info',
+        localId: localFilter !== 'todos' ? localFilter : 'unknown'
+      });
     }
   };
 
@@ -798,7 +810,7 @@ export default function ClientsPage() {
                       <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
                         <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
                       </TableHead>
-                      <TableHead className="w-[50px]">Mensaje</TableHead>
+                      {enableMarketing && <TableHead className="w-[50px]">Contacto</TableHead>}
                       <TableHead className="text-right">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -831,19 +843,41 @@ export default function ClientsPage() {
                           <TableCell>{client.correo}</TableCell>
                           <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
                           <TableCell>{formatDate(client.creado_en)}</TableCell>
-                          <TableCell>
-                            {hasPhone && (
-                              <a
-                                href={whatsappUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                                title="Enviar mensaje de WhatsApp"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></svg>
-                              </a>
-                            )}
-                          </TableCell>
+                          {enableMarketing && (
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-primary">
+                                    <MessageCircle className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {hasPhone && (
+                                    <DropdownMenuItem onClick={() => {
+                                      const message = activeFilters.inactiveTime !== 'todos'
+                                        ? `Hola ${client.nombre}, te extrañamos en VATOS ALFA. ¡Vuelve pronto!`
+                                        : `Hola ${client.nombre}`;
+                                      window.open(`https://wa.me/${cleanPhone.length === 10 ? '52' + cleanPhone : cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                                    }}>
+                                      <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
+                                    </DropdownMenuItem>
+                                  )}
+                                  {client.correo && (
+                                    <DropdownMenuItem onClick={() => {
+                                      const subject = activeFilters.inactiveTime !== 'todos' ? "¡Te extrañamos!" : "Hola desde VATOS ALFA";
+                                      const body = activeFilters.inactiveTime !== 'todos' ? `Hola ${client.nombre},\n\nHace tiempo que no te vemos. ¡Reserva tu próxima cita hoy!` : `Hola ${client.nombre},`;
+                                      window.open(`mailto:${client.correo}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                                    }}>
+                                      <Mail className="mr-2 h-4 w-4" /> Email
+                                    </DropdownMenuItem>
+                                  )}
+                                  {!hasPhone && !client.correo && (
+                                    <div className="p-2 text-xs text-muted-foreground">Sin datos de contacto</div>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>
@@ -907,7 +941,7 @@ export default function ClientsPage() {
             <DialogTitle>{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
           </DialogHeader>
           <NewClientForm
-            onClientCreated={() => {
+            onFormSubmit={() => {
               setIsClientModalOpen(false);
               setEditingClient(null);
               setQueryKey(prev => prev + 1);
@@ -916,7 +950,7 @@ export default function ClientsPage() {
               setIsClientModalOpen(false);
               setEditingClient(null);
             }}
-            initialData={editingClient}
+            client={editingClient}
           />
         </DialogContent>
       </Dialog>
@@ -926,15 +960,10 @@ export default function ClientsPage() {
           <ClientDetailModal
             client={selectedClient}
             isOpen={isDetailModalOpen}
-            onClose={() => setIsDetailModalOpen(false)}
-            onOpenReservation={() => {
+            onOpenChange={setIsDetailModalOpen}
+            onNewReservation={() => {
               setIsDetailModalOpen(false);
               setIsReservationModalOpen(true);
-            }}
-            onEdit={(client) => {
-              setIsDetailModalOpen(false);
-              setEditingClient(client);
-              setIsClientModalOpen(true);
             }}
           />
 
@@ -944,12 +973,11 @@ export default function ClientsPage() {
                 <DialogTitle>Nueva Reserva para {selectedClient.nombre}</DialogTitle>
               </DialogHeader>
               <NewReservationForm
-                preSelectedClientId={selectedClient.id}
-                onReservationCreated={() => {
+                initialData={{ cliente_id: selectedClient.id }}
+                onFormSubmit={() => {
                   setIsReservationModalOpen(false);
                   toast({ title: "Reserva creada exitosamente" });
                 }}
-                onCancel={() => setIsReservationModalOpen(false)}
               />
             </DialogContent>
           </Dialog>
@@ -958,14 +986,14 @@ export default function ClientsPage() {
 
       <CombineClientsModal
         isOpen={isCombineModalOpen}
-        onClose={() => setIsCombineModalOpen(false)}
+        onOpenChange={setIsCombineModalOpen}
         onClientsCombined={handleDataUpdated}
       />
 
       <UploadClientsModal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onClientsUploaded={handleDataUpdated}
+        onOpenChange={setIsUploadModalOpen}
+        onUploadComplete={handleDataUpdated}
       />
 
       {clientToDelete && (

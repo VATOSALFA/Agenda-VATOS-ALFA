@@ -1,0 +1,18 @@
+{
+    "name": "VATOS ALFA - Barber Shop",
+    "short_name": "VATOS ALFA",
+    "description": "Agenda tu cita con los mejores profesionales.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/logo-vatos-alfa.png",
+            "sizes": "any",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

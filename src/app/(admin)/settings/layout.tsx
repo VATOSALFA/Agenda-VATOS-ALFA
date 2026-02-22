@@ -12,6 +12,7 @@ interface SettingsLayoutProps {
 
 const sidebarNavItems = [
   { title: "Empresa", href: "/settings/empresa" },
+  { title: "Funcionalidades Avanzadas", href: "/settings/features" },
   { title: "Locales", href: "/settings/locales" },
   { title: "Sitio Web", href: "/settings/sitio-web" },
 

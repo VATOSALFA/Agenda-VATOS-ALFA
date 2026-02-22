@@ -50,8 +50,15 @@ export const ClientInput = ({ value, onChange, clients, loading, onSearchChange 
         setOpen(false);
     };
 
+    const customFilter = (value: string, search: string) => {
+        if (!search) return 1;
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        if (normalize(value).includes(normalize(search))) return 1;
+        return 0;
+    };
+
     return (
-        <Command className="h-auto overflow-visible bg-transparent">
+        <Command filter={customFilter} className="h-auto overflow-visible bg-transparent">
             <Popover open={open} onOpenChange={setOpen} modal={false}>
                 <PopoverTrigger asChild>
                     <div

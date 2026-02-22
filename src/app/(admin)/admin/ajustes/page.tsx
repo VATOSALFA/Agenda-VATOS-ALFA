@@ -14,6 +14,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { BluetoothPrinter } from '@/lib/printer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from "@/components/ui/input";
 
 const customerFields = [
     { id: 'email', label: 'Email' },
@@ -33,6 +34,8 @@ interface AjustesSettings {
     simultaneousReservations: boolean;
     resourceOverload: boolean;
     customerFields: Record<string, { use: boolean; required: boolean }>;
+
+    // Advanced Features moved to /settings/features
 }
 
 export default function AjustesPage() {
@@ -51,7 +54,14 @@ export default function AjustesPage() {
             customerFields: customerFields.reduce((acc, field) => {
                 acc[field.id] = { use: true, required: ['phone'].includes(field.id) };
                 return acc;
-            }, {} as Record<string, { use: boolean; required: boolean }>)
+            }, {} as Record<string, { use: boolean; required: boolean }>),
+            /* Moved to settings/features
+            enableMarketing: false,
+            enableLoyaltyPoints: false,
+            loyaltyCashbackPercentage: 10,
+            enableBarberDashboard: false,
+            enableOfflineMode: false,
+            */
         }
     });
 
@@ -69,6 +79,11 @@ export default function AjustesPage() {
                 const agendaSnap = await getDoc(agendaRef);
                 const agendaData = agendaSnap.exists() ? agendaSnap.data() : {};
 
+                // 3. Fetch Advanced Features
+                const featuresRef = doc(db, 'configuracion', 'features');
+                const featuresSnap = await getDoc(featuresRef);
+                const featuresData = featuresSnap.exists() ? featuresSnap.data() : {};
+
                 form.reset({
                     ticketPrinterEnabled: pagosData.ticketPrinterEnabled ?? false,
                     ticketPrinterDeviceName: pagosData.ticketPrinterDeviceName || '',
@@ -79,7 +94,15 @@ export default function AjustesPage() {
                     customerFields: agendaData.customerFields || customerFields.reduce((acc, field) => {
                         acc[field.id] = { use: true, required: ['phone'].includes(field.id) };
                         return acc;
-                    }, {} as Record<string, { use: boolean; required: boolean }>)
+                    }, {} as Record<string, { use: boolean; required: boolean }>),
+
+                    /* Moved to settings/features
+                    enableMarketing: featuresData.enableMarketing ?? false,
+                    enableLoyaltyPoints: featuresData.enableLoyaltyPoints ?? false,
+                    loyaltyCashbackPercentage: featuresData.loyaltyCashbackPercentage ?? 10,
+                    enableBarberDashboard: featuresData.enableBarberDashboard ?? false,
+                    enableOfflineMode: featuresData.enableOfflineMode ?? false,
+                    */
                 });
 
             } catch (error) {
@@ -139,8 +162,6 @@ export default function AjustesPage() {
         setIsSubmitting(true);
         try {
             // 1. Save Printer Settings to 'configuracion/pagos'
-            // We must ONLY update printer fields to avoid overwriting other payment settings if they changed elsewhere (unlikely but safe)
-            // Actually setDoc with merge: true is safer.
             const pagosRef = doc(db, 'configuracion', 'pagos');
             await setDoc(pagosRef, {
                 ticketPrinterEnabled: data.ticketPrinterEnabled,
@@ -155,6 +176,18 @@ export default function AjustesPage() {
                 resourceOverload: data.resourceOverload,
                 customerFields: data.customerFields
             }, { merge: true });
+
+            /* Moved to settings/features
+            // 3. Save Advanced Features to 'configuracion/features'
+            const featuresRef = doc(db, 'configuracion', 'features');
+            await setDoc(featuresRef, {
+                enableMarketing: data.enableMarketing,
+                enableLoyaltyPoints: data.enableLoyaltyPoints,
+                loyaltyCashbackPercentage: Number(data.loyaltyCashbackPercentage),
+                enableBarberDashboard: data.enableBarberDashboard,
+                enableOfflineMode: data.enableOfflineMode,
+            }, { merge: true });
+            */
 
             toast({
                 title: "Configuración guardada",
@@ -184,6 +217,8 @@ export default function AjustesPage() {
 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
                 <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
+
+                    {/* FEATURES MOVED TO /settings/features */}
 
                     {/* IMPRESORA DE TICKETS */}
                     <AccordionItem value="printer" className="border rounded-lg bg-card">

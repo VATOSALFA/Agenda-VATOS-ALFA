@@ -42,16 +42,19 @@ export default function AppInitializer() {
   }, [user, locales, selectedLocalId, setSelectedLocalId]);
 
   useEffect(() => {
-    const handleNewReservation = () => {
-      setReservationInitialData(null);
+    const handleNewReservation = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setReservationInitialData(customEvent.detail || null);
       setIsReservationModalOpen(true);
     };
-    const handleNewBlock = () => {
-      setBlockInitialData(null);
+    const handleNewBlock = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setBlockInitialData(customEvent.detail || null);
       setIsBlockScheduleModalOpen(true);
     };
-    const handleNewSale = () => {
-      setSaleInitialData(null);
+    const handleNewSale = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setSaleInitialData(customEvent.detail || null);
       setIsSaleSheetOpen(true);
       setSaleTrigger(prev => prev + 1);
     };

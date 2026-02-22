@@ -46,6 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: title,
     description: description,
+    manifest: '/manifest.json',
     icons: {
       icon: icon,
       apple: icon,
@@ -57,6 +58,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: '#000000',
 };
 
 import { AuthGuard } from '@/components/layout/auth-guard';

@@ -174,7 +174,7 @@ export default function CashBoxPage() {
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
     const [authCode, setAuthCode] = useState('');
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-    const [authAction, setAuthAction] = useState<(() => void) | null>(null);
+    const [authAction, setAuthAction] = useState<{ execute: () => void, description: string } | null>(null);
     const [currentPageSales, setCurrentPageSales] = useState(1);
     const [itemsPerPageSales, setItemsPerPageSales] = useState(10);
     const [currentPageEgresos, setCurrentPageEgresos] = useState(1);
@@ -396,7 +396,7 @@ export default function CashBoxPage() {
             setEditingEgreso(egreso);
             setIsEgresoModalOpen(true);
         };
-        setAuthAction(() => action);
+        setAuthAction({ execute: action, description: `Editar egreso: ${egreso.concepto} por $${egreso.monto}` });
         setTimeout(() => setIsAuthModalOpen(true), 0);
     };
 
@@ -540,7 +540,7 @@ export default function CashBoxPage() {
 
     const handleOpenDeleteEgresoModal = (egreso: Egreso) => {
         const action = () => setEgresoToDelete(egreso);
-        setAuthAction(() => action);
+        setAuthAction({ execute: action, description: `Eliminar egreso: ${egreso.concepto} por $${egreso.monto}` });
         setTimeout(() => setIsAuthModalOpen(true), 0);
     }
 
@@ -549,13 +549,13 @@ export default function CashBoxPage() {
             setEditingIngreso(ingreso);
             setIsIngresoModalOpen(true);
         };
-        setAuthAction(() => action);
+        setAuthAction({ execute: action, description: `Editar ingreso: ${ingreso.concepto} por $${ingreso.monto}` });
         setTimeout(() => setIsAuthModalOpen(true), 0);
     };
 
     const handleOpenDeleteIngresoModal = (ingreso: IngresoManual) => {
         const action = () => setIngresoToDelete(ingreso);
-        setAuthAction(() => action);
+        setAuthAction({ execute: action, description: `Eliminar ingreso: ${ingreso.concepto} por $${ingreso.monto}` });
         setTimeout(() => setIsAuthModalOpen(true), 0);
     };
 
@@ -678,12 +678,12 @@ export default function CashBoxPage() {
             toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
         } else {
             toast({ title: 'Código correcto' });
-            authAction?.(); // Execute the stored action
+            authAction?.execute(); // Execute the stored action
             setIsAuthModalOpen(false);
 
             await logAuditAction({
-                action: 'Código Autorización Usado',
-                details: `Código de autorización utilizado para acción de caja.`,
+                action: 'Autorización por Código',
+                details: `Acción autorizada en caja: ${authAction?.description || 'Desconocida'}.`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
                 severity: 'info',
@@ -700,7 +700,7 @@ export default function CashBoxPage() {
         if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
             action();
         } else {
-            setAuthAction(() => action);
+            setAuthAction({ execute: action, description: `Eliminar venta de $${sale.total} para ${sale.client?.nombre || 'Desconocido'}` });
             // Delay opening the modal slightly to allow dropdown to close cleanly
             setTimeout(() => setIsAuthModalOpen(true), 100);
         }

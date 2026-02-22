@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query } from 'firebase/firestore'; // <--- AGREGADO setDoc
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
+import { useFeatures } from '@/hooks/use-features';
 import {
     Form,
     FormControl,
@@ -172,7 +173,9 @@ const ClientCombobox = React.memo(({ clients, loading, value, onChange, onSearch
 });
 ClientCombobox.displayName = 'ClientCombobox';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers }: any) => (
+import { Switch } from '@/components/ui/switch';
+
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers, client, redeemPoints, setRedeemPoints }: any) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg h-[450px] md:h-full md:min-h-0">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
@@ -229,6 +232,25 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                 ))}
             </div>
         </ScrollArea>
+        {useFeatures().enableLoyaltyPoints && client && (
+            <div className="p-4 border-t space-y-2 bg-purple-50 dark:bg-purple-900/10">
+                <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                        Puntos Disponibles: {client.puntos || 0}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground mr-2">Usar puntos</span>
+                        <Switch checked={redeemPoints} onCheckedChange={setRedeemPoints} disabled={!client.puntos || client.puntos <= 0} />
+                    </div>
+                </div>
+                {redeemPoints && (
+                    <div className="flex justify-between text-purple-600 font-medium text-sm">
+                        <span>Puntos Redimidos:</span>
+                        <span>-${Math.min(client.puntos || 0, Math.ceil(subtotal - totalDiscount - anticipoPagado)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                )}
+            </div>
+        )}
         {cart.length > 0 && (
             <div className="p-4 border-t space-y-2 text-sm flex-shrink-0">
                 <div className="flex justify-between">
@@ -239,19 +261,21 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                     <span>Descuento:</span>
                     <span>-${totalDiscount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                {/* This is passed as a prop, but ResumenCarrito doesn't have access to the state 'anticipoPagado' directly unless passed. 
-                    I need to add 'anticipoPagado' to the props of ResumenCarrito. 
-                    Wait, I am editing ResumenCarrito which is defined in the same file. */}
-                {/* I will add a placeholder prop access here, and update the component signature next.*/}
                 {anticipoPagado > 0 && (
                     <div className="flex justify-between text-green-600 font-medium">
                         <span>Anticipo Pagado:</span>
                         <span>-${anticipoPagado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 )}
+                {redeemPoints && (
+                    <div className="flex justify-between text-purple-600 font-medium">
+                        <span>Descuento por Puntos:</span>
+                        <span>-${Math.min(client?.puntos || 0, Math.ceil(subtotal - totalDiscount - anticipoPagado)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                )}
                 <div className="flex justify-between font-bold text-xl pt-2 border-t">
                     <span>Total:</span>
-                    <span className="text-primary">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="text-primary">${Math.max(0, total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
             </div>
         )}
@@ -383,6 +407,7 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete, forceMaximize }: NewSaleSheetProps) {
     const { toast } = useToast();
     const { user, db } = useAuth();
+    const { enableLoyaltyPoints, loyaltyCashbackPercentage } = useFeatures(); // Import hook
     const [step, setStep] = useState(1);
     const [isMinimized, setIsMinimized] = useState(false);
 
@@ -481,6 +506,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     );
 
     const [anticipoPagado, setAnticipoPagado] = useState(0);
+    const [redeemPoints, setRedeemPoints] = useState(false); // State for redemption
 
     const totalDiscount = useMemo(() => {
         return cart.reduce((acc, item) => {
@@ -493,7 +519,19 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }, 0);
     }, [cart]);
 
-    const total = useMemo(() => Math.max(0, subtotal - totalDiscount - anticipoPagado), [subtotal, totalDiscount, anticipoPagado]);
+    const [selectedClientId, setSelectedClientId] = useState<string>(''); // Local state for immediate access
+
+    const selectedClient = useMemo(() => {
+        return clients.find(c => c.id === selectedClientId)
+    }, [selectedClientId, clients]);
+
+    const pointsDiscount = useMemo(() => {
+        if (!redeemPoints || !selectedClient || !selectedClient.puntos) return 0;
+        const currentTotal = subtotal - totalDiscount - anticipoPagado;
+        return Math.min(selectedClient.puntos, Math.ceil(currentTotal));
+    }, [redeemPoints, selectedClient, subtotal, totalDiscount, anticipoPagado]);
+
+    const total = useMemo(() => Math.max(0, subtotal - totalDiscount - anticipoPagado - pointsDiscount), [subtotal, totalDiscount, anticipoPagado, pointsDiscount]);
 
     const form = useForm<SaleFormData>({
         resolver: zodResolver(saleSchema(total)),
@@ -505,12 +543,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         },
     });
 
-    const selectedClientId = form.watch('cliente_id');
-    const selectedClient = useMemo(() => {
-        return clients.find(c => c.id === selectedClientId)
-    }, [selectedClientId, clients]);
-
-
+    // Sync form with local state if needed (though we handle it in onChange)
+    useEffect(() => {
+        const formClient = form.getValues('cliente_id');
+        if (formClient && formClient !== selectedClientId) {
+            setSelectedClientId(formClient);
+        }
+    }, [form.watch('cliente_id')]);
 
     useEffect(() => {
         if (mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -642,6 +681,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             form.setValue('notas', '');
 
             form.setValue('cliente_id', initialData.client.id);
+            if (initialData?.client) {
+                setSelectedClientId(initialData.client.id);
+                form.setValue('cliente_id', initialData.client.id);
+            }
             if (initialData.local_id) {
                 form.setValue('local_id', initialData.local_id);
             }
@@ -674,15 +717,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [initialData, form, isOpen]);
 
-    // ... existing imports ...
-
-    // ... inside NewSaleSheet ...
 
     const finalizeSaleProcess = async (clientId: string, localId: string) => {
-        toast({
-            title: '¡Venta registrada!',
-            description: 'La venta se ha completado correctamente.',
-        });
+        // Loyalty Points Logic
+        if (enableLoyaltyPoints && db && selectedClient) {
+            const cashbackRate = (loyaltyCashbackPercentage || 10) / 100;
+            const pointsEarned = Math.floor(total * cashbackRate);
+            const pointsSpent = pointsDiscount || 0;
+
+            if (pointsEarned > 0 || pointsSpent > 0) {
+                try {
+                    const clientRef = doc(db, 'clientes', selectedClient.id);
+                    await updateDoc(clientRef, {
+                        puntos: increment(pointsEarned - pointsSpent)
+                    });
+                } catch (e) {
+                    console.error("Error updating points:", e);
+                }
+            }
+        }
 
         try {
             if (db) {
@@ -714,7 +767,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         if (!printer.isConnected()) {
                             // Try to reconnect to existing device object first to avoid picker
                             // Access private 'device' field via 'any' cast if needed, or better, add public method in printer.ts
-                            // But since we can't edit printer.ts right now without extra cost, let's assume connect() handles it? 
+                            // But since we can't edit printer.ts right now without extra cost, let's assume connect() handles it?
                             // Actually connect() logic in printer.ts does: if (this.device) ... reconnect.
                             // So if we are here, it means either:
                             // A) this.device is null (fresh load) -> connect() tries getDevices() -> fails -> requestDevice() (picker)
@@ -738,11 +791,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             reservationId: reservationId || "",
                             items: cart, // cart has { nombre, cantidad, subtotal } which maps roughly to what formatTicket expects if subtotal exists.
                             // printer.ts expects: item.nombre, item.cantidad, item.subtotal.
-                            // Cart items structure in NewSaleSheet: { nombre, cantidad, precio, ... } 
+                            // Cart items structure in NewSaleSheet: { nombre, cantidad, precio, ... }
                             // We need to ensure subtotal is calculated or explicitly passed in the item.
                             // Let's assume printer.ts calculates price from subtotal or similar.
-                            // Actually formatTicket uses item.subtotal. 
-                            // In NewSaleSheet cart items usually have 'subtotal' calculated? 
+                            // Actually formatTicket uses item.subtotal.
+                            // In NewSaleSheet cart items usually have 'subtotal' calculated?
                             // Let's check cart structure separately if needed, but for now passing cart.
                             subtotal: subtotal,
                             anticipoPagado: anticipoPagado === undefined ? (initialData?.anticipoPagado || 0) : anticipoPagado,
@@ -781,7 +834,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     // --- LOGICA DE COBRO CON TERMINAL CORREGIDA ---
     const handleSendToTerminal = async () => {
-        if (!db || !selectedTerminalId || total <= 0 || !selectedClient) return;
+        const formData = form.getValues();
+        const amountToCharge = paymentMethod === 'combinado' ? (formData.pago_tarjeta || 0) : total;
+        if (!db || !selectedTerminalId || amountToCharge <= 0 || !selectedClient) return;
 
         setIsSendingToTerminal(true);
         setIsWaitingForPayment(true);
@@ -870,7 +925,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     ...formData,
                     cliente_id: selectedClient.id,
                     local_id: formData.local_id,
-                    metodo_pago: 'tarjeta', // Forzamos tarjeta porque es terminal
+                    metodo_pago: paymentMethod, // Respeta combinado o tarjeta
                     items: itemsToSave,
                     subtotal: subtotal,
                     descuento: {
@@ -883,6 +938,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     creado_por_id: user?.uid,
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pendiente', // <--- IMPORTANTE: Nace como pendiente
+                    ...(paymentMethod === 'combinado' && {
+                        detalle_pago_combinado: {
+                            efectivo: formData.pago_efectivo || 0,
+                            tarjeta: formData.pago_tarjeta || 0,
+                            transferencia: formData.pago_transferencia || 0,
+                            pagos_en_linea: 0
+                        }
+                    }),
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
                 };
@@ -898,7 +961,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             // 3. Llamar a la Cloud Function con el ID del documento que ACABAMOS de crear
             const createPayment = httpsCallable(functions, 'createPointPayment');
             const result: any = await createPayment({
-                amount: total,
+                amount: amountToCharge,
                 terminalId: selectedTerminalId,
                 referenceId: tempSaleId, // Enviamos el ID del documento real
                 payer: { email: selectedClient.correo, name: `${selectedClient.nombre} ${selectedClient.apellido}` }
@@ -977,6 +1040,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setCart([]);
         setSearchTerm('');
         setStep(1);
+        setRedeemPoints(false);
+        setSelectedClientId(''); // Reset redeem points state
 
         // Determine default local
         let defaultLocalId = '';
@@ -1061,6 +1126,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, [db, isWaitingForPayment]);
 
 
+    useEffect(() => {
+        if (isMinimized) {
+            // Force unlock body after animation to prevent background freezing
+            setTimeout(() => {
+                document.body.style.removeProperty('pointer-events');
+                document.body.style.removeProperty('overflow');
+                document.body.removeAttribute('data-scroll-locked');
+            }, 50);
+        }
+    }, [isMinimized]);
+
+
     const handleOpenChange = (open: boolean) => {
         if (!open) {
             cancelPendingSale();
@@ -1081,8 +1158,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const handleClientCreated = (newClientId: string) => {
         setIsClientModalOpen(false);
         setClientQueryKey(prev => prev + 1);
+        setSelectedClientId(newClientId);
         form.setValue('cliente_id', newClientId, { shouldValidate: true });
-    }
+    };
 
     async function onSubmit(data: SaleFormData) {
         if (!db) return;
@@ -1193,7 +1271,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             existingSaleData = sData;
                         }
                     } else {
-                        // 2. Try query by field (fallback: ID differs) 
+                        // 2. Try query by field (fallback: ID differs)
                         // We will try to fetch the reservation first to see if it has 'deposit_payment_id'
                         const resRef = doc(db, 'reservas', reservationId);
                         const resDoc = await transaction.get(resRef);
@@ -1423,13 +1501,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     hideOverlay={isMinimized}
                     onCloseAutoFocus={(e) => e.preventDefault()}
                     onInteractOutside={(e) => {
+                        if (isMinimized) {
+                            e.preventDefault();
+                            return; // Allow background interaction when minimized without closing sheet
+                        }
                         e.preventDefault();
+                        if (isAddItemDialogOpen || isClientModalOpen) return;
+                        const target = e.target as HTMLElement;
+                        if (target && (target.closest('[role="dialog"]') || target.closest('[role="listbox"]'))) return;
                         if (Date.now() - openTimeRef.current > 500) {
                             setIsMinimized(true);
                         }
                     }}
                     onPointerDownOutside={(e) => {
+                        if (isMinimized) {
+                            e.preventDefault();
+                            return; // Allow background interaction when minimized without closing sheet
+                        }
                         e.preventDefault();
+                        if (isAddItemDialogOpen || isClientModalOpen) return;
+                        const target = e.target as HTMLElement;
+                        if (target && (target.closest('[role="dialog"]') || target.closest('[role="listbox"]'))) return;
                         if (Date.now() - openTimeRef.current > 500) {
                             setIsMinimized(true);
                         }
@@ -1580,7 +1672,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         </ScrollArea>
                                     </Tabs>
                                 </div>
-                                <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} serviceSellers={serviceSellers} productSellers={productSellers} />
+                                <ResumenCarrito
+                                    cart={cart}
+                                    subtotal={subtotal}
+                                    totalDiscount={totalDiscount}
+                                    total={total}
+                                    anticipoPagado={anticipoPagado}
+                                    onOpenAddItem={() => setIsAddItemDialogOpen(true)}
+                                    updateQuantity={updateQuantity}
+                                    updateItemProfessional={updateItemProfessional}
+                                    updateItemDiscount={updateItemDiscount}
+                                    removeFromCart={removeFromCart}
+                                    serviceSellers={serviceSellers}
+                                    productSellers={productSellers}
+                                    client={selectedClient}
+                                    redeemPoints={redeemPoints}
+                                    setRedeemPoints={setRedeemPoints}
+                                    pointsDiscount={pointsDiscount}
+                                    enableLoyaltyPoints={enableLoyaltyPoints}
+                                />
                             </div>
                         )}
 
@@ -1723,7 +1833,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </Card>
                                         )}
 
-                                        {paymentMethod === 'tarjeta' && (
+                                        {(paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0)) && (
                                             <Card className="p-4 bg-muted/50">
                                                 <FormLabel className="flex items-center text-sm font-medium mb-2"><CreditCard className="mr-2 h-4 w-4" /> Cobro con Terminal Point</FormLabel>
                                                 <div className="space-y-2">
@@ -1750,7 +1860,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         ) : (
                                                             <>
                                                                 <Send className="mr-2 h-4 w-4" />
-                                                                Cobrar ${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en Terminal
+                                                                Cobrar ${(paymentMethod === 'combinado' ? (watchedCard || 0) : total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en Terminal
                                                             </>
                                                         )}
                                                     </Button>
@@ -1798,7 +1908,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                             const saleRef = doc(db, 'ventas', saleIdRef.current);
                                                                             await updateDoc(saleRef, {
                                                                                 pago_estado: 'Pagado',
-                                                                                metodo_pago: 'tarjeta', // Ensure method is card
+                                                                                metodo_pago: paymentMethod, // Respect initial choice
                                                                                 monto_pagado_real: total,
                                                                                 fecha_pago: new Date(),
                                                                                 notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
@@ -1910,7 +2020,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || isWaitingForPayment || cart.some(item => !item.barbero_id)} onClick={(e) => {
+                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id)} onClick={(e) => {
                                         if (cart.some(item => !item.barbero_id)) {
                                             e.preventDefault();
                                             toast({
@@ -1935,7 +2045,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         form.handleSubmit(onSubmit)(e);
                                     }}>
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Finalizar Venta por ${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        {(paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
+                                            ? `Usa el botón de Cobrar en Terminal arriba`
+                                            : `Finalizar Venta por $${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                     </Button>
                                 </SheetFooter>
                             </div>

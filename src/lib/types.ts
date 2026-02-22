@@ -18,6 +18,7 @@ export interface Client {
   gasto_total?: number;
   numero_cliente?: string;
   reviewRequestSent?: boolean;
+  puntos?: number;
 }
 
 export interface Local {

@@ -49,6 +49,7 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { db } from "@/lib/firebase-client";
 import { DonutChartCard } from "@/components/sales/donut-chart-card";
 import { useInvoicedSales } from "./use-invoiced-sales";
+import { logAuditAction } from '@/lib/audit-logger';
 
 
 
@@ -75,7 +76,7 @@ export default function InvoicedSalesPage() {
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-    const [authAction, setAuthAction] = useState<(() => void) | null>(null);
+    const [authAction, setAuthAction] = useState<{ execute: () => void, description: string } | null>(null);
     const [authCode, setAuthCode] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -400,7 +401,7 @@ export default function InvoicedSalesPage() {
             // Delay opening the modal slightly to allow dropdown to close cleanly
             // This prevents race conditions with body lock/pointer-events
             setTimeout(() => {
-                setAuthAction(() => action);
+                setAuthAction({ execute: action, description: `Eliminar venta facturada de $${sale.total} para ${sale.client?.nombre || 'Desconocido'}` });
                 setAuthPermissionField('cashbox');
                 setIsAuthModalOpen(true);
             }, 100);
@@ -423,8 +424,17 @@ export default function InvoicedSalesPage() {
             toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
         } else {
             toast({ title: 'Código correcto' });
-            authAction?.();
+            authAction?.execute();
             setIsAuthModalOpen(false);
+
+            await logAuditAction({
+                action: 'Autorización por Código',
+                details: `Acción autorizada en ventas facturadas: ${authAction?.description || 'Desconocida'}.`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                severity: 'info',
+                localId: localFilter !== 'todos' ? localFilter : 'unknown'
+            });
         }
         setAuthCode('');
         setAuthAction(null);
@@ -468,7 +478,7 @@ export default function InvoicedSalesPage() {
             action();
         } else {
             setTimeout(() => {
-                setAuthAction(() => action);
+                setAuthAction({ execute: action, description: `Editar venta facturada de $${sale.total} para cliente ID ${sale.cliente_id}` });
                 setAuthPermissionField('invoiced_sales');
                 setIsAuthModalOpen(true);
             }, 100);

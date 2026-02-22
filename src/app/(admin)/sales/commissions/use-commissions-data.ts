@@ -237,12 +237,22 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
     }, [commissionData]);
 
 
+    const tipSummary = useMemo(() => {
+        const tipData = commissionData.filter(d => d.itemType === 'propina');
+        return tipData.reduce((acc, current) => {
+            acc.tipAmount += current.saleAmount;
+            return acc;
+        }, { tipAmount: 0 });
+    }, [commissionData]);
+
+
     return {
         commissionData,
         summaryByProfessional,
         overallSummary,
         serviceSummary,
         productSummary,
+        tipSummary,
         loading: dataLoading || isComputing,
         raw: {
             locales,

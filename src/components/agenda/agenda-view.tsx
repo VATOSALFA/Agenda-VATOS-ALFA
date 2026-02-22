@@ -44,7 +44,6 @@ import {
 import { NewReservationForm } from '../reservations/new-reservation-form';
 import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
-import { NewSaleSheet } from '../sales/new-sale-sheet';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where, doc, updateDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
@@ -177,8 +176,6 @@ export default function AgendaView() {
 
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
-  const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
-  const [saleInitialData, setSaleInitialData] = useState<any>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
   const [blockToDelete, setBlockToDelete] = useState<TimeBlock | null>(null);
@@ -419,42 +416,57 @@ export default function AgendaView() {
       return;
     }
 
-    // Check if slot overlaps with a break
     const barber = filteredProfessionals.find(p => p.id === barberId);
     if (barber) {
       const daySchedule = getDaySchedule(barber);
-      if (daySchedule && daySchedule.breaks) {
-        const [slotH, slotM] = time.split(':').map(Number);
-        const slotTime = slotH * 60 + slotM;
-        const slotEnd = slotTime + 15; // 15 min slot check
-        const slotTimeDecimal = slotH + slotM / 60;
+      const [slotH, slotM] = time.split(':').map(Number);
+      const slotTime = slotH * 60 + slotM;
+      const slotEnd = slotTime + 15; // 15 min slot check
+      const slotTimeDecimal = slotH + slotM / 60;
 
-        const isBreak = daySchedule.breaks.some((brk: any) => {
-          const [sH, sM] = brk.start.split(':').map(Number);
-          const [eH, eM] = brk.end.split(':').map(Number);
-          const breakStart = sH * 60 + sM;
-          const breakEnd = eH * 60 + eM;
+      const isUnlocked = allEvents.some(evt =>
+        evt.barbero_id === barberId &&
+        evt.type === 'block' &&
+        (evt as any).originalType === 'available' &&
+        evt.start <= slotTimeDecimal &&
+        evt.end > slotTimeDecimal
+      );
 
-          // Intersection check
-          return (slotTime < breakEnd && slotEnd > breakStart);
-        });
+      const isWorking = daySchedule && daySchedule.enabled;
+      let isInvalidSlot = false;
 
-        // Check if this break slot is unlocked by an 'available' block
-        const isUnlocked = allEvents.some(evt =>
-          evt.barbero_id === barberId &&
-          evt.type === 'block' &&
-          (evt as any).originalType === 'available' &&
-          evt.start <= slotTimeDecimal &&
-          evt.end > slotTimeDecimal
-        );
+      if (!isUnlocked) {
+        if (!isWorking) {
+          isInvalidSlot = true;
+        } else {
+          const [startH, startM] = daySchedule.start.split(':').map(Number);
+          const [endH, endM] = daySchedule.end.split(':').map(Number);
+          const barberStart = startH + startM / 60;
+          const barberEnd = endH + endM / 60;
 
-        if (isBreak && !isUnlocked) {
-          setHoveredSlot(null);
-          if (popoverState && !popoverTimeoutRef.current) {
-            popoverTimeoutRef.current = setTimeout(() => setPopoverState(null), 400);
+          if (slotTimeDecimal < barberStart || slotTimeDecimal >= barberEnd) {
+            isInvalidSlot = true;
           }
-          return;
+
+          if (!isInvalidSlot && daySchedule.breaks) {
+            const isBreak = daySchedule.breaks.some((brk: any) => {
+              const [sH, sM] = brk.start.split(':').map(Number);
+              const [eH, eM] = brk.end.split(':').map(Number);
+              const breakStart = sH * 60 + sM;
+              const breakEnd = eH * 60 + eM;
+              return (slotTime < breakEnd && slotEnd > breakStart);
+            });
+            if (isBreak) isInvalidSlot = true;
+          }
         }
+      }
+
+      if (isInvalidSlot) {
+        setHoveredSlot(null);
+        if (popoverState && !popoverTimeoutRef.current) {
+          popoverTimeoutRef.current = setTimeout(() => setPopoverState(null), 400);
+        }
+        return;
       }
     }
 
@@ -612,15 +624,15 @@ export default function AgendaView() {
         }
       }).filter((i): i is any => !!i);
 
-      setSaleInitialData({
+      const saleData = {
         client,
         items: cartItems,
         reservationId: selectedReservation.id,
         local_id: selectedReservation.local_id,
         anticipoPagado: selectedReservation.anticipo_pagado || selectedReservation.monto_pagado || 0
-      });
+      };
       setIsDetailModalOpen(false);
-      setIsSaleSheetOpen(true);
+      document.dispatchEvent(new CustomEvent('new-sale', { detail: saleData }));
     }
   }
 
@@ -1059,9 +1071,9 @@ export default function AgendaView() {
                     <div
                       className="relative h-full"
                       ref={(el: HTMLDivElement | null) => { gridRefs.current[barber.id] = el; }}
-                      onMouseMove={(e) => isWorking && handleMouseMove(e, barber.id)}
+                      onMouseMove={(e) => handleMouseMove(e, barber.id)}
                       onMouseLeave={handleMouseLeave}
-                      onClick={(e) => isWorking && handleClickSlot(e)}
+                      onClick={(e) => handleClickSlot(e)}
                     >
                       {/* Background Grid Cells */}
                       <div className="flex flex-col">
@@ -1134,7 +1146,7 @@ export default function AgendaView() {
                       })}
 
                       {/* Hover Popover */}
-                      {isWorking && hoveredSlot?.barberId === barber.id && (
+                      {hoveredSlot?.barberId === barber.id && (
                         <div
                           className="absolute w-full p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
                           style={{ ...calculatePopoverPosition(hoveredSlot.time) }}
@@ -1147,7 +1159,7 @@ export default function AgendaView() {
                       )}
 
                       {/* Click Popover */}
-                      {isWorking && popoverState?.barberId === barber.id && (
+                      {popoverState?.barberId === barber.id && (
                         <div
                           className="absolute w-[calc(100%_+_16px)] -ml-2 z-30"
                           style={{ top: calculatePopoverPosition(popoverState.time).top }}
@@ -1359,13 +1371,6 @@ export default function AgendaView() {
           }}
         />
       )}
-
-      <NewSaleSheet
-        isOpen={isSaleSheetOpen}
-        onOpenChange={setIsSaleSheetOpen}
-        initialData={saleInitialData}
-        onSaleComplete={onDataRefresh}
-      />
 
       <CancelReservationModal
         isOpen={!!reservationToCancel}

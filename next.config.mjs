@@ -1,4 +1,4 @@
-import 'dotenv/config';
+
 import withPWAInit from '@ducanh2912/next-pwa';
 
 const withPWA = withPWAInit({
@@ -11,9 +11,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+
   images: {
     remotePatterns: [
       {

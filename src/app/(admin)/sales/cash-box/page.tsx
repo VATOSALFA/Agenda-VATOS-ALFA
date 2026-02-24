@@ -182,6 +182,8 @@ export default function CashBoxPage() {
     const [currentPageIngresos, setCurrentPageIngresos] = useState(1);
     const [itemsPerPageIngresos, setItemsPerPageIngresos] = useState(10);
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+    const [sortConfigEgresos, setSortConfigEgresos] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+    const [sortConfigIngresos, setSortConfigIngresos] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
     const { data: cashboxSettings, loading: cashboxSettingsLoading } = useFirestoreQuery<any>('configuracion', 'caja-settings', where('__name__', '==', 'caja'));
     const mainTerminalId = cashboxSettings?.[0]?.mercadoPagoTerminalId;
@@ -286,6 +288,114 @@ export default function CashBoxPage() {
         return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
     };
 
+    const sortedEgresos = useMemo(() => {
+        let sortableItems = [...egresosWithData];
+        if (sortConfigEgresos !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfigEgresos.key) {
+                    case 'fecha':
+                        aValue = a.fecha instanceof Timestamp ? a.fecha.toMillis() : new Date(a.fecha).getTime();
+                        bValue = b.fecha instanceof Timestamp ? b.fecha.toMillis() : new Date(b.fecha).getTime();
+                        break;
+                    case 'local':
+                        aValue = (localMap.get(a.local_id ?? '') || '').toLowerCase();
+                        bValue = (localMap.get(b.local_id ?? '') || '').toLowerCase();
+                        break;
+                    case 'concepto':
+                        aValue = (a.concepto || '').toLowerCase();
+                        bValue = (b.concepto || '').toLowerCase();
+                        break;
+                    case 'aQuien':
+                        aValue = (a.aQuienNombre || a.aQuien || '').toLowerCase();
+                        bValue = (b.aQuienNombre || b.aQuien || '').toLowerCase();
+                        break;
+                    case 'comentarios':
+                        aValue = (a.comentarios || '').toLowerCase();
+                        bValue = (b.comentarios || '').toLowerCase();
+                        break;
+                    case 'monto':
+                        aValue = a.monto || 0;
+                        bValue = b.monto || 0;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aValue < bValue) return sortConfigEgresos.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfigEgresos.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [egresosWithData, sortConfigEgresos, localMap]);
+
+    const requestSortEgresos = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfigEgresos && sortConfigEgresos.key === key && sortConfigEgresos.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfigEgresos({ key, direction });
+    };
+
+    const SortIconEgresos = ({ field }: { field: string }) => {
+        if (!sortConfigEgresos || sortConfigEgresos.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+        if (sortConfigEgresos.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+    };
+
+    const sortedIngresos = useMemo(() => {
+        let sortableItems = [...ingresos];
+        if (sortConfigIngresos !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortConfigIngresos.key) {
+                    case 'fecha':
+                        aValue = a.fecha instanceof Timestamp ? a.fecha.toMillis() : new Date(a.fecha).getTime();
+                        bValue = b.fecha instanceof Timestamp ? b.fecha.toMillis() : new Date(b.fecha).getTime();
+                        break;
+                    case 'concepto':
+                        aValue = (a.concepto || '').toLowerCase();
+                        bValue = (b.concepto || '').toLowerCase();
+                        break;
+                    case 'comentarios':
+                        aValue = (a.comentarios || '').toLowerCase();
+                        bValue = (b.comentarios || '').toLowerCase();
+                        break;
+                    case 'monto':
+                        aValue = a.monto || 0;
+                        bValue = b.monto || 0;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aValue < bValue) return sortConfigIngresos.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfigIngresos.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [ingresos, sortConfigIngresos]);
+
+    const requestSortIngresos = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfigIngresos && sortConfigIngresos.key === key && sortConfigIngresos.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfigIngresos({ key, direction });
+    };
+
+    const SortIconIngresos = ({ field }: { field: string }) => {
+        if (!sortConfigIngresos || sortConfigIngresos.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
+        if (sortConfigIngresos.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+    };
+
     // We already have loading state from hook
     const localesLoading = dataLoading;
     const clientsLoading = dataLoading;
@@ -358,6 +468,16 @@ export default function CashBoxPage() {
                 }
             }
 
+            // Guardar en ventas_canceladas
+            const canceladaRef = doc(collection(db, 'ventas_canceladas'), saleToDelete.id);
+            batch.set(canceladaRef, {
+                ...saleToDelete,
+                estado_venta: 'cancelada',
+                eliminada_el: Timestamp.now(),
+                eliminada_por: user?.uid || 'unknown',
+                eliminada_por_nombre: user?.displayName || 'unknown'
+            });
+
             // Eliminar Venta
             batch.delete(saleRef);
 
@@ -374,6 +494,7 @@ export default function CashBoxPage() {
                 details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total}. Local: ${saleToDelete.local_id}`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
                 severity: 'critical',
                 entityId: saleToDelete.id,
                 localId: saleToDelete.local_id || 'unknown'
@@ -521,6 +642,7 @@ export default function CashBoxPage() {
                 details: `Egreso ID: ${egresoToDelete.id} eliminado. Monto: $${egresoToDelete.monto}. Concepto: ${egresoToDelete.concepto}`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
                 severity: 'warning',
                 entityId: egresoToDelete.id,
                 localId: egresoToDelete.local_id || 'unknown'
@@ -574,6 +696,7 @@ export default function CashBoxPage() {
                 details: `Ingreso ID: ${ingresoToDelete.id} eliminado. Monto: $${ingresoToDelete.monto}. Concepto: ${ingresoToDelete.concepto}`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
                 severity: 'warning',
                 entityId: ingresoToDelete.id,
                 localId: ingresoToDelete.local_id || 'unknown'
@@ -686,6 +809,8 @@ export default function CashBoxPage() {
                 details: `Acción autorizada en caja: ${authAction?.description || 'Desconocida'}.`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                authCode: authCode,
                 severity: 'info',
                 localId: selectedLocalId
             });
@@ -722,14 +847,14 @@ export default function CashBoxPage() {
         currentPageSales * itemsPerPageSales
     );
 
-    const totalPagesEgresos = Math.ceil(egresosWithData.length / itemsPerPageEgresos);
-    const paginatedEgresos = egresosWithData.slice(
+    const totalPagesEgresos = Math.ceil(sortedEgresos.length / itemsPerPageEgresos);
+    const paginatedEgresos = sortedEgresos.slice(
         (currentPageEgresos - 1) * itemsPerPageEgresos,
         currentPageEgresos * itemsPerPageEgresos
     );
 
-    const totalPagesIngresos = Math.ceil(ingresos.length / itemsPerPageIngresos);
-    const paginatedIngresos = ingresos.slice(
+    const totalPagesIngresos = Math.ceil(sortedIngresos.length / itemsPerPageIngresos);
+    const paginatedIngresos = sortedIngresos.slice(
         (currentPageIngresos - 1) * itemsPerPageIngresos,
         currentPageIngresos * itemsPerPageIngresos
     );
@@ -1007,10 +1132,18 @@ export default function CashBoxPage() {
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead>Fecha</TableHead>
-                                                            <TableHead>Concepto</TableHead>
-                                                            <TableHead>Comentarios</TableHead>
-                                                            <TableHead className="text-right">Monto</TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortIngresos('fecha')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Fecha <SortIconIngresos field="fecha" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortIngresos('concepto')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Concepto <SortIconIngresos field="concepto" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortIngresos('comentarios')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Comentarios <SortIconIngresos field="comentarios" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSortIngresos('monto')}>
+                                                                <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Monto <SortIconIngresos field="monto" /></div>
+                                                            </TableHead>
                                                             <TableHead className="text-right">Opciones</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
@@ -1083,12 +1216,24 @@ export default function CashBoxPage() {
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead>Fecha</TableHead>
-                                                            <TableHead>Local</TableHead>
-                                                            <TableHead>Concepto</TableHead>
-                                                            <TableHead>A quién se entrega</TableHead>
-                                                            <TableHead>Comentarios</TableHead>
-                                                            <TableHead className="text-right">Monto</TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('fecha')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Fecha <SortIconEgresos field="fecha" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('local')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Local <SortIconEgresos field="local" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('concepto')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Concepto <SortIconEgresos field="concepto" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('aQuien')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">A quién se entrega <SortIconEgresos field="aQuien" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('comentarios')}>
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Comentarios <SortIconEgresos field="comentarios" /></div>
+                                                            </TableHead>
+                                                            <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSortEgresos('monto')}>
+                                                                <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Monto <SortIconEgresos field="monto" /></div>
+                                                            </TableHead>
                                                             <TableHead className="text-right">Opciones</TableHead>
                                                         </TableRow>
                                                     </TableHeader>

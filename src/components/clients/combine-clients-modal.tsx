@@ -1,15 +1,13 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Client } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Loader2, Combine, User, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Checkbox } from '../ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
@@ -47,7 +45,11 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
     const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
 
-    const { data: clients, loading } = useFirestoreQuery<Client>('clientes', isOpen);
+    const { data: clients, loading } = useFirestoreQuery<Client>(
+        'clientes',
+        isOpen ? 'active' : 'inactive',
+        !isOpen ? where('numero_cliente', '==', 'NO_EXISTE_9999') : undefined
+    );
 
     const duplicateGroups = useMemo(() => {
         if (loading || clients.length === 0) return [];
@@ -84,7 +86,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
     };
 
     const handleCombine = async () => {
-        if (!selectedGroup || !primaryClientId) return;
+        if (!selectedGroup || !primaryClientId || !db) return;
         setIsProcessing(true);
 
         try {
@@ -146,15 +148,21 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
 
 
     const handleClose = () => {
-        setStep(1);
-        setSelectedGroup(null);
-        setPrimaryClientId(null);
         onOpenChange(false);
     };
 
-    const ComparisonField = ({ label, primaryValue, secondaryValues }: { label: string, primaryValue?: string, secondaryValues: (string | undefined)[] }) => {
-        const primaryClient = selectedGroup?.clients.find(c => c.id === primaryClientId);
+    useEffect(() => {
+        if (!isOpen) {
+            const timer = setTimeout(() => {
+                setStep(1);
+                setSelectedGroup(null);
+                setPrimaryClientId(null);
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
 
+    const ComparisonField = ({ label, primaryValue, secondaryValues }: { label: string, primaryValue?: string, secondaryValues: (string | undefined)[] }) => {
         return (
             <div className="grid grid-cols-2 gap-4 border-b py-2">
                 <div className="font-semibold">{label}</div>
@@ -263,9 +271,21 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                     )}
 
                     <DialogFooter>
-                        <Button variant="outline" onClick={step === 1 ? handleClose : () => setStep(1)}>
-                            {step === 1 ? 'Cerrar' : 'Volver'}
-                        </Button>
+                        {step === 1 ? (
+                            <Button
+                                variant="outline"
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleClose();
+                                }}
+                            >
+                                Cerrar
+                            </Button>
+                        ) : (
+                            <Button variant="outline" type="button" onClick={() => setStep(1)}>Volver</Button>
+                        )}
                         {step === 2 && (
                             <Button onClick={() => setIsConfirming(true)} disabled={isProcessing}>
                                 {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -276,24 +296,22 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 </DialogContent>
             </Dialog>
 
-            {isConfirming && (
-                <AlertDialog open={isConfirming} onOpenChange={setIsConfirming}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-6 w-6 text-destructive" /> ¿Confirmar Combinación?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta acción es irreversible. Se combinarán los clientes seleccionados. Todo el historial (citas, ventas) será asignado al cliente principal y los otros registros serán eliminados permanentemente.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleCombine} className="bg-destructive hover:bg-destructive/90">
-                                Sí, combinar
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            <AlertDialog open={isConfirming} onOpenChange={setIsConfirming}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-6 w-6 text-destructive" /> ¿Confirmar Combinación?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción es irreversible. Se combinarán los clientes seleccionados. Todo el historial (citas, ventas) será asignado al cliente principal y los otros registros serán eliminados permanentemente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleCombine} className="bg-destructive hover:bg-destructive/90">
+                            Sí, combinar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }

@@ -50,6 +50,8 @@ const DialogContent = React.forwardRef<
 
       setTimeout(cleanup, 100);
       setTimeout(cleanup, 300);
+      setTimeout(cleanup, 500);
+      setTimeout(cleanup, 1000);
     };
   }, []);
 

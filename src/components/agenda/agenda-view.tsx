@@ -56,7 +56,7 @@ import Image from 'next/image';
 import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser, Product, AgendaEvent, AgendaLayout } from '@/lib/types';
 
 import { useAgendaEvents } from './use-agenda-events';
-import { getStatusColor } from './agenda-utils';
+import { getStatusColor, formatClientName } from './agenda-utils';
 
 import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
 import { ClientDetailModal } from '../clients/client-detail-modal';
@@ -1233,7 +1233,7 @@ export default function AgendaView() {
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
                                 <div className="flex-grow overflow-hidden pr-1">
-                                  <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? (event.customer?.nombre || 'Cliente Eliminado') : event.motivo}</p>
+                                  <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? formatClientName(event.customer?.nombre, event.customer?.apellido) : event.motivo}</p>
                                 </div>
 
                                 {(event.type === 'appointment') && (
@@ -1279,7 +1279,7 @@ export default function AgendaView() {
                               <TooltipContent className="bg-background shadow-lg rounded-lg p-3 w-64 border-border">
                                 <div className="space-y-2">
                                   <div className="flex justify-between items-start">
-                                    <p className="font-bold text-base text-foreground">{(event.customer?.nombre || 'Cliente Eliminado')}</p>
+                                    <p className="font-bold text-base text-foreground">{formatClientName(event.customer?.nombre, event.customer?.apellido)}</p>
                                     {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
                                   </div>
                                   <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : event.servicio}</p>

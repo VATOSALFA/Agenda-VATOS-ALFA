@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { DateRange } from 'react-day-picker';
 import { format, startOfDay, endOfDay } from 'date-fns';
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar as CalendarIcon, Search, Download, Eye, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, Download, Eye, Loader2, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CashClosing, User as AppUser } from '@/lib/types';
 import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
@@ -155,6 +155,8 @@ export default function CashClosingsPage() {
     const [queryKey, setQueryKey] = useState(0);
     const [selectedClosing, setSelectedClosing] = useState<CashClosing | null>(null);
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
 
@@ -228,6 +230,16 @@ export default function CashClosingsPage() {
         }
         return sortableItems;
     }, [closings, sortConfig]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [dateRange, deliveredByFilter, receivedByFilter]);
+
+    const totalPages = Math.ceil(sortedClosings.length / itemsPerPage) || 1;
+    const paginatedClosings = sortedClosings.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     const requestSort = (key: string) => {
         let direction: 'asc' | 'desc' = 'asc';
@@ -366,7 +378,7 @@ export default function CashClosingsPage() {
                                 ) : sortedClosings.length === 0 ? (
                                     <TableRow><TableCell colSpan={7} className="text-center h-24">No se encontraron cierres de caja.</TableCell></TableRow>
                                 ) : (
-                                    sortedClosings.map(closing => (
+                                    paginatedClosings.map(closing => (
                                         <TableRow key={closing.id}>
                                             <TableCell>{format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}</TableCell>
                                             <TableCell>{closing.persona_entrega_nombre}</TableCell>
@@ -386,6 +398,52 @@ export default function CashClosingsPage() {
                         </Table>
                     </CardContent>
                 </Card>
+
+                {!isLoading && sortedClosings.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-2">
+                        <div className="flex items-center space-x-2">
+                            <p className="text-sm font-medium">Resultados por página</p>
+                            <Select
+                                value={`${itemsPerPage}`}
+                                onValueChange={(value) => {
+                                    setItemsPerPage(Number(value));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="h-8 w-[70px]">
+                                    <SelectValue placeholder={itemsPerPage} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="20">20</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="text-sm font-medium">
+                            Página {currentPage} de {totalPages}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                            >
+                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                            >
+                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div >
 
             <ClosingDetailModal

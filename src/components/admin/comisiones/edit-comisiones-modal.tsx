@@ -27,6 +27,7 @@ import { Loader2 } from 'lucide-react';
 import type { Profesional as Professional, Service, Commission } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { logAuditAction } from '@/lib/audit-logger';
 import { Separator } from '@/components/ui/separator';
 
 interface EditComisionesModalProps {
@@ -47,7 +48,7 @@ const getDefaultValues = (professional: Professional, services: Service[]) => {
 
 export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved, services }: EditComisionesModalProps) {
   const { toast } = useToast();
-  const { db } = useAuth();
+  const { db, user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [masterValue, setMasterValue] = useState<number | ''>('');
   const [masterType, setMasterType] = useState<'%' | '$'>('%');
@@ -92,6 +93,17 @@ export function EditComisionesModal({ professional, isOpen, onClose, onDataSaved
         title: 'Comisiones guardadas con éxito',
         description: `Las comisiones para ${professional.name} han sido actualizadas.`,
       });
+
+      await logAuditAction({
+        action: 'Editar Comisiones',
+        details: `Se editaron las comisiones del profesional ${professional.name}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'warning',
+        localId: professional.local_id || 'unknown'
+      });
+
       onDataSaved();
       onClose();
 

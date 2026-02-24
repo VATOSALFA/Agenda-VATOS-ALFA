@@ -75,6 +75,7 @@ const adminConcepts = [
     { id: 'publicidad', label: 'Publicidad' },
     { id: 'internet', label: 'Internet' },
     { id: 'nomina', label: 'Nómina' },
+    { id: 'entrega_efectivo', label: 'Entrega de efectivo' },
     { id: 'otro', label: 'Otro' },
 ];
 

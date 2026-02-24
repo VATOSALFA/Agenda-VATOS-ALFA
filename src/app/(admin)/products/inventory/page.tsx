@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Filter, Search, Edit, Trash2, Upload, Settings, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Filter, Search, Edit, Trash2, Upload, Settings, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +63,8 @@ export default function InventoryPage() {
   const [stockUpdateProduct, setStockUpdateProduct] = useState<Product | null>(null);
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const catalogMap = useMemo(() => {
     if (categoriesLoading || brandsLoading || presentationsLoading) return { categories: new Map(), brands: new Map(), presentations: new Map() };
@@ -141,6 +144,16 @@ export default function InventoryPage() {
     if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
     return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
   };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
 
   const handleDataUpdated = (newEntityId?: string) => {
@@ -250,7 +263,7 @@ export default function InventoryPage() {
                         {searchTerm ? "No se encontraron productos." : "No hay productos registrados."}
                       </TableCell>
                     </TableRow>
-                  ) : filteredProducts.map((product) => (
+                  ) : paginatedProducts.map((product) => (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">{product.nombre}</TableCell>
                       <TableCell>{catalogMap.categories.get(product.category_id) || 'N/A'}</TableCell>
@@ -275,6 +288,52 @@ export default function InventoryPage() {
             </div>
           </CardContent>
         </Card>
+
+        {!isLoading && filteredProducts.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-2">
+            <div className="flex items-center space-x-2">
+              <p className="text-sm font-medium">Resultados por página</p>
+              <Select
+                value={`${itemsPerPage}`}
+                onValueChange={(value) => {
+                  setItemsPerPage(Number(value));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue placeholder={itemsPerPage} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="text-sm font-medium">
+              Página {currentPage} de {totalPages}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+              >
+                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {isProductModalOpen && (

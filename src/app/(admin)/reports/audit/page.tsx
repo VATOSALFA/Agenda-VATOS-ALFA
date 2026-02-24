@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,7 +12,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Search, ShieldAlert, ShieldCheck, Info, Loader2, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, ShieldAlert, ShieldCheck, Info, Loader2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
 import { AuditLogEntry } from '@/lib/audit-logger';
@@ -27,11 +27,23 @@ export default function AuditPage() {
     });
     const [severityFilter, setSeverityFilter] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
-    const [limitCount, setLimitCount] = useState<number>(100);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // Fetch logs - simplified fetching without filtering at query level for now to allow flexible client-side filtering
-    // In production with massive data, this should be paginated and filtered at Firestore level.
-    const { data: logs, loading } = useFirestoreQuery<AuditLogEntry & { id: string }>('audit_logs');
+    const { data: logs, loading: logsLoading } = useFirestoreQuery<AuditLogEntry & { id: string }>('audit_logs');
+    const { data: usersData, loading: usersLoading } = useFirestoreQuery<any>('usuarios');
+
+    const loading = logsLoading || usersLoading;
+
+    // Create a map of userId -> role
+    const userRolesMap = useMemo(() => {
+        const map = new Map<string, string>();
+        usersData?.forEach(user => {
+            if (user.uid) map.set(user.uid, user.role);
+            if (user.id) map.set(user.id, user.role);
+        });
+        return map;
+    }, [usersData]);
 
     const filteredLogs = useMemo(() => {
         if (!logs) return [];
@@ -56,10 +68,7 @@ export default function AuditPage() {
             });
         }
 
-        // 3. Filter by Severity
-        if (severityFilter !== 'all') {
-            filtered = filtered.filter(log => log.severity === severityFilter);
-        }
+
 
         // 4. Filter by Search Term
         if (searchTerm) {
@@ -73,6 +82,16 @@ export default function AuditPage() {
 
         return filtered;
     }, [logs, dateRange, severityFilter, searchTerm]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, dateRange]);
+
+    const totalPages = Math.ceil(filteredLogs.length / itemsPerPage) || 1;
+    const paginatedLogs = filteredLogs.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     const getSeverityBadge = (severity: string) => {
         switch (severity) {
@@ -100,8 +119,8 @@ export default function AuditPage() {
         const data = filteredLogs.map(log => ({
             Fecha: formatDate(log.timestamp),
             Usuario: log.userName,
-            Acción: log.action,
-            Severidad: log.severity.toUpperCase(),
+            Rol: log.userRole || userRolesMap.get(log.userId) || 'Desconocido',
+            Acción: log.authCode ? `${log.action} - (Código: ${log.authCode})` : log.action,
             Detalles: log.details,
             ID_Entidad: log.entityId || 'N/A',
         }));
@@ -165,19 +184,7 @@ export default function AuditPage() {
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <div className="w-full md:w-[200px]">
-                            <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Severidad" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todas</SelectItem>
-                                    <SelectItem value="info">Info</SelectItem>
-                                    <SelectItem value="warning">Advertencia</SelectItem>
-                                    <SelectItem value="critical">Crítico</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+
                         <div className="w-full md:w-[300px]">
                             <div className="relative">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -200,8 +207,8 @@ export default function AuditPage() {
                             <TableRow>
                                 <TableHead className="w-[180px]">Fecha</TableHead>
                                 <TableHead className="w-[150px]">Usuario</TableHead>
-                                <TableHead className="w-[120px]">Severidad</TableHead>
-                                <TableHead className="w-[200px]">Acción</TableHead>
+                                <TableHead className="w-[150px]">Rol</TableHead>
+                                <TableHead className="w-[250px]">Acción/Código</TableHead>
                                 <TableHead>Detalles</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -221,7 +228,7 @@ export default function AuditPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredLogs.slice(0, limitCount).map((log, index) => (
+                                paginatedLogs.map((log, index) => (
                                     <TableRow key={log.id || index}>
                                         <TableCell className="font-medium">{formatDate(log.timestamp)}</TableCell>
                                         <TableCell>
@@ -229,23 +236,75 @@ export default function AuditPage() {
                                                 <span className="font-medium">{log.userName}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell>{getSeverityBadge(log.severity)}</TableCell>
-                                        <TableCell className="font-semibold">{log.action}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className="text-xs">
+                                                {log.userRole || userRolesMap.get(log.userId) || 'Desconocido'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="font-semibold">{log.action}</span>
+                                                {log.authCode && (
+                                                    <span className="text-[10px] font-mono bg-muted text-muted-foreground px-1 py-0.5 rounded w-fit capitalize">
+                                                        Código: {log.authCode}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">{log.details}</TableCell>
                                     </TableRow>
                                 ))
-                            )}
-                            {filteredLogs.length > limitCount && (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center">
-                                        <Button variant="ghost" onClick={() => setLimitCount(prev => prev + 100)}>Cargar más</Button>
-                                    </TableCell>
-                                </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </CardContent>
             </Card>
+
+            {!loading && filteredLogs.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-2">
+                    <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium">Resultados por página</p>
+                        <Select
+                            value={`${itemsPerPage}`}
+                            onValueChange={(value) => {
+                                setItemsPerPage(Number(value));
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <SelectTrigger className="h-8 w-[70px]">
+                                <SelectValue placeholder={itemsPerPage} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="text-sm font-medium">
+                        Página {currentPage} de {totalPages}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

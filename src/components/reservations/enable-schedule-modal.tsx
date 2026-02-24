@@ -48,6 +48,16 @@ export function EnableScheduleModal({ isOpen, onOpenChange, onFormSubmit, initia
                 setEndHour('13');
                 setEndMinute('00');
             }
+        } else if (!isOpen) {
+            // Agresivo reseteo de interactividad si Radix UI deja el scroll o puntero bloqueado por conflicto Modal+Select
+            const cleanup = () => {
+                document.body.style.pointerEvents = "";
+                document.body.style.overflow = "";
+                document.body.style.paddingRight = "";
+            };
+            setTimeout(cleanup, 100);
+            setTimeout(cleanup, 300);
+            setTimeout(cleanup, 600);
         }
     }, [isOpen, initialData]);
 

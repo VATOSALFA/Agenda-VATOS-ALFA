@@ -410,9 +410,8 @@ export default function ClientsPage() {
         }
       }
 
-      if ((activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.dateRange) && (sales.length > 0 || hasLoadedHistory)) {
+      if (activeFilters.local !== 'todos' || activeFilters.professional !== 'todos' || activeFilters.dateRange) {
         const clientIdsFromHistory = new Set<string>();
-        let hasHistoryFilter = false;
 
         const salesToCheck = hasLoadedHistory ? historicalSales : sales;
 
@@ -420,14 +419,25 @@ export default function ClientsPage() {
         salesToCheck.forEach(s => {
           if (activeFilters.local !== 'todos' && s.local_id !== activeFilters.local) return;
 
-          let matchesProfessional = true;
-          if (activeFilters.professional !== 'todos') {
-            matchesProfessional = s.items?.some(item => item.barbero_id === activeFilters.professional);
+          if (activeFilters.dateRange && hasLoadedHistory) {
+            let saleDate: Date | null = null;
+            if (s.fecha_hora_venta instanceof Timestamp) saleDate = s.fecha_hora_venta.toDate();
+            else if ((s.fecha_hora_venta as any)?.seconds) saleDate = new Date((s.fecha_hora_venta as any).seconds * 1000);
+            else if (typeof s.fecha_hora_venta === 'string') saleDate = parseISO(s.fecha_hora_venta);
+
+            if (saleDate) {
+              if (activeFilters.dateRange.from && saleDate < activeFilters.dateRange.from) return;
+              if (activeFilters.dateRange.to && saleDate > endOfDay(activeFilters.dateRange.to)) return;
+            }
           }
 
-          if (matchesProfessional) {
+          let matchesProfessional = true;
+          if (activeFilters.professional !== 'todos') {
+            matchesProfessional = s.items?.some(item => item.barbero_id === activeFilters.professional) || false;
+          }
+
+          if (matchesProfessional && s.cliente_id) {
             clientIdsFromHistory.add(s.cliente_id);
-            hasHistoryFilter = true;
           }
         });
 
@@ -435,24 +445,21 @@ export default function ClientsPage() {
           historicalReservations.forEach(r => {
             if (r.estado === 'Cancelado') return;
             if (activeFilters.local !== 'todos' && r.local_id !== activeFilters.local) return;
-            // Date logic optimization: Convert string to Date once if heavily reused, but here simple comparison is OK.
+            // Date logic optimization
             if (activeFilters.dateRange) {
               const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : new Date();
               if (activeFilters.dateRange.from && resDate < activeFilters.dateRange.from) return;
-              if (activeFilters.dateRange.to && resDate > activeFilters.dateRange.to) return;
+              if (activeFilters.dateRange.to && resDate > endOfDay(activeFilters.dateRange.to)) return;
             }
 
             const matchesProf = r.items?.some(i => i.barbero_id === activeFilters.professional) || r.barbero_id === activeFilters.professional;
-            if (matchesProf) {
+            if (matchesProf && r.cliente_id) {
               clientIdsFromHistory.add(r.cliente_id);
-              hasHistoryFilter = true;
             }
           });
         }
 
-        if (hasHistoryFilter) {
-          filtered = filtered.filter(c => clientIdsFromHistory.has(c.id));
-        }
+        filtered = filtered.filter(c => clientIdsFromHistory.has(c.id));
       }
 
       if (activeFilters.birthdayMonth !== 'todos') {
@@ -486,6 +493,10 @@ export default function ClientsPage() {
 
     return filtered;
   }, [clients, sales, debouncedSearchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm]);
 
   const getDateValue = (date: any): number => {
     if (!date) return 0;
@@ -708,16 +719,17 @@ export default function ClientsPage() {
       toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
       triggerDownload();
       setIsDownloadModalOpen(false);
-      setAuthCode('');
-
       await logAuditAction({
         action: 'Autorización por Código',
         details: `Acción autorizada: Descargar reporte de clientes filtrado.`,
         userId: user?.uid || 'unknown',
         userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        authCode: authCode,
         severity: 'info',
         localId: localFilter !== 'todos' ? localFilter : 'unknown'
       });
+      setAuthCode('');
     }
   };
 
@@ -770,7 +782,7 @@ export default function ClientsPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Button variant="outline">Crear una audiencia con este listado</Button>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">
@@ -905,11 +917,31 @@ export default function ClientsPage() {
             </Card>
 
             {!isLoading && paginatedClients.length > 0 && (
-              <div className="flex items-center justify-end space-x-2 py-4">
-                <div className="flex-1 text-sm text-muted-foreground">
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 py-4">
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm font-medium">Resultados por página</p>
+                  <Select
+                    value={`${itemsPerPage}`}
+                    onValueChange={(value) => {
+                      setItemsPerPage(Number(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[70px]">
+                      <SelectValue placeholder={itemsPerPage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-sm font-medium">
                   Página {currentPage} de {totalPages}
                 </div>
-                <div className="space-x-2">
+                <div className="flex space-x-2">
                   <Button
                     variant="outline"
                     size="sm"

@@ -313,6 +313,16 @@ export default function InvoicedSalesPage() {
                 }
             }
 
+            // Guardar en ventas_canceladas
+            const canceladaRef = doc(collection(db, 'ventas_canceladas'), saleToDelete.id);
+            batch.set(canceladaRef, {
+                ...saleToDelete,
+                estado_venta: 'cancelada',
+                eliminada_el: Timestamp.now(),
+                eliminada_por: user?.uid || 'unknown',
+                eliminada_por_nombre: user?.displayName || 'unknown'
+            });
+
             // Eliminar Venta
             batch.delete(saleRef);
 
@@ -321,6 +331,16 @@ export default function InvoicedSalesPage() {
             toast({
                 title: "Venta Eliminada",
                 description: "La venta ha sido eliminada y el stock revertido.",
+            });
+
+            await logAuditAction({
+                action: 'Eliminar Venta Facturada',
+                details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total} del cliente ${saleToDelete.client?.nombre || 'Desconocido'}.`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                severity: 'critical',
+                localId: saleToDelete.local_id || 'unknown'
             });
         } catch (error) {
             console.error("Error deleting sale: ", error);
@@ -335,8 +355,38 @@ export default function InvoicedSalesPage() {
         }
     };
 
-    const triggerDownload = () => {
-        if (populatedSales.length === 0) {
+    const triggerDownload = async () => {
+        let allSalesForDownload = [...populatedSales];
+
+        try {
+            if (activeFilters.dateRange?.from && activeFilters.dateRange?.to && db) {
+                const start = startOfDay(activeFilters.dateRange.from);
+                const end = endOfDay(activeFilters.dateRange.to);
+
+                const q = firestoreQuery(
+                    collection(db, 'ventas_canceladas'),
+                    where('fecha_hora_venta', '>=', Timestamp.fromDate(start)),
+                    where('fecha_hora_venta', '<=', Timestamp.fromDate(end))
+                );
+
+                const snapshot = await getDocs(q);
+                const cancelledSales: any[] = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const localMatch = activeFilters.local === 'todos' || data.local_id === activeFilters.local;
+                    const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || data.metodo_pago === activeFilters.paymentMethod;
+
+                    if (localMatch && paymentMethodMatch) {
+                        cancelledSales.push({ ...data, isCancelled: true });
+                    }
+                });
+                allSalesForDownload = [...allSalesForDownload, ...cancelledSales];
+            }
+        } catch (error) {
+            console.error("Error fetching cancelled sales for download", error);
+        }
+
+        if (allSalesForDownload.length === 0) {
             toast({
                 title: "No hay datos para exportar",
                 description: "No hay ventas en el período seleccionado.",
@@ -345,14 +395,20 @@ export default function InvoicedSalesPage() {
             return;
         }
 
-        const dataForExcel = populatedSales.map(sale => ({
+        allSalesForDownload.sort((a, b) => {
+            const dateA = a.fecha_hora_venta?.seconds ? new Date(a.fecha_hora_venta.seconds * 1000) : new Date(a.fecha_hora_venta);
+            const dateB = b.fecha_hora_venta?.seconds ? new Date(b.fecha_hora_venta.seconds * 1000) : new Date(b.fecha_hora_venta);
+            return dateB.getTime() - dateA.getTime();
+        });
+
+        const dataForExcel = allSalesForDownload.map((sale: any) => ({
             'Fecha de pago': formatDate(sale.fecha_hora_venta),
-            'Cliente': sale.client?.nombre ? `${sale.client.nombre} ${sale.client.apellido}` : 'Desconocido',
-            'Concepto': getSaleConcept(sale),
-            'Detalle': sale.items?.map(i => i.nombre).join(', ') || 'N/A',
+            'Cliente': sale.client?.nombre ? `${sale.client.nombre} ${sale.client.apellido || ''}`.trim() : 'Desconocido',
+            'Concepto': sale.isCancelled ? `[CANCELADA] ${getSaleConcept(sale)}` : getSaleConcept(sale),
+            'Detalle': sale.items?.map((i: any) => i.nombre).join(', ') || 'N/A',
             'Profesional': sale.professionalNames || 'N/A',
             'Método de Pago': sale.metodo_pago,
-            'Total': (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total,
+            'Total': sale.isCancelled ? 0 : ((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total),
             'Descuento': '0.00%', // Placeholder
         }));
 
@@ -387,7 +443,7 @@ export default function InvoicedSalesPage() {
             toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
         } else {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
-            triggerDownload();
+            await triggerDownload();
             setIsDownloadModalOpen(false);
             setAuthCode('');
         }
@@ -432,6 +488,8 @@ export default function InvoicedSalesPage() {
                 details: `Acción autorizada en ventas facturadas: ${authAction?.description || 'Desconocida'}.`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                authCode: authCode,
                 severity: 'info',
                 localId: localFilter !== 'todos' ? localFilter : 'unknown'
             });

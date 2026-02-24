@@ -63,7 +63,9 @@ import {
   Clock,
   Circle,
   ChevronDown,
-  GripVertical
+  GripVertical,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditProfesionalModal } from '@/components/admin/profesionales/edit-profesional-modal';
@@ -194,6 +196,8 @@ export default function ProfesionalesPage() {
   const [specialDayProfessional, setSpecialDayProfessional] = useState<Profesional | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClientMounted, setIsClientMounted] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -326,13 +330,21 @@ export default function ProfesionalesPage() {
     }
   }
 
+  const totalPages = Math.ceil(localProfessionals.length / itemsPerPage) || 1;
+  const paginatedProfessionals = useMemo(() => {
+    return localProfessionals.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [localProfessionals, currentPage, itemsPerPage]);
+
   const professionalsByLocal = useMemo(() => {
     if (localesLoading) return [];
 
     const assignedProfessionals = new Set<string>();
 
     const byLocal = locales.map(local => {
-      const prosInLocal = localProfessionals.filter(p => {
+      const prosInLocal = paginatedProfessionals.filter(p => {
         if (p.local_id === local.id) {
           assignedProfessionals.add(p.id);
           return true;
@@ -346,7 +358,7 @@ export default function ProfesionalesPage() {
       };
     }).filter(localGroup => localGroup.professionals.length > 0);
 
-    const unassigned = localProfessionals.filter(p => !p.local_id || !assignedProfessionals.has(p.id));
+    const unassigned = paginatedProfessionals.filter(p => !p.local_id || !assignedProfessionals.has(p.id));
 
     const result: ({ professionals: Profesional[] } & Partial<Local>)[] = [...byLocal];
 
@@ -359,7 +371,7 @@ export default function ProfesionalesPage() {
     }
 
     return result;
-  }, [localProfessionals, locales, localesLoading]);
+  }, [paginatedProfessionals, locales, localesLoading]);
 
   const activeProfessional = useMemo(() => localProfessionals.find(p => p.id === activeId), [activeId, localProfessionals]);
 
@@ -478,6 +490,52 @@ export default function ProfesionalesPage() {
               ) : null}
             </DragOverlay>
           </DndContext>
+
+          {localProfessionals.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-2">
+              <div className="flex items-center space-x-2">
+                <p className="text-sm font-medium">Resultados por página</p>
+                <Select
+                  value={`${itemsPerPage}`}
+                  onValueChange={(value) => {
+                    setItemsPerPage(Number(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue placeholder={itemsPerPage} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

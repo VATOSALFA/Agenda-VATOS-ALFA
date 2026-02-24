@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, Package, DollarSign, Eye, Loader2, Search, User, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Product, Profesional, ProductPresentation, SaleItem, Client, AuthCode, User as AppUser, Role } from "@/lib/types";
@@ -59,6 +59,8 @@ export default function ProductSalesPage() {
     const { toast } = useToast();
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
     const [authCode, setAuthCode] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
 
     const [activeFilters, setActiveFilters] = useState({
@@ -77,6 +79,22 @@ export default function ProductSalesPage() {
         raw: { products, professionals, presentations, clients },
         formatDate
     } = useProductSalesData(activeFilters, queryKey);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeFilters, activeTab]);
+
+    const totalPagesProducts = Math.ceil(salesSummary.aggregatedData.length / itemsPerPage) || 1;
+    const paginatedProducts = salesSummary.aggregatedData.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const totalPagesSellers = Math.ceil(sellerSummary.length / itemsPerPage) || 1;
+    const paginatedSellers = sellerSummary.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
 
 
@@ -176,15 +194,17 @@ export default function ProductSalesPage() {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
             triggerDownload();
             setIsDownloadModalOpen(false);
-            setAuthCode('');
             await logAuditAction({
                 action: 'Autorización por Código',
                 details: 'Acción autorizada: Descargar reporte detallado de ventas de productos.',
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                authCode: authCode,
                 severity: 'info',
                 localId: 'unknown'
             });
+            setAuthCode('');
         }
     };
 
@@ -338,7 +358,7 @@ export default function ProductSalesPage() {
                                             <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                         ) : salesSummary.aggregatedData.length === 0 ? (
                                             <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas de productos para los filtros seleccionados.</TableCell></TableRow>
-                                        ) : salesSummary.aggregatedData.map((sale) => (
+                                        ) : paginatedProducts.map((sale) => (
                                             <TableRow key={sale.id}>
                                                 <TableCell className="font-medium">{sale.nombre}</TableCell>
                                                 <TableCell>{sale.presentation}</TableCell>
@@ -370,7 +390,7 @@ export default function ProductSalesPage() {
                                             <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                         ) : sellerSummary.length === 0 ? (
                                             <TableRow><TableCell colSpan={5} className="text-center h-24">No hay ventas para los filtros seleccionados.</TableCell></TableRow>
-                                        ) : sellerSummary.map((seller) => (
+                                        ) : paginatedSellers.map((seller) => (
                                             <TableRow key={seller.sellerId}>
                                                 <TableCell className="font-medium">{seller.sellerName}</TableCell>
                                                 <TableCell>{seller.userType}</TableCell>
@@ -387,6 +407,52 @@ export default function ProductSalesPage() {
                                 </Table>
                             </TabsContent>
                         </Tabs>
+
+                        {!isLoading && (activeTab === 'por-productos' ? salesSummary.aggregatedData.length > 0 : sellerSummary.length > 0) && (
+                            <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 border-t mt-4">
+                                <div className="flex items-center space-x-2">
+                                    <p className="text-sm font-medium">Resultados por página</p>
+                                    <Select
+                                        value={`${itemsPerPage}`}
+                                        onValueChange={(value) => {
+                                            setItemsPerPage(Number(value));
+                                            setCurrentPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-8 w-[70px]">
+                                            <SelectValue placeholder={itemsPerPage} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="text-sm font-medium">
+                                    Página {currentPage} de {activeTab === 'por-productos' ? totalPagesProducts : totalPagesSellers}
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                    >
+                                        <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, activeTab === 'por-productos' ? totalPagesProducts : totalPagesSellers))}
+                                        disabled={currentPage === (activeTab === 'por-productos' ? totalPagesProducts : totalPagesSellers)}
+                                    >
+                                        Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

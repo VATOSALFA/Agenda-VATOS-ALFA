@@ -181,15 +181,18 @@ export default function CommissionsPage() {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
             triggerDownload();
             setIsDownloadModalOpen(false);
-            setAuthCode('');
+
             await logAuditAction({
                 action: 'Autorización por Código',
                 details: 'Acción autorizada: Descargar reporte de comisiones filtrado.',
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                authCode: authCode,
                 severity: 'info',
                 localId: localFilter !== 'todos' ? localFilter : 'unknown'
             });
+            setAuthCode('');
         }
     };
 

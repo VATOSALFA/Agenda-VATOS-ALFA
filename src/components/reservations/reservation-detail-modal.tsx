@@ -44,6 +44,8 @@ import { SaleDetailModal } from '../sales/sale-detail-modal';
 import { functions, httpsCallable } from '@/lib/firebase-client';
 
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { logAuditAction } from '@/lib/audit-logger';
+import { formatClientName } from '../agenda/agenda-utils';
 
 
 interface ReservationDetailModalProps {
@@ -82,7 +84,7 @@ export function ReservationDetailModal({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const { toast } = useToast();
-  const { db } = useAuth();
+  const { db, user } = useAuth();
 
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
@@ -118,6 +120,16 @@ export function ReservationDetailModal({
       toast({
         title: "Reserva Cancelada",
         description: "El estado de la reserva ha sido actualizado a 'Cancelado'.",
+      });
+
+      await logAuditAction({
+        action: 'Cancelar Reserva',
+        details: `Se canceló la cita del cliente ${reservation.customer?.nombre || 'Desconocido'}. Fecha: ${reservation.fecha} a las ${reservation.hora_inicio}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'warning',
+        localId: reservation.local_id || 'unknown'
       });
 
       // 2. CERRAR EL MODAL PRINCIPAL DESPUÉS DE LA TRANSACCIÓN
@@ -246,7 +258,7 @@ export function ReservationDetailModal({
                   className={cn("font-semibold text-lg hover:text-primary transition-colors", onClientClick && "cursor-pointer hover:underline")}
                   onClick={() => onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
                 >
-                  {reservation.customer?.nombre} {reservation.customer?.apellido}
+                  {formatClientName(reservation.customer?.nombre, reservation.customer?.apellido)}
                 </h4>
                 <div className="flex items-center gap-2">
                   <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
@@ -300,7 +312,7 @@ export function ReservationDetailModal({
                 <span>{reservation.customer?.telefono || 'No registrado'}</span>
                 {reservation.customer?.telefono && (
                   <a
-                    href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '').length === 10 ? '52' + reservation.customer.telefono.replace(/\D/g, '') : reservation.customer.telefono.replace(/\D/g, '')}?text=Hola+${reservation.customer.nombre},+te+escribimos+de+VATOS+ALFA...`}
+                    href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '').length === 10 ? '52' + reservation.customer.telefono.replace(/\D/g, '') : reservation.customer.telefono.replace(/\D/g, '')}?text=Hola+${formatClientName(reservation.customer.nombre, reservation.customer.apellido)},+te+escribimos+de+VATOS+ALFA...`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ml-2 inline-flex items-center justify-center h-6 w-6 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-foreground"

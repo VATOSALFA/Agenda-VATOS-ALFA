@@ -21,8 +21,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { UploadCloud, FileSpreadsheet, Loader2, Download } from 'lucide-react';
+import { format, parse, isValid } from 'date-fns';
 
 interface UploadClientsModalProps {
   isOpen: boolean;
@@ -70,6 +70,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
           const noShowAppointmentsIndex = headers.indexOf('citas no asistidas');
           const cancelledAppointmentsIndex = headers.indexOf('citas canceladas');
           const totalSpentIndex = headers.indexOf('gasto total');
+          const clientSinceIndex = headers.indexOf('cliente desde');
           const clientNumberIndex = headers.indexOf('número de cliente');
 
           if (nameIndex === -1 || lastnameIndex === -1 || phoneIndex === -1) {
@@ -79,8 +80,15 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
 
           const data: ParsedClient[] = json.slice(1).map(row => {
             let birthDate = null;
-            if (birthDateIndex > -1 && row[birthDateIndex] instanceof Date) {
-              birthDate = format(row[birthDateIndex], 'yyyy-MM-dd');
+            const birthDateValue = birthDateIndex > -1 ? row[birthDateIndex] : null;
+
+            if (birthDateValue instanceof Date) {
+              birthDate = format(birthDateValue, 'yyyy-MM-dd');
+            } else if (typeof birthDateValue === 'string') {
+              const parsedDate = parse(birthDateValue, 'dd/MM/yyyy', new Date());
+              if (isValid(parsedDate)) {
+                birthDate = format(parsedDate, 'yyyy-MM-dd');
+              }
             } else if (dayIndex > -1 && monthIndex > -1 && yearIndex > -1) {
               const day = row[dayIndex];
               const month = row[monthIndex];
@@ -91,7 +99,16 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
             }
 
             let clientSinceDate = Timestamp.now();
-            if (clientSinceDayIndex > -1 && clientSinceMonthIndex > -1 && clientSinceYearIndex > -1) {
+            const clientSinceValue = clientSinceIndex > -1 ? row[clientSinceIndex] : null;
+
+            if (clientSinceValue instanceof Date) {
+              clientSinceDate = Timestamp.fromDate(clientSinceValue);
+            } else if (typeof clientSinceValue === 'string') {
+              const parsedDate = parse(clientSinceValue, 'dd/MM/yyyy', new Date());
+              if (isValid(parsedDate)) {
+                clientSinceDate = Timestamp.fromDate(parsedDate);
+              }
+            } else if (clientSinceDayIndex > -1 && clientSinceMonthIndex > -1 && clientSinceYearIndex > -1) {
               const day = row[clientSinceDayIndex];
               const month = row[clientSinceMonthIndex];
               const year = row[clientSinceYearIndex];
@@ -137,6 +154,60 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
     multiple: false,
   });
 
+  const downloadTemplate = () => {
+    try {
+      const headers = [
+        'nombre',
+        'apellido',
+        'telefono',
+        'correo',
+        'fecha de nacimiento',
+        'cliente desde',
+        'gasto total'
+      ];
+
+      const sampleData = [
+        {
+          'nombre': 'Juan',
+          'apellido': 'Pérez',
+          'telefono': '5551234567',
+          'correo': 'juan.perez@ejemplo.com',
+          'fecha de nacimiento': '15/05/1990',
+          'cliente desde': '01/01/2024',
+          'gasto total': '1500'
+        },
+        {
+          'nombre': 'María',
+          'apellido': 'García',
+          'telefono': '5559876543',
+          'correo': 'm.garcia@ejemplo.com',
+          'fecha de nacimiento': '20/11/1985',
+          'cliente desde': '15/06/2023',
+          'gasto total': '2400'
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Clientes');
+
+      // Generate XLSX file and trigger download
+      XLSX.writeFile(workbook, 'plantilla-clientes-vatos-alfa.xlsx');
+
+      toast({
+        title: '¡Descarga iniciada!',
+        description: 'Se ha generado la plantilla de ejemplo correctamente.',
+      });
+    } catch (error) {
+      console.error('Error generating template:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo generar la plantilla de ejemplo.'
+      });
+    }
+  };
+
   const handleUpload = async () => {
     if (parsedData.length === 0) {
       toast({ variant: 'destructive', title: 'No hay datos', description: 'No hay clientes válidos para importar.' });
@@ -144,7 +215,6 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
     }
     setIsProcessing(true);
     try {
-      const settingsRef = doc(db, 'configuracion', 'clientes');
       const settingsSnap = await getDocs(query(collection(db, 'configuracion'), where('__name__', '==', 'clientes')));
       const clientSettings = settingsSnap.docs[0]?.data() as ClientSettings | undefined;
       const autoNumberEnabled = clientSettings?.autoClientNumber ?? false;
@@ -215,9 +285,21 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
             <Alert>
               <FileSpreadsheet className="h-4 w-4" />
               <AlertTitle>Formato del archivo</AlertTitle>
-              <AlertDescription>
-                Asegúrate de que tu archivo .xlsx, .xls o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) otras columnas como <strong>correo</strong>, <strong>fecha de nacimiento</strong>, etc.
-                <a href="/Base de datos clientes.csv" download="plantilla-clientes.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+              <AlertDescription className="space-y-3">
+                <p>
+                  Asegúrate de que tu archivo .xlsx, .xls o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) otras columnas como <strong>correo</strong>, <strong>fecha de nacimiento</strong>, etc.
+                </p>
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2 border-primary text-primary hover:bg-primary/5 font-bold"
+                    onClick={downloadTemplate}
+                  >
+                    <Download className="h-4 w-4" />
+                    Descargar archivo de ejemplo (.xlsx)
+                  </Button>
+                </div>
               </AlertDescription>
             </Alert>
           </div>

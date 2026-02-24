@@ -427,10 +427,20 @@ export default function FinanzasMensualesPage() {
     const calculatedEgresos = useMemo(() => {
         if (egresosLoading) return [];
 
-        const manualEgresos: Egreso[] = egresos.map(e => ({
-            ...e,
-            fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha)
-        }));
+        const manualEgresos: Egreso[] = egresos
+            .filter(e => {
+                const concepto = e.concepto?.toLowerCase() || '';
+                if (concepto.includes('entrega de efectivo') ||
+                    concepto.includes('cierre de caja') ||
+                    concepto.includes('retiro de efectivo')) {
+                    return false;
+                }
+                return true;
+            })
+            .map(e => ({
+                ...e,
+                fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha)
+            }));
 
         return manualEgresos.sort((a, b) => {
             const { key, direction } = egresosSortConfig;

@@ -8,6 +8,8 @@ export interface AuditLogEntry {
     details: string;
     userId: string;
     userName: string;
+    userRole?: string;
+    authCode?: string;
     severity: AuditSeverity;
     entityId?: string;
     localId?: string;

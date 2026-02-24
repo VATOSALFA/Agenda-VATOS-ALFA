@@ -24,3 +24,25 @@ export const getStatusColor = (status: string | undefined) => {
             return 'bg-gray-200/80 border-gray-500 text-gray-800';
     }
 }
+
+export const formatClientName = (nombre?: string, apellido?: string) => {
+    if (!nombre) return 'Cliente Eliminado';
+
+    const nameWords = nombre.trim().split(/\s+/).filter(Boolean);
+
+    // Caso: El nombre ya tiene 2 o más palabras
+    if (nameWords.length >= 2) {
+        return `${nameWords[0]} ${nameWords[1]}`;
+    }
+
+    // Caso: El nombre solo tiene 1 palabra, intentamos usar el apellido
+    if (apellido) {
+        const lastNameWords = apellido.trim().split(/\s+/).filter(Boolean);
+        if (lastNameWords.length > 0) {
+            return `${nameWords[0]} ${lastNameWords[0]}`;
+        }
+    }
+
+    // Caso: Solo hay una palabra en total
+    return nameWords[0];
+};

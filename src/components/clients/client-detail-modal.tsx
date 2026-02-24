@@ -38,7 +38,7 @@ interface Sale {
   fecha_hora_venta: { seconds: number; nanoseconds: number; };
   total: number;
   metodo_pago: string;
-  items: { nombre: string; cantidad: number; precio_unitario: number }[];
+  items: { nombre: string; cantidad: number; precio_unitario: number; barbero_id?: string }[];
   pago_estado?: string;
   monto_pagado_real?: number;
 }
@@ -174,7 +174,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : attendedAppointments} icon={UserCheck} />
                     <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : unattendedAppointments} icon={UserX} />
                     <StatCard title="Citas canceladas" value={reservationsLoading ? '...' : cancelledAppointments} icon={XCircle} />
-                    <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-CL')}`} icon={PiggyBank} description={`${validSales.length} compras`} />
+                    <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={PiggyBank} description={`${validSales.length} compras`} />
                   </div>
                 </TabsContent>
                 <TabsContent value="reservations">
@@ -214,25 +214,33 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                           <TableRow>
                             <TableHead>Fecha</TableHead>
                             <TableHead>Items</TableHead>
+                            <TableHead>Profesional</TableHead>
                             <TableHead>Método de pago</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {sales.map(sale => (
-                            <TableRow key={sale.id}>
-                              <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
-                              <TableCell>
-                                <ul className="list-disc pl-4 text-xs">
-                                  {sale.items?.map((item, index) => (
-                                    <li key={index}>{item.cantidad}x {item.nombre}</li>
-                                  ))}
-                                </ul>
-                              </TableCell>
-                              <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                              <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-CL')}</TableCell>
-                            </TableRow>
-                          ))}
+                          {sales.map(sale => {
+                            const professionalNames = Array.from(
+                              new Set(sale.items?.map(item => item.barbero_id ? professionalMap.get(item.barbero_id) : null).filter(Boolean))
+                            ).join(', ') || 'N/A';
+
+                            return (
+                              <TableRow key={sale.id}>
+                                <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
+                                <TableCell>
+                                  <ul className="list-disc pl-4 text-xs">
+                                    {sale.items?.map((item, index) => (
+                                      <li key={index}>{item.cantidad}x {item.nombre}</li>
+                                    ))}
+                                  </ul>
+                                </TableCell>
+                                <TableCell className="text-sm">{professionalNames}</TableCell>
+                                <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
+                                <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     ) : (

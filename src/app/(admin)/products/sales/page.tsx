@@ -47,7 +47,10 @@ import { logAuditAction } from '@/lib/audit-logger';
 
 export default function ProductSalesPage() {
     const { user } = useAuth();
-    const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: startOfDay(new Date()),
+        to: endOfDay(new Date())
+    });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [productStatusFilter, setProductStatusFilter] = useState('active');
     const [productFilter, setProductFilter] = useState('todos');

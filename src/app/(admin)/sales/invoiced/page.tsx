@@ -451,7 +451,7 @@ export default function InvoicedSalesPage() {
 
     const handleOpenDeleteModal = (sale: Sale) => {
         const action = () => setSaleToDelete(sale);
-        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
+        if (user?.role === 'Administrador general') {
             action();
         } else {
             // Delay opening the modal slightly to allow dropdown to close cleanly
@@ -532,7 +532,7 @@ export default function InvoicedSalesPage() {
             });
             setIsEditModalOpen(true);
         };
-        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
+        if (user?.role === 'Administrador general') {
             action();
         } else {
             setTimeout(() => {
@@ -812,10 +812,6 @@ export default function InvoicedSalesPage() {
                                                             <DropdownMenuItem onSelect={() => handleOpenEditModal(sale)}>
                                                                 <Pencil className="mr-2 h-4 w-4 text-blue-500" />
                                                                 <span className="text-blue-500">Editar</span>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onSelect={() => window.print()}>
-                                                                <Printer className="mr-2 h-4 w-4 text-secondary" />
-                                                                <span className="text-secondary">Imprimir</span>
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onSelect={() => handleOpenDeleteModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                 <Trash2 className="mr-2 h-4 w-4" />

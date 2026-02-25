@@ -517,8 +517,12 @@ export default function CashBoxPage() {
             setEditingEgreso(egreso);
             setIsEgresoModalOpen(true);
         };
-        setAuthAction({ execute: action, description: `Editar egreso: ${egreso.concepto} por $${egreso.monto}` });
-        setTimeout(() => setIsAuthModalOpen(true), 0);
+        if (user?.role === 'Administrador general') {
+            action();
+        } else {
+            setAuthAction({ execute: action, description: `Editar egreso: ${egreso.concepto} por $${egreso.monto}` });
+            setTimeout(() => setIsAuthModalOpen(true), 0);
+        }
     };
 
     const handleDeleteEgreso = async () => {
@@ -662,8 +666,12 @@ export default function CashBoxPage() {
 
     const handleOpenDeleteEgresoModal = (egreso: Egreso) => {
         const action = () => setEgresoToDelete(egreso);
-        setAuthAction({ execute: action, description: `Eliminar egreso: ${egreso.concepto} por $${egreso.monto}` });
-        setTimeout(() => setIsAuthModalOpen(true), 0);
+        if (user?.role === 'Administrador general') {
+            action();
+        } else {
+            setAuthAction({ execute: action, description: `Eliminar egreso: ${egreso.concepto} por $${egreso.monto}` });
+            setTimeout(() => setIsAuthModalOpen(true), 0);
+        }
     }
 
     const handleOpenEditIngreso = (ingreso: IngresoManual) => {
@@ -671,14 +679,22 @@ export default function CashBoxPage() {
             setEditingIngreso(ingreso);
             setIsIngresoModalOpen(true);
         };
-        setAuthAction({ execute: action, description: `Editar ingreso: ${ingreso.concepto} por $${ingreso.monto}` });
-        setTimeout(() => setIsAuthModalOpen(true), 0);
+        if (user?.role === 'Administrador general') {
+            action();
+        } else {
+            setAuthAction({ execute: action, description: `Editar ingreso: ${ingreso.concepto} por $${ingreso.monto}` });
+            setTimeout(() => setIsAuthModalOpen(true), 0);
+        }
     };
 
     const handleOpenDeleteIngresoModal = (ingreso: IngresoManual) => {
         const action = () => setIngresoToDelete(ingreso);
-        setAuthAction({ execute: action, description: `Eliminar ingreso: ${ingreso.concepto} por $${ingreso.monto}` });
-        setTimeout(() => setIsAuthModalOpen(true), 0);
+        if (user?.role === 'Administrador general') {
+            action();
+        } else {
+            setAuthAction({ execute: action, description: `Eliminar ingreso: ${ingreso.concepto} por $${ingreso.monto}` });
+            setTimeout(() => setIsAuthModalOpen(true), 0);
+        }
     };
 
     const handleDeleteIngreso = async () => {
@@ -822,7 +838,7 @@ export default function CashBoxPage() {
 
     const handleOpenDeleteSaleModal = (sale: Sale) => {
         const action = () => setSaleToDelete(sale);
-        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') {
+        if (user?.role === 'Administrador general') {
             action();
         } else {
             setAuthAction({ execute: action, description: `Eliminar venta de $${sale.total} para ${sale.client?.nombre || 'Desconocido'}` });

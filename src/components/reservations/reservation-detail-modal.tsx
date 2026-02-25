@@ -212,6 +212,16 @@ export function ReservationDetailModal({
 
   const handleResendEmail = async () => {
     if (!reservation.id) return;
+
+    if (!reservation.customer?.correo) {
+      toast({
+        title: "Atención",
+        description: "El cliente no cuenta con correo electrónico registrado.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSendingEmail(true);
     try {
       const resendFn = httpsCallable(functions, 'resendReservationConfirmation');

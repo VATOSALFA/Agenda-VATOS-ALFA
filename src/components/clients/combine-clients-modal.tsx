@@ -275,11 +275,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                             <Button
                                 variant="outline"
                                 type="button"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleClose();
-                                }}
+                                onClick={handleClose}
                             >
                                 Cerrar
                             </Button>

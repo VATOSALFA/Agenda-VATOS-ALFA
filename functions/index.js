@@ -1527,7 +1527,7 @@ exports.sendDailyAgendaSummary = onSchedule({
 
   // 1. Determine "Today" and Current Time in Mexico City using reliable locale (en-US)
   const now = new Date();
-  const options = { timeZone: "America/Mexico_City", hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+  const options = { timeZone: "America/Mexico_City", hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
   const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(now);
 
   const findPart = (type) => parts.find(p => p.type === type)?.value;

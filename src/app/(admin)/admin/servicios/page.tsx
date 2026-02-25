@@ -12,8 +12,10 @@ import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, writeBatch, getDocs, query, collection, where } from 'firebase/firestore';
 import { db } from '@/firebase';
+import { useAuth } from '@/contexts/firebase-auth-context';
+import { logAuditAction } from '@/lib/audit-logger';
 import { Input } from '@/components/ui/input';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, DragOverlay, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -140,6 +142,11 @@ export default function ServiciosPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const { user } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authCode, setAuthCode] = useState('');
+  const [authAction, setAuthAction] = useState<{ execute: () => void, description: string } | null>(null);
+
   const { data: allServices, loading: servicesLoading } = useFirestoreQuery<Service>('servicios', queryKey);
   const { data: allCategories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios', queryKey);
 
@@ -218,12 +225,63 @@ export default function ServiciosPage() {
       await deleteDoc(doc(db, 'servicios', serviceToDelete.id));
       toast({ title: "Servicio eliminado con éxito" });
       handleDataUpdated();
+
+      await logAuditAction({
+        action: 'Eliminar Servicio',
+        details: `Servicio eliminado: ${serviceToDelete.name}`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'warning'
+      });
+
     } catch (error) {
       toast({ variant: 'destructive', title: "Error al eliminar" });
     } finally {
       setServiceToDelete(null);
     }
   }
+
+  const handleOpenDeleteServiceModal = (service: Service) => {
+    const action = () => setServiceToDelete(service);
+    if (user?.role === 'Administrador general') {
+      action();
+    } else {
+      setAuthAction({ execute: action, description: `Eliminar servicio: ${service.name}` });
+      setTimeout(() => setIsAuthModalOpen(true), 0);
+    }
+  };
+
+  const handleAuthCodeSubmit = async () => {
+    if (!authCode || !db) {
+      toast({ variant: 'destructive', title: 'Código requerido' });
+      return;
+    }
+    const authCodeQuery = query(
+      collection(db, 'codigos_autorizacion'),
+      where('code', '==', authCode),
+      where('active', '==', true)
+    );
+    const querySnapshot = await getDocs(authCodeQuery);
+    if (querySnapshot.empty) {
+      toast({ variant: 'destructive', title: 'Código inválido o inactivo' });
+    } else {
+      toast({ title: 'Código correcto' });
+      authAction?.execute();
+      setIsAuthModalOpen(false);
+      await logAuditAction({
+        action: 'Autorización por Código',
+        details: `Acción autorizada en servicios: ${authAction?.description || 'Desconocida'}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        authCode: authCode,
+        severity: 'warning'
+      });
+    }
+    setAuthCode('');
+    setAuthAction(null);
+  };
 
   const handleToggleActive = async (service: Service) => {
     if (!db) return;
@@ -416,7 +474,7 @@ export default function ServiciosPage() {
                           categoryName={categoryMap[service.category] || 'Sin categoría'}
                           onToggleActive={handleToggleActive}
                           onEdit={handleEditService}
-                          onDelete={setServiceToDelete}
+                          onDelete={handleOpenDeleteServiceModal}
                           onMoveUp={handleMoveUp}
                           onMoveDown={handleMoveDown}
                           isFirst={index === 0}
@@ -463,7 +521,7 @@ export default function ServiciosPage() {
                           categoryName={categoryMap[service.category] || 'Sin categoría'}
                           onToggleActive={handleToggleActive}
                           onEdit={handleEditService}
-                          onDelete={setServiceToDelete}
+                          onDelete={handleOpenDeleteServiceModal}
                           onMoveUp={handleMoveUp}
                           onMoveDown={handleMoveDown}
                           isFirst={index === 0}
@@ -518,6 +576,24 @@ export default function ServiciosPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Autorización Requerida</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción requiere confirmar con un código de autorización.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Input type="password" placeholder="Ingrese el código secreto" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); setIsAuthModalOpen(false); }}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAuthCodeSubmit}>Autorizar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

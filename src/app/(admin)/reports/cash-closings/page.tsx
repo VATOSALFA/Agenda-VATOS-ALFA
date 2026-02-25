@@ -7,6 +7,8 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { DateRange } from 'react-day-picker';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
+import { useToast } from '@/hooks/use-toast';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -157,6 +159,7 @@ export default function CashClosingsPage() {
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
+    const { toast } = useToast();
 
     const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
 
@@ -255,6 +258,40 @@ export default function CashClosingsPage() {
         return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
     };
 
+    const handleDownload = () => {
+        if (sortedClosings.length === 0) {
+            toast({
+                title: "No hay datos para exportar",
+                description: "No hay cierres de caja en el período seleccionado.",
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        const dataForExcel = sortedClosings.map((closing: CashClosing) => ({
+            'Fecha': format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm'),
+            'Entrega': closing.persona_entrega_nombre,
+            'Recibe': closing.persona_recibe,
+            'Fondo Base': closing.fondo_base,
+            'Total Contado': closing.total_calculado,
+            'Total Entregado': closing.total_calculado - closing.fondo_base,
+            'Total Sistema': closing.total_sistema,
+            'Diferencia (Contado - Sistema - Fondo)': closing.total_calculado - closing.fondo_base - closing.total_sistema,
+            'Comentarios': closing.comentarios || 'N/A'
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Cierres de Caja");
+
+        XLSX.writeFile(workbook, `Reporte_Cierres_Caja_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+        toast({
+            title: "Descarga iniciada",
+            description: "Tu archivo de Excel se está descargando.",
+        });
+    };
+
     const isLoading = usersLoading || closingsLoading;
 
     return (
@@ -325,7 +362,7 @@ export default function CashClosingsPage() {
                 <Card>
                     <CardHeader className="flex-row items-center justify-between">
                         <CardTitle>Historial de cierres</CardTitle>
-                        <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Descargar</Button>
+                        <Button variant="outline" onClick={handleDownload} disabled={isLoading || sortedClosings.length === 0}><Download className="mr-2 h-4 w-4" /> Descargar</Button>
                     </CardHeader>
                     <CardContent>
                         <Table>

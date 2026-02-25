@@ -868,34 +868,18 @@ export default function LandingPage() {
 
                     {websiteSettings.privacyPolicyEnabled !== false && (
                         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium">
-                            {(websiteSettings.privacyText || websiteSettings.privacyUrl) && (
-                                <button
-                                    onClick={() => {
-                                        if (websiteSettings.privacyText) {
-                                            setPrivacyModalOpen(true);
-                                        } else if (websiteSettings.privacyUrl) {
-                                            window.open(websiteSettings.privacyUrl, '_blank');
-                                        }
-                                    }}
-                                    className="hover:underline hover:text-primary transition-colors"
-                                >
-                                    Aviso de Privacidad
-                                </button>
-                            )}
-                            {(websiteSettings.termsText || websiteSettings.termsUrl) && (
-                                <button
-                                    onClick={() => {
-                                        if (websiteSettings.termsText) {
-                                            setTermsModalOpen(true);
-                                        } else if (websiteSettings.termsUrl) {
-                                            window.open(websiteSettings.termsUrl, '_blank');
-                                        }
-                                    }}
-                                    className="hover:underline hover:text-primary transition-colors"
-                                >
-                                    Términos y Condiciones
-                                </button>
-                            )}
+                            <Link
+                                href="/privacidad"
+                                className="hover:underline hover:text-primary transition-colors"
+                            >
+                                Aviso de Privacidad
+                            </Link>
+                            <Link
+                                href="/terminos"
+                                className="hover:underline hover:text-primary transition-colors"
+                            >
+                                Términos y Condiciones
+                            </Link>
                         </div>
                     )}
 

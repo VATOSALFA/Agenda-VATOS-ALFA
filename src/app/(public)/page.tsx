@@ -12,7 +12,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from '@/lib/utils'; // Make sure this is imported
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 // Hook moved inside component
 
@@ -39,6 +40,15 @@ export default function LandingPage() {
     const packageServices = sortedServices.filter((s: any) => packageCategoryIds.includes(s.category));
 
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
+
+    // Check if user is logged in to redirect to admin side
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.push('/agenda');
+        }
+    }, [user, authLoading, router]);
+
     // Cart stored as array of Service IDs to allow multiples
     const [cart, setCart] = useState<string[]>([]);
     const [isBooking, setIsBooking] = useState(false);
@@ -61,7 +71,7 @@ export default function LandingPage() {
         }
     }, [locales, selectedBranch]);
 
-    if (loadingServices || loadingEmpresa || loadingLocales || loadingSettings) {
+    if (loadingServices || loadingEmpresa || loadingLocales || loadingSettings || authLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <CustomLoader size={50} />

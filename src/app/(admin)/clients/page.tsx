@@ -477,15 +477,17 @@ export default function ClientsPage() {
 
 
     if (debouncedSearchTerm) {
-      const searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(Boolean);
+      const normalizeText = (text: string) => text ? text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : '';
+      const searchTerms = normalizeText(debouncedSearchTerm).split(' ').filter(Boolean);
+
       filtered = filtered.filter(client => {
-        const clientDataString = [
+        const clientDataString = normalizeText([
           client.nombre,
           client.apellido,
           client.telefono,
           client.correo,
           client.numero_cliente,
-        ].join(' ').toLowerCase();
+        ].join(' '));
 
         return searchTerms.every(term => clientDataString.includes(term));
       });

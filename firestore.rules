@@ -93,6 +93,8 @@ service cloud.firestore {
     
     match /sales/{document=**} { allow read, write: if isAuthenticated(); }
     match /ventas/{document=**} { allow read, write: if isAuthenticated(); } // Added for Spanish collection name
+    match /ventas_canceladas/{document=**} { allow read, write: if isAuthenticated(); }
+
     match /caja/{document=**} { allow read, write: if isAuthenticated(); }   // Added for cash register
     
     match /clientes/{document=**} { allow read, write: if isAuthenticated(); } 

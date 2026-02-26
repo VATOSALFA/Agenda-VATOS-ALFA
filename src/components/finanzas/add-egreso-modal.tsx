@@ -86,6 +86,7 @@ const cashierConcepts = [
 export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: AddEgresoModalProps) {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const { selectedLocalId } = useLocal();
     const { user } = useAuth();
     const isEditMode = !!egreso;
@@ -280,7 +281,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                                     render={({ field }) => (
                                         <FormItem className="flex flex-col">
                                             <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
-                                            <Popover modal={true}>
+                                            <Popover modal={true} open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                                                 <PopoverTrigger asChild>
                                                     <FormControl>
                                                         <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -297,8 +298,10 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                                                         onSelect={(date) => {
                                                             if (date) {
                                                                 const current = field.value || new Date();
-                                                                date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                                                                field.onChange(date);
+                                                                const newDate = new Date(date);
+                                                                newDate.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                                                                field.onChange(newDate);
+                                                                setIsCalendarOpen(false);
                                                             } else {
                                                                 field.onChange(date);
                                                             }

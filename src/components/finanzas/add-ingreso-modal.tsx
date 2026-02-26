@@ -69,6 +69,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { selectedLocalId: contextLocalId } = useLocal();
   const activeLocalId = localId || contextLocalId; // Prioritize prop, then context
   const isEditMode = !!ingreso;
@@ -235,7 +236,7 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><CalendarIcon className="mr-1 h-3 w-3" /> Fecha</FormLabel>
-                      <Popover modal={true}>
+                      <Popover modal={true} open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -245,7 +246,23 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
                           </FormControl>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                          <Calendar
+                            locale={es}
+                            mode="single"
+                            selected={field.value}
+                            onSelect={(date) => {
+                              if (date) {
+                                const current = field.value || new Date();
+                                const newDate = new Date(date);
+                                newDate.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                                field.onChange(newDate);
+                                setIsCalendarOpen(false);
+                              } else {
+                                field.onChange(date);
+                              }
+                            }}
+                            initialFocus
+                          />
                         </PopoverContent>
                       </Popover>
                       <FormMessage />

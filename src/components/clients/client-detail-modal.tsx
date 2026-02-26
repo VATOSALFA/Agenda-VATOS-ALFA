@@ -159,15 +159,17 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
           </div>
 
           {/* History Tabs */}
-          <div className="md:col-span-3 flex flex-col">
-            <Tabs defaultValue="general" className="flex-grow flex flex-col">
-              <TabsList className="mb-4">
-                <TabsTrigger value="general">Información General</TabsTrigger>
-                <TabsTrigger value="reservations">Historial de Reservas</TabsTrigger>
-                <TabsTrigger value="sales">Historial de Compras</TabsTrigger>
-              </TabsList>
+          <div className="md:col-span-3 flex flex-col min-h-0 min-w-0">
+            <Tabs defaultValue="general" className="flex-grow flex flex-col min-h-0 min-w-0">
+              <ScrollArea className="w-full mb-4">
+                <TabsList className="w-full justify-start">
+                  <TabsTrigger value="general">Información General</TabsTrigger>
+                  <TabsTrigger value="reservations">Historial de Reservas</TabsTrigger>
+                  <TabsTrigger value="sales">Historial de Compras</TabsTrigger>
+                </TabsList>
+              </ScrollArea>
 
-              <ScrollArea className="flex-grow pr-2">
+              <div className="flex-grow pr-2 overflow-y-auto overflow-x-hidden">
                 <TabsContent value="general" className="space-y-4">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <StatCard title="Citas totales" value={reservationsLoading ? '...' : totalAppointments} icon={Calendar} />
@@ -177,78 +179,82 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={PiggyBank} description={`${validSales.length} compras`} />
                   </div>
                 </TabsContent>
-                <TabsContent value="reservations">
+                <TabsContent value="reservations" className="m-0 h-full">
                   {reservationsLoading ? <Skeleton className="h-60 w-full" /> : (
                     reservations.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Servicio</TableHead>
-                            <TableHead>Profesional</TableHead>
-                            <TableHead>Estado</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {reservations.map(res => (
-                            <TableRow key={res.id}>
-                              <TableCell>{formatDate(res.fecha, true)}</TableCell>
-                              <TableCell>{res.servicio}</TableCell>
-                              <TableCell>{professionalMap.get(res.barbero_id) || res.barbero_id}</TableCell>
-                              <TableCell><Badge>{res.estado}</Badge></TableCell>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha</TableHead>
+                              <TableHead>Servicio</TableHead>
+                              <TableHead>Profesional</TableHead>
+                              <TableHead>Estado</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {reservations.map(res => (
+                              <TableRow key={res.id}>
+                                <TableCell>{formatDate(res.fecha, true)}</TableCell>
+                                <TableCell>{res.servicio}</TableCell>
+                                <TableCell>{professionalMap.get(res.barbero_id) || res.barbero_id}</TableCell>
+                                <TableCell><Badge>{res.estado}</Badge></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     ) : (
                       <p className="text-muted-foreground text-center py-10">No hay reservas registradas.</p>
                     )
                   )}
                 </TabsContent>
 
-                <TabsContent value="sales">
+                <TabsContent value="sales" className="m-0 h-full">
                   {salesLoading ? <Skeleton className="h-60 w-full" /> : (
                     sales.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Items</TableHead>
-                            <TableHead>Profesional</TableHead>
-                            <TableHead>Método de pago</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {sales.map(sale => {
-                            const professionalNames = Array.from(
-                              new Set(sale.items?.map(item => item.barbero_id ? professionalMap.get(item.barbero_id) : null).filter(Boolean))
-                            ).join(', ') || 'N/A';
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha</TableHead>
+                              <TableHead>Items</TableHead>
+                              <TableHead>Profesional</TableHead>
+                              <TableHead>Método de pago</TableHead>
+                              <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {sales.map(sale => {
+                              const professionalNames = Array.from(
+                                new Set(sale.items?.map(item => item.barbero_id ? professionalMap.get(item.barbero_id) : null).filter(Boolean))
+                              ).join(', ') || 'N/A';
 
-                            return (
-                              <TableRow key={sale.id}>
-                                <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
-                                <TableCell>
-                                  <ul className="list-disc pl-4 text-xs">
-                                    {sale.items?.map((item, index) => (
-                                      <li key={index}>{item.cantidad}x {item.nombre}</li>
-                                    ))}
-                                  </ul>
-                                </TableCell>
-                                <TableCell className="text-sm">{professionalNames}</TableCell>
-                                <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
-                                <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
+                              return (
+                                <TableRow key={sale.id}>
+                                  <TableCell>{formatDate(sale.fecha_hora_venta, true)}</TableCell>
+                                  <TableCell>
+                                    <ul className="list-disc pl-4 text-xs">
+                                      {sale.items?.map((item, index) => (
+                                        <li key={index}>{item.cantidad}x {item.nombre}</li>
+                                      ))}
+                                    </ul>
+                                  </TableCell>
+                                  <TableCell className="text-sm">{professionalNames}</TableCell>
+                                  <TableCell className="capitalize">{sale.metodo_pago}</TableCell>
+                                  <TableCell className="text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
                     ) : (
                       <p className="text-muted-foreground text-center py-10">No hay ventas registradas.</p>
                     )
                   )}
                 </TabsContent>
-              </ScrollArea>
+              </div>
             </Tabs>
           </div>
         </div>

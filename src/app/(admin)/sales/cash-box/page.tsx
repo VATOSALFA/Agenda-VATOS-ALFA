@@ -1123,7 +1123,7 @@ export default function CashBoxPage() {
                                                                                 <Printer className="mr-2 h-4 w-4 text-secondary" />
                                                                                 <span className="text-secondary">Imprimir</span>
                                                                             </DropdownMenuItem>
-                                                                            <DropdownMenuItem onSelect={() => handleOpenDeleteSaleModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenDeleteSaleModal(sale), 150)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                                 <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                                                             </DropdownMenuItem>
                                                                         </DropdownMenuContent>
@@ -1204,10 +1204,10 @@ export default function CashBoxPage() {
                                                                             </Button>
                                                                         </DropdownMenuTrigger>
                                                                         <DropdownMenuContent>
-                                                                            <DropdownMenuItem onSelect={() => handleOpenEditIngreso(ingreso)}>
+                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenEditIngreso(ingreso), 150)}>
                                                                                 <Pencil className="mr-2 h-4 w-4" /> Editar
                                                                             </DropdownMenuItem>
-                                                                            <DropdownMenuItem onSelect={() => handleOpenDeleteIngresoModal(ingreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenDeleteIngresoModal(ingreso), 150)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                                 <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                                                             </DropdownMenuItem>
                                                                         </DropdownMenuContent>
@@ -1296,11 +1296,11 @@ export default function CashBoxPage() {
                                                                             </Button>
                                                                         </DropdownMenuTrigger>
                                                                         <DropdownMenuContent align="end">
-                                                                            <DropdownMenuItem onSelect={() => handleOpenEditEgreso(egreso)}>
+                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenEditEgreso(egreso), 150)}>
                                                                                 <Pencil className="mr-2 h-4 w-4" /> Editar
                                                                             </DropdownMenuItem>
 
-                                                                            <DropdownMenuItem onSelect={() => handleOpenDeleteEgresoModal(egreso)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenDeleteEgresoModal(egreso), 150)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                                                 <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                                                                             </DropdownMenuItem>
                                                                         </DropdownMenuContent>
@@ -1350,11 +1350,13 @@ export default function CashBoxPage() {
                 isOpen={isEgresoModalOpen}
                 onOpenChange={(open) => {
                     setIsEgresoModalOpen(open);
-                    if (!open) setEditingEgreso(null);
+                    if (!open) {
+                        setTimeout(() => setEditingEgreso(null), 300);
+                    }
                 }}
                 onFormSubmit={() => {
                     setIsEgresoModalOpen(false)
-                    setEditingEgreso(null);
+                    setTimeout(() => setEditingEgreso(null), 300);
                     setTimeout(() => handleSearch(), 500);
                 }}
                 egreso={editingEgreso}
@@ -1363,11 +1365,13 @@ export default function CashBoxPage() {
                 isOpen={isIngresoModalOpen}
                 onOpenChange={(open) => {
                     setIsIngresoModalOpen(open);
-                    if (!open) setEditingIngreso(null);
+                    if (!open) {
+                        setTimeout(() => setEditingIngreso(null), 300);
+                    }
                 }}
                 onFormSubmit={() => {
                     setIsIngresoModalOpen(false)
-                    setEditingIngreso(null);
+                    setTimeout(() => setEditingIngreso(null), 300);
                     setTimeout(() => handleSearch(), 500);
                 }}
                 ingreso={editingIngreso}

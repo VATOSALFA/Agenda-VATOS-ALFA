@@ -730,7 +730,8 @@ export default function AgendaView() {
     const minutesFromAgendaStart = (startDecimal - startHour) * 60;
     const top = minutesFromAgendaStart * pixelsPerMinute;
     const height = durationDecimal * 60 * pixelsPerMinute;
-    return { top: `${top}px`, height: `${height}px` };
+    // Se restan 3px de la altura total para dejar un pequeño espacio entre citas consecutivas
+    return { top: `${top}px`, height: `calc(${height}px - 3px)` };
   };
 
   const calculatePopoverPosition = (time: string) => {
@@ -1201,13 +1202,17 @@ export default function AgendaView() {
 
                       {/* Events */}
                       {eventsWithLayout
-                        .filter(event =>
-                          ((event.type === 'block' && event.barbero_id === barber.id) ||
-                            (event.type === 'appointment' && event.items?.some((i: SaleItem) => i.barbero_id === barber.id))) &&
-                          (event as any).originalType !== 'available'
-                        )
+                        .filter(event => {
+                          if ((event as any).originalType === 'available') return false;
+                          if (event.type === 'block') return event.barbero_id === barber.id;
+                          if (event.type === 'appointment') {
+                            if ((event as any).target_barber_id) return (event as any).target_barber_id === barber.id;
+                            return event.items?.some((i: SaleItem) => i.barbero_id === barber.id);
+                          }
+                          return false;
+                        })
                         .map((event: AgendaEvent) => (
-                          <Tooltip key={event.id}>
+                          <Tooltip key={event.id + ((event as any).target_barber_id ? '-' + (event as any).target_barber_id : '')}>
                             <TooltipTrigger asChild>
                               <div
                                 onClick={(e) => {

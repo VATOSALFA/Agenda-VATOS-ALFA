@@ -18,23 +18,71 @@ export function useAgendaEvents(
 
         const appointmentEvents: AgendaEvent[] = reservations
             .filter(res => res.estado !== 'Cancelado')
-            .map(res => {
+            .flatMap(res => {
                 const [startH, startM] = res.hora_inicio.split(':').map(Number);
                 const [endH, endM] = res.hora_fin.split(':').map(Number);
-                const start = startH + startM / 60;
-                const end = endH + endM / 60;
+                const globalStart = startH + startM / 60;
+                const globalEnd = endH + endM / 60;
+                const globalDuration = Math.max(0.0833, globalEnd - globalStart);
+                const customer = clientMap.get(res.cliente_id);
 
-                return {
-                    ...res,
-                    type: 'appointment' as const,
-                    customer: clientMap.get(res.cliente_id),
-                    professionalNames: res.items?.map((i: SaleItem) => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
-                    start: start,
-                    end: end,
-                    duration: Math.max(0.0833, end - start),
-                    color: getStatusColor(res.estado),
-                    layout: { width: 100, left: 0, col: 0, totalCols: 1 }
-                };
+                if (!res.items || res.items.length === 0) {
+                    return [{
+                        ...res,
+                        type: 'appointment' as const,
+                        customer: customer,
+                        professionalNames: 'N/A',
+                        start: globalStart,
+                        end: globalEnd,
+                        duration: globalDuration,
+                        color: getStatusColor(res.estado),
+                        layout: { width: 100, left: 0, col: 0, totalCols: 1 }
+                    }] as AgendaEvent[];
+                }
+
+                const profIds = new Set(res.items.map(i => i.barbero_id).filter(Boolean));
+
+                // Same behavior, 1 professional handling the whole reservation ticket
+                if (profIds.size <= 1) {
+                    return [{
+                        ...res,
+                        type: 'appointment' as const,
+                        customer: customer,
+                        professionalNames: res.items?.map((i: SaleItem) => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
+                        start: globalStart,
+                        end: globalEnd,
+                        duration: globalDuration,
+                        color: getStatusColor(res.estado),
+                        layout: { width: 100, left: 0, col: 0, totalCols: 1 }
+                    }] as AgendaEvent[];
+                }
+
+                // Reservation has MULTIPLE professionals. Split into multiple AgendaEvents per professional.
+                const splitEvents: AgendaEvent[] = [];
+                const profIdArray = Array.from(profIds);
+
+                for (const profId of profIdArray) {
+                    const profItems = res.items.filter(i => i.barbero_id === profId);
+
+                    const totalProfDurationMins = profItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
+                    const profDurationHours = totalProfDurationMins > 0 ? (totalProfDurationMins / 60) : globalDuration;
+                    const profEnd = globalStart + profDurationHours;
+
+                    splitEvents.push({
+                        ...res,
+                        type: 'appointment' as const,
+                        customer: customer,
+                        professionalNames: professionalMap.get(profId) || 'N/A',
+                        target_barber_id: profId,
+                        start: globalStart,
+                        end: profEnd,
+                        duration: Math.max(0.0833, profEnd - globalStart),
+                        color: getStatusColor(res.estado),
+                        layout: { width: 100, left: 0, col: 0, totalCols: 1 }
+                    } as unknown as AgendaEvent);
+                }
+
+                return splitEvents;
             });
 
         const mappedBlockEvents: AgendaEvent[] = timeBlocks.map(block => {
@@ -102,8 +150,12 @@ export function useAgendaEvents(
             for (let j = i + 1; j < processedEvents.length; j++) {
                 const eventB = processedEvents[j];
 
-                const eventAProfessionals = eventA.type === 'appointment' && eventA.items ? eventA.items.map((item) => item.barbero_id) : [eventA.barbero_id];
-                const eventBProfessionals = eventB.type === 'appointment' && eventB.items ? eventB.items.map((item) => item.barbero_id) : [eventB.barbero_id];
+                const eventAProfessionals = eventA.type === 'appointment'
+                    ? ((eventA as any).target_barber_id ? [(eventA as any).target_barber_id] : (eventA.items ? eventA.items.map((item: any) => item.barbero_id) : []))
+                    : [eventA.barbero_id];
+                const eventBProfessionals = eventB.type === 'appointment'
+                    ? ((eventB as any).target_barber_id ? [(eventB as any).target_barber_id] : (eventB.items ? eventB.items.map((item: any) => item.barbero_id) : []))
+                    : [eventB.barbero_id];
 
                 const hasCommonProfessional = eventAProfessionals.some(p => eventBProfessionals.includes(p));
 

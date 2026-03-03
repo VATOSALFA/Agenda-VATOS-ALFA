@@ -106,8 +106,8 @@ export default function ReservationsReportPage() {
         });
     };
 
-    const { totalReservations, totalRevenue, serviceRankingData, reservationsByDayData, reservationsByHourData } = useMemo(() => {
-        if (isLoading) return { totalReservations: 0, totalRevenue: 0, serviceRankingData: [], reservationsByDayData: [], reservationsByHourData: [] };
+    const { totalReservations, totalRevenue, serviceRankingData, reservationsByDayData, reservationsByHourData, bestDay, worstDay, bestHour, worstHour } = useMemo(() => {
+        if (isLoading) return { totalReservations: 0, totalRevenue: 0, serviceRankingData: [], reservationsByDayData: [], reservationsByHourData: [], bestDay: null, worstDay: null, bestHour: null, worstHour: null };
 
         const serviceCount: Record<string, number> = {};
         // Use a map for reliable counting by day index (0=Sunday, 1=Monday, etc.)
@@ -154,12 +154,28 @@ export default function ReservationsReportPage() {
         }));
 
 
+        let bestDay = null;
+        let worstDay = null;
+        let bestHour = null;
+        let worstHour = null;
+
+        if (sortedDays.length > 0) {
+            bestDay = sortedDays.reduce((prev, current) => (prev.value > current.value) ? prev : current, sortedDays[0]);
+            worstDay = sortedDays.reduce((prev, current) => (prev.value < current.value) ? prev : current, sortedDays[0]);
+        }
+
+        if (sortedHours.length > 0) {
+            bestHour = sortedHours.reduce((prev, current) => (prev.reservas > current.reservas) ? prev : current, sortedHours[0]);
+            worstHour = sortedHours.reduce((prev, current) => (prev.reservas < current.reservas) ? prev : current, sortedHours[0]);
+        }
+
         return {
             totalReservations: reservations.length,
             totalRevenue: reservations.reduce((acc, r) => acc + (r.precio || 0), 0),
             serviceRankingData: sortedServices.map(([name, value]) => ({ name, value })),
             reservationsByDayData: sortedDays,
             reservationsByHourData: sortedHours,
+            bestDay, worstDay, bestHour, worstHour,
         };
     }, [reservations, isLoading]);
 
@@ -219,16 +235,16 @@ export default function ReservationsReportPage() {
                             </SelectContent>
                         </Select>
                         <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={professionalsLoading}>
-                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Profesional" /></SelectTrigger>
+                            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Profesional" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="todos">Todos</SelectItem>
+                                <SelectItem value="todos">Todos los profesionales</SelectItem>
                                 {professionals.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
                         <Select value={serviceFilter} onValueChange={setServiceFilter} disabled={servicesLoading}>
-                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Servicio" /></SelectTrigger>
+                            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Servicio" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="todos">Todos</SelectItem>
+                                <SelectItem value="todos">Todos los servicios</SelectItem>
                                 {services.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
@@ -241,7 +257,7 @@ export default function ReservationsReportPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <main className="lg:col-span-4 space-y-6">
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Cantidad de reservas</CardTitle>
@@ -258,6 +274,34 @@ export default function ReservationsReportPage() {
                             </CardHeader>
                             <CardContent>
                                 {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <div className="text-2xl font-bold">${totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>}
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Desempeño por Día</CardTitle>
+                                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                                    <div className="space-y-1 mt-1">
+                                        <div className="flex justify-between items-center"><span className="text-xs text-muted-foreground">Mejor:</span><span className="text-sm font-bold text-primary">{bestDay?.name} ({bestDay?.value})</span></div>
+                                        <div className="flex justify-between items-center"><span className="text-xs text-muted-foreground">Peor:</span><span className="text-sm font-bold text-muted-foreground">{worstDay?.name} ({worstDay?.value})</span></div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Desempeño por Hora</CardTitle>
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                                    <div className="space-y-1 mt-1">
+                                        <div className="flex justify-between items-center"><span className="text-xs text-muted-foreground">Mejor:</span><span className="text-sm font-bold text-primary">{bestHour?.hour || '-'} ({bestHour?.reservas || 0})</span></div>
+                                        <div className="flex justify-between items-center"><span className="text-xs text-muted-foreground">Peor:</span><span className="text-sm font-bold text-muted-foreground">{worstHour?.hour || '-'} ({worstHour?.reservas || 0})</span></div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -302,22 +346,40 @@ export default function ReservationsReportPage() {
                         </Card>
                     </div>
 
-                    <Card>
-                        <CardHeader><CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Horarios más concurridos (Total)</CardTitle></CardHeader>
-                        <CardContent>
-                            {isLoading ? <div className="flex justify-center items-center h-[300px]"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <RechartsBarChart data={reservationsByHourData}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="hour" tick={{ fontSize: 12 }} />
-                                        <YAxis tick={{ fontSize: 12 }} />
-                                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
-                                        <Bar dataKey="reservas" name="Cantidad de reservas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                                    </RechartsBarChart>
-                                </ResponsiveContainer>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <Card>
+                            <CardHeader><CardTitle className="flex items-center"><CalendarIcon className="mr-2 h-5 w-5" /> Días más concurridos (Total)</CardTitle></CardHeader>
+                            <CardContent>
+                                {isLoading ? <div className="flex justify-center items-center h-[300px]"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <RechartsBarChart data={reservationsByDayData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                                            <YAxis tick={{ fontSize: 12 }} />
+                                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
+                                            <Bar dataKey="value" name="Cantidad de reservas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                                        </RechartsBarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader><CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Horarios más concurridos (Total)</CardTitle></CardHeader>
+                            <CardContent>
+                                {isLoading ? <div className="flex justify-center items-center h-[300px]"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <RechartsBarChart data={reservationsByHourData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="hour" tick={{ fontSize: 12 }} />
+                                            <YAxis tick={{ fontSize: 12 }} />
+                                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
+                                            <Bar dataKey="reservas" name="Cantidad de reservas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                                        </RechartsBarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </main >
             </div >
         </div >

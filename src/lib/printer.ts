@@ -358,6 +358,24 @@ export class BluetoothPrinter {
 
         receipt += BOLD_ON + `TOTAL:          $${data.total.toFixed(2)}` + BOLD_OFF + "\n";
 
+        if (data.cashPaid !== undefined && data.change !== undefined) {
+            receipt += `EFECTIVO:      $${data.cashPaid.toFixed(2)}\n`;
+            receipt += `CAMBIO:        $${data.change.toFixed(2)}\n`;
+        }
+
+        if (data.combinedDetails) {
+            receipt += "\n- DESGLOSE DE PAGO -\n";
+            if (data.combinedDetails.efectivo > 0) {
+                receipt += `Efectivo:      $${data.combinedDetails.efectivo.toFixed(2)}\n`;
+            }
+            if (data.combinedDetails.tarjeta > 0) {
+                receipt += `Tarjeta:       $${data.combinedDetails.tarjeta.toFixed(2)}\n`;
+            }
+            if (data.combinedDetails.transferencia > 0) {
+                receipt += `Transferencia: $${data.combinedDetails.transferencia.toFixed(2)}\n`;
+            }
+        }
+
         receipt += "--------------------------------\n";
         receipt += ALIGN_CENTER;
         receipt += this.removeAccents("¡Gracias por su preferencia!") + "\n";

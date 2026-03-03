@@ -108,7 +108,7 @@ export function EnableScheduleModal({ isOpen, onOpenChange, onFormSubmit, initia
     };
 
     const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-    const minutes = ['00', '15', '30', '45'];
+    const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>

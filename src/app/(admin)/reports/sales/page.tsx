@@ -12,12 +12,12 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Loader2, Clock } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, parseISO, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { where, Timestamp } from 'firebase/firestore';
-import type { Sale, Service, ServiceCategory, SaleItem, Role } from '@/lib/types';
+import type { Sale, Service, ServiceCategory, SaleItem, Role, Profesional } from '@/lib/types';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 
@@ -46,43 +46,43 @@ const CustomBarLabel = (props: any) => {
 export default function SalesReportPage() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 28), to: new Date() });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-    const [localFilter, setLocalFilter] = useState('todos');
-    const [queryKey, setQueryKey] = useState(0);
+    const [professionalFilter, setProfessionalFilter] = useState('todos');
+    const [serviceFilter, setServiceFilter] = useState('todos');
+
+    const [activeFilters, setActiveFilters] = useState({
+        professional: 'todos',
+        service: 'todos',
+        dateRange: { from: subDays(new Date(), 28), to: new Date() } as DateRange | undefined
+    });
 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
-        if (dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(dateRange.from)));
+        if (activeFilters.dateRange?.from) {
+            constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(activeFilters.dateRange.from)));
         }
-        if (dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(dateRange.to)));
-        }
-        if (localFilter !== 'todos') {
-            constraints.push(where('local_id', '==', localFilter));
+        if (activeFilters.dateRange?.to) {
+            // Include entire end day
+            const end = new Date(activeFilters.dateRange.to);
+            end.setHours(23, 59, 59, 999);
+            constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(end)));
         }
         return constraints;
-    }, [dateRange, localFilter]);
+    }, [activeFilters.dateRange]);
 
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', JSON.stringify(activeFilters.dateRange), ...salesQueryConstraints);
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
-    const isLoading = salesLoading || servicesLoading || categoriesLoading;
-
-    const handlePeriodChange = (value: string) => {
-        const today = new Date();
-        if (value === 'this_week') {
-            setDateRange({ from: startOfWeek(today, { weekStartsOn: 1 }), to: endOfWeek(today, { weekStartsOn: 1 }) });
-        } else if (value === 'this_month') {
-            setDateRange({ from: startOfMonth(today), to: endOfMonth(today) });
-        } else if (value === 'last_4_weeks') {
-            setDateRange({ from: subDays(today, 28), to: today });
-        }
-    };
+    const isLoading = salesLoading || servicesLoading || categoriesLoading || professionalsLoading;
 
     const handleSearch = () => {
-        setQueryKey(prev => prev + 1);
+        setActiveFilters({
+            professional: professionalFilter,
+            service: serviceFilter,
+            dateRange: dateRange
+        });
     };
 
     const categoryMap = useMemo(() => {
@@ -97,25 +97,49 @@ export default function SalesReportPage() {
             averageSale: 0,
             salesOverTime: [],
             salesByCategory: [],
-            salesByService: []
+            salesByService: [],
+            bestDay: null as { name: string, value: number } | null,
+            worstDay: null as { name: string, value: number } | null,
+            bestHour: null as { hour: string, value: number } | null,
+            worstHour: null as { hour: string, value: number } | null,
         };
 
-        const totalSales = sales.reduce((sum, sale) => {
+        const filteredSales = sales.filter(sale => {
+            if (activeFilters.professional === 'todos' && activeFilters.service === 'todos') return true;
+            if (!sale.items || !Array.isArray(sale.items)) return false;
+
+            const matchesProf = activeFilters.professional === 'todos' || sale.items.some(i => i.barbero_id === activeFilters.professional);
+            const matchesService = activeFilters.service === 'todos' || sale.items.some(i => i.id === activeFilters.service || i.servicio === activeFilters.service || i.servicio === services.find(s => s.id === activeFilters.service)?.name);
+
+            return matchesProf && matchesService;
+        });
+
+        const totalSales = filteredSales.reduce((sum, sale) => {
             const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
                 ? sale.monto_pagado_real
                 : (sale.total || 0);
             return sum + amount;
         }, 0);
-        const salesCount = sales.length;
+        const salesCount = filteredSales.length;
         const averageSale = salesCount > 0 ? totalSales / salesCount : 0;
 
         const salesByDate: Record<string, number> = {};
-        sales.forEach(sale => {
-            const date = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
+        const dayIndexCount: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+        const hourCount: Record<string, number> = {};
+
+        filteredSales.forEach(sale => {
+            const dateObj = sale.fecha_hora_venta.toDate();
+            const date = format(dateObj, 'yyyy-MM-dd');
             const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
                 ? sale.monto_pagado_real
                 : (sale.total || 0);
             salesByDate[date] = (salesByDate[date] || 0) + amount;
+
+            const dayIndex = getDay(dateObj);
+            dayIndexCount[dayIndex] = (dayIndexCount[dayIndex] || 0) + amount;
+
+            const hourStr = format(dateObj, 'HH:00');
+            hourCount[hourStr] = (hourCount[hourStr] || 0) + amount;
         });
 
         const salesOverTime = Object.entries(salesByDate).map(([date, total]) => ({
@@ -126,7 +150,7 @@ export default function SalesReportPage() {
         const salesByService: Record<string, number> = {};
         const salesByCategory: Record<string, number> = {};
 
-        sales.forEach(sale => {
+        filteredSales.forEach(sale => {
             const saleTotal = sale.total || 1;
             const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
                 ? sale.monto_pagado_real
@@ -144,6 +168,9 @@ export default function SalesReportPage() {
                         if (categoryName) {
                             salesByCategory[categoryName] = (salesByCategory[categoryName] || 0) + itemAmount;
                         }
+                    } else if (item.servicio) {
+                        // Fallback using name directly
+                        salesByService[item.servicio] = (salesByService[item.servicio] || 0) + itemAmount;
                     }
                 }
             });
@@ -152,16 +179,43 @@ export default function SalesReportPage() {
         const sortedServices = Object.entries(salesByService).sort(([, a], [, b]) => b - a).slice(0, 5);
         const sortedCategories = Object.entries(salesByCategory).sort(([, a], [, b]) => b - a).slice(0, 5);
 
+        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const orderedIndices = [1, 2, 3, 4, 5, 6, 0];
+        const sortedDays = orderedIndices.map(index => ({
+            name: dayNames[index],
+            value: dayIndexCount[index] || 0
+        })).filter(d => d.value > 0);
+
+        const sortedHours = Object.keys(hourCount).sort().map(hour => ({
+            hour,
+            value: hourCount[hour]
+        }));
+
+        let bestDay = null;
+        let worstDay = null;
+        if (sortedDays.length > 0) {
+            bestDay = sortedDays.reduce((prev, current) => (prev.value > current.value) ? prev : current, sortedDays[0]);
+            worstDay = sortedDays.reduce((prev, current) => (prev.value < current.value) ? prev : current, sortedDays[0]);
+        }
+
+        let bestHour = null;
+        let worstHour = null;
+        if (sortedHours.length > 0) {
+            bestHour = sortedHours.reduce((prev, current) => (prev.value > current.value) ? prev : current, sortedHours[0]);
+            worstHour = sortedHours.reduce((prev, current) => (prev.value < current.value) ? prev : current, sortedHours[0]);
+        }
+
         return {
             totalSales,
             salesCount,
             averageSale,
             salesOverTime,
             salesByCategory: sortedCategories.map(([name, value]) => ({ name, value })),
-            salesByService: sortedServices.map(([name, value]) => ({ name, value }))
+            salesByService: sortedServices.map(([name, value]) => ({ name, value })),
+            bestDay, worstDay, bestHour, worstHour
         };
 
-    }, [sales, services, categoryMap, isLoading]);
+    }, [sales, services, categoryMap, isLoading, activeFilters]);
 
 
     const { user } = useAuth();
@@ -177,19 +231,8 @@ export default function SalesReportPage() {
 
             <Card>
                 <CardContent className="pt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div className="flex flex-wrap items-end gap-4 mb-4">
                         <div className="space-y-1">
-                            <label className="text-sm font-medium">Periodo</label>
-                            <Select defaultValue="last_4_weeks" onValueChange={handlePeriodChange}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="this_week">Esta semana</SelectItem>
-                                    <SelectItem value="this_month">Este mes</SelectItem>
-                                    <SelectItem value="last_4_weeks">Últimas 4 semanas</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1 md:col-span-2">
                             <label className="text-sm font-medium">Rango de fechas</label>
                             <Popover open={isCalendarOpen} onOpenChange={(open) => {
                                 setIsCalendarOpen(open);
@@ -198,7 +241,7 @@ export default function SalesReportPage() {
                                 }
                             }}>
                                 <PopoverTrigger asChild>
-                                    <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
+                                    <Button id="date" variant={"outline"} className="w-[260px] justify-start text-left font-normal border-input">
                                         <CalendarIcon className="mr-2 h-4 w-4" />
                                         {dateRange?.from ? (dateRange.to ? <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</> : format(dateRange.from, "LLL dd, y", { locale: es })) : <span>Selecciona un rango</span>}
                                     </Button>
@@ -222,6 +265,26 @@ export default function SalesReportPage() {
                                 </PopoverContent>
                             </Popover>
                         </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium">Profesional</label>
+                            <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={professionalsLoading}>
+                                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Profesional" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todos los profesionales</SelectItem>
+                                    {professionals.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium">Servicio</label>
+                            <Select value={serviceFilter} onValueChange={setServiceFilter} disabled={servicesLoading}>
+                                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Servicio" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todos los servicios</SelectItem>
+                                    {services.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <Button onClick={handleSearch} disabled={isLoading}>
                             {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                         </Button>
@@ -229,14 +292,43 @@ export default function SalesReportPage() {
                 </CardContent>
             </Card>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Desempeño por Día</CardTitle>
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-1 mt-1">
+                            <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Mejor:</span><span className="text-sm font-bold text-primary">{aggregatedData.bestDay?.name} ({aggregatedData.bestDay?.value ? `$${aggregatedData.bestDay.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'})</span></div>
+                            <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Peor:</span><span className="text-sm font-bold text-muted-foreground">{aggregatedData.worstDay?.name} ({aggregatedData.worstDay?.value ? `$${aggregatedData.worstDay.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'})</span></div>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Desempeño por Hora</CardTitle>
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-1 mt-1">
+                            <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Mejor:</span><span className="text-sm font-bold text-primary">{aggregatedData.bestHour?.hour || '-'} ({aggregatedData.bestHour?.value ? `$${aggregatedData.bestHour.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'})</span></div>
+                            <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Peor:</span><span className="text-sm font-bold text-muted-foreground">{aggregatedData.worstHour?.hour || '-'} ({aggregatedData.worstHour?.value ? `$${aggregatedData.worstHour.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'})</span></div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
             <Card>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
                     <div className="lg:col-span-1">
                         <h3 className="text-xl font-semibold mb-4">Resumen</h3>
                         <div className="space-y-6">
-                            <KpiCard title="Total" value={aggregatedData.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
+                            <KpiCard title="Total (Pagado)" value={aggregatedData.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
                             <KpiCard title="Cantidad de ventas" value={aggregatedData.salesCount.toLocaleString()} />
                             <KpiCard title="Venta promedio" value={aggregatedData.averageSale.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix="$" />
+
+
                         </div>
                     </div>
                     <div className="lg:col-span-2">

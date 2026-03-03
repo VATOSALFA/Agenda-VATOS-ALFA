@@ -198,7 +198,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                             </div>
                             <div className="mt-2">
                                 <Select onValueChange={(value) => updateItemProfessional(item.uniqueId, value)} value={item.barbero_id}>
-                                    <SelectTrigger className="h-8 text-xs">
+                                    <SelectTrigger className={cn("h-8 text-xs", !item.barbero_id && "border-red-500 text-red-500 font-semibold shadow-sm shadow-red-500/20 animate-pulse")}>
                                         <SelectValue placeholder="Seleccionar vendedor" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -746,11 +746,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 // 2. Trigger Print if Enabled and Manual Payment (Cash/Combined/Transfer)
                 // We prioritize printing for Cash, but usually useful for all walk-ins.
-                // User requirement: "una vez incluida todas las ventas que se pagan en efectivo debria de imprimir su ticket"
-                // So strictly enforcing cash or combined (which has cash).
-                const isCashOrCombined = paymentMethod === 'efectivo' || paymentMethod === 'combinado';
+                // User requirement: Imprimir ticket cuando sea en efectivo, transferencia o combinado (que contenga efectivo o transferencia).
+                const isCashTransferOrCombined = paymentMethod === 'efectivo' || paymentMethod === 'transferencia' || (paymentMethod === 'combinado' && ((watchedCash > 0) || (watchedTransfer > 0)));
 
-                if (printerEnabled && isCashOrCombined) {
+                if (printerEnabled && isCashTransferOrCombined) {
                     try {
                         const local = locales.find(l => l.id === localId);
 
@@ -800,7 +799,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             subtotal: subtotal,
                             anticipoPagado: anticipoPagado === undefined ? (initialData?.anticipoPagado || 0) : anticipoPagado,
                             discount: totalDiscount,
-                            total: total
+                            total: total,
+                            cashPaid: paymentMethod === 'efectivo' ? amountPaid : undefined,
+                            change: paymentMethod === 'efectivo' ? Math.max(0, amountPaid - total) : undefined,
+                            combinedDetails: paymentMethod === 'combinado' ? {
+                                efectivo: watchedCash || 0,
+                                tarjeta: watchedCard || 0,
+                                transferencia: watchedTransfer || 0
+                            } : undefined
                         };
 
                         // Map cart items to ensure 'subtotal' exists for printer
@@ -837,6 +843,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         const formData = form.getValues();
         const amountToCharge = paymentMethod === 'combinado' ? (formData.pago_tarjeta || 0) : total;
         if (!db || !selectedTerminalId || amountToCharge <= 0 || !selectedClient) return;
+
+        if (cart.some(item => !item.barbero_id)) {
+            toast({ variant: 'destructive', title: 'Faltan datos', description: 'Debes asignar un profesional/vendedor a todos los items del carrito para cobrar en terminal.' });
+            return;
+        }
 
         setIsSendingToTerminal(true);
         setIsWaitingForPayment(true);
@@ -946,9 +957,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             pagos_en_linea: 0
                         }
                     }),
+                    propina: formData.propina || 0, // Registrar propina
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
                 };
+
+                // Lógica de partición de propina si hay y si hay múltiples vendedores.
+                if (formData.propina && formData.propina > 0) {
+                    const uniqueBarberos = Array.from(new Set(itemsToSave.map(i => i.barbero_id).filter(id => id)));
+                    if (uniqueBarberos.length > 0) {
+                        const propinaSplit = formData.propina / uniqueBarberos.length;
+                        saleDataToSave.propina_detalles = uniqueBarberos.map(bId => ({
+                            barbero_id: bId,
+                            monto: propinaSplit
+                        }));
+                    }
+                }
 
                 if (reservationId) {
                     saleDataToSave.reservationId = reservationId;
@@ -1800,7 +1824,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )}
                                         />
 
-                                        {paymentMethod === 'transferencia' && (
+                                        {(paymentMethod === 'transferencia' || (paymentMethod === 'combinado' && watchedTransfer > 0)) && (
                                             <Card className="p-4 bg-muted/50 mt-2">
                                                 <FormField
                                                     control={form.control}
@@ -1848,7 +1872,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     <Button
                                                         type="button"
                                                         onClick={handleSendToTerminal}
-                                                        disabled={isSendingToTerminal || isWaitingForPayment || terminalsLoading || !selectedTerminalId || total <= 0}
+                                                        disabled={isSendingToTerminal || isWaitingForPayment || terminalsLoading || !selectedTerminalId || total <= 0 || cart.some(item => !item.barbero_id)}
                                                         className="w-full"
                                                         variant={isWaitingForPayment ? "secondary" : "default"}
                                                     >
@@ -1944,10 +1968,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <div className="space-y-2">
                                                     <div className="grid grid-cols-2 gap-4 items-center">
                                                         <FormItem>
-                                                            <FormLabel className="text-xs">Paga con</FormLabel>
+                                                            <FormLabel className={cn("text-xs transition-colors", amountPaid < total && "text-destructive animate-pulse font-bold")}>Paga con</FormLabel>
                                                             <div className="relative">
                                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                                                <Input type="number" placeholder="0" className="pl-6" value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
+                                                                <Input type="number" placeholder="0" className={cn("pl-6 transition-colors", amountPaid < total && "border-destructive focus-visible:ring-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse")} value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
                                                             </div>
                                                         </FormItem>
                                                         <div className="text-center">
@@ -2020,7 +2044,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id)} onClick={(e) => {
+                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (paymentMethod === 'efectivo' && amountPaid < total)} onClick={(e) => {
+                                        if (paymentMethod === 'efectivo' && amountPaid < total) {
+                                            e.preventDefault();
+                                            toast({
+                                                variant: 'destructive',
+                                                title: 'Falta efectivo',
+                                                description: 'Ingresa la cantidad con la que te paga el cliente. (Debe ser mayor o igual al total)'
+                                            });
+                                            return;
+                                        }
+
                                         if (cart.some(item => !item.barbero_id)) {
                                             e.preventDefault();
                                             toast({

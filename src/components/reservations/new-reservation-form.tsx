@@ -69,18 +69,19 @@ interface AgendaSettings {
 }
 
 const createReservationSchema = (isEditMode: boolean) => z.object({
-  cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
+  cliente_id: z.string({ required_error: 'Debes seleccionar un cliente.' }).min(1, 'Debes seleccionar un cliente.'),
   items: z.array(
     z.object({
-      servicio: z.string().min(1, 'Debes seleccionar un servicio.'),
-      barbero_id: z.string().min(1, 'Debes seleccionar un profesional.'),
+      servicio: z.string({ required_error: 'Debes seleccionar un servicio.' }).min(1, 'Debes seleccionar un servicio.'),
+      barbero_id: z.string({ required_error: 'Debes seleccionar un profesional.' }).min(1, 'Debes seleccionar un profesional.'),
+      duracion: z.number().optional()
     })
   ).min(1, 'Debes agregar al menos un servicio.'),
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
-  hora_inicio_hora: z.string().min(1, "Selecciona una hora."),
-  hora_inicio_minuto: z.string().min(1, "Selecciona un minuto."),
-  hora_fin_hora: z.string().min(1, "Selecciona una hora de fin."),
-  hora_fin_minuto: z.string().min(1, "Selecciona un minuto de fin."),
+  hora_inicio_hora: z.string({ required_error: 'Selecciona una hora.' }).min(1, "Selecciona una hora."),
+  hora_inicio_minuto: z.string({ required_error: 'Selecciona un minuto.' }).min(1, "Selecciona un minuto."),
+  hora_fin_hora: z.string({ required_error: 'Selecciona una hora de fin.' }).min(1, "Selecciona una hora de fin."),
+  hora_fin_minuto: z.string({ required_error: 'Selecciona un minuto de fin.' }).min(1, "Selecciona un minuto de fin."),
   precio: z.coerce.number().optional().default(0),
   estado: z.string().optional(),
   notas: z.string().optional(),
@@ -90,7 +91,7 @@ const createReservationSchema = (isEditMode: boolean) => z.object({
     whatsapp_notification: z.boolean().default(false),
     whatsapp_reminder: z.boolean().default(false),
   }).optional(),
-  local_id: z.string().min(1, 'Se requiere un local.')
+  local_id: z.string({ required_error: 'Se requiere un local.' }).min(1, 'Se requiere un local.')
 }).refine(data => {
   if (data.hora_inicio_hora && data.hora_inicio_minuto && data.hora_fin_hora && data.hora_fin_minuto) {
     const start = parseInt(data.hora_inicio_hora) * 60 + parseInt(data.hora_inicio_minuto);
@@ -228,7 +229,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       nota_interna: '',
       estado: 'Reservado',
       precio: 0,
-      items: [{ servicio: '', barbero_id: '' }],
+      items: [{ servicio: '', barbero_id: '', duracion: 0 }],
       notifications: {
         email_notification: true,
         whatsapp_notification: false,
@@ -421,7 +422,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
       const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
 
-      let itemsToSet: { servicio: string; barbero_id: string; }[] = [];
+      let itemsToSet: { servicio: string; barbero_id: string; duracion: number }[] = [];
       if (isEditMode && initialData.items && Array.isArray(initialData.items)) {
         itemsToSet = initialData.items.map((i: SaleItemType) => {
           // Try to match with a service
@@ -429,7 +430,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           if (service) {
             return {
               servicio: service.id,
-              barbero_id: i.barbero_id || ''
+              barbero_id: i.barbero_id || '',
+              duracion: (i as any).duracion !== undefined ? (i as any).duracion : (service.duration || 0)
             };
           }
 
@@ -438,20 +440,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           if (product) {
             return {
               servicio: product.id,
-              barbero_id: i.barbero_id || ''
+              barbero_id: i.barbero_id || '',
+              duracion: (i as any).duracion || 0
             };
           }
 
           // Fallback: Use existing ID if available, otherwise try empty
           return {
             servicio: i.id || '',
-            barbero_id: i.barbero_id || ''
+            barbero_id: i.barbero_id || '',
+            duracion: (i as any).duracion || 0
           };
         });
       } else {
         itemsToSet = [{
           servicio: '',
-          barbero_id: (initialData as any).barbero_id || ''
+          barbero_id: (initialData as any).barbero_id || '',
+          duracion: 0
         }];
       }
 
@@ -486,7 +491,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         nota_interna: '',
         estado: 'Reservado',
         precio: 0,
-        items: [{ servicio: '', barbero_id: '' }],
+        items: [{ servicio: '', barbero_id: '', duracion: 0 }],
         notifications: {
           whatsapp_notification: true,
           whatsapp_reminder: true
@@ -506,28 +511,30 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         if (!items || !servicesMap.size) return;
 
-        const { totalPrice, totalDuration } = (items as { servicio: string }[]).reduce(
+        const { totalPrice, maxDuration } = (items as { servicio: string; barbero_id: string; duracion?: number }[]).reduce(
           (acc, currentItem) => {
             if (!currentItem) return acc;
             const service = servicesMap.get(currentItem.servicio);
             if (service) {
               acc.totalPrice += service.price || 0;
-              acc.totalDuration += service.duration || 0;
+              const profId = currentItem.barbero_id || 'unassigned';
+              acc.durations[profId] = (acc.durations[profId] || 0) + (currentItem.duracion !== undefined ? currentItem.duracion : (service.duration || 0));
+              acc.maxDuration = Math.max(acc.maxDuration, acc.durations[profId]);
             }
             return acc;
           },
-          { totalPrice: 0, totalDuration: 0 }
+          { totalPrice: 0, maxDuration: 0, durations: {} as Record<string, number> }
         );
 
         form.setValue('precio', totalPrice, { shouldValidate: true });
 
-        if (fecha && hora_inicio_hora && hora_inicio_minuto && totalDuration > 0) {
+        if (fecha && hora_inicio_hora && hora_inicio_minuto && maxDuration > 0) {
           try {
             const startTime = set(fecha, {
               hours: parseInt(hora_inicio_hora, 10),
               minutes: parseInt(hora_inicio_minuto, 10),
             });
-            const endTime = addMinutes(startTime, totalDuration);
+            const endTime = addMinutes(startTime, maxDuration);
             form.setValue('hora_fin_hora', format(endTime, 'HH'), { shouldValidate: true });
             form.setValue('hora_fin_minuto', format(endTime, 'mm'), { shouldValidate: true });
           } catch (e) {
@@ -576,7 +583,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             nombre: service.name,
             barbero_id: item.barbero_id,
             precio: service.price || 0,
-            duracion: service.duration || 0,
+            duracion: item.duracion !== undefined ? item.duracion : (service.duration || 0),
             tipo: 'servicio'
           };
         }
@@ -590,7 +597,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             nombre: product.nombre,
             barbero_id: item.barbero_id,
             precio: product.public_price || 0, // SaleItem usually uses 'precio' corresponding to 'public_price'
-            duracion: 0,
+            duracion: item.duracion !== undefined ? item.duracion : 0,
             tipo: 'producto'
           };
         }
@@ -810,9 +817,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                       <div className="flex-grow space-y-1">
                         <p className="text-xs text-muted-foreground text-center">Fin</p>
                         <div className="flex items-center gap-1">
-                          <FormField control={form.control} name="hora_fin_hora" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                          <FormField control={form.control} name="hora_fin_hora" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value} disabled={!watchedItems?.some(item => !!item.servicio)}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                           <span>:</span>
-                          <FormField control={form.control} name="hora_fin_minuto" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                          <FormField control={form.control} name="hora_fin_minuto" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value} disabled={!watchedItems?.some(item => !!item.servicio)}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                         </div>
                       </div>
                     </div>
@@ -897,15 +904,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
                     return (
                       <Card key={field.id} className="p-4 relative bg-muted/50">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className={cn("grid grid-cols-1 gap-4 items-start", fields.length > 1 ? "md:grid-cols-[1fr_1fr_120px]" : "md:grid-cols-2")}>
                           <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between min-h-[24px] gap-2">
                                 <FormLabel>{isProduct ? 'Producto' : 'Servicios'}</FormLabel>
                               </div>
                               <ServiceInput
                                 value={field.value}
-                                onChange={field.onChange}
+                                onChange={(val) => {
+                                  field.onChange(val);
+                                  const srv = servicesMap.get(val);
+                                  if (srv && srv.duration) {
+                                    form.setValue(`items.${index}.duracion`, srv.duration, { shouldValidate: true });
+                                  } else {
+                                    form.setValue(`items.${index}.duracion`, 0, { shouldValidate: true });
+                                  }
+                                }}
                                 groupedServices={groupedServices}
                                 products={products}
                                 isProduct={isProduct}
@@ -917,7 +932,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
                           <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center min-h-[24px] gap-2">
                                 <FormLabel>Profesional</FormLabel>
                                 <Button
                                   type="button"
@@ -954,6 +969,31 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                               {availabilityErrors[index] && <p className="text-destructive text-sm mt-1">{availabilityErrors[index]}</p>}
                             </FormItem>
                           )} />
+
+                          {!isProduct && fields.length > 1 && (
+                            <FormField control={form.control} name={`items.${index}.duracion`} render={({ field }) => (
+                              <FormItem>
+                                <div className="flex items-center min-h-[24px] gap-2">
+                                  <FormLabel>Duración</FormLabel>
+                                </div>
+                                <FormControl>
+                                  <div className="relative">
+                                    <Input
+                                      type="number"
+                                      className="pr-8"
+                                      value={field.value || 0}
+                                      onChange={(e) => field.onChange(Number(e.target.value))}
+                                      min={0}
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                                      m
+                                    </span>
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                          )}
                         </div>
                         {fields.length > 1 && (
                           <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
@@ -963,7 +1003,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                       </Card>
                     );
                   })}
-                  <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '' })} className="w-full">
+                  <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '', duracion: 0 })} className="w-full">
                     <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
                   </Button>
                 </div>

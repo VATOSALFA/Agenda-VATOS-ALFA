@@ -294,7 +294,7 @@ export default function ProductSalesPage() {
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${salesSummary.totalRevenue.toLocaleString('es-CL')}</div>
+                            <div className="text-2xl font-bold">${salesSummary.totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -314,7 +314,7 @@ export default function ProductSalesPage() {
                         <CardContent>
                             <div className="text-lg font-bold truncate">{salesSummary.highestRevenueProduct?.name || '-'}</div>
                             <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.highestRevenueProduct?.seller || '-'}</p>
-                            <p className="text-sm font-semibold text-primary">${(salesSummary.highestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
+                            <p className="text-sm font-semibold text-primary">${(salesSummary.highestRevenueProduct?.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                     </Card>
                     <Card>
@@ -325,7 +325,7 @@ export default function ProductSalesPage() {
                         <CardContent>
                             <div className="text-lg font-bold truncate">{salesSummary.lowestRevenueProduct?.name || '-'}</div>
                             <p className="text-xs text-muted-foreground">Vendedor: {salesSummary.lowestRevenueProduct?.seller || '-'}</p>
-                            <p className="text-sm font-semibold text-primary">${(salesSummary.lowestRevenueProduct?.amount || 0).toLocaleString('es-CL')}</p>
+                            <p className="text-sm font-semibold text-primary">${(salesSummary.lowestRevenueProduct?.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -366,7 +366,7 @@ export default function ProductSalesPage() {
                                                 <TableCell className="font-medium">{sale.nombre}</TableCell>
                                                 <TableCell>{sale.presentation}</TableCell>
                                                 <TableCell className="text-right">{sale.unitsSold}</TableCell>
-                                                <TableCell className="text-right font-semibold text-primary">${sale.revenue.toLocaleString('es-CL')}</TableCell>
+                                                <TableCell className="text-right font-semibold text-primary">${sale.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                 <TableCell className="text-right">
                                                     <Button variant="outline" size="sm" onClick={() => handleViewProductDetails(sale)}>
                                                         <Eye className="mr-2 h-4 w-4" />Ver detalles
@@ -398,7 +398,7 @@ export default function ProductSalesPage() {
                                                 <TableCell className="font-medium">{seller.sellerName}</TableCell>
                                                 <TableCell>{seller.userType}</TableCell>
                                                 <TableCell className="text-right">{seller.unitsSold}</TableCell>
-                                                <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-CL')}</TableCell>
+                                                <TableCell className="text-right font-semibold text-primary">${seller.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                 <TableCell className="text-right">
                                                     <Button variant="outline" size="sm" onClick={() => handleViewSellerDetails(seller)}>
                                                         <Eye className="mr-2 h-4 w-4" />Ver detalles

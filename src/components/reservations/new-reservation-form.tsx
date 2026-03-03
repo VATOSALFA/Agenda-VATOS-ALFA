@@ -1058,7 +1058,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           </DialogFooter>
         </form>
       </Form>
-      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
+      <Dialog open={isClientModalOpen} onOpenChange={(open) => {
+        setIsClientModalOpen(open);
+        if (!open) {
+          setClientSearchTerm('');
+        }
+      }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>

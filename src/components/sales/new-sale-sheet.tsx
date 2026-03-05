@@ -742,7 +742,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 // 1. Check for Ticket Printer Setting
                 const pagosRef = doc(db, 'configuracion', 'pagos');
                 const pagosSnap = await getDoc(pagosRef);
-                const printerEnabled = pagosSnap.exists() && pagosSnap.data().ticketPrinterEnabled;
+                const pagosData = pagosSnap.exists() ? pagosSnap.data() : {};
+                const printerEnabled = pagosData.ticketPrinterEnabled;
+                const ticketFooterMessage = pagosData.ticketFooterMessage || "¡Gracias por su preferencia!";
 
                 // 2. Trigger Print if Enabled and Manual Payment (Cash/Combined/Transfer)
                 // We prioritize printing for Cash, but usually useful for all walk-ins.
@@ -806,7 +808,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 efectivo: watchedCash || 0,
                                 tarjeta: watchedCard || 0,
                                 transferencia: watchedTransfer || 0
-                            } : undefined
+                            } : undefined,
+                            footerMessage: ticketFooterMessage
                         };
 
                         // Map cart items to ensure 'subtotal' exists for printer
@@ -2119,7 +2122,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             Completa la información para registrar un nuevo cliente en el sistema.
                         </DialogDescription>
                     </DialogHeader>
-                    <NewClientForm onFormSubmit={handleClientCreated} onCancel={() => setIsClientModalOpen(false)} initialName={clientSearchTerm} />
+                    {isClientModalOpen && (
+                        <NewClientForm onFormSubmit={handleClientCreated} onCancel={() => setIsClientModalOpen(false)} initialName={clientSearchTerm} />
+                    )}
                 </DialogContent>
             </Dialog>
             <AddItemDialog

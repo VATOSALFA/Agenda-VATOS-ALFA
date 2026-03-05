@@ -1268,46 +1268,83 @@ export default function CashBoxPage() {
                                                             <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('aQuien')}>
                                                                 <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">A quién se entrega <SortIconEgresos field="aQuien" /></div>
                                                             </TableHead>
+                                                            <TableHead className="select-none hover:bg-muted/50 transition-colors group">
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Com. Servicio</div>
+                                                            </TableHead>
+                                                            <TableHead className="select-none hover:bg-muted/50 transition-colors group">
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Com. Producto</div>
+                                                            </TableHead>
+                                                            <TableHead className="select-none hover:bg-muted/50 transition-colors group">
+                                                                <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Propina</div>
+                                                            </TableHead>
                                                             <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSortEgresos('comentarios')}>
                                                                 <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Comentarios <SortIconEgresos field="comentarios" /></div>
                                                             </TableHead>
                                                             <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSortEgresos('monto')}>
-                                                                <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Monto <SortIconEgresos field="monto" /></div>
+                                                                <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">Total <SortIconEgresos field="monto" /></div>
                                                             </TableHead>
                                                             <TableHead className="text-right">Opciones</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
                                                         {paginatedEgresos.length === 0 ? (
-                                                            <TableRow><TableCell colSpan={7} className="text-center h-24">No hay egresos para el período seleccionado.</TableCell></TableRow>
-                                                        ) : paginatedEgresos.map((egreso) => (
-                                                            <TableRow key={egreso.id}>
-                                                                <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd-MM-yyyy') : format(egreso.fecha, 'dd-MM-yyyy')}</TableCell>
-                                                                <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
-                                                                <TableCell>{egreso.concepto}</TableCell>
-                                                                <TableCell>{egreso.aQuienNombre || egreso.aQuien}</TableCell>
-                                                                <TableCell>{egreso.comentarios}</TableCell>
-                                                                <TableCell className="text-right font-medium">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                                <TableCell className="text-right">
-                                                                    <DropdownMenu>
-                                                                        <DropdownMenuTrigger asChild>
-                                                                            <Button variant="outline" size="sm">
-                                                                                Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                                            </Button>
-                                                                        </DropdownMenuTrigger>
-                                                                        <DropdownMenuContent align="end">
-                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenEditEgreso(egreso), 150)}>
-                                                                                <Pencil className="mr-2 h-4 w-4" /> Editar
-                                                                            </DropdownMenuItem>
+                                                            <TableRow><TableCell colSpan={10} className="text-center h-24">No hay egresos para el período seleccionado.</TableCell></TableRow>
+                                                        ) : paginatedEgresos.map((egreso) => {
+                                                            let comS = egreso.comisionServicios || 0;
+                                                            let comP = egreso.comisionProductos || 0;
+                                                            let prop = egreso.propina || 0;
+                                                            let commentClean = egreso.comentarios || '';
 
-                                                                            <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenDeleteEgresoModal(egreso), 150)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                                            </DropdownMenuItem>
-                                                                        </DropdownMenuContent>
-                                                                    </DropdownMenu>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))}
+                                                            if (!comS && !comP && !prop && commentClean) {
+                                                                const matchS = commentClean.match(/Comisión Servicios: \$([0-9.,]+)/);
+                                                                const matchP = commentClean.match(/Comisión Productos: \$([0-9.,]+)/);
+                                                                const matchT = commentClean.match(/Propina: \$([0-9.,]+)/);
+                                                                const parseAmt = (val: string) => {
+                                                                    let c = val.replace(/[^0-9.,]/g, '');
+                                                                    if (c.match(/,\d{1,2}$/)) c = c.replace(/(.*),(.*)/, '$1.$2');
+                                                                    return parseFloat(c.replace(/,/g, '')) || 0;
+                                                                };
+                                                                if (matchS) comS = parseAmt(matchS[1]);
+                                                                if (matchP) comP = parseAmt(matchP[1]);
+                                                                if (matchT) prop = parseAmt(matchT[1]);
+
+                                                                if (matchS || matchP || matchT) {
+                                                                    commentClean = 'Auto Pago (Sistema)';
+                                                                }
+                                                            }
+
+                                                            return (
+                                                                <TableRow key={egreso.id}>
+                                                                    <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd/MM/yyyy HH:mm') : format(egreso.fecha, 'dd/MM/yyyy HH:mm')}</TableCell>
+                                                                    <TableCell>{localMap.get(egreso.local_id ?? '')}</TableCell>
+                                                                    <TableCell>{egreso.concepto}</TableCell>
+                                                                    <TableCell>{egreso.aQuienNombre || egreso.aQuien}</TableCell>
+                                                                    <TableCell className="font-medium text-muted-foreground">{comS > 0 ? `$${comS.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                                    <TableCell className="font-medium text-muted-foreground">{comP > 0 ? `$${comP.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                                    <TableCell className="font-medium text-muted-foreground">{prop > 0 ? `$${prop.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                                    <TableCell>{commentClean}</TableCell>
+                                                                    <TableCell className="text-right font-extrabold text-primary">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        <DropdownMenu>
+                                                                            <DropdownMenuTrigger asChild>
+                                                                                <Button variant="outline" size="sm">
+                                                                                    Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                                                                                </Button>
+                                                                            </DropdownMenuTrigger>
+                                                                            <DropdownMenuContent align="end">
+                                                                                <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenEditEgreso(egreso), 150)}>
+                                                                                    <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                                                </DropdownMenuItem>
+
+                                                                                <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenDeleteEgresoModal(egreso), 150)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                                                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                                                </DropdownMenuItem>
+                                                                            </DropdownMenuContent>
+                                                                        </DropdownMenu>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
                                                     </TableBody>
                                                 </Table>
                                             </div>

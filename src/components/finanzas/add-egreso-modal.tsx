@@ -39,7 +39,7 @@ import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 
 
-const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet'];
+const conceptosCostoFijo = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet', 'Costos fijos'];
 
 const egresoSchema = z.object({
     fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
@@ -49,6 +49,9 @@ const egresoSchema = z.object({
     aQuienId: z.string().min(1, 'Debes seleccionar a quién se le entrega el dinero.'),
     local_id: z.string().min(1, 'Debes seleccionar un local.'),
     comentarios: z.string().optional(),
+    comisionServicios: z.coerce.number().optional(),
+    comisionProductos: z.coerce.number().optional(),
+    propina: z.coerce.number().optional(),
 }).refine(data => {
     if (data.concepto === 'Otro') {
         return data.concepto_otro && data.concepto_otro.trim().length > 0;
@@ -67,14 +70,17 @@ interface AddEgresoModalProps {
     onOpenChange: (isOpen: boolean) => void;
     onFormSubmit: () => void;
     egreso?: Egreso | null;
+    source?: 'finanzas' | 'caja';
 }
 
 const adminConcepts = [
+    { id: 'pago_comision_propinas', label: 'Pago de Comisión y Propinas' },
     { id: 'pago_renta', label: 'Pago de renta' },
     { id: 'insumos', label: 'Insumos' },
     { id: 'publicidad', label: 'Publicidad' },
     { id: 'internet', label: 'Internet' },
     { id: 'nomina', label: 'Nómina' },
+    { id: 'costos_fijos', label: 'Costos fijos' },
     { id: 'entrega_efectivo', label: 'Entrega de efectivo' },
     { id: 'otro', label: 'Otro' },
 ];
@@ -83,7 +89,7 @@ const cashierConcepts = [
     { id: 'entrega_efectivo', label: 'Entrega de efectivo' }
 ];
 
-export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: AddEgresoModalProps) {
+export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, source = 'caja' }: AddEgresoModalProps) {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -107,11 +113,15 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             aQuienId: '',
             local_id: '',
             comentarios: '',
+            comisionServicios: 0,
+            comisionProductos: 0,
+            propina: 0,
         },
     });
 
     const conceptoSeleccionado = form.watch('concepto');
     const localSeleccionadoId = form.watch('local_id');
+    const isCommissionsConcept = conceptoSeleccionado === 'Pago de Comisión y Propinas' || (conceptoSeleccionado === 'Otro' && form.watch('concepto_otro') === 'Pago de Comisión y Propinas');
 
     const destinatariosDisponibles = useMemo(() => {
         if (usersLoading || !users) return [];
@@ -129,39 +139,52 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             return false;
         });
 
-        if (isAdmin) return filteredUsers;
+        const generic = [
+            { id: 'costos_fijos', name: 'Costos fijos', role: 'Categoría general' },
+            { id: 'insumos', name: 'Insumos', role: 'Categoría general' },
+            { id: 'otro', name: 'Otro', role: 'Categoría general' }
+        ];
 
-        // Si NO es admin (cajera/recepcionista), restringimos más si es necesario.
-        // En este caso, la lógica anterior permitía ver Admins Generales y Locales.
-        // Mantengamos esa lógica sobre la lista ya filtrada (que tiene a local staff + admins generales).
+        if (isAdmin) return [...filteredUsers, ...generic] as any[];
 
-        return filteredUsers.filter(u =>
+        const adminUsers = filteredUsers.filter(u =>
             (u.role === 'Administrador general') ||
             (u.role === 'Administrador local' && u.local_id === localSeleccionadoId)
-            // ¿Deberían poder pagarle a Staff? Normalmente egresos de caja son a admins o dueños,
-            // pero si es nomina, tal vez a staff. 
-            // La petición original no restringía, pero la lógica anterior de 'non-admin' restringía a admins.
-            // Asumiré que cajeras solo entregan dinero a supervisores (Admins).
         );
+
+        return [...adminUsers, ...generic] as any[];
 
     }, [isAdmin, users, localSeleccionadoId, usersLoading]);
 
     useEffect(() => {
         const subscription = form.watch((value, { name }) => {
             if (name === 'concepto') {
-                const esCostoFijo = conceptosCostoFijo.includes(value.concepto!);
+                const esCostoFijo = conceptosCostoFijo.includes(value.concepto || '');
                 if (esCostoFijo) {
-                    form.setValue('aQuienId', 'costos_fijos');
+                    if (value.concepto === 'Insumos') {
+                        form.setValue('aQuienId', 'insumos');
+                    } else {
+                        form.setValue('aQuienId', 'costos_fijos');
+                    }
                 } else {
-                    // Reset if it was previously set to costos_fijos or on any other change
-                    if (form.getValues('aQuienId') === 'costos_fijos') {
+                    if (['costos_fijos', 'insumos'].includes(form.getValues('aQuienId'))) {
                         form.setValue('aQuienId', '');
+                    }
+                }
+            }
+            if (name === 'comisionServicios' || name === 'comisionProductos' || name === 'propina') {
+                if (isCommissionsConcept) {
+                    const s = Number(form.getValues('comisionServicios')) || 0;
+                    const p = Number(form.getValues('comisionProductos')) || 0;
+                    const r = Number(form.getValues('propina')) || 0;
+                    if (s > 0 || p > 0 || r > 0) {
+                        form.setValue('monto', s + p + r);
                     }
                 }
             }
         });
         return () => subscription.unsubscribe();
-    }, [form]);
+    }, [form, isCommissionsConcept]);
 
     useEffect(() => {
         if (isOpen) {
@@ -172,6 +195,29 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
 
                 const isPredefinedConcept = conceptosDisponibles.some(c => c.label === egreso.concepto);
 
+                let parsedComServ = egreso.comisionServicios;
+                let parsedComProd = egreso.comisionProductos;
+                let parsedProp = egreso.propina;
+                let cleanComment = egreso.comentarios || '';
+
+                if (parsedComServ === undefined && parsedComProd === undefined && parsedProp === undefined && cleanComment) {
+                    const matchS = cleanComment.match(/Comisión Servicios: \$([0-9.,]+)/);
+                    const matchP = cleanComment.match(/Comisión Productos: \$([0-9.,]+)/);
+                    const matchT = cleanComment.match(/Propina: \$([0-9.,]+)/);
+                    const parseAmt = (val: string) => {
+                        let c = val.replace(/[^0-9.,]/g, '');
+                        if (c.match(/,\d{1,2}$/)) c = c.replace(/(.*),(.*)/, '$1.$2');
+                        return parseFloat(c.replace(/,/g, '')) || 0;
+                    };
+                    if (matchS) parsedComServ = parseAmt(matchS[1]);
+                    if (matchP) parsedComProd = parseAmt(matchP[1]);
+                    if (matchT) parsedProp = parseAmt(matchT[1]);
+
+                    if (matchS || matchP || matchT) {
+                        cleanComment = '';
+                    }
+                }
+
                 form.reset({
                     ...egreso,
                     monto: egreso.monto,
@@ -179,6 +225,10 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     concepto: isPredefinedConcept ? egreso.concepto : 'Otro',
                     concepto_otro: isPredefinedConcept ? '' : egreso.concepto,
                     aQuienId: egreso.aQuienId || '',
+                    comentarios: cleanComment,
+                    comisionServicios: parsedComServ || 0,
+                    comisionProductos: parsedComProd || 0,
+                    propina: parsedProp || 0
                 });
             } else {
                 form.reset({
@@ -189,10 +239,13 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                     comentarios: '',
                     concepto_otro: '',
                     local_id: selectedLocalId || (locales && locales.length > 0 ? locales[0].id : ''),
+                    comisionServicios: 0,
+                    comisionProductos: 0,
+                    propina: 0,
                 });
             }
         }
-    }, [isOpen, egreso, isEditMode, form, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
+    }, [isOpen, egreso, isEditMode, locales, selectedLocalId, isAdmin, conceptosDisponibles]);
 
 
     async function onSubmit(data: EgresoFormData) {
@@ -201,11 +254,9 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
 
         const destinatarioSeleccionado = destinatariosDisponibles.find(d => d.id === data.aQuienId);
 
-        const aQuienValue = data.aQuienId === 'costos_fijos'
-            ? 'Costos fijos'
-            : (destinatarioSeleccionado ? destinatarioSeleccionado.name : 'Desconocido');
+        const aQuienValue = destinatarioSeleccionado ? destinatarioSeleccionado.name : 'Desconocido';
 
-        const dataToSave = {
+        const dataToSave: any = {
             fecha: Timestamp.fromDate(data.fecha),
             monto: data.monto,
             concepto: finalConcepto,
@@ -215,8 +266,15 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
             comentarios: data.comentarios,
             persona_entrega_id: user?.uid,
             persona_entrega_nombre: user?.displayName,
+            source,
             ...(isEditMode && egreso?.commission_payment_details ? { commission_payment_details: egreso.commission_payment_details } : {})
         };
+
+        if (finalConcepto === 'Pago de Comisión y Propinas') {
+            dataToSave.comisionServicios = data.comisionServicios || 0;
+            dataToSave.comisionProductos = data.comisionProductos || 0;
+            dataToSave.propina = data.propina || 0;
+        }
 
         try {
             if (isEditMode && egreso) {
@@ -385,10 +443,10 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><User className="mr-1 h-3 w-3" /> Destinatario / Receptor</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={esCostoFijo || usersLoading}>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
                                             <FormControl>
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder={esCostoFijo ? 'N/A (Costo Fijo)' : (usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega')} />
+                                                    <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona a quién se le entrega'} />
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
@@ -411,6 +469,41 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso }: A
                                     </FormItem>
                                 )}
                             />
+
+                            {isCommissionsConcept && (
+                                <div className="grid grid-cols-3 gap-2 border-y py-4 my-2">
+                                    <FormField
+                                        control={form.control}
+                                        name="comisionServicios"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">Com. Servicio ($)</FormLabel>
+                                                <FormControl><Input type="number" step="0.01" {...field} value={field.value || ''} /></FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="comisionProductos"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">Com. Producto ($)</FormLabel>
+                                                <FormControl><Input type="number" step="0.01" {...field} value={field.value || ''} /></FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="propina"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">Propina ($)</FormLabel>
+                                                <FormControl><Input type="number" step="0.01" {...field} value={field.value || ''} /></FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            )}
 
                             {/* Fila 5: Comentarios */}
                             <FormField

@@ -82,7 +82,7 @@ function SortableHeader({ barber, avatarUrl }: { barber: Profesional, avatarUrl:
       style={style}
       {...attributes}
       {...listeners}
-      className="p-2 h-28 flex flex-col items-center justify-center border-b select-none cursor-pointer hover:bg-muted/50 transition-colors"
+      className="p-2 h-28 flex flex-col items-center justify-center border-b select-none cursor-pointer hover:bg-muted/50 transition-colors bg-background"
       onClick={() => {
         // dnd-kit should prevent this click if a drag occurred.
         // If the event fires, it means it was a click.
@@ -965,7 +965,14 @@ export default function AgendaView() {
                     <Cast className="h-5 w-5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Transmitir agenda en pantalla</TooltipContent>
+                <TooltipContent className="max-w-[250px] space-y-2 p-3 text-center z-[100]">
+                  <p className="font-semibold text-sm border-b pb-1">Transmitir en pantalla</p>
+                  <p className="text-xs text-muted-foreground text-left">
+                    1. Clic aquí para abrir la vista pública en una pestaña nueva.<br />
+                    2. En esa pestaña, abre el menú de opciones (⫶) de tu navegador.<br />
+                    3. Elige <strong>"Enviar, guardar..." &gt; "Transmitir..."</strong> o <strong>"Enviar"</strong> a tu pantalla.
+                  </p>
+                </TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -983,9 +990,9 @@ export default function AgendaView() {
           {/* Esta es la linea que genera el scroll vertical */}
           <div className="flex-grow overflow-auto">
             {/* Professional Headers */}
-            <div className="sticky top-0 z-40 grid gap-2 bg-background" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
-              <div className="sticky left-0 bg-background z-50">
-                <div className="h-28 flex items-center justify-center p-2 border-b">
+            <div className="sticky top-0 z-50 grid gap-2 bg-background border-b shadow-sm" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
+              <div className="sticky left-0 bg-background z-[60]">
+                <div className="h-28 flex items-center justify-center p-2 border-b border-r">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="icon"><Clock className="h-5 w-5" /></Button>
@@ -1011,10 +1018,10 @@ export default function AgendaView() {
 
             <div className="grid gap-2 pb-8" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
               {/* Time Column */}
-              <div className="flex-shrink-0 sticky left-0 z-10 bg-white">
-                <div className="flex flex-col">
+              <div className="flex-shrink-0 sticky left-0 z-40 bg-background border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                <div className="flex flex-col bg-background">
                   {timeSlots.slice(0, -1).map((time, index) => (
-                    <div key={index} style={{ height: `${ROW_HEIGHT}px` }} className="border-b flex items-center justify-center text-center">
+                    <div key={index} style={{ height: `${ROW_HEIGHT}px` }} className="border-b flex items-center justify-center text-center bg-background">
                       <span className="text-xs text-muted-foreground font-semibold">{time}</span>
                     </div>
                   ))}

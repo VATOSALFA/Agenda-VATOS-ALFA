@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, ShoppingCart, Loader2, Edit, Save, Trash2, ChevronLeft, ChevronRight, HelpCircle, TrendingUp, DollarSign, FileEdit, X, ArrowUpDown } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Edit, LineChart, TrendingUp, Save, Undo, MoreVertical, Search, CalendarDays, ExternalLink, HelpCircle, PlusCircle, ShoppingCart, Loader2, Trash2, DollarSign, FileEdit, X, ArrowUpDown, Minus } from "lucide-react";
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -13,8 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Egreso, Profesional, Service, Product, User } from '@/lib/types';
-import { where, Timestamp, doc, deleteDoc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import type { Sale, Egreso, Profesional, Service, Product, User, IngresoManual } from '@/lib/types';
+import { where, Timestamp, doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase-client';
 import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
@@ -72,13 +72,6 @@ const COLORS = {
     accent: '#C9C9C9'
 };
 
-const ResumenEgresoItem = ({ label, amount, isBold, isPrimary }: { label: string, amount: number, isBold?: boolean, isPrimary?: boolean }) => (
-    <div className="flex justify-between items-center text-base py-1.5 border-b last:border-b-0">
-        <span className={cn("text-muted-foreground", isBold && "font-bold text-foreground", isPrimary && "font-bold text-primary flex items-center")}>{label}</span>
-        <span className={cn("font-semibold", isBold && "font-extrabold", isPrimary && "text-primary")}>${amount.toLocaleString('es-MX')}</span>
-    </div>
-);
-
 const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, tooltipText }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, tooltipText?: string }) => (
     <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
         <div className="flex items-center gap-2">
@@ -101,6 +94,84 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
     </div>
 );
 
+const CurrencyInput = ({ value, onChange, className }: { value: number, onChange: (val: number) => void, className?: string }) => {
+    const [localValue, setLocalValue] = useState('');
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        if (!isFocused) {
+            setLocalValue(value === 0 ? '0' : (value ? value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0'));
+        }
+    }, [value, isFocused]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const rawValue = e.target.value;
+        const numberString = rawValue.replace(/[^0-9.]/g, '');
+
+        const parts = numberString.split('.');
+        let cleanString = numberString;
+        if (parts.length > 2) {
+            cleanString = parts[0] + '.' + parts.slice(1).join('');
+        }
+
+        let formattedStr = cleanString;
+        if (cleanString !== '') {
+            const split = cleanString.split('.');
+            let whole = split[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            if (split.length > 1) {
+                formattedStr = `${whole}.${split[1]}`;
+            } else {
+                formattedStr = whole;
+            }
+        }
+
+        setLocalValue(formattedStr);
+
+        const num = parseFloat(cleanString);
+        onChange(isNaN(num) ? 0 : num);
+    };
+
+    return (
+        <div className={cn("relative", className)}>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">$</span>
+            <Input
+                type="text"
+                className="pl-7"
+                value={localValue}
+                onChange={handleChange}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => {
+                    setIsFocused(false);
+                    setLocalValue(value === 0 ? '0' : (value ? value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0'));
+                }}
+            />
+        </div>
+    );
+};
+
+
+function ResumenEgresoItem({ label, amount, tooltip }: { label: string, amount: number, tooltip?: string }) {
+    return (
+        <div className="flex justify-between items-center text-sm py-1.5 border-b last:border-0 text-muted-foreground">
+            <span className="flex items-center">
+                {label}
+                {tooltip && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <HelpCircle className="h-3 w-3 inline-block ml-1 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p className="max-w-xs">{tooltip}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+            </span>
+            <span className="font-semibold text-foreground">${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+    );
+}
 
 export default function FinanzasMensualesPage() {
     const params = useParams();
@@ -206,8 +277,16 @@ export default function FinanzasMensualesPage() {
         ]
     }, [startDate, endDate]);
 
+    const incomesManualQueryConstraints = useMemo(() => {
+        return [
+            where('fecha', '>=', Timestamp.fromDate(startDate)),
+            where('fecha', '<=', Timestamp.fromDate(endDate))
+        ]
+    }, [startDate, endDate]);
+
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', `sales-${monthName}-${selectedYear}-${queryKey}`, ...salesQueryConstraints);
     const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos', `egresos-${monthName}-${selectedYear}-${queryKey}`, ...egresosQueryConstraints);
+    const { data: incomesManual, loading: incomesManualLoading } = useFirestoreQuery<IngresoManual>('ingresos_manuales', `incomes-${monthName}-${selectedYear}-${queryKey}`, ...incomesManualQueryConstraints);
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
@@ -219,11 +298,19 @@ export default function FinanzasMensualesPage() {
     const [egresosPerPage, setEgresosPerPage] = useState(10);
     const [incomesPage, setIncomesPage] = useState(1);
     const [incomesPerPage, setIncomesPerPage] = useState(10);
+    const [cashMovementsPage, setCashMovementsPage] = useState(1);
+    const [cashMovementsPerPage, setCashMovementsPerPage] = useState(10);
 
     // Sort configurations
     type SortDirection = 'asc' | 'desc';
     const [ingresosSortConfig, setIngresosSortConfig] = useState<{ key: string; direction: SortDirection }>({ key: 'fecha', direction: 'asc' });
     const [egresosSortConfig, setEgresosSortConfig] = useState<{ key: string; direction: SortDirection }>({ key: 'fecha', direction: 'asc' });
+    const [cashMovementsSortConfig, setCashMovementsSortConfig] = useState<{ key: string; direction: SortDirection }>({ key: 'fecha', direction: 'desc' });
+
+    const [isIngresosCollapsed, setIsIngresosCollapsed] = useState(true);
+    const [isEgresosCollapsed, setIsEgresosCollapsed] = useState(true);
+    const [isEditingComment, setIsEditingComment] = useState(false);
+    const [commentToEdit, setCommentToEdit] = useState<{ id: string, type: 'egreso' | 'ingreso', comment: string } | null>(null);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -232,7 +319,7 @@ export default function FinanzasMensualesPage() {
         const groupedByDay = sales.reduce((acc, sale) => {
             const saleDate = format(sale.fecha_hora_venta.toDate(), 'yyyy-MM-dd');
             if (!acc[saleDate]) {
-                acc[saleDate] = { fecha: saleDate, efectivo: 0, deposito: 0, total: 0 };
+                acc[saleDate] = { fecha: saleDate, efectivo: 0, tarjeta: 0, transferencia: 0, pagos_en_linea: 0, deposito: 0, total: 0 };
             }
 
             const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
@@ -242,19 +329,27 @@ export default function FinanzasMensualesPage() {
             const metodoPago = sale.metodo_pago;
 
             if (sale.pago_estado === 'deposit_paid' || metodoPago === 'mercadopago') {
+                acc[saleDate].pagos_en_linea += realPaid;
                 acc[saleDate].deposito += realPaid;
             } else if (metodoPago === 'efectivo') {
                 acc[saleDate].efectivo += realPaid;
-            } else if (['tarjeta', 'transferencia'].includes(metodoPago)) {
+            } else if (metodoPago === 'tarjeta') {
+                acc[saleDate].tarjeta += realPaid;
+                acc[saleDate].deposito += realPaid;
+            } else if (metodoPago === 'transferencia') {
+                acc[saleDate].transferencia += realPaid;
                 acc[saleDate].deposito += realPaid;
             } else if (metodoPago === 'combinado' && sale.detalle_pago_combinado) {
                 acc[saleDate].efectivo += sale.detalle_pago_combinado.efectivo || 0;
-                acc[saleDate].deposito += (sale.detalle_pago_combinado.tarjeta || 0) + (sale.detalle_pago_combinado.pagos_en_linea || 0);
+                acc[saleDate].tarjeta += sale.detalle_pago_combinado.tarjeta || 0;
+                acc[saleDate].transferencia += sale.detalle_pago_combinado.transferencia || 0;
+                acc[saleDate].pagos_en_linea += sale.detalle_pago_combinado.pagos_en_linea || 0;
+                acc[saleDate].deposito += (sale.detalle_pago_combinado.tarjeta || 0) + (sale.detalle_pago_combinado.transferencia || 0) + (sale.detalle_pago_combinado.pagos_en_linea || 0);
             }
 
             acc[saleDate].total += realPaid;
             return acc;
-        }, {} as Record<string, { fecha: string; efectivo: number; deposito: number; total: number }>);
+        }, {} as Record<string, { fecha: string; efectivo: number; tarjeta: number; transferencia: number; pagos_en_linea: number; deposito: number; total: number }>);
 
         return Object.values(groupedByDay).sort((a, b) => {
             const { key, direction } = ingresosSortConfig;
@@ -264,6 +359,12 @@ export default function FinanzasMensualesPage() {
                 return a.fecha.localeCompare(b.fecha) * dir;
             } else if (key === 'efectivo') {
                 return (a.efectivo - b.efectivo) * dir;
+            } else if (key === 'tarjeta') {
+                return (a.tarjeta - b.tarjeta) * dir;
+            } else if (key === 'transferencia') {
+                return (a.transferencia - b.transferencia) * dir;
+            } else if (key === 'pagos_en_linea') {
+                return (a.pagos_en_linea - b.pagos_en_linea) * dir;
             } else if (key === 'deposito') {
                 return (a.deposito - b.deposito) * dir;
             } else if (key === 'total') {
@@ -288,7 +389,9 @@ export default function FinanzasMensualesPage() {
         egresos_comisiones_servicios: { nombre: string; monto: number }[];
         egresos_comisiones_productos: number;
         egresos_nomina: number;
+        egresos_insumos: number;
         egresos_costos_fijos: number;
+        egresos_propinas: number;
     }
     const [manualOverride, setManualOverride] = useState<ManualOverrideData | null>(null);
     const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
@@ -306,7 +409,9 @@ export default function FinanzasMensualesPage() {
         egresos_comisiones_servicios: [],
         egresos_comisiones_productos: 0,
         egresos_nomina: 0,
+        egresos_insumos: 0,
         egresos_costos_fijos: 0,
+        egresos_propinas: 0,
     });
     const [isSavingOverride, setIsSavingOverride] = useState(false);
 
@@ -335,23 +440,28 @@ export default function FinanzasMensualesPage() {
 
     const openOverrideModal = () => {
         if (manualOverride) {
-            setOverrideForm({ ...manualOverride });
+            setOverrideForm({
+                ...manualOverride,
+                egresos_insumos: manualOverride.egresos_insumos || 0
+            });
         } else {
             setOverrideForm({
-                servicios_ingreso: ingresoServiciosTotal,
-                servicios_egreso: egresoTotal,
-                servicios_subtotal: subtotalUtilidad,
-                servicios_comision_admin: totalLocalAdminCommissions,
-                servicios_utilidad: utilidadNeta,
-                productos_ingreso: ventaProductos,
-                productos_reinversion: reinversion,
-                productos_comision_prof: comisionProfesionales,
-                productos_subtotal: utilidadVatosAlfa,
-                productos_utilidad: utilidadNetaProductos,
-                egresos_comisiones_servicios: commissionsSummary.filter(c => c.commissionServices > 0).map(c => ({ nombre: c.name, monto: c.commissionServices })),
-                egresos_comisiones_productos: totalComisionesProductos,
-                egresos_nomina: nominaTotal,
-                egresos_costos_fijos: costosFijosTotal,
+                servicios_ingreso: Number(ingresoServiciosTotal.toFixed(2)),
+                servicios_egreso: Number(egresoTotal.toFixed(2)),
+                servicios_subtotal: Number(subtotalUtilidad.toFixed(2)),
+                servicios_comision_admin: Number(totalLocalAdminCommissions.toFixed(2)),
+                servicios_utilidad: Number(utilidadNeta.toFixed(2)),
+                productos_ingreso: Number(ventaProductos.toFixed(2)),
+                productos_reinversion: Number(reinversion.toFixed(2)),
+                productos_comision_prof: Number(totalComisionesProductos.toFixed(2)),
+                productos_subtotal: Number(utilidadVatosAlfa.toFixed(2)),
+                productos_utilidad: Number(utilidadNetaProductos.toFixed(2)),
+                egresos_comisiones_servicios: commissionsFromEgresos.professionalList.filter((c: any) => c.service > 0).map((c: any) => ({ nombre: c.nombre, monto: Number(c.service.toFixed(2)) })),
+                egresos_comisiones_productos: Number(totalComisionesProductos.toFixed(2)),
+                egresos_nomina: Number(nominaTotal.toFixed(2)),
+                egresos_insumos: Number(insumosTotal.toFixed(2)),
+                egresos_costos_fijos: Number(costosFijosTotal.toFixed(2)),
+                egresos_propinas: Number(propinasTotal.toFixed(2)),
             });
         }
         setIsOverrideModalOpen(true);
@@ -430,7 +540,9 @@ export default function FinanzasMensualesPage() {
         const manualEgresos: Egreso[] = egresos
             .filter(e => {
                 const concepto = e.concepto?.toLowerCase() || '';
+                const comentarios = e.comentarios?.toLowerCase() || '';
                 if (concepto.includes('entrega de efectivo') ||
+                    concepto.includes('entrega de dinero') ||
                     concepto.includes('cierre de caja') ||
                     concepto.includes('retiro de efectivo')) {
                     return false;
@@ -455,7 +567,6 @@ export default function FinanzasMensualesPage() {
             } else if (key === 'concepto') {
                 return (a.concepto || '').localeCompare(b.concepto || '') * dir;
             } else if (key === 'aQuien') {
-                // We need to resolve names
                 const getName = (id: string) => {
                     const professional = professionals?.find(p => p.id === id);
                     if (professional) return professional.name;
@@ -470,6 +581,109 @@ export default function FinanzasMensualesPage() {
 
     }, [egresos, egresosLoading, egresosSortConfig, professionals, users]);
     // ---------------------------------
+
+    const cashMovementsData = useMemo(() => {
+        if (egresosLoading || incomesManualLoading) return { movements: [], totalEntradas: 0, totalSalidas: 0 };
+
+        const movements: any[] = [];
+        let totalEntradas = 0;
+        let totalSalidas = 0;
+
+        // Add relevant Egresos (Entrega de efectivo)
+        egresos.forEach(e => {
+            const concepto = e.concepto?.toLowerCase() || '';
+            if (concepto.includes('entrega de efectivo') || concepto.includes('entrega de dinero')) {
+                totalSalidas += e.monto;
+                movements.push({
+                    id: e.id,
+                    dbType: 'egreso',
+                    fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha),
+                    tipo: 'Salida (Entrega)',
+                    concepto: e.concepto,
+                    quien: e.aQuien,
+                    monto: e.monto,
+                    comentarios: e.comentarios,
+                    color: 'text-primary' // Aceto (Blue)
+                });
+            }
+        });
+
+        // Add manual incomes from caja balance
+        incomesManual.forEach(i => {
+            const comentarios = i.comentarios?.toLowerCase() || '';
+            if (comentarios.includes('lo ingresó') || comentarios.includes('ajuste de caja')) {
+                totalEntradas += i.monto;
+                movements.push({
+                    id: i.id,
+                    dbType: 'ingreso',
+                    fecha: i.fecha instanceof Timestamp ? i.fecha.toDate() : new Date(i.fecha),
+                    tipo: 'Entrada (Balance)',
+                    concepto: i.concepto,
+                    quien: 'Sistema',
+                    monto: i.monto,
+                    comentarios: i.comentarios,
+                    color: 'text-slate-500' // Secundario (Slate)
+                });
+            }
+        });
+
+        const sorted = [...movements].sort((a, b) => {
+            const { key, direction } = cashMovementsSortConfig;
+            const dir = direction === 'asc' ? 1 : -1;
+
+            if (key === 'fecha') {
+                return (a.fecha.getTime() - b.fecha.getTime()) * dir;
+            } else if (key === 'monto') {
+                return (a.monto - b.monto) * dir;
+            } else if (key === 'tipo') {
+                return a.tipo.localeCompare(b.tipo) * dir;
+            }
+            return 0;
+        });
+
+        return { movements: sorted, totalEntradas, totalSalidas };
+    }, [egresos, egresosLoading, incomesManual, incomesManualLoading, cashMovementsSortConfig]);
+
+    const { movements: cashMovements, totalEntradas, totalSalidas } = cashMovementsData;
+
+    const handleCashMovementsSort = (key: string) => {
+        setCashMovementsSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const paginatedCashMovements = useMemo(() => {
+        const start = (cashMovementsPage - 1) * cashMovementsPerPage;
+        return cashMovements.slice(start, start + cashMovementsPerPage);
+    }, [cashMovements, cashMovementsPage, cashMovementsPerPage]);
+
+    const totalCashMovementsPages = Math.ceil(cashMovements.length / cashMovementsPerPage);
+
+    const handleSaveComment = async () => {
+        if (!commentToEdit) return;
+        try {
+            const collectionName = commentToEdit.type === 'egreso' ? 'egresos' : 'ingresos_manuales';
+            const docRef = doc(db, collectionName, commentToEdit.id);
+            await updateDoc(docRef, {
+                comentarios: commentToEdit.comment
+            });
+            setIsEditingComment(false);
+            setCommentToEdit(null);
+            setQueryKey(prev => prev + 1);
+            toast({
+                title: "Comentario actualizado",
+                description: "El movimiento ha sido actualizado correctamente.",
+            });
+        } catch (error) {
+            console.error("Error updating comment:", error);
+            toast({
+                title: "Error",
+                description: "No se pudo actualizar el comentario.",
+                variant: "destructive"
+            });
+        }
+    };
 
 
     // Calculation logic
@@ -549,87 +763,100 @@ export default function FinanzasMensualesPage() {
         return { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa };
     }, [sales, products, professionals, salesLoading, productsLoading, professionalsLoading]);
 
-    const { ventaProductos, reinversion, comisionProfesionales, utilidadVatosAlfa } = productSummary;
+    const { ventaProductos, reinversion } = productSummary;
 
-    const commissionsSummary = useMemo(() => {
-        const summary: Record<string, { commissionServices: number, commissionProducts: number, tips: number, avatarUrl?: string, active?: boolean }> = {};
-        const profIdToData: Record<string, { name: string, avatarUrl?: string, active?: boolean }> = {};
+    const commissionsFromEgresos = useMemo(() => {
+        const summary: Record<string, { service: number, product: number, tip: number, other: number }> = {};
+        const profIdToName: Record<string, string> = {};
 
         professionals.forEach(prof => {
-            summary[prof.name] = { commissionServices: 0, commissionProducts: 0, tips: 0, avatarUrl: prof.avatarUrl, active: prof.active };
-            profIdToData[prof.id] = { name: prof.name, avatarUrl: prof.avatarUrl, active: prof.active };
+            summary[prof.id] = { service: 0, product: 0, tip: 0, other: 0 };
+            profIdToName[prof.id] = prof.name;
         });
 
+        let totalService = 0;
+        let totalProduct = 0;
+        let totalTips = 0;
+        let totalOtros = 0;
+
         calculatedEgresos.forEach(egreso => {
-            // Buscamos conceptos que indiquen comisión para agruparlos visualmente
-            if (egreso.concepto.toLowerCase().includes('comisi')) {
-                const profId = egreso.aQuien;
-                const profData = profIdToData[profId];
-                // Try to find by ID (most common now) or fallback to name if legacy data
-                const profName = profData?.name || profId;
+            const concepto = egreso.concepto.toLowerCase();
+            const aQuien = egreso.aQuien;
 
-                let serviceAmount = 0;
-                let productAmount = 0;
-                let tipAmount = 0;
+            // Skip fixed costs/nomina as they are handled separately
+            if (concepto === 'nómina' || aQuien === 'Insumos' || aQuien === 'Costos fijos') return;
 
-                // Intentar parsear el comentario para separar servicios y productos
-                // Formato esperado: "Pago a X (Comisión Servicios: $70.00, Comisión Productos: $26.85, Propina: $0.00)..."
-                const serviceMatch = egreso.comentarios?.match(/Comisión Servicios: \$([0-9.,]+)/);
-                const productMatch = egreso.comentarios?.match(/Comisión Productos: \$([0-9.,]+)/);
-                const tipMatch = egreso.comentarios?.match(/Propina: \$([0-9.,]+)/);
+            const profMatch = professionals.find(p => p.id === aQuien || p.name === aQuien);
 
-                if (serviceMatch || productMatch) {
-                    if (serviceMatch) serviceAmount = parseFloat(serviceMatch[1].replace(/,/g, ''));
-                    if (productMatch) productAmount = parseFloat(productMatch[1].replace(/,/g, ''));
-                    if (tipMatch) tipAmount = parseFloat(tipMatch[1].replace(/,/g, ''));
+            // RegEx for detailed payment comments
+            const serviceMatch = egreso.comentarios?.match(/Comisión Servicios: \$([0-9.,]+)/);
+            const productMatch = egreso.comentarios?.match(/Comisión Productos: \$([0-9.,]+)/);
+            const tipMatch = egreso.comentarios?.match(/Propina: \$([0-9.,]+)/);
 
-                    // Si el monto total del egreso es mayor que la suma parseada (por ajuste manual u otro), 
-                    // asignamos la diferencia a Servicios por defecto o respetamos el parseo?
-                    // Respetamos el parseo para la división, pero si la suma no cuadra con egreso.monto,
-                    // podría haber un desbalance visual.
-                    // Para simplificar, asumimos que si hay desglose, es correcto.
-                    // Si NO hay desglose en el comentario pero es una "comisión", todo a servicios.
-                } else {
-                    serviceAmount = egreso.monto;
+            if (serviceMatch || productMatch || tipMatch) {
+                const parseAmt = (val: string) => {
+                    let c = val.replace(/[^0-9.,]/g, '');
+                    if (c.match(/,\d{1,2}$/)) c = c.replace(/(.*),(.*)/, '$1.$2');
+                    return parseFloat(c.replace(/,/g, '')) || 0;
+                };
+                const s = serviceMatch ? parseAmt(serviceMatch[1]) : 0;
+                const p = productMatch ? parseAmt(productMatch[1]) : 0;
+                const t = tipMatch ? parseAmt(tipMatch[1]) : 0;
+
+                totalService += s;
+                totalProduct += p;
+                totalTips += t;
+
+                if (profMatch) {
+                    summary[profMatch.id].service += s;
+                    summary[profMatch.id].product += p;
+                    summary[profMatch.id].tip += t;
                 }
-
-                if (summary[profName]) {
-                    summary[profName].commissionServices += serviceAmount;
-                    summary[profName].commissionProducts += productAmount;
-                    summary[profName].tips += tipAmount;
+            } else {
+                // Not a detailed payment, categorize by concept
+                if (concepto.includes('comisi') || concepto.includes('pago')) {
+                    totalService += egreso.monto;
+                    if (profMatch) summary[profMatch.id].service += egreso.monto;
+                } else if (concepto.includes('propina')) {
+                    totalTips += egreso.monto;
+                    if (profMatch) summary[profMatch.id].tip += egreso.monto;
                 } else {
-                    // Fallback using parsed amounts or total to service
-                    const legacyProf = professionals.find(p => p.name === profName);
-                    summary[profName] = {
-                        commissionServices: serviceAmount,
-                        commissionProducts: productAmount,
-                        tips: tipAmount,
-                        avatarUrl: profData?.avatarUrl || legacyProf?.avatarUrl,
-                        active: profData?.active ?? legacyProf?.active ?? false
-                    };
+                    totalOtros += egreso.monto;
+                    if (profMatch) summary[profMatch.id].other += egreso.monto;
                 }
             }
         });
 
-        return Object.entries(summary)
-            .filter(([_, data]) => {
-                // Mostrar si tiene algún monto > 0 (histórico o actual)
-                return data.commissionServices > 0 || data.commissionProducts > 0 || data.tips > 0;
-            })
-            .map(([name, data]) => ({
-                name,
-                ...data
+        const professionalList = Object.entries(summary)
+            .filter(([_, data]) => data.service > 0 || data.product > 0 || data.tip > 0 || data.other > 0)
+            .map(([id, data]) => ({
+                id,
+                nombre: profIdToName[id] || id,
+                service: data.service,
+                product: data.product,
+                tip: data.tip,
+                other: data.other
             }));
 
+        return { totalService, totalProduct, totalTips, totalOtros, professionalList };
     }, [calculatedEgresos, professionals]);
 
-    const totalComisionesServicios = commissionsSummary.reduce((acc, curr) => acc + curr.commissionServices + curr.tips, 0);
-    const totalComisionesProductos = commissionsSummary.reduce((acc, curr) => acc + curr.commissionProducts, 0);
+    const totalComisionesServicios = commissionsFromEgresos.totalService;
+    const totalComisionesProductos = commissionsFromEgresos.totalProduct;
     const totalComisiones = totalComisionesServicios + totalComisionesProductos;
+    const totalOtrosEgresos = commissionsFromEgresos.totalOtros;
+
+    const propinasTotal = commissionsFromEgresos.totalTips; // Strict cash basis: only paid tips
 
     const nominaTotal = useMemo(() => {
         return calculatedEgresos
             .filter(e => e.concepto === 'Nómina')
+            .reduce((sum, e) => sum + e.monto, 0);
+    }, [calculatedEgresos]);
+
+    const insumosTotal = useMemo(() => {
+        return calculatedEgresos
+            .filter(e => e.aQuien === 'Insumos')
             .reduce((sum, e) => sum + e.monto, 0);
     }, [calculatedEgresos]);
 
@@ -639,10 +866,14 @@ export default function FinanzasMensualesPage() {
             .reduce((sum, e) => sum + e.monto, 0);
     }, [calculatedEgresos]);
 
-    const egresoTotal = (totalComisiones + nominaTotal + costosFijosTotal) - comisionProfesionales;
 
-    // Subtotal de Utilidad = Ingreso Servicios - Egreso (ajustado sin productos)
-    // NOTA: ventaProductos ya NO se resta aquí porque ingresoServiciosTotal NO incluye productos.
+    // --- FINANCIAL SUMMARY LOGIC (CASH BASIS / REAL EGRESOS) ---
+
+    // 1. Products: Use REAL paid commissions from egresos
+    const utilidadVatosAlfa = ventaProductos - reinversion - totalComisionesProductos;
+
+    // 2. Services: Use REAL paid expenses (Commissions + Nomina + Insumos + Fixed)
+    const egresoTotal = totalComisionesServicios + nominaTotal + insumosTotal + costosFijosTotal + totalOtrosEgresos;
     const subtotalUtilidad = ingresoServiciosTotal - egresoTotal;
 
     // Calculate Local Admin Commissions
@@ -721,7 +952,6 @@ export default function FinanzasMensualesPage() {
 
 
     const isLoading = salesLoading || egresosLoading || professionalsLoading || servicesLoading || productsLoading || usersLoading;
-    const totalResumenEgresos = totalComisiones + nominaTotal + costosFijosTotal;
 
     // --- Apply manual overrides ---
     const hasOverride = !!manualOverride;
@@ -733,7 +963,7 @@ export default function FinanzasMensualesPage() {
         servicios_utilidad: hasOverride ? manualOverride!.servicios_utilidad : utilidadNeta,
         productos_ingreso: hasOverride ? manualOverride!.productos_ingreso : ventaProductos,
         productos_reinversion: hasOverride ? manualOverride!.productos_reinversion : reinversion,
-        productos_comision_prof: hasOverride ? manualOverride!.productos_comision_prof : comisionProfesionales,
+        productos_comision_prof: hasOverride ? manualOverride!.productos_comision_prof : totalComisionesProductos,
         productos_subtotal: hasOverride ? manualOverride!.productos_subtotal : utilidadVatosAlfa,
         productos_utilidad: hasOverride ? manualOverride!.productos_utilidad : utilidadNetaProductos,
         egresos_comisiones_servicios_total: hasOverride
@@ -741,12 +971,14 @@ export default function FinanzasMensualesPage() {
             : totalComisionesServicios,
         egresos_comisiones_servicios_list: hasOverride
             ? manualOverride!.egresos_comisiones_servicios
-            : commissionsSummary.filter(c => c.commissionServices > 0 || c.tips > 0).map(c => ({ nombre: c.name, monto: c.commissionServices + c.tips })),
+            : commissionsFromEgresos.professionalList.filter(c => (c.service > 0 || c.other > 0)).map(c => ({ nombre: c.nombre, monto: c.service + c.other })),
         egresos_comisiones_productos: hasOverride ? manualOverride!.egresos_comisiones_productos : totalComisionesProductos,
         egresos_nomina: hasOverride ? manualOverride!.egresos_nomina : nominaTotal,
+        egresos_insumos: hasOverride ? (manualOverride!.egresos_insumos || 0) : insumosTotal,
         egresos_costos_fijos: hasOverride ? manualOverride!.egresos_costos_fijos : costosFijosTotal,
+        egresos_propinas: hasOverride ? (manualOverride!.egresos_propinas || 0) : propinasTotal,
     };
-    const display_totalEgresos = display.egresos_comisiones_servicios_total + display.egresos_comisiones_productos + display.egresos_nomina + display.egresos_costos_fijos;
+    const display_totalEgresos = display.egresos_comisiones_servicios_total + display.egresos_nomina + display.egresos_insumos + display.egresos_costos_fijos;
     const display_ingresosTotalesMes = display.servicios_ingreso + display.productos_ingreso;
     const display_utilidadNetaTotal = display.servicios_utilidad + display.productos_utilidad;
     const display_margen = display_ingresosTotalesMes > 0 ? (display_utilidadNetaTotal / display_ingresosTotalesMes * 100) : 0;
@@ -1004,8 +1236,8 @@ export default function FinanzasMensualesPage() {
                                         amount={display.servicios_utilidad}
                                         isPrimary
                                         isBold
-                                        className="text-xl"
-                                        tooltipText="Se considera la ganancia final del mes."
+                                        className="text-xl pt-2 border-t mt-2"
+                                        tooltipText="Ganancia neta del mes tras restar todos los gastos operativos y comisiones administrativas sobre servicios."
                                     />
                                 </>
                             )}
@@ -1019,21 +1251,25 @@ export default function FinanzasMensualesPage() {
                             <ResumenGeneralItem
                                 label="Ingreso total"
                                 amount={display.productos_ingreso}
+                                tooltipText="Suma total de todas las ventas de productos realizadas en el mes."
                             />
                             <ResumenGeneralItem
                                 label="Reinversión"
                                 amount={-display.productos_reinversion}
                                 className="text-muted-foreground"
+                                tooltipText="Costo estimado o configurado de los productos para su resurtido (costo de inversión)."
                             />
                             <ResumenGeneralItem
                                 label="Comisión de profesionales"
                                 amount={-display.productos_comision_prof}
                                 className="text-muted-foreground"
+                                tooltipText="Comisiones pagadas a los colaboradores por la venta directa de estos productos."
                             />
                             <ResumenGeneralItem
                                 label="Subtotal de utilidad"
                                 amount={display.productos_subtotal}
                                 isBold
+                                tooltipText="Utilidad bruta de productos antes de pagar comisiones administrativas."
                             />
 
                             {/* Mostrar administradores locales para configurar comisión (si hay alguno) */}
@@ -1064,6 +1300,7 @@ export default function FinanzasMensualesPage() {
                                 isPrimary
                                 isBold
                                 className="text-xl pt-2 border-t mt-2"
+                                tooltipText="Utilidad final de productos que queda para el dueño después de todos los pagos."
                             />
                         </CardContent>
                     </Card>
@@ -1076,9 +1313,21 @@ export default function FinanzasMensualesPage() {
                                 <AccordionItem value="comisiones-servicios" className="border-b-0">
                                     <div className="flex justify-between items-center text-base py-1.5 border-b">
                                         <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
-                                            <span className="text-muted-foreground">Comisiones Servicios</span>
+                                            <span className="text-muted-foreground flex items-center">
+                                                Comisiones Servicios
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-3 w-3 inline-block ml-1 cursor-help" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs">Dinero pagado exclusivamente por comisión de servicios realizados por los profesionales.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
                                         </AccordionTrigger>
-                                        <span className="font-semibold mr-4">${display.egresos_comisiones_servicios_total.toLocaleString('es-MX')}</span>
+                                        <span className="font-semibold mr-4">${display.egresos_comisiones_servicios_total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     <AccordionContent className="p-0">
                                         <Table>
@@ -1102,44 +1351,35 @@ export default function FinanzasMensualesPage() {
                                     </AccordionContent>
                                 </AccordionItem>
 
-                                <AccordionItem value="comisiones-productos" className="border-b-0">
-                                    <div className="flex justify-between items-center text-base py-1.5 border-b">
-                                        <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
-                                            <span className="text-muted-foreground">Comisiones Productos</span>
-                                        </AccordionTrigger>
-                                        <span className="font-semibold mr-4">${display.egresos_comisiones_productos.toLocaleString('es-MX')}</span>
-                                    </div>
-                                    <AccordionContent className="p-0">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow className="hover:bg-transparent">
-                                                    <TableHead className="w-[60%]">Profesional</TableHead>
-                                                    <TableHead className="text-right">Comisión</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {commissionsSummary.filter(c => c.commissionProducts > 0).map(({ name, commissionProducts, avatarUrl }) => (
-                                                    <TableRow key={name}>
-                                                        <TableCell className="font-medium flex items-center gap-2">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={avatarUrl} alt={name} />
-                                                                <AvatarFallback>{name.charAt(0)}</AvatarFallback>
-                                                            </Avatar>
-                                                            <span>{name}</span>
-                                                        </TableCell>
-                                                        <TableCell className="text-right font-bold text-primary">${commissionProducts.toLocaleString('es-MX')}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </AccordionContent>
-                                </AccordionItem>
+
                             </Accordion>
-                            <ResumenEgresoItem label="Nómina" amount={display.egresos_nomina} />
-                            <ResumenEgresoItem label="Costos fijos" amount={display.egresos_costos_fijos} />
+                            <ResumenEgresoItem label="Nómina" amount={display.egresos_nomina} tooltip="Sueldos base pagados al personal administratico o staff general." />
+                            <ResumenEgresoItem label="Insumos" amount={display.egresos_insumos} tooltip="Gasto en materia prima de trabajo (Papel, gels, etc)." />
+                            <ResumenEgresoItem label="Costos fijos" amount={display.egresos_costos_fijos} tooltip="Gastos fijos de operación del local (Renta, Luz, Internet)." />
+
+                            {totalOtrosEgresos > 0 && (
+                                <ResumenEgresoItem label="Otros egresos registrados" amount={totalOtrosEgresos} tooltip="Gastos varios registrados en caja que no entran en las categorías principales." />
+                            )}
+
                             <div className="flex justify-between items-center text-lg pt-2 mt-2">
                                 <span className="font-bold text-primary">Total</span>
-                                <span className="font-extrabold text-primary text-lg">${display_totalEgresos.toLocaleString('es-MX')}</span>
+                                <span className="font-extrabold text-primary text-lg">${display_totalEgresos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm pt-2 mt-2 border-t text-muted-foreground">
+                                <span className="flex items-center">
+                                    Propinas (Informativo)
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <HelpCircle className="h-3 w-3 inline-block ml-1 cursor-help" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-xs">Total de propinas pagadas realmente a los profesionales (egresos registrados en caja). No incluye propinas de ventas que aún no se han liquidado con el barbero.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </span>
+                                <span className="font-medium">${display.egresos_propinas.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -1147,182 +1387,371 @@ export default function FinanzasMensualesPage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <Card className="lg:col-span-5">
-                        <CardHeader>
-                            <CardTitle>Ingresos</CardTitle>
+                        <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsIngresosCollapsed(!isIngresosCollapsed)}>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg">Ingresos</CardTitle>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    {isIngresosCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+                                </Button>
+                            </div>
                         </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('fecha')}>
-                                                Fecha {ingresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('efectivo')}>
-                                                Efectivo {ingresosSortConfig.key === 'efectivo' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('deposito')}>
-                                                Depósito {ingresosSortConfig.key === 'deposito' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('total')}>
-                                                Total venta {ingresosSortConfig.key === 'total' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLoading ? (
+                        {!isIngresosCollapsed && (
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center h-24">
-                                                <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                                            </TableCell>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('fecha')}>
+                                                    Fecha {ingresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('efectivo')}>
+                                                    Efectivo {ingresosSortConfig.key === 'efectivo' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('tarjeta')}>
+                                                    Tarjeta {ingresosSortConfig.key === 'tarjeta' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('transferencia')}>
+                                                    Transferencia {ingresosSortConfig.key === 'transferencia' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('pagos_en_linea')}>
+                                                    En línea {ingresosSortConfig.key === 'pagos_en_linea' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('total')}>
+                                                    Total venta {ingresosSortConfig.key === 'total' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
                                         </TableRow>
-                                    ) : dailyIncome.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="text-center h-24">
-                                                No hay ingresos registrados para {capitalize(monthName)}.
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        paginatedIncomes.map((ingreso, i) => (
-                                            <TableRow key={i}>
-                                                <TableCell>{ingreso.fecha.split('-').reverse().join('/')}</TableCell>
-                                                <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
-                                                <TableCell>${ingreso.deposito.toLocaleString('es-MX')}</TableCell>
-                                                <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center h-24">
+                                                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                                </TableCell>
                                             </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                            {dailyIncome.length > 0 && (
-                                <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
-                                    <div className="flex items-center space-x-2">
-                                        <p className="text-sm font-medium">Resultados por página</p>
-                                        <Select
-                                            value={`${incomesPerPage}`}
-                                            onValueChange={(value) => {
-                                                setIncomesPerPage(Number(value));
-                                                setIncomesPage(1);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-8 w-[70px]">
-                                                <SelectValue placeholder={incomesPerPage} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="10">10</SelectItem>
-                                                <SelectItem value="20">20</SelectItem>
-                                                <SelectItem value="50">50</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        ) : dailyIncome.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center h-24">
+                                                    No hay ingresos registrados para {capitalize(monthName)}.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            paginatedIncomes.map((ingreso, i) => (
+                                                <TableRow key={i}>
+                                                    <TableCell>{ingreso.fecha.split('-').reverse().join('/')}</TableCell>
+                                                    <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell>${ingreso.tarjeta.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell>${ingreso.transferencia.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell>${ingreso.pagos_en_linea.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                                {dailyIncome.length > 0 && (
+                                    <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                        <div className="flex items-center space-x-2">
+                                            <p className="text-sm font-medium">Resultados por página</p>
+                                            <Select
+                                                value={`${incomesPerPage}`}
+                                                onValueChange={(value) => {
+                                                    setIncomesPerPage(Number(value));
+                                                    setIncomesPage(1);
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-8 w-[70px]">
+                                                    <SelectValue placeholder={incomesPerPage} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="10">10</SelectItem>
+                                                    <SelectItem value="20">20</SelectItem>
+                                                    <SelectItem value="50">50</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="text-sm font-medium">
+                                            Página {incomesPage} de {totalIncomesPages}
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <Button
+                                                variant="outline"
+                                                className="h-8 w-8 p-0"
+                                                onClick={() => setIncomesPage(p => Math.max(1, p - 1))}
+                                                disabled={incomesPage === 1}
+                                            >
+                                                <span className="sr-only">Anterior</span>
+                                                <ChevronLeft className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                className="h-8 w-8 p-0"
+                                                onClick={() => setIncomesPage(p => Math.min(totalIncomesPages, p + 1))}
+                                                disabled={incomesPage === totalIncomesPages}
+                                            >
+                                                <span className="sr-only">Siguiente</span>
+                                                <ChevronRight className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="text-sm font-medium">
-                                        Página {incomesPage} de {totalIncomesPages}
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <Button
-                                            variant="outline"
-                                            className="h-8 w-8 p-0"
-                                            onClick={() => setIncomesPage(p => Math.max(1, p - 1))}
-                                            disabled={incomesPage === 1}
-                                        >
-                                            <span className="sr-only">Anterior</span>
-                                            <ChevronLeft className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            className="h-8 w-8 p-0"
-                                            onClick={() => setIncomesPage(p => Math.min(totalIncomesPages, p + 1))}
-                                            disabled={incomesPage === totalIncomesPages}
-                                        >
-                                            <span className="sr-only">Siguiente</span>
-                                            <ChevronRight className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
+                                )}
+                            </CardContent>
+                        )}
                     </Card>
                     <Card className="lg:col-span-7">
-                        <CardHeader className="flex-row items-center justify-between">
-                            <CardTitle>Egresos</CardTitle>
-                            <Button variant="outline" onClick={() => { setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
-                                <PlusCircle className="mr-2 h-4 w-4" /> Agregar egreso
-                            </Button>
+                        <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsEgresosCollapsed(!isEgresosCollapsed)}>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg">Egresos</CardTitle>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
+                                        <PlusCircle className="mr-2 h-4 w-4" /> Agregar egreso
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                        {isEgresosCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        {!isEgresosCollapsed && (
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('fecha')}>
+                                                    Fecha {egresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('concepto')}>
+                                                    Concepto {egresosSortConfig.key === 'concepto' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('aQuien')}>
+                                                    A quién se entrega {egresosSortConfig.key === 'aQuien' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>Com. Servicio</TableHead>
+                                            <TableHead>Com. Producto</TableHead>
+                                            <TableHead>Propina</TableHead>
+                                            <TableHead>Comentarios</TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('monto')}>
+                                                    Total {egresosSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead className="text-right">Opciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow><TableCell colSpan={9} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        ) : calculatedEgresos.length === 0 ? (
+                                            <TableRow><TableCell colSpan={9} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                        ) : (
+                                            paginatedEgresos.map((egreso) => {
+                                                let comS = egreso.comisionServicios || 0;
+                                                let comP = egreso.comisionProductos || 0;
+                                                let prop = egreso.propina || 0;
+                                                let commentClean = egreso.comentarios || '';
+
+                                                if (!comS && !comP && !prop && commentClean) {
+                                                    const matchS = commentClean.match(/Comisión Servicios: \$([0-9.,]+)/);
+                                                    const matchP = commentClean.match(/Comisión Productos: \$([0-9.,]+)/);
+                                                    const matchT = commentClean.match(/Propina: \$([0-9.,]+)/);
+                                                    const parseAmt = (val: string) => {
+                                                        let c = val.replace(/[^0-9.,]/g, '');
+                                                        if (c.match(/,\d{1,2}$/)) c = c.replace(/(.*),(.*)/, '$1.$2');
+                                                        return parseFloat(c.replace(/,/g, '')) || 0;
+                                                    };
+                                                    if (matchS) comS = parseAmt(matchS[1]);
+                                                    if (matchP) comP = parseAmt(matchP[1]);
+                                                    if (matchT) prop = parseAmt(matchT[1]);
+
+                                                    if (matchS || matchP || matchT) {
+                                                        commentClean = 'Auto Pago (Sistema)';
+                                                    }
+                                                }
+
+                                                return (
+                                                    <TableRow key={egreso.id}>
+                                                        <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd/MM/yyyy HH:mm') : format(new Date(egreso.fecha), 'dd/MM/yyyy HH:mm')}</TableCell>
+                                                        <TableCell>{egreso.concepto}</TableCell>
+                                                        <TableCell>{getNameFromId(egreso.aQuien)}</TableCell>
+                                                        <TableCell className="font-medium text-muted-foreground">{comS > 0 ? `$${comS.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                        <TableCell className="font-medium text-muted-foreground">{comP > 0 ? `$${comP.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                        <TableCell className="font-medium text-muted-foreground">{prop > 0 ? `$${prop.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                        <TableCell>{commentClean}</TableCell>
+                                                        <TableCell className="font-extrabold text-primary">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            {!egreso.id.startsWith('comm-') && (
+                                                                <div className="flex gap-1 justify-end">
+                                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
+                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
+                                        )}
+                                    </TableBody>
+                                </Table>
+                                {calculatedEgresos.length > 0 && (
+                                    <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                        <div className="flex items-center space-x-2">
+                                            <p className="text-sm font-medium">Resultados por página</p>
+                                            <Select
+                                                value={`${egresosPerPage}`}
+                                                onValueChange={(value) => {
+                                                    setEgresosPerPage(Number(value));
+                                                    setEgresosPage(1);
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-8 w-[70px]">
+                                                    <SelectValue placeholder={egresosPerPage} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="10">10</SelectItem>
+                                                    <SelectItem value="20">20</SelectItem>
+                                                    <SelectItem value="50">50</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="text-sm font-medium">
+                                            Página {egresosPage} de {totalEgresosPages}
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setEgresosPage(prev => Math.max(prev - 1, 1))}
+                                                disabled={egresosPage === 1}
+                                            >
+                                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setEgresosPage(prev => Math.min(prev + 1, totalEgresosPages))}
+                                                disabled={egresosPage === totalEgresosPages}
+                                            >
+                                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        )}
+                    </Card>
+                </div>
+
+                <div className="mt-8">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <DollarSign className="h-5 w-5 text-primary" />
+                                    Movimientos de Flujo de Caja (Informativo)
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-xs text-xs">
+                                                    Registro de entregas de efectivo (sobrantes) y entradas de dinero (ajustes) para balancear la caja diaria.
+                                                    Estos movimientos NO afectan la utilidad neta ya que son transferencias internas de efectivo.
+                                                </p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </CardTitle>
+                                <div className="flex gap-4">
+                                    <div className="text-right">
+                                        <p className="text-xs text-muted-foreground">Total Entradas</p>
+                                        <p className="text-sm font-bold text-slate-500">${totalEntradas.toLocaleString('es-MX')}</p>
+                                    </div>
+                                    <div className="text-right border-l pl-4">
+                                        <p className="text-xs text-muted-foreground">Total Salidas</p>
+                                        <p className="text-sm font-bold text-primary">${totalSalidas.toLocaleString('es-MX')}</p>
+                                    </div>
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('fecha')}>
-                                                Fecha {egresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('fecha')}>
+                                                Fecha {cashMovementsSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
                                         <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('concepto')}>
-                                                Concepto {egresosSortConfig.key === 'concepto' && <ArrowUpDown className="h-4 w-4" />}
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('tipo')}>
+                                                Tipo {cashMovementsSortConfig.key === 'tipo' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
+                                        <TableHead>Concepto</TableHead>
+                                        <TableHead>Responsable / Destino</TableHead>
                                         <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('aQuien')}>
-                                                A quién se entrega {egresosSortConfig.key === 'aQuien' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('monto')}>
-                                                Monto {egresosSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('monto')}>
+                                                Monto {cashMovementsSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
                                         <TableHead>Comentarios</TableHead>
-                                        <TableHead className="text-right">Opciones</TableHead>
+                                        <TableHead className="text-right w-[80px]">Opciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {isLoading ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                                    ) : calculatedEgresos.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                    {egresosLoading || incomesManualLoading ? (
+                                        <TableRow><TableCell colSpan={7} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    ) : cashMovements.length === 0 ? (
+                                        <TableRow><TableCell colSpan={7} className="text-center h-24">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
                                     ) : (
-                                        paginatedEgresos.map((egreso) => (
-                                            <TableRow key={egreso.id}>
-                                                <TableCell>{safeFormatDate(egreso.fecha)}</TableCell>
-                                                <TableCell>{egreso.concepto}</TableCell>
-                                                <TableCell>{getNameFromId(egreso.aQuien)}</TableCell>
-                                                <TableCell className="font-semibold">${egreso.monto.toLocaleString('es-MX')}</TableCell>
-                                                <TableCell>{egreso.comentarios}</TableCell>
+                                        paginatedCashMovements.map((mov) => (
+                                            <TableRow key={mov.id}>
+                                                <TableCell>{safeFormatDate(mov.fecha)}</TableCell>
+                                                <TableCell className="font-medium">{mov.tipo}</TableCell>
+                                                <TableCell>{mov.concepto}</TableCell>
+                                                <TableCell>{getNameFromId(mov.quien)}</TableCell>
+                                                <TableCell className={cn("font-bold", mov.color)}>${mov.monto.toLocaleString('es-MX')}</TableCell>
+                                                <TableCell className="text-muted-foreground text-xs italic">{mov.comentarios || 'Sin comentario'}</TableCell>
                                                 <TableCell className="text-right">
-                                                    {!egreso.id.startsWith('comm-') && (
-                                                        <div className="flex gap-1 justify-end">
-                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
-                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
-                                                        </div>
-                                                    )}
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setCommentToEdit({ id: mov.id, type: mov.dbType, comment: mov.comentarios || '' }); setIsEditingComment(true); }}>
+                                                        <FileEdit className="h-4 w-4" />
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))
                                     )}
                                 </TableBody>
                             </Table>
-                            {calculatedEgresos.length > 0 && (
+                            {cashMovements.length > 0 && (
                                 <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
                                     <div className="flex items-center space-x-2">
                                         <p className="text-sm font-medium">Resultados por página</p>
                                         <Select
-                                            value={`${egresosPerPage}`}
+                                            value={`${cashMovementsPerPage}`}
                                             onValueChange={(value) => {
-                                                setEgresosPerPage(Number(value));
-                                                setEgresosPage(1);
+                                                setCashMovementsPerPage(Number(value));
+                                                setCashMovementsPage(1);
                                             }}
                                         >
                                             <SelectTrigger className="h-8 w-[70px]">
-                                                <SelectValue placeholder={egresosPerPage} />
+                                                <SelectValue placeholder={cashMovementsPerPage} />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="10">10</SelectItem>
@@ -1332,22 +1761,22 @@ export default function FinanzasMensualesPage() {
                                         </Select>
                                     </div>
                                     <div className="text-sm font-medium">
-                                        Página {egresosPage} de {totalEgresosPages}
+                                        Página {cashMovementsPage} de {totalCashMovementsPages}
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setEgresosPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={egresosPage === 1}
+                                            onClick={() => setCashMovementsPage(prev => Math.max(prev - 1, 1))}
+                                            disabled={cashMovementsPage === 1}
                                         >
                                             <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
                                         </Button>
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setEgresosPage(prev => Math.min(prev + 1, totalEgresosPages))}
-                                            disabled={egresosPage === totalEgresosPages}
+                                            onClick={() => setCashMovementsPage(prev => Math.min(prev + 1, totalCashMovementsPages))}
+                                            disabled={cashMovementsPage === totalCashMovementsPages}
                                         >
                                             Siguiente <ChevronRight className="h-4 w-4 ml-1" />
                                         </Button>
@@ -1368,6 +1797,7 @@ export default function FinanzasMensualesPage() {
                     setQueryKey(prev => prev + 1);
                 }}
                 egreso={editingEgreso}
+                source="finanzas"
             />
 
             {egresoToDelete && (
@@ -1443,108 +1873,120 @@ export default function FinanzasMensualesPage() {
 
                     <div className="space-y-6 py-4">
                         {/* Resumen de Servicios */}
-                        <div className="space-y-3">
-                            <h4 className="font-semibold text-sm text-primary border-b pb-1">Resumen de Servicios</h4>
-                            <div className="grid grid-cols-2 gap-3">
+                        <Card className="border-border shadow-sm">
+                            <CardHeader className="py-3 bg-muted/30 border-b">
+                                <CardTitle className="text-sm font-semibold">Resumen de Servicios</CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid grid-cols-2 gap-4 pt-4">
                                 <div>
-                                    <Label className="text-xs">Ingreso total</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.servicios_ingreso} onChange={e => setOverrideForm(f => ({ ...f, servicios_ingreso: Number(e.target.value) }))} />
-                                </div>
-                                <div>
-                                    <Label className="text-xs">Egreso total</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.servicios_egreso} onChange={e => setOverrideForm(f => ({ ...f, servicios_egreso: Number(e.target.value) }))} />
+                                    <Label className="text-xs text-muted-foreground">Ingreso total</Label>
+                                    <CurrencyInput value={overrideForm.servicios_ingreso} onChange={v => setOverrideForm(f => ({ ...f, servicios_ingreso: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs">Subtotal de utilidad</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.servicios_subtotal} onChange={e => setOverrideForm(f => ({ ...f, servicios_subtotal: Number(e.target.value) }))} />
+                                    <Label className="text-xs text-muted-foreground">Egreso total</Label>
+                                    <CurrencyInput value={overrideForm.servicios_egreso} onChange={v => setOverrideForm(f => ({ ...f, servicios_egreso: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs">Comisión admin</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.servicios_comision_admin} onChange={e => setOverrideForm(f => ({ ...f, servicios_comision_admin: Number(e.target.value) }))} />
+                                    <Label className="text-xs text-muted-foreground">Subtotal de utilidad</Label>
+                                    <CurrencyInput value={overrideForm.servicios_subtotal} onChange={v => setOverrideForm(f => ({ ...f, servicios_subtotal: v }))} className="mt-1" />
                                 </div>
-                                <div className="col-span-2">
-                                    <Label className="text-xs">Utilidad neta</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.servicios_utilidad} onChange={e => setOverrideForm(f => ({ ...f, servicios_utilidad: Number(e.target.value) }))} />
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Comisión admin</Label>
+                                    <CurrencyInput value={overrideForm.servicios_comision_admin} onChange={v => setOverrideForm(f => ({ ...f, servicios_comision_admin: v }))} className="mt-1" />
                                 </div>
-                            </div>
-                        </div>
+                                <div className="col-span-2 mt-2 p-3 bg-muted/50 rounded-lg">
+                                    <Label className="text-xs font-semibold">Utilidad neta (Servicios)</Label>
+                                    <CurrencyInput value={overrideForm.servicios_utilidad} onChange={v => setOverrideForm(f => ({ ...f, servicios_utilidad: v }))} className="mt-1 font-bold" />
+                                </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Resumen de Productos */}
-                        <div className="space-y-3">
-                            <h4 className="font-semibold text-sm text-primary border-b pb-1">Resumen de Productos</h4>
-                            <div className="grid grid-cols-2 gap-3">
+                        <Card className="border-border shadow-sm">
+                            <CardHeader className="py-3 bg-muted/30 border-b">
+                                <CardTitle className="text-sm font-semibold">Resumen de Productos</CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid grid-cols-2 gap-4 pt-4">
                                 <div>
-                                    <Label className="text-xs">Ingreso total</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.productos_ingreso} onChange={e => setOverrideForm(f => ({ ...f, productos_ingreso: Number(e.target.value) }))} />
-                                </div>
-                                <div>
-                                    <Label className="text-xs">Reinversión</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.productos_reinversion} onChange={e => setOverrideForm(f => ({ ...f, productos_reinversion: Number(e.target.value) }))} />
+                                    <Label className="text-xs text-muted-foreground">Ingreso total</Label>
+                                    <CurrencyInput value={overrideForm.productos_ingreso} onChange={v => setOverrideForm(f => ({ ...f, productos_ingreso: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs">Comisión profesionales</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.productos_comision_prof} onChange={e => setOverrideForm(f => ({ ...f, productos_comision_prof: Number(e.target.value) }))} />
+                                    <Label className="text-xs text-muted-foreground">Reinversión</Label>
+                                    <CurrencyInput value={overrideForm.productos_reinversion} onChange={v => setOverrideForm(f => ({ ...f, productos_reinversion: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs">Subtotal utilidad</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.productos_subtotal} onChange={e => setOverrideForm(f => ({ ...f, productos_subtotal: Number(e.target.value) }))} />
+                                    <Label className="text-xs text-muted-foreground">Comisión profesionales</Label>
+                                    <CurrencyInput value={overrideForm.productos_comision_prof} onChange={v => setOverrideForm(f => ({ ...f, productos_comision_prof: v }))} className="mt-1" />
                                 </div>
-                                <div className="col-span-2">
-                                    <Label className="text-xs">Utilidad neta</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.productos_utilidad} onChange={e => setOverrideForm(f => ({ ...f, productos_utilidad: Number(e.target.value) }))} />
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Subtotal utilidad</Label>
+                                    <CurrencyInput value={overrideForm.productos_subtotal} onChange={v => setOverrideForm(f => ({ ...f, productos_subtotal: v }))} className="mt-1" />
                                 </div>
-                            </div>
-                        </div>
+                                <div className="col-span-2 mt-2 p-3 bg-muted/50 rounded-lg">
+                                    <Label className="text-xs font-semibold">Utilidad neta (Productos)</Label>
+                                    <CurrencyInput value={overrideForm.productos_utilidad} onChange={v => setOverrideForm(f => ({ ...f, productos_utilidad: v }))} className="mt-1 font-bold" />
+                                </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Egresos */}
-                        <div className="space-y-3">
-                            <h4 className="font-semibold text-sm text-primary border-b pb-1">Egresos</h4>
+                        <Card className="border-border shadow-sm">
+                            <CardHeader className="py-3 bg-muted/30 border-b">
+                                <CardTitle className="text-sm font-semibold">Egresos y Comisiones</CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-4 space-y-6">
+                                <div className="p-4 border rounded-lg bg-background">
+                                    <Label className="text-sm font-semibold mb-3 block text-primary">Comisiones Servicios (por profesional)</Label>
+                                    <div className="space-y-3">
+                                        {overrideForm.egresos_comisiones_servicios.map((item, index) => (
+                                            <div key={index} className="flex items-center gap-3 bg-muted/40 p-2 rounded-md">
+                                                <Input
+                                                    placeholder="Nombre del profesional"
+                                                    value={item.nombre}
+                                                    onChange={e => updateComisionServicio(index, 'nombre', e.target.value)}
+                                                    className="flex-1 bg-background"
+                                                />
+                                                <CurrencyInput
+                                                    value={item.monto}
+                                                    onChange={v => updateComisionServicio(index, 'monto', v)}
+                                                    className="w-32 bg-background font-medium"
+                                                />
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => removeComisionServicio(index)}>
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        <Button variant="outline" size="sm" onClick={addComisionServicio} className="mt-2 w-full border-dashed">
+                                            <PlusCircle className="h-4 w-4 mr-2" /> Agregar profesional
+                                        </Button>
+                                    </div>
+                                </div>
 
-                            <div>
-                                <Label className="text-xs font-medium">Comisiones Servicios (por profesional)</Label>
-                                <div className="space-y-2 mt-2">
-                                    {overrideForm.egresos_comisiones_servicios.map((item, index) => (
-                                        <div key={index} className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="Nombre"
-                                                value={item.nombre}
-                                                onChange={e => updateComisionServicio(index, 'nombre', e.target.value)}
-                                                className="flex-1"
-                                            />
-                                            <Input
-                                                type="number"
-                                                step="0.01"
-                                                placeholder="Monto"
-                                                value={item.monto}
-                                                onChange={e => updateComisionServicio(index, 'monto', Number(e.target.value))}
-                                                className="w-32"
-                                            />
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeComisionServicio(index)}>
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                    <Button variant="outline" size="sm" onClick={addComisionServicio}>
-                                        <PlusCircle className="h-4 w-4 mr-1" /> Agregar profesional
-                                    </Button>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Comisiones Productos</Label>
+                                        <CurrencyInput value={overrideForm.egresos_comisiones_productos} onChange={v => setOverrideForm(f => ({ ...f, egresos_comisiones_productos: v }))} className="mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Nómina</Label>
+                                        <CurrencyInput value={overrideForm.egresos_nomina} onChange={v => setOverrideForm(f => ({ ...f, egresos_nomina: v }))} className="mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Insumos</Label>
+                                        <CurrencyInput value={overrideForm.egresos_insumos} onChange={v => setOverrideForm(f => ({ ...f, egresos_insumos: v }))} className="mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Costos fijos</Label>
+                                        <CurrencyInput value={overrideForm.egresos_costos_fijos} onChange={v => setOverrideForm(f => ({ ...f, egresos_costos_fijos: v }))} className="mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Propinas (Informativo)</Label>
+                                        <CurrencyInput value={overrideForm.egresos_propinas} onChange={v => setOverrideForm(f => ({ ...f, egresos_propinas: v }))} className="mt-1" />
+                                    </div>
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                    <Label className="text-xs">Comisiones Productos</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.egresos_comisiones_productos} onChange={e => setOverrideForm(f => ({ ...f, egresos_comisiones_productos: Number(e.target.value) }))} />
-                                </div>
-                                <div>
-                                    <Label className="text-xs">Nómina</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.egresos_nomina} onChange={e => setOverrideForm(f => ({ ...f, egresos_nomina: Number(e.target.value) }))} />
-                                </div>
-                                <div>
-                                    <Label className="text-xs">Costos fijos</Label>
-                                    <Input type="number" step="0.01" value={overrideForm.egresos_costos_fijos} onChange={e => setOverrideForm(f => ({ ...f, egresos_costos_fijos: Number(e.target.value) }))} />
-                                </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     </div>
 
                     <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -1558,6 +2000,29 @@ export default function FinanzasMensualesPage() {
                             {isSavingOverride ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                             Guardar datos
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={isEditingComment} onOpenChange={setIsEditingComment}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar comentario</DialogTitle>
+                        <DialogDescription>
+                            Actualiza el comentario para este movimiento de caja.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Label>Comentario</Label>
+                        <Input
+                            value={commentToEdit?.comment || ''}
+                            onChange={(e) => setCommentToEdit(prev => prev ? { ...prev, comment: e.target.value } : null)}
+                            placeholder="Escribe un comentario..."
+                            className="mt-2"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditingComment(false)}>Cancelar</Button>
+                        <Button onClick={handleSaveComment}>Guardar cambio</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -94,7 +94,13 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
             .reduce((sum, i) => sum + i.monto, 0);
 
         const egresosCash = liveEgresos
-            .filter(e => isAfterCut(e.fecha))
+            .filter(e => {
+                if (!isAfterCut(e.fecha)) return false;
+                if (e.source === 'finanzas') return false;
+                const financeConcepts = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet', 'Costos fijos', 'Nómina'];
+                if (financeConcepts.includes(e.concepto)) return false;
+                return true;
+            })
             .reduce((sum, e) => sum + e.monto, 0);
 
         return roundMoney(baseCash + salesCash + ingresosCash - egresosCash);

@@ -10,7 +10,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const { user } = useAuth();
     const pathname = usePathname();
 
-    const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos';
+    const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display';
     const isAuthPage = pathname === '/login';
     const isFullscreenPage = pathname === '/agenda/display';
 

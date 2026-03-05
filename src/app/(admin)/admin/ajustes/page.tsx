@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase-client';
 import { BluetoothPrinter } from '@/lib/printer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const customerFields = [
     { id: 'email', label: 'Email' },
@@ -28,6 +29,7 @@ interface AjustesSettings {
     // Printer Settings
     ticketPrinterEnabled: boolean;
     ticketPrinterDeviceName: string;
+    ticketFooterMessage: string;
 
     // Agenda Settings
     overlappingReservations: boolean;
@@ -48,6 +50,7 @@ export default function AjustesPage() {
         defaultValues: {
             ticketPrinterEnabled: false,
             ticketPrinterDeviceName: '',
+            ticketFooterMessage: '¡Gracias por su preferencia!',
             overlappingReservations: true,
             simultaneousReservations: true,
             resourceOverload: false,
@@ -87,6 +90,7 @@ export default function AjustesPage() {
                 form.reset({
                     ticketPrinterEnabled: pagosData.ticketPrinterEnabled ?? false,
                     ticketPrinterDeviceName: pagosData.ticketPrinterDeviceName || '',
+                    ticketFooterMessage: pagosData.ticketFooterMessage || '¡Gracias por su preferencia!',
 
                     overlappingReservations: agendaData.overlappingReservations ?? true,
                     simultaneousReservations: agendaData.simultaneousReservations ?? true,
@@ -166,6 +170,7 @@ export default function AjustesPage() {
             await setDoc(pagosRef, {
                 ticketPrinterEnabled: data.ticketPrinterEnabled,
                 ticketPrinterDeviceName: data.ticketPrinterDeviceName,
+                ticketFooterMessage: data.ticketFooterMessage || '¡Gracias por su preferencia!',
             }, { merge: true });
 
             // 2. Save Agenda Settings to 'configuracion/agenda'
@@ -261,6 +266,14 @@ export default function AjustesPage() {
                                         </CardContent>
                                     </Card>
                                 )}
+
+                                <div className="space-y-2 mt-2">
+                                    <Label>Mensaje de pie de página</Label>
+                                    <Controller name="ticketFooterMessage" control={form.control} render={({ field }) => (
+                                        <Textarea {...field} placeholder="¡Gracias por su preferencia!\nVisitanos de nuevo" />
+                                    )} />
+                                    <p className="text-xs text-muted-foreground">Este mensaje aparecerá al final de cada ticket impreso. Puedes usar la tecla <b>Enter</b> para agregar saltos de línea.</p>
+                                </div>
                             </div>
                         </AccordionContent>
                     </AccordionItem>

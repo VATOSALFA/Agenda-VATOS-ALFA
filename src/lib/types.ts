@@ -283,6 +283,10 @@ export interface Egreso {
     saleItemIds: { saleId: string; itemIndex: number }[];
     tipSaleIds: string[];
   };
+  comisionServicios?: number;
+  comisionProductos?: number;
+  propina?: number;
+  source?: string;
 }
 
 export interface IngresoManual {

@@ -13,6 +13,7 @@ import { useLocal } from '@/contexts/local-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAgendaEvents } from '@/components/agenda/use-agenda-events';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSearchParams } from 'next/navigation';
 import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservation, Local, TimeBlock, SaleItem, User as AppUser, Product, AgendaEvent } from '@/lib/types';
 
 interface EmpresaSettings {
@@ -65,8 +66,15 @@ export default function AgendaDisplayPage() {
         }, 30000); // Check every 30s
         return () => clearInterval(checkDay);
     }, [date]);
+
+    const searchParams = useSearchParams();
+    const urlLocalId = searchParams.get('local_id');
+
     const { selectedLocalId, setSelectedLocalId } = useLocal();
     const { user, db } = useAuth();
+
+    // Using URL local_id if present, otherwise context local_id
+    const effectiveLocalId = urlLocalId || selectedLocalId;
     const currentTime = useCurrentTime();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [hasScrolled, setHasScrolled] = useState(false);
@@ -82,17 +90,19 @@ export default function AgendaDisplayPage() {
 
     // Set local
     useEffect(() => {
-        if (user?.local_id) {
+        if (urlLocalId && urlLocalId !== selectedLocalId) {
+            setSelectedLocalId(urlLocalId);
+        } else if (user?.local_id) {
             if (selectedLocalId !== user.local_id) setSelectedLocalId(user.local_id);
-        } else if (!selectedLocalId && locales.length > 0) {
+        } else if (!effectiveLocalId && locales.length > 0) {
             setSelectedLocalId(locales[0].id);
         }
-    }, [locales, selectedLocalId, setSelectedLocalId, user]);
+    }, [urlLocalId, locales, selectedLocalId, setSelectedLocalId, user, effectiveLocalId]);
 
     const selectedLocal = useMemo(() => {
-        if (!selectedLocalId || locales.length === 0) return null;
-        return locales.find(l => l.id === selectedLocalId) || locales[0];
-    }, [selectedLocalId, locales]);
+        if (!effectiveLocalId || locales.length === 0) return null;
+        return locales.find(l => l.id === effectiveLocalId) || locales[0];
+    }, [effectiveLocalId, locales]);
 
     const slotDurationMinutes = 60;
 
@@ -125,24 +135,24 @@ export default function AgendaDisplayPage() {
 
     // Reservations query
     const reservationsQueryConstraint = useMemo(() => {
-        if (!selectedLocalId) return undefined;
+        if (!effectiveLocalId) return undefined;
         return [
             where('fecha', '==', format(date, 'yyyy-MM-dd')),
-            where('local_id', '==', selectedLocalId)
+            where('local_id', '==', effectiveLocalId)
         ];
-    }, [date, selectedLocalId]);
+    }, [date, effectiveLocalId]);
 
-    const reservationsQueryKey = useMemo(() => `display-reservations-${format(date, 'yyyy-MM-dd')}-${selectedLocalId}`, [date, selectedLocalId]);
-    const blocksQueryKey = useMemo(() => `display-blocks-${format(date, 'yyyy-MM-dd')}-${selectedLocalId}`, [date, selectedLocalId]);
+    const reservationsQueryKey = useMemo(() => `display-reservations-${format(date, 'yyyy-MM-dd')}-${effectiveLocalId}`, [date, effectiveLocalId]);
+    const blocksQueryKey = useMemo(() => `display-blocks-${format(date, 'yyyy-MM-dd')}-${effectiveLocalId}`, [date, effectiveLocalId]);
 
     const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
     const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
 
     const filteredProfessionals = useMemo(() => {
         return professionals
-            .filter(p => !p.deleted && p.local_id === selectedLocalId)
+            .filter(p => !p.deleted && p.local_id === effectiveLocalId)
             .sort((a, b) => (a.order || 0) - (b.order || 0));
-    }, [professionals, selectedLocalId]);
+    }, [professionals, effectiveLocalId]);
 
     const { eventsWithLayout } = useAgendaEvents(reservations, timeBlocks, clients, filteredProfessionals);
 
@@ -198,16 +208,8 @@ export default function AgendaDisplayPage() {
 
     const currentTimeFormatted = currentTime ? format(currentTime, 'HH:mm') : '';
 
-    if (!user) {
-        return (
-            <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
-                <p className="text-white text-2xl">Inicia sesión para ver la agenda</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-900 text-white overflow-hidden">
+        <div className="h-screen w-screen flex flex-col bg-muted/40 text-gray-900 overflow-hidden">
             {/* Header Bar */}
             <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200">
                 <div className="flex items-center gap-5">
@@ -236,18 +238,18 @@ export default function AgendaDisplayPage() {
             </div>
 
             {/* Professional Headers - Sticky */}
-            <div className="flex-shrink-0 grid gap-1 bg-slate-800/60 border-b border-slate-700/50 px-1"
+            <div className="flex-shrink-0 grid gap-1 bg-white border-b shadow-sm px-1"
                 style={{ gridTemplateColumns: `80px repeat(${filteredProfessionals.length}, minmax(180px, 1fr))` }}>
-                <div /> {/* Spacer for time column */}
+                <div className="border-r" /> {/* Spacer for time column */}
                 {filteredProfessionals.map(barber => (
                     <div key={barber.id} className="py-4 flex flex-col items-center justify-center">
-                        <Avatar className="h-[80px] w-[80px] rounded-xl ring-2 ring-slate-600">
+                        <Avatar className="h-[80px] w-[80px] rounded-xl ring-2 ring-primary/20">
                             <AvatarImage src={getProfessionalAvatar(barber)} alt={barber.name} />
-                            <AvatarFallback className="rounded-xl bg-slate-700 text-white text-lg">
+                            <AvatarFallback className="rounded-xl bg-primary/10 text-primary text-lg font-bold">
                                 {barber.name ? barber.name.substring(0, 2) : '??'}
                             </AvatarFallback>
                         </Avatar>
-                        <p className="font-semibold text-lg text-center mt-2 text-slate-200">{barber.name}</p>
+                        <p className="font-semibold text-lg text-center mt-2 text-gray-900">{barber.name}</p>
                     </div>
                 ))}
             </div>
@@ -257,11 +259,11 @@ export default function AgendaDisplayPage() {
                 <div className="grid gap-1 pb-8 px-1"
                     style={{ gridTemplateColumns: `80px repeat(${filteredProfessionals.length}, minmax(180px, 1fr))` }}>
                     {/* Time Column */}
-                    <div className="flex-shrink-0 sticky left-0 z-10">
+                    <div className="flex-shrink-0 sticky left-0 z-10 bg-muted/40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         <div className="flex flex-col">
                             {timeSlots.slice(0, -1).map((time, index) => (
-                                <div key={index} style={{ height: `${ROW_HEIGHT}px` }} className="border-b border-slate-700/30 flex items-center justify-center">
-                                    <span className="text-sm text-slate-400 font-semibold">{time}</span>
+                                <div key={index} style={{ height: `${ROW_HEIGHT}px` }} className="border-b border-r bg-muted/40 flex items-center justify-center">
+                                    <span className="text-sm text-muted-foreground font-semibold">{time}</span>
                                 </div>
                             ))}
                         </div>
@@ -314,7 +316,7 @@ export default function AgendaDisplayPage() {
                                     {/* Background cells */}
                                     <div className="flex flex-col">
                                         {timeSlots.slice(0, -1).map((time, index) => (
-                                            <div key={index} style={{ height: `${ROW_HEIGHT}px` }} className="bg-slate-800/40 border-b border-slate-700/30" />
+                                            <div key={index} style={{ height: `${ROW_HEIGHT}px` }} className="bg-white border-b border-r" />
                                         ))}
                                     </div>
 
@@ -331,9 +333,9 @@ export default function AgendaDisplayPage() {
                                         const top = minutesFromStart * pixelsPerMinute;
                                         const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
                                         return (
-                                            <div key={`nw-${i}`} className="absolute w-full bg-slate-900/60 flex items-center justify-center"
+                                            <div key={`nw-${i}`} className="absolute w-full bg-gray-100 flex items-center justify-center"
                                                 style={{ top: `${top}px`, height: `${height}px` }}>
-                                                <p className="text-xs text-slate-500 font-medium">Día no laboral</p>
+                                                <p className="text-xs text-gray-500 font-medium">Día no laboral</p>
                                             </div>
                                         );
                                     })}
@@ -344,9 +346,9 @@ export default function AgendaDisplayPage() {
                                         const top = minutesFromStart * pixelsPerMinute;
                                         const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
                                         return (
-                                            <div key={`pre-${i}`} className="absolute w-full bg-slate-900/50 flex items-center justify-center"
+                                            <div key={`pre-${i}`} className="absolute w-full bg-gray-100 flex items-center justify-center"
                                                 style={{ top: `${top}px`, height: `${height}px` }}>
-                                                <p className="text-xs text-slate-500 font-medium">No disponible</p>
+                                                <p className="text-xs text-gray-500 font-medium">No disponible</p>
                                             </div>
                                         );
                                     })}
@@ -357,9 +359,9 @@ export default function AgendaDisplayPage() {
                                         const top = minutesFromStart * pixelsPerMinute;
                                         const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
                                         return (
-                                            <div key={`post-${i}`} className="absolute w-full bg-slate-900/50 flex items-center justify-center"
+                                            <div key={`post-${i}`} className="absolute w-full bg-gray-100 flex items-center justify-center"
                                                 style={{ top: `${top}px`, height: `${height}px` }}>
-                                                <p className="text-xs text-slate-500 font-medium">No disponible</p>
+                                                <p className="text-xs text-gray-500 font-medium">No disponible</p>
                                             </div>
                                         );
                                     })}
@@ -370,9 +372,9 @@ export default function AgendaDisplayPage() {
                                         const top = minutesFromStart * pixelsPerMinute;
                                         const height = (seg.end - seg.start) * 60 * pixelsPerMinute;
                                         return (
-                                            <div key={`break-${i}`} className="absolute w-full bg-slate-700/40 flex items-center justify-center"
+                                            <div key={`break-${i}`} className="absolute w-full bg-gray-200/50 flex items-center justify-center"
                                                 style={{ top: `${top}px`, height: `${height}px` }}>
-                                                <p className="text-xs text-slate-500 font-medium">Descanso</p>
+                                                <p className="text-xs text-gray-500 font-medium">Descanso</p>
                                             </div>
                                         );
                                     })}
@@ -395,17 +397,11 @@ export default function AgendaDisplayPage() {
                                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 4px)`, left: `${event.layout.left}%` }}
                                             >
                                                 <div className="flex-grow overflow-hidden">
-                                                    <p className="font-bold text-sm truncate leading-tight">
+                                                    <p className="font-bold text-lg truncate leading-tight">
                                                         {event.type === 'appointment'
                                                             ? (event.customer?.nombre || 'Cliente')
                                                             : event.motivo}
                                                     </p>
-                                                    {event.type === 'appointment' && (
-                                                        <p className="text-xs opacity-75 truncate">
-                                                            {formatHour(event.start)} - {formatHour(event.end)}
-                                                            {event.items ? ` · ${event.items.map(i => i.nombre || i.servicio).join(', ')}` : ''}
-                                                        </p>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}

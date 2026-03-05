@@ -1071,7 +1071,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               Completa la información para registrar un nuevo cliente en el sistema.
             </DialogDescription>
           </DialogHeader>
-          <NewClientForm onFormSubmit={handleClientCreated} client={selectedClient} initialName={clientSearchTerm} />
+          {isClientModalOpen && (
+            <NewClientForm onFormSubmit={handleClientCreated} client={selectedClient} initialName={clientSearchTerm} />
+          )}
         </DialogContent>
       </Dialog>
     </>

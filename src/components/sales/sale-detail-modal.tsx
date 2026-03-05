@@ -20,7 +20,8 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { BluetoothPrinter } from '@/lib/printer';
 import { useToast } from '@/hooks/use-toast';
-import { functions, httpsCallable } from '@/lib/firebase-client';
+import { db, functions, httpsCallable } from '@/lib/firebase-client';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -111,6 +112,10 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 subtotal: (item.precio_unitario || 0) * item.cantidad
             }));
 
+            const pagosRef = doc(db, 'configuracion', 'pagos');
+            const pagosSnap = await getDoc(pagosRef);
+            const ticketFooterMessage = pagosSnap.exists() ? pagosSnap.data().ticketFooterMessage : undefined;
+
             const ticketData = {
                 storeName: localData?.name || empresa?.name || "VATOS ALFA",
                 storeAddress: localData?.address || empresa?.address || "",
@@ -121,7 +126,8 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 subtotal: subtotal,
                 anticipoPagado: (sale as any).anticipoPagado || 0, // In case we added it to Sale type or it's extra field
                 discount: discountAmount,
-                total: sale.total
+                total: sale.total,
+                footerMessage: ticketFooterMessage
             };
 
             await printer.print(printer.formatTicket(ticketData));

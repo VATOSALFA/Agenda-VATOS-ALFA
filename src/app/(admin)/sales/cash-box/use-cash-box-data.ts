@@ -4,7 +4,7 @@ import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay } from "date-fns";
 import { where, Timestamp, type QueryConstraint } from 'firebase/firestore';
 import { useFirestoreQuery } from "@/hooks/use-firestore";
-import type { Sale, Egreso, IngresoManual, Client, Profesional, Local } from "@/lib/types";
+import type { Sale, Egreso, IngresoManual, Client, Profesional, Local, User } from "@/lib/types";
 import { roundMoney } from '@/lib/utils';
 
 export interface CashBoxFilters {
@@ -79,8 +79,9 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
+    const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
 
-    const loading = salesLoading || egresosLoading || ingresosLoading || localesLoading || clientsLoading || professionalsLoading;
+    const loading = salesLoading || egresosLoading || ingresosLoading || localesLoading || clientsLoading || professionalsLoading || usersLoading;
 
     // 3. Filter in Memory (Local for Egresos/Ingresos if needed - though query constraints handles some, local filtering for egresos/ingresos was partly manual in original?)
     // Original code: egresos = activeFilters.localId === 'todos' ? allEgresos : allEgresos.filter...
@@ -92,6 +93,13 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
         let filtered = localId === 'todos'
             ? allEgresos
             : allEgresos.filter(e => e.local_id === localId);
+
+        filtered = filtered.filter(e => {
+            if (e.source === 'finanzas') return false;
+            const financeConcepts = ['Pago de renta', 'Insumos', 'Publicidad', 'Internet', 'Costos fijos', 'Nómina'];
+            if (financeConcepts.includes(e.concepto)) return false;
+            return true;
+        });
 
         return [...filtered].sort((a, b) => {
             const tA = a.fecha instanceof Timestamp ? a.fecha.toMillis() : 0;
@@ -119,9 +127,16 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     }, [clients, clientsLoading]);
 
     const professionalMap = useMemo(() => {
-        if (professionalsLoading) return new Map();
-        return new Map(professionals.map(p => [p.id, p.name]));
-    }, [professionals, professionalsLoading]);
+        if (professionalsLoading || usersLoading) return new Map();
+        const map = new Map<string, string>();
+        if (professionals) {
+            professionals.forEach(p => map.set(p.id, p.name));
+        }
+        if (users) {
+            users.forEach(u => map.set(u.id, u.name));
+        }
+        return map;
+    }, [professionals, users, professionalsLoading, usersLoading]);
 
     const localMap = useMemo(() => new Map(locales.map(l => [l.id, l.name])), [locales]);
 

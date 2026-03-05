@@ -378,7 +378,11 @@ export class BluetoothPrinter {
 
         receipt += "--------------------------------\n";
         receipt += ALIGN_CENTER;
-        receipt += this.removeAccents("¡Gracias por su preferencia!") + "\n";
+        const footerMsg = (data.footerMessage || "¡Gracias por su preferencia!").replace(/\\n/g, '\n');
+        const footerLines = footerMsg.split('\n');
+        for (const line of footerLines) {
+            receipt += this.removeAccents(line) + "\n";
+        }
         receipt += "--------------------------------\n";
         receipt += FEED;
 

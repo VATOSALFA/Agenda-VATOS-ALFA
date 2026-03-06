@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -40,14 +40,16 @@ export default function LandingPage() {
     const packageServices = sortedServices.filter((s: any) => packageCategoryIds.includes(s.category));
 
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const isPreview = searchParams.get('preview') === 'true';
     const { user, loading: authLoading } = useAuth();
 
     // Check if user is logged in to redirect to admin side
     useEffect(() => {
-        if (!authLoading && user) {
+        if (!authLoading && user && !isPreview) {
             router.push('/agenda');
         }
-    }, [user, authLoading, router]);
+    }, [user, authLoading, router, isPreview]);
 
     // Cart stored as array of Service IDs to allow multiples
     const [cart, setCart] = useState<string[]>([]);

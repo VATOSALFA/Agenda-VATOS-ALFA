@@ -611,7 +611,18 @@ export default function FinanzasMensualesPage() {
         // Add manual incomes from caja balance
         incomesManual.forEach(i => {
             const comentarios = i.comentarios?.toLowerCase() || '';
-            if (comentarios.includes('lo ingresó') || comentarios.includes('ajuste de caja')) {
+            const concepto = i.concepto?.toLowerCase() || '';
+
+            if (concepto.includes('lo ingresó') || concepto.includes('lo ingreso') || concepto.includes('ajuste de caja') ||
+                comentarios.includes('lo ingresó') || comentarios.includes('lo ingreso') || comentarios.includes('ajuste de caja')) {
+
+                let quien = 'Sistema';
+                if (concepto.includes('lo ingresó') || concepto.includes('lo ingreso')) {
+                    quien = i.concepto?.replace(/lo ingres[oó]\s*/i, '').trim() || 'Sistema';
+                } else if (comentarios.includes('lo ingresó') || comentarios.includes('lo ingreso')) {
+                    quien = i.comentarios?.replace(/lo ingres[oó]\s*/i, '').trim() || 'Sistema';
+                }
+
                 totalEntradas += i.monto;
                 movements.push({
                     id: i.id,
@@ -619,7 +630,7 @@ export default function FinanzasMensualesPage() {
                     fecha: i.fecha instanceof Timestamp ? i.fecha.toDate() : new Date(i.fecha),
                     tipo: 'Entrada (Balance)',
                     concepto: i.concepto,
-                    quien: 'Sistema',
+                    quien: quien,
                     monto: i.monto,
                     comentarios: i.comentarios,
                     color: 'text-slate-500' // Secundario (Slate)

@@ -258,7 +258,10 @@ export default function Header() {
                                   variant="outline"
                                   className="h-8 flex-1 text-xs"
                                   onClick={() => {
-                                    if (displayUrl) window.open(displayUrl, '_blank');
+                                    if (displayUrl) {
+                                      const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
+                                      window.open(previewUrl, '_blank');
+                                    }
                                   }}
                                 >
                                   <ExternalLink className="mr-2 h-3 w-3" />
@@ -675,7 +678,10 @@ export default function Header() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" className="w-full" onClick={() => {
-                      if (displayUrl) window.open(displayUrl, '_blank');
+                      if (displayUrl) {
+                        const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
+                        window.open(previewUrl, '_blank');
+                      }
                     }}>
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Ir a mi sitio web

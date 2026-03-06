@@ -46,7 +46,9 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'ver_ventas', label: 'Ver Menú Ventas' },
             { key: 'ver_ventas_facturadas', label: 'Ver Ventas Facturadas' },
             { key: 'ver_reporte_comisiones', label: 'Ver Reporte de Comisiones' },
-            { key: 'ver_propinas', label: 'Ver Propinas' },
+            { key: 'ver_mis_ventas', label: 'Ver Mis Ventas Facturadas (Staff)' },
+            { key: 'ver_mis_comisiones', label: 'Ver Mis Comisiones (Staff)' },
+            { key: 'ver_mis_propinas', label: 'Ver Mis Propinas (Staff)' },
         ],
         subCategories: [
             { title: 'Caja de Ventas', permissions: [{ key: 'ver_caja', label: 'Ver Caja de Ventas' }, { key: 'registrar_ventas', label: 'Registrar Ventas' }] },
@@ -141,7 +143,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
     {
         title: 'Staff',
         description: 'Profesional que puede ver su propia agenda y gestionar sus citas.',
-        permissions: ['ver_agenda', 'crear_reservas', 'editar_reservas', 'ver_productos', 'ver_inventario'],
+        permissions: ['ver_agenda', 'crear_reservas', 'editar_reservas', 'ver_productos', 'ver_inventario', 'ver_mis_ventas', 'ver_mis_comisiones', 'ver_mis_propinas', 'ver_ventas'],
     },
     {
         title: 'Staff (Sin edición)',

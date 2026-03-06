@@ -148,36 +148,39 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                 }
             });
 
-            // Handle Transfer Tip
+            // Handle Tip
             if (sale.propina && sale.propina > 0) {
-                const professionalsInSale = new Map<string, number>();
-                sale.items.forEach(i => {
-                    const pid = i.barbero_id;
-                    if (pid) {
-                        professionalsInSale.set(pid, (professionalsInSale.get(pid) || 0) + (i.subtotal || 0));
-                    }
-                });
+                const allSellersInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
+                const validProfessionalsIds = allSellersInSale.filter(id => id && professionalMap.has(id));
 
-                let topProfId = '';
-                let maxRev = -1;
-                professionalsInSale.forEach((rev, pid) => {
-                    if (rev > maxRev) {
-                        maxRev = rev;
-                        topProfId = pid;
-                    }
-                });
+                if (validProfessionalsIds.length > 0) {
+                    const tipPerProfessional = sale.propina / validProfessionalsIds.length;
 
-                const professional = professionalMap.get(topProfId);
-                if (professional && (activeFilters.professional === 'todos' || activeFilters.professional === professional.id)) {
-                    commissionRows.push({
-                        professionalId: professional.id,
-                        professionalName: professional.name,
-                        clientName: clientName,
-                        itemName: 'Propina (Transferencia)',
-                        itemType: 'propina',
-                        saleAmount: sale.propina,
-                        commissionAmount: sale.propina,
-                        commissionPercentage: 100
+                    const methodMap: Record<string, string> = {
+                        'mercadopago': 'Terminal (Mercado Pago)',
+                        'tarjeta': 'Tarjeta',
+                        'transferencia': 'Transferencia',
+                        'efectivo': 'Efectivo',
+                        'combinado': 'Combinado'
+                    };
+
+                    const mappedMethod = sale.metodo_pago ? (methodMap[sale.metodo_pago.toLowerCase()] || sale.metodo_pago) : 'Desconocido';
+                    const tipItemName = `Propina (${mappedMethod})`;
+
+                    validProfessionalsIds.forEach(profId => {
+                        const professional = professionalMap.get(profId);
+                        if (professional && (activeFilters.professional === 'todos' || activeFilters.professional === professional.id)) {
+                            commissionRows.push({
+                                professionalId: professional.id,
+                                professionalName: professional.name,
+                                clientName: clientName,
+                                itemName: tipItemName,
+                                itemType: 'propina',
+                                saleAmount: tipPerProfessional,
+                                commissionAmount: tipPerProfessional,
+                                commissionPercentage: 100
+                            });
+                        }
                     });
                 }
             }

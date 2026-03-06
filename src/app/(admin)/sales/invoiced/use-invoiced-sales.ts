@@ -10,6 +10,7 @@ export interface InvoicedSalesFilters {
     dateRange: DateRange | undefined;
     local: string;
     paymentMethod: string;
+    professional?: string;
 }
 
 export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: number) {
@@ -41,7 +42,14 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         const filtered = salesDataFromHook.filter(sale => {
             const localMatch = activeFilters.local === 'todos' || sale.local_id === activeFilters.local;
             const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || sale.metodo_pago === activeFilters.paymentMethod;
-            return localMatch && paymentMethodMatch;
+
+            // Professional Filter Logic
+            let professionalMatch = true;
+            if (activeFilters.professional && activeFilters.professional !== 'todos') {
+                professionalMatch = sale.items?.some(item => item.barbero_id === activeFilters.professional) || false;
+            }
+
+            return localMatch && paymentMethodMatch && professionalMatch;
         });
 
         return filtered.sort((a, b) => {
@@ -49,7 +57,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
             const dateB = b.fecha_hora_venta?.seconds ? new Date(b.fecha_hora_venta.seconds * 1000) : new Date(b.fecha_hora_venta);
             return dateB.getTime() - dateA.getTime();
         });
-    }, [salesDataFromHook, activeFilters.local, activeFilters.paymentMethod]);
+    }, [salesDataFromHook, activeFilters.local, activeFilters.paymentMethod, activeFilters.professional]);
 
     // 4. Populate Data (Join with Clients/Professionals)
     const clientMap = useMemo(() => {

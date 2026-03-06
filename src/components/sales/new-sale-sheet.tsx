@@ -967,7 +967,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 // Lógica de partición de propina si hay y si hay múltiples vendedores.
                 if (formData.propina && formData.propina > 0) {
-                    const uniqueBarberos = Array.from(new Set(itemsToSave.map(i => i.barbero_id).filter(id => id)));
+                    const allBarberos = Array.from(new Set(itemsToSave.map(i => i.barbero_id).filter(id => id)));
+                    const uniqueBarberos = allBarberos.filter(id => professionals?.some(p => p.id === id));
                     if (uniqueBarberos.length > 0) {
                         const propinaSplit = formData.propina / uniqueBarberos.length;
                         saleDataToSave.propina_detalles = uniqueBarberos.map(bId => ({

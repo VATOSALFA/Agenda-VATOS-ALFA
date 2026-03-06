@@ -112,14 +112,14 @@ export default function TipsPage() {
             .filter(sale => (sale.propina && Number(sale.propina) > 0))
             // B. Filtrar por Local ACTIVO
             .filter(sale => activeFilters.local === 'todos' || sale.local_id === activeFilters.local)
-            // C. Filtrar por Profesional ACTIVO
             .filter(sale => {
                 if (activeFilters.professional === 'todos') return true;
                 return sale.items?.some((item: any) => item.barbero_id === activeFilters.professional);
             })
             .map(sale => {
                 // D. Enriquecer datos...
-                const uniqueBarberIds = Array.from(new Set(sale.items?.map((i: any) => i.barbero_id).filter(Boolean)));
+                const allBarberIds = Array.from(new Set(sale.items?.map((i: any) => i.barbero_id).filter(Boolean)));
+                const uniqueBarberIds = allBarberIds.filter(id => professionals?.some(p => p.id === id));
                 const professionalNames = uniqueBarberIds.map((id: any) => {
                     const prof = professionals?.find(p => p.id === id);
                     return prof ? prof.name : 'Desconocido';

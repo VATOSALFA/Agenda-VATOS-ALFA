@@ -64,10 +64,12 @@ export default function InvoicedSalesPage() {
         dateRange: DateRange | undefined;
         local: string;
         paymentMethod: string;
+        professional?: string;
     }>({
         dateRange: undefined,
         local: 'todos',
-        paymentMethod: 'todos'
+        paymentMethod: 'todos',
+        professional: 'todos'
     });
     const { toast } = useToast();
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -124,9 +126,10 @@ export default function InvoicedSalesPage() {
 
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
-    const { sales: populatedSales, loading: salesLoading, salesData } = useInvoicedSales(activeFilters, queryKey);
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+
+    const { sales: populatedSales, loading: salesLoading, salesData } = useInvoicedSales(activeFilters, queryKey);
 
     const professionalOptions = useMemo(() => {
         return professionals?.map(p => ({ value: p.id, label: p.name })) || [];

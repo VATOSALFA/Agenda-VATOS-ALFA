@@ -96,7 +96,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
         sales.forEach(sale => {
             const saleTip = (sale as any).propina || 0;
-            const professionalsInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
+            const allSellersInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
+            const professionalsInSale = allSellersInSale.filter(id => id && professionalMap.has(id));
 
             // Distribute tip among professionals in the sale, only if tip is not paid
             if (saleTip > 0 && !(sale as any).tipPaid && professionalsInSale.length > 0) {

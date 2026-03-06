@@ -71,10 +71,11 @@ import { useNetworkStatus } from '@/hooks/use-network-status';
 
 
 const salesNavLinks = [
-  { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard, permission: 'ver_ventas_facturadas' },
-  { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign, permission: 'ver_reporte_comisiones' },
-  { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote, permission: 'ver_caja' },
-  { href: '/sales/tips', label: 'Propinas', icon: Gift, permission: 'ver_propinas' },
+  { href: '/sales/my-performance', label: 'Mi Rendimiento', icon: LineChart, permission: ['ver_mis_ventas', 'ver_mis_comisiones', 'ver_mis_propinas'] },
+  { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard, permission: ['ver_ventas_facturadas'] },
+  { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign, permission: ['ver_reporte_comisiones'] },
+  { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote, permission: ['ver_caja'] },
+  { href: '/sales/tips', label: 'Propinas', icon: Gift, permission: ['ver_propinas'] },
 ]
 
 const productsNavLinks = [
@@ -164,17 +165,39 @@ export default function Header() {
     return name.substring(0, 2).toUpperCase();
   }
 
-  const canSee = (permission: string) => {
+  const canSee = (permission: string | string[]) => {
     if (!user || !user.permissions) return false;
-    // Admin always has all permissions
-    if (user.role === 'Administrador general') return true;
+
+    // Admin always has all permissions EXCEPT FOR personal views unless explicitly granted
+    const isPersonalPermission = Array.isArray(permission)
+      ? permission.every(p => p.startsWith('ver_mis_'))
+      : permission.startsWith('ver_mis_');
+
+    if (user.role === 'Administrador general' && !isPersonalPermission) return true;
+
+    if (Array.isArray(permission)) {
+      return permission.some(p => user.permissions!.includes(p));
+    }
     return user.permissions.includes(permission);
   }
 
-  const canSeeAny = (permissions: (string | undefined)[]) => {
+  const canSeeAny = (permissions: (string | string[] | undefined)[]) => {
     if (!user || !user.permissions) return false;
-    if (user.role === 'Administrador general') return true;
-    return permissions.some(p => p && user.permissions!.includes(p));
+
+    // Check if ALL permissions being queried are personal
+    const allPersonal = permissions.every(p => {
+      if (!p) return true;
+      if (Array.isArray(p)) return p.every(singleP => singleP.startsWith('ver_mis_'));
+      return p.startsWith('ver_mis_');
+    });
+
+    if (user.role === 'Administrador general' && !allPersonal) return true;
+
+    return permissions.some(p => {
+      if (!p) return false;
+      if (Array.isArray(p)) return p.some(singleP => user.permissions!.includes(singleP));
+      return user.permissions!.includes(p);
+    });
   }
 
   const dispatchCustomEvent = (eventName: string) => {

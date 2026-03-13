@@ -92,6 +92,8 @@ export interface Reservation {
   anticipo_pagado?: number;
   deposit_payment_id?: string;
   professional_lock?: boolean;
+  whatsappConfirmationSent?: boolean;
+  whatsappReminderSent?: boolean;
 }
 
 export interface TimeBlock {

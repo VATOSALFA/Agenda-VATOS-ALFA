@@ -28,6 +28,8 @@ import {
   Trash2,
   Eye,
   Lock,
+  CheckCircle2,
+  MessageCircle,
 } from 'lucide-react';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
@@ -84,6 +86,7 @@ export function ReservationDetailModal({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>('¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._');
+  const [whatsappReminderTemplate, setWhatsappReminderTemplate] = useState<string>('¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_');
 
   const { toast } = useToast();
   const { db, user } = useAuth();
@@ -95,8 +98,10 @@ export function ReservationDetailModal({
   useEffect(() => {
     if (isOpen && db) {
       getDoc(doc(db, 'configuracion', 'whatsapp')).then(snap => {
-        if (snap.exists() && snap.data().whatsappMessageTemplate) {
-          setWhatsappTemplate(snap.data().whatsappMessageTemplate);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.whatsappMessageTemplate) setWhatsappTemplate(data.whatsappMessageTemplate);
+          if (data.whatsappReminderTemplate) setWhatsappReminderTemplate(data.whatsappReminderTemplate);
         }
       }).catch(console.error);
     }
@@ -284,6 +289,44 @@ export function ReservationDetailModal({
     return encodeURIComponent(message);
   };
 
+  const generateWhatsAppReminderMessage = () => {
+    if (!reservation.customer) return '';
+    let dateStr = reservation.fecha;
+    try {
+        dateStr = format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", { locale: es });
+        dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    } catch(e) {}
+    const local = locales?.find(l => l.id === reservation.local_id);
+    const locationStr = local ? `${local.name} (${local.address})` : 'VATOS ALFA Barber Shop';
+
+    const message = whatsappReminderTemplate
+        .replace(/{nombre}/g, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{fecha}/g, dateStr)
+        .replace(/{hora}/g, reservation.hora_inicio || '')
+        .replace(/{ubicacion}/g, locationStr);
+    
+    return encodeURIComponent(message);
+  };
+
+  const handleWhatsAppClick = async (type: 'confirmation' | 'reminder') => {
+    if (!reservation.customer?.telefono || !db) return;
+    const phone = reservation.customer.telefono.replace(/\D/g, '');
+    const formattedPhone = phone.length === 10 ? '52' + phone : phone;
+    
+    const message = type === 'confirmation' ? generateWhatsAppMessage() : generateWhatsAppReminderMessage();
+    
+    window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
+    
+    try {
+      await updateDoc(doc(db, 'reservas', reservation.id), {
+        [type === 'confirmation' ? 'whatsappConfirmationSent' : 'whatsappReminderSent']: true
+      });
+      toast({ title: 'Estado actualizado', description: 'Se marcó el mensaje como enviado.', variant: 'default' });
+    } catch(e) {
+      console.error("Error updating whatsapp status", e);
+    }
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -362,15 +405,40 @@ export function ReservationDetailModal({
                 <Phone className="w-4 h-4 text-muted-foreground" />
                 <span>{reservation.customer?.telefono || 'No registrado'}</span>
                 {reservation.customer?.telefono && (
-                    <a
-                      href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '').length === 10 ? '52' + reservation.customer.telefono.replace(/\D/g, '') : reservation.customer.telefono.replace(/\D/g, '')}?text=${generateWhatsAppMessage()}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-2 inline-flex items-center justify-center h-6 w-6 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-foreground"
-                      title="Enviar mensaje de confirmación por WhatsApp"
-                    >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></svg>
-                  </a>
+                  <div className="flex items-center gap-2 ml-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleWhatsAppClick('confirmation')}
+                            className={cn("inline-flex items-center justify-center p-1 rounded transition-colors text-foreground", reservation.whatsappConfirmationSent ? "bg-green-100 text-green-700 cursor-default" : "hover:bg-gray-100 dark:hover:bg-gray-800")}
+                            disabled={reservation.whatsappConfirmationSent}
+                          >
+                            {reservation.whatsappConfirmationSent ? <CheckCircle2 className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{reservation.whatsappConfirmationSent ? 'Confirmación ya enviada' : 'Enviar Confirmación (WhatsApp)'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleWhatsAppClick('reminder')}
+                            className={cn("inline-flex gap-1 items-center justify-center p-1 rounded transition-colors text-foreground", reservation.whatsappReminderSent ? "bg-blue-100 text-blue-700 cursor-default" : "hover:bg-gray-100 dark:hover:bg-gray-800")}
+                            disabled={reservation.whatsappReminderSent}
+                          >
+                            {reservation.whatsappReminderSent ? <CheckCircle2 className="w-5 h-5" /> : <Bell className="w-4 h-4 ml-1" />}
+                            {!reservation.whatsappReminderSent && <MessageCircle className="w-4 h-4" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{reservation.whatsappReminderSent ? 'Recordatorio ya enviado' : 'Enviar Recordatorio (WhatsApp)'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                 )}
               </div>
             </div>

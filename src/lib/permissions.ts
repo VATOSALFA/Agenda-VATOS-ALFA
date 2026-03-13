@@ -90,6 +90,8 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'ver_profesionales', label: 'Ver Profesionales' },
             { key: 'ver_servicios', label: 'Ver Servicios' },
             { key: 'ver_comisiones', label: 'Ver Comisiones' },
+            { key: 'ver_ajustes', label: 'Ver Ajustes Generales' },
+            { key: 'editar_mensajes_whatsapp', label: 'Editar Mensajes de WhatsApp' },
         ]
     },
 

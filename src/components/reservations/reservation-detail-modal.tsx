@@ -34,9 +34,9 @@ import { format, parse, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2 } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
@@ -82,6 +82,8 @@ export function ReservationDetailModal({
   const [isLoadingSale, setIsLoadingSale] = useState(false);
 
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  
+  const [whatsappTemplate, setWhatsappTemplate] = useState<string>('¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._');
 
   const { toast } = useToast();
   const { db, user } = useAuth();
@@ -89,6 +91,16 @@ export function ReservationDetailModal({
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
   const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
+
+  useEffect(() => {
+    if (isOpen && db) {
+      getDoc(doc(db, 'configuracion', 'whatsapp')).then(snap => {
+        if (snap.exists() && snap.data().whatsappMessageTemplate) {
+          setWhatsappTemplate(snap.data().whatsappMessageTemplate);
+        }
+      }).catch(console.error);
+    }
+  }, [isOpen, db]);
 
   if (!reservation) return null;
 
@@ -261,7 +273,13 @@ export function ReservationDetailModal({
     const local = locales?.find(l => l.id === reservation.local_id);
     const locationStr = local ? `${local.name} (${local.address})` : 'VATOS ALFA Barber Shop';
 
-    const message = `¡Hola *${formatClientName(reservation.customer.nombre, reservation.customer.apellido)}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* ${servicesText}\n📅 *Fecha:* ${dateStr}\n⏰ *Hora:* ${reservation.hora_inicio}\n👤 *Profesional:* ${reservation.professionalNames || 'N/A'}\n📍 *Ubicación:* ${locationStr}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._`;
+    const message = whatsappTemplate
+        .replace(/{nombre}/g, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{servicios}/g, servicesText)
+        .replace(/{fecha}/g, dateStr)
+        .replace(/{hora}/g, reservation.hora_inicio || '')
+        .replace(/{profesional}/g, reservation.professionalNames || 'N/A')
+        .replace(/{ubicacion}/g, locationStr);
     
     return encodeURIComponent(message);
   };

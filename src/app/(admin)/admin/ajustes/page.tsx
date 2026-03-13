@@ -16,6 +16,7 @@ import { BluetoothPrinter } from '@/lib/printer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 
 const customerFields = [
     { id: 'email', label: 'Email' },
@@ -36,7 +37,9 @@ interface AjustesSettings {
     simultaneousReservations: boolean;
     resourceOverload: boolean;
     customerFields: Record<string, { use: boolean; required: boolean }>;
-
+    // WhatsApp Settings
+    whatsappMessageTemplate: string;
+    
     // Advanced Features moved to /settings/features
 }
 
@@ -58,6 +61,7 @@ export default function AjustesPage() {
                 acc[field.id] = { use: true, required: ['phone'].includes(field.id) };
                 return acc;
             }, {} as Record<string, { use: boolean; required: boolean }>),
+            whatsappMessageTemplate: '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._',
             /* Moved to settings/features
             enableMarketing: false,
             enableLoyaltyPoints: false,
@@ -87,6 +91,11 @@ export default function AjustesPage() {
                 const featuresSnap = await getDoc(featuresRef);
                 const featuresData = featuresSnap.exists() ? featuresSnap.data() : {};
 
+                // 4. Fetch WhatsApp Settings
+                const whatsappRef = doc(db, 'configuracion', 'whatsapp');
+                const whatsappSnap = await getDoc(whatsappRef);
+                const whatsappData = whatsappSnap.exists() ? whatsappSnap.data() : {};
+
                 form.reset({
                     ticketPrinterEnabled: pagosData.ticketPrinterEnabled ?? false,
                     ticketPrinterDeviceName: pagosData.ticketPrinterDeviceName || '',
@@ -99,6 +108,7 @@ export default function AjustesPage() {
                         acc[field.id] = { use: true, required: ['phone'].includes(field.id) };
                         return acc;
                     }, {} as Record<string, { use: boolean; required: boolean }>),
+                    whatsappMessageTemplate: whatsappData.whatsappMessageTemplate || '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._',
 
                     /* Moved to settings/features
                     enableMarketing: featuresData.enableMarketing ?? false,
@@ -180,6 +190,12 @@ export default function AjustesPage() {
                 simultaneousReservations: data.simultaneousReservations,
                 resourceOverload: data.resourceOverload,
                 customerFields: data.customerFields
+            }, { merge: true });
+
+            // 3. Save WhatsApp Settings
+            const whatsappRef = doc(db, 'configuracion', 'whatsapp');
+            await setDoc(whatsappRef, {
+                whatsappMessageTemplate: data.whatsappMessageTemplate
             }, { merge: true });
 
             /* Moved to settings/features
@@ -273,6 +289,77 @@ export default function AjustesPage() {
                                         <Textarea {...field} placeholder="¡Gracias por su preferencia!\nVisitanos de nuevo" />
                                     )} />
                                     <p className="text-xs text-muted-foreground">Este mensaje aparecerá al final de cada ticket impreso. Puedes usar la tecla <b>Enter</b> para agregar saltos de línea.</p>
+                                </div>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+
+                    {/* MENSAJES DE WHATSAPP */}
+                    <AccordionItem value="whatsapp" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6 font-semibold text-base">Mensajes de WhatsApp</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-6">
+                            <p className="text-sm text-muted-foreground">
+                                Personaliza el mensaje predeterminado que se sugiere al intentar enviar una confirmación de cita por WhatsApp.
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-4">
+                                    <Label>Plantilla del mensaje</Label>
+                                    <Controller
+                                        name="whatsappMessageTemplate"
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <Textarea
+                                                {...field}
+                                                rows={10}
+                                                className="font-mono text-sm"
+                                            />
+                                        )}
+                                    />
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        <div className="text-xs font-semibold w-full mb-1">Variables disponibles:</div>
+                                        {['{nombre}', '{servicios}', '{fecha}', '{hora}', '{profesional}', '{ubicacion}'].map(tag => (
+                                            <Badge
+                                                key={tag}
+                                                variant="outline"
+                                                className="cursor-pointer hover:bg-secondary"
+                                                onClick={() => {
+                                                    const val = form.getValues('whatsappMessageTemplate') || '';
+                                                    form.setValue('whatsappMessageTemplate', val + tag);
+                                                }}
+                                            >
+                                                {tag}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Usa el formato de WhatsApp: *negrita*, _cursiva_, ~tachado~.
+                                    </p>
+                                </div>
+                                
+                                <div className="bg-[#e5ddd5] p-4 rounded-xl shadow-inner relative flex flex-col justify-end">
+                                    <div className="mb-2 text-center text-xs text-gray-500 font-semibold uppercase tracking-wider">Vista Previa</div>
+                                    <div className="bg-white p-3 rounded-tr-xl rounded-tl-xl rounded-bl-xl shadow flex flex-col max-w-[90%] self-end">
+                                        <div 
+                                            className="text-sm text-[#303030] whitespace-pre-wrap font-sans leading-snug"
+                                            dangerouslySetInnerHTML={{
+                                                __html: (form.watch('whatsappMessageTemplate') || '')
+                                                    .replace(/{nombre}/g, 'Juan Pérez')
+                                                    .replace(/{servicios}/g, 'Corte de Cabello')
+                                                    .replace(/{fecha}/g, 'Lunes, 12 de Octubre, 2026')
+                                                    .replace(/{hora}/g, '10:00 AM')
+                                                    .replace(/{profesional}/g, 'Carlos Barbero')
+                                                    .replace(/{ubicacion}/g, 'VATOS ALFA Barber Shop Suc1 (Av. Cerro Sombrerete 1001)')
+                                                    // Convert WhatsApp bold: *text* -> <b>text</b>
+                                                    .replace(/\*(.*?)\*/g, '<strong style="font-weight: 600;">$1</strong>')
+                                                    // Convert WhatsApp italic: _text_ -> <i>text</i>
+                                                    .replace(/_(.*?)_/g, '<em style="font-style: italic;">$1</em>')
+                                                    // Convert WhatsApp strikethrough: ~text~ -> <s>text</s>
+                                                    .replace(/~(.*?)~/g, '<del>$1</del>')
+                                            }}
+                                        />
+                                        <span className="text-[10px] text-gray-400 self-end mt-1 uppercase">12:00</span>
+                                    </div>
                                 </div>
                             </div>
                         </AccordionContent>

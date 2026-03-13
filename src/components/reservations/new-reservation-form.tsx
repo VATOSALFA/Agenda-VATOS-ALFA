@@ -338,23 +338,25 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
 
-      // Check for 'available' blocks (overrides schedule)
-      const hasAvailableBlock = allTimeBlocks.some(b =>
+      // Get all available blocks for this professional on this date
+      const availableBlocks = allTimeBlocks.filter(b => 
         b.barbero_id === item.barbero_id &&
         b.fecha === formattedDate &&
-        (b as any).type === 'available' &&
-        b.hora_inicio <= hora_inicio &&
-        b.hora_fin >= hora_fin
+        (b as any).type === 'available'
       );
+
+      // Helper function to check if a specific time range is fully covered by an available block
+      const isRangeCovered = (start: string, end: string) => {
+        if (start >= end) return true;
+        return availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin >= end);
+      };
 
       // Check for 'block' blocks (overrides schedule)
       const hasBlock = allTimeBlocks.some(b =>
         b.barbero_id === item.barbero_id &&
         b.fecha === formattedDate &&
         (b as any).type !== 'available' &&
-        ((hora_inicio >= b.hora_inicio && hora_inicio < b.hora_fin) ||
-          (hora_fin > b.hora_inicio && hora_fin <= b.hora_fin) ||
-          (hora_inicio <= b.hora_inicio && hora_fin >= b.hora_fin))
+        hora_inicio < b.hora_fin && hora_fin > b.hora_inicio
       );
 
       if (hasBlock) {
@@ -363,10 +365,28 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         return;
       }
 
-      if (!hasAvailableBlock && !agendaSettings?.resourceOverload && (!daySchedule || !daySchedule.enabled || hora_inicio < daySchedule.start || hora_fin > daySchedule.end)) {
-        errors[index] = `El profesional no está disponible en este horario.`;
-        allItemsValid = false;
-        return;
+      if (!agendaSettings?.resourceOverload) {
+        if (!daySchedule || !daySchedule.enabled) {
+          // If schedule is disabled, the entire reservation must be covered by a special schedule
+          if (!isRangeCovered(hora_inicio, hora_fin)) {
+            errors[index] = `El profesional no está disponible en este horario.`;
+            allItemsValid = false;
+            return;
+          }
+        } else {
+          // Check if any part before schedule start is uncovered
+          if (hora_inicio < daySchedule.start && !isRangeCovered(hora_inicio, hora_fin < daySchedule.start ? hora_fin : daySchedule.start)) {
+            errors[index] = `El profesional no está disponible en este horario.`;
+            allItemsValid = false;
+            return;
+          }
+          // Check if any part after schedule end is uncovered
+          if (hora_fin > daySchedule.end && !isRangeCovered(hora_inicio > daySchedule.end ? hora_inicio : daySchedule.end, hora_fin)) {
+            errors[index] = `El profesional no está disponible en este horario.`;
+            allItemsValid = false;
+            return;
+          }
+        }
       }
 
       if (!agendaSettings?.overlappingReservations) {
@@ -385,25 +405,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
 
       if (!agendaSettings?.resourceOverload) {
-        const blockConflict = allTimeBlocks.some(b => {
-          if (b.barbero_id !== item.barbero_id || b.fecha !== formattedDate) return false;
-          if ((b as any).type === 'available') return false;
-          return hora_inicio < b.hora_fin && hora_fin > b.hora_inicio;
-        });
-
-        if (blockConflict) {
-          errors[index] = `El profesional tiene un bloqueo en este horario.`;
-          allItemsValid = false;
-          return;
-        }
-
         // Check for breaks
         if (daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
           const breakConflict = daySchedule.breaks.some((brk: any) => {
-            return hora_inicio < brk.end && hora_fin > brk.start;
+            if (hora_inicio >= brk.end || hora_fin <= brk.start) return false; // No overlap
+
+            // Calculate exact overlap with this break
+            const overlapStart = hora_inicio > brk.start ? hora_inicio : brk.start;
+            const overlapEnd = hora_fin < brk.end ? hora_fin : brk.end;
+
+            // Is this overlap covered by a special schedule (available block)?
+            return !isRangeCovered(overlapStart, overlapEnd);
           });
 
-          if (breakConflict && !hasAvailableBlock) {
+          if (breakConflict) {
             errors[index] = `El profesional está en su horario de descanso.`;
             allItemsValid = false;
             return;

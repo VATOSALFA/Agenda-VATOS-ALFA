@@ -30,6 +30,7 @@ import {
   Lock,
   CheckCircle2,
   MessageCircle,
+  Send,
 } from 'lucide-react';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
@@ -424,12 +425,12 @@ export function ReservationDetailModal({
                         className={cn(
                           "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all text-xs font-semibold shadow-sm", 
                           reservation.whatsappConfirmationSent 
-                            ? "bg-green-100/80 text-green-700 border-green-200 border cursor-default" 
-                            : "bg-[#25D366] text-white hover:bg-[#20bd5a] hover:shadow"
+                            ? "bg-blue-100/80 text-blue-700 border-blue-200 border cursor-default" 
+                            : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow"
                         )}
                         disabled={reservation.whatsappConfirmationSent}
                       >
-                        {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Enviada</> : 'Enviar'}
+                        {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
                       </button>
                     </div>
 
@@ -448,7 +449,7 @@ export function ReservationDetailModal({
                         )}
                         disabled={reservation.whatsappReminderSent}
                       >
-                        {reservation.whatsappReminderSent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Enviado</> : <><Bell className="w-3 h-3" /> Enviar</>}
+                        {reservation.whatsappReminderSent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Enviado</> : <><Send className="w-3 h-3" /> Enviar</>}
                       </button>
                     </div>
                   </div>

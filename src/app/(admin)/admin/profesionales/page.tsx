@@ -103,42 +103,44 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
     <li
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       className={cn(
-        "flex flex-col sm:flex-row items-center justify-between p-4 bg-card hover:bg-muted/50 list-none cursor-grab active:cursor-grabbing touch-none gap-4",
-        isDragging && "shadow-xl ring-2 ring-primary ring-opacity-50 rounded-md bg-accent"
+        "flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-card hover:bg-muted/50 list-none gap-4 transition-colors",
+        isDragging ? "shadow-xl ring-2 ring-primary ring-opacity-50 rounded-md bg-accent z-20" : ""
       )}
     >
-      <div className="flex items-center gap-4 w-full sm:w-auto">
-        <div className="p-2">
-          <GripVertical className="h-5 w-5 text-muted-foreground" />
+      <div className="flex items-center gap-3 w-full md:w-auto">
+        <div 
+          {...attributes}
+          {...listeners}
+          className="p-2 -ml-2 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground shrink-0"
+        >
+          <GripVertical className="h-5 w-5" />
         </div>
-        <Avatar>
+        <Avatar className="h-10 w-10 shrink-0">
           <AvatarImage src={prof.avatarUrl} alt={prof.name} />
           <AvatarFallback>{prof.name ? prof.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
         </Avatar>
-        <span className="font-medium">{prof.name}</span>
+        <span className="font-medium truncate">{prof.name}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto justify-end">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:justify-end">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0">
               <Clock className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Ver horario</span>
+              <span>Ver horario</span>
             </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <div className="p-2 text-sm">
-              <div className="grid grid-cols-3 gap-x-4 gap-y-1 font-bold mb-2">
+          </PopoverTrigger>
+          <PopoverContent className="w-80" align="end">
+            <div className="p-1 px-2 text-sm">
+              <div className="grid grid-cols-3 gap-x-4 gap-y-1 font-bold mb-3 border-b pb-2">
                 <span>Día</span>
                 <span className="text-right">Apertura</span>
                 <span className="text-right">Cierre</span>
               </div>
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {daysOfWeek.map(day => (
                   <li key={day} className="grid grid-cols-3 gap-x-4 gap-y-1">
-                    <span className="capitalize">{day.substring(0, 3)}</span>
+                    <span className="capitalize text-muted-foreground">{day.substring(0, 3)}</span>
                     {prof.schedule && prof.schedule[day as keyof Schedule]?.enabled
                       ? <>
                         <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].start}</span>
@@ -150,8 +152,8 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
                 ))}
               </ul>
             </div>
-          </TooltipContent>
-        </Tooltip>
+          </PopoverContent>
+        </Popover>
 
         <Badge variant={prof.active ? 'default' : 'destructive'} className={cn(
           prof.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50',
@@ -162,7 +164,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </Badge>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" onPointerDown={(e) => e.stopPropagation()} className="shrink-0">
+            <Button variant="outline" size="sm" className="shrink-0">
               <span className="hidden sm:inline">Opciones</span> <ChevronDown className="ml-0 sm:ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -173,7 +175,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="sm" onClick={() => onEdit(prof)} onPointerDown={(e) => e.stopPropagation()} className="shrink-0">
+        <Button variant="outline" size="sm" onClick={() => onEdit(prof)} className="shrink-0">
           <Pencil className="mr-2 h-4 w-4" />
           <span className="hidden sm:inline">Editar</span>
         </Button>

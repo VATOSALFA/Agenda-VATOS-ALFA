@@ -241,7 +241,30 @@ export function ReservationDetailModal({
     }
   };
 
+  const generateWhatsAppMessage = () => {
+    if (!reservation.customer) return '';
+    
+    let servicesText = '';
+    if (reservation.items && reservation.items.length > 0) {
+      servicesText = reservation.items.map(i => i.nombre || i.servicio).join(', ');
+    } else {
+      servicesText = (reservation as any).servicio || 'Servicio';
+    }
 
+    let dateStr = reservation.fecha;
+    try {
+        dateStr = format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM, yyyy", { locale: es });
+        // Capitalize first letter of day
+        dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    } catch(e) {}
+
+    const local = locales?.find(l => l.id === reservation.local_id);
+    const locationStr = local ? `${local.name} (${local.address})` : 'VATOS ALFA Barber Shop';
+
+    const message = `¡Hola *${formatClientName(reservation.customer.nombre, reservation.customer.apellido)}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* ${servicesText}\n📅 *Fecha:* ${dateStr}\n⏰ *Hora:* ${reservation.hora_inicio}\n👤 *Profesional:* ${reservation.professionalNames || 'N/A'}\n📍 *Ubicación:* ${locationStr}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._`;
+    
+    return encodeURIComponent(message);
+  };
 
   return (
     <>
@@ -321,13 +344,13 @@ export function ReservationDetailModal({
                 <Phone className="w-4 h-4 text-muted-foreground" />
                 <span>{reservation.customer?.telefono || 'No registrado'}</span>
                 {reservation.customer?.telefono && (
-                  <a
-                    href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '').length === 10 ? '52' + reservation.customer.telefono.replace(/\D/g, '') : reservation.customer.telefono.replace(/\D/g, '')}?text=Hola+${formatClientName(reservation.customer.nombre, reservation.customer.apellido)},+te+escribimos+de+VATOS+ALFA...`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-2 inline-flex items-center justify-center h-6 w-6 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-foreground"
-                    title="Enviar mensaje de WhatsApp"
-                  >
+                    <a
+                      href={`https://wa.me/${reservation.customer.telefono.replace(/\D/g, '').length === 10 ? '52' + reservation.customer.telefono.replace(/\D/g, '') : reservation.customer.telefono.replace(/\D/g, '')}?text=${generateWhatsAppMessage()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 inline-flex items-center justify-center h-6 w-6 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-foreground"
+                      title="Enviar mensaje de confirmación por WhatsApp"
+                    >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></svg>
                   </a>
                 )}

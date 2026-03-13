@@ -49,6 +49,22 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             return { slots: [] }; // Day is closed
         }
 
+        // 1.0 Fetch Local Schedule to enforce bounds
+        let localData = null;
+        if (profData.local_id) {
+            const localDoc = await db.collection('locales').doc(profData.local_id).get();
+            if (localDoc.exists) localData = localDoc.data();
+        }
+        if (!localData) {
+            const locsSnap = await db.collection('locales').limit(1).get();
+            if (!locsSnap.empty) localData = locsSnap.docs[0].data();
+        }
+
+        const localScheduleDay = localData?.schedule?.[dayName];
+        if (!localScheduleDay || !localScheduleDay.enabled) {
+            return { slots: [] }; // Local is closed
+        }
+
         // Safe Time Parsing Helper
         const parseTimeSafe = (timeStr: any) => {
             if (!timeStr || typeof timeStr !== 'string') return null;
@@ -60,10 +76,26 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             return { h, m };
         };
 
-        const startT = parseTimeSafe(scheduleDay.start);
-        const endT = parseTimeSafe(scheduleDay.end);
+        const profStart = parseTimeSafe(scheduleDay.start);
+        const profEnd = parseTimeSafe(scheduleDay.end);
+        const localStart = parseTimeSafe(localScheduleDay.start);
+        const localEnd = parseTimeSafe(localScheduleDay.end);
 
-        if (!startT || !endT) return { slots: [] }; // Invalid schedule configuration
+        if (!profStart || !profEnd || !localStart || !localEnd) return { slots: [] }; // Invalid configuration
+
+        // Enforce boundaries
+        const pStartMins = profStart.h * 60 + profStart.m;
+        const pEndMins = profEnd.h * 60 + profEnd.m;
+        const lStartMins = localStart.h * 60 + localStart.m;
+        const lEndMins = localEnd.h * 60 + localEnd.m;
+
+        const effectiveStartMins = Math.max(pStartMins, lStartMins);
+        const effectiveEndMins = Math.min(pEndMins, lEndMins);
+
+        if (effectiveStartMins >= effectiveEndMins) return { slots: [] };
+
+        const startT = { h: Math.floor(effectiveStartMins / 60), m: effectiveStartMins % 60 };
+        const endT = { h: Math.floor(effectiveEndMins / 60), m: effectiveEndMins % 60 };
 
         // 1.1 Add Breaks to Busy Intervals
         const busyIntervals: { start: number, end: number }[] = [];
@@ -392,9 +424,34 @@ export async function createPublicReservation(data: any) {
 
         if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };
 
-        // Check working hours
-        if (startTimeStr < scheduleDay.start || endTimeStr > scheduleDay.end) {
-            return { error: 'La hora seleccionada está fuera del horario laboral.' };
+        // 1.2 Validate against local shop's hours
+        let localData = null;
+        if (data.locationId && data.locationId !== 'default') {
+            const localDoc = await db.collection('locales').doc(data.locationId).get();
+            if (localDoc.exists) localData = localDoc.data();
+        } else if (profData.local_id) {
+            const localDoc = await db.collection('locales').doc(profData.local_id).get();
+            if (localDoc.exists) localData = localDoc.data();
+        }
+        if (!localData) {
+            const locsSnap = await db.collection('locales').limit(1).get();
+            if (!locsSnap.empty) localData = locsSnap.docs[0].data();
+        }
+
+        const localScheduleDay = localData?.schedule?.[dayName];
+        if (!localScheduleDay || !localScheduleDay.enabled) return { error: 'La sucursal se encuentra cerrada este día.' };
+
+        const pStart = scheduleDay.start;
+        const pEnd = scheduleDay.end;
+        const lStart = localScheduleDay.start;
+        const lEnd = localScheduleDay.end;
+
+        const effectiveStart = pStart > lStart ? pStart : lStart;
+        const effectiveEnd = pEnd < lEnd ? pEnd : lEnd;
+
+        // Check working hours against unified bounds
+        if (startTimeStr < effectiveStart || endTimeStr > effectiveEnd) {
+            return { error: 'La hora seleccionada está fuera del horario laboral habilitado.' };
         }
 
         // Check Breaks

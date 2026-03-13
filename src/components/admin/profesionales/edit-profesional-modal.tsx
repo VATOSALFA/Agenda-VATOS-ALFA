@@ -118,49 +118,39 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     });
 
     const timeOptions = useMemo(() => {
-        if (!locales || locales.length === 0) {
-            // Fallback if local data is not available
-            return Array.from({ length: 48 }, (_, i) => {
-                const hour = Math.floor(i / 2);
-                const minute = i % 2 === 0 ? '00' : '30';
-                return `${String(hour).padStart(2, '0')}:${minute}`;
-            });
-        }
-        const scheduleSource = locales.find(l => l.id === form.watch('local_id'))?.schedule || defaultSchedule;
-
-        let minTime = 24 * 60;
-        let maxTime = 0;
-
-        const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
-        days.forEach(day => {
-            const daySchedule = scheduleSource[day as keyof Schedule];
-            if (daySchedule?.enabled) {
-                const [startH, startM] = daySchedule.start.split(':').map(Number);
-                const [endH, endM] = daySchedule.end.split(':').map(Number);
-
-                const startMins = startH * 60 + startM;
-                const endMins = endH * 60 + endM;
-
-                if (startMins < minTime) minTime = startMins;
-                if (endMins > maxTime) maxTime = endMins;
-            }
-        });
-
-        // Fallback if nothing enabled or invalid range
-        if (maxTime === 0 || minTime > maxTime) {
-            minTime = 8 * 60; // 08:00
-            maxTime = 22 * 60; // 22:00
-        }
-
         const options = [];
-        for (let t = minTime; t <= maxTime; t += 30) {
+        for (let t = 0; t < 24 * 60; t += 30) {
             const h = Math.floor(t / 60);
             const m = t % 60;
             options.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
         }
         return options;
-    }, [locales, form]);
+    }, []);
+
+    const getFilteredTimeOptions = useMemo(() => {
+        return (dayId: string) => {
+            if (!locales || locales.length === 0) return timeOptions;
+            const shopSchedule = locales.find(l => l.id === form.watch('local_id'))?.schedule || defaultSchedule;
+            const daySchedule = shopSchedule[dayId as keyof Schedule];
+
+            if (!daySchedule || !daySchedule.enabled) {
+                // Return no available times if shop is closed that day,
+                // or just default to 10 - 20 if we want a fallback.
+                return []; 
+            }
+
+            const [startH, startM] = daySchedule.start.split(':').map(Number);
+            const [endH, endM] = daySchedule.end.split(':').map(Number);
+            const minTime = startH * 60 + startM;
+            const maxTime = endH * 60 + endM;
+
+            return timeOptions.filter(time => {
+                const [h, m] = time.split(':').map(Number);
+                const tMins = h * 60 + m;
+                return tMins >= minTime && tMins <= maxTime;
+            });
+        };
+    }, [locales, form, timeOptions, defaultSchedule]);
 
     useEffect(() => {
         if (isOpen) {
@@ -534,7 +524,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                 <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
                                                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                                                     <SelectContent>
-                                                                        {timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
+                                                                        {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
                                                                     </SelectContent>
                                                                 </Select>
                                                             )}
@@ -546,7 +536,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                 <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
                                                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                                                     <SelectContent>
-                                                                        {timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
+                                                                        {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
                                                                     </SelectContent>
                                                                 </Select>
                                                             )}
@@ -572,7 +562,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                     <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
                                                                         <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                                                                         <SelectContent>
-                                                                            {timeOptions.map(time => <SelectItem key={`break-start-${time}`} value={time}>{time}</SelectItem>)}
+                                                                            {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-start-${time}`} value={time}>{time}</SelectItem>)}
                                                                         </SelectContent>
                                                                     </Select>
                                                                 )}
@@ -584,7 +574,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                     <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
                                                                         <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                                                                         <SelectContent>
-                                                                            {timeOptions.map(time => <SelectItem key={`break-end-${time}`} value={time}>{time}</SelectItem>)}
+                                                                            {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-end-${time}`} value={time}>{time}</SelectItem>)}
                                                                         </SelectContent>
                                                                     </Select>
                                                                 )}

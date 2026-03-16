@@ -3,7 +3,7 @@
 import { getDb } from '@/lib/firebase-server';
 import { addMinutes, format, set, parse, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 
 interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
@@ -732,6 +732,19 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
             subject: subject,
             html: html
         });
+        
+        // --- TRACK EMAIL STATUS ---
+        try {
+            if (reservation.id) {
+                await db.collection('reservas').doc(reservation.id).update({
+                    'notifications.email_confirmation_sent': true,
+                    'notifications.email_confirmation_sent_at': Timestamp.now()
+                });
+            }
+        } catch (updateError) {
+            console.error("Failed to track email status:", updateError);
+        }
+
         console.log(`[Email] Client confirmation sent to ${clientEmail}`);
     } else {
         console.log(`[Email] Skipping Client Email. Email: ${clientEmail}, Enabled: ${clientConfig.enabled}`);

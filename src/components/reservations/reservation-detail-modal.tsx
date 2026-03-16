@@ -407,9 +407,16 @@ export function ReservationDetailModal({
 
             <div className="space-y-3 pt-4 border-t">
               <h4 className="font-semibold">Información del Cliente</h4>
-              <div className="flex items-center gap-3">
-                <Mail className="w-4 h-4 text-muted-foreground" />
-                <span>{reservation.customer?.correo || 'No registrado'}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                  <span>{reservation.customer?.correo || 'No registrado'}</span>
+                </div>
+                {reservation.customer?.correo && reservation.notifications?.email_confirmation_sent && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] py-0 px-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-2.5 h-2.5" /> Correo enviado
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">

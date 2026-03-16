@@ -87,6 +87,8 @@ export interface Reservation {
     email_notification?: boolean;
     whatsapp_notification: boolean;
     whatsapp_reminder: boolean;
+    email_confirmation_sent?: boolean;
+    email_confirmation_sent_at?: Timestamp;
   };
   monto_pagado?: number;
   anticipo_pagado?: number;

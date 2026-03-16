@@ -337,9 +337,12 @@ export function ReservationDetailModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader className="p-6 flex-row justify-between items-center border-b">
-            <DialogTitle>Detalle de la Reserva</DialogTitle>
+        <DialogContent className="max-w-xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 flex-row justify-between items-center border-b flex-shrink-0 space-y-0">
+            <div className="flex flex-col gap-1">
+              <DialogTitle>Detalle de la Reserva</DialogTitle>
+              <DialogDescription>ID: {reservation.id}</DialogDescription>
+            </div>
             <div className="flex items-center gap-2">
               {onEdit && (
                 <Button variant="outline" size="sm" onClick={onEdit} disabled={reservation.pago_estado === 'Pagado'}>
@@ -352,7 +355,7 @@ export function ReservationDetailModal({
               </Button>
             </div>
           </DialogHeader>
-          <div className="p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <div className="flex justify-between items-start">
               <div>
                 <h4
@@ -425,10 +428,9 @@ export function ReservationDetailModal({
                         className={cn(
                           "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all text-xs font-semibold shadow-sm", 
                           reservation.whatsappConfirmationSent 
-                            ? "bg-blue-100/80 text-blue-700 border-blue-200 border cursor-default" 
+                            ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow" 
                             : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow"
                         )}
-                        disabled={reservation.whatsappConfirmationSent}
                       >
                         {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
                       </button>
@@ -444,10 +446,9 @@ export function ReservationDetailModal({
                         className={cn(
                           "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all text-xs font-semibold shadow-sm", 
                           reservation.whatsappReminderSent 
-                            ? "bg-blue-100/80 text-blue-700 border-blue-200 border cursor-default" 
+                            ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow" 
                             : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow"
                         )}
-                        disabled={reservation.whatsappReminderSent}
                       >
                         {reservation.whatsappReminderSent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Enviado</> : <><Send className="w-3 h-3" /> Enviar</>}
                       </button>
@@ -488,7 +489,7 @@ export function ReservationDetailModal({
               ))}
             </div>
           </div>
-          <DialogFooter className="p-6 border-t flex justify-between">
+          <DialogFooter className="p-6 border-t flex justify-between flex-shrink-0 mt-0">
             {reservation.estado !== 'Cancelado' && (
               <Button
                 variant="destructive"

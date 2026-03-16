@@ -291,6 +291,8 @@ export interface Egreso {
   comisionProductos?: number;
   propina?: number;
   source?: string;
+  quienPagaId?: string;
+  quienPagaNombre?: string;
 }
 
 export interface IngresoManual {

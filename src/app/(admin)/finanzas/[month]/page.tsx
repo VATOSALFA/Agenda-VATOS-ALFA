@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, ChevronLeft, ChevronRight, Edit, LineChart, TrendingUp, Save, Undo, MoreVertical, Search, CalendarDays, ExternalLink, HelpCircle, PlusCircle, ShoppingCart, Loader2, Trash2, DollarSign, FileEdit, X, ArrowUpDown, Minus } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Edit, LineChart, TrendingUp, Save, Undo, MoreVertical, Search, CalendarDays, ExternalLink, HelpCircle, PlusCircle, ShoppingCart, Loader2, Trash2, DollarSign, FileEdit, X, ArrowUpDown, Minus, UserCircle, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -309,6 +309,8 @@ export default function FinanzasMensualesPage() {
 
     const [isIngresosCollapsed, setIsIngresosCollapsed] = useState(true);
     const [isEgresosCollapsed, setIsEgresosCollapsed] = useState(true);
+    const [isMovementsCollapsed, setIsMovementsCollapsed] = useState(false);
+    const [isAdminBalanceCollapsed, setIsAdminBalanceCollapsed] = useState(false);
     const [isEditingComment, setIsEditingComment] = useState(false);
     const [commentToEdit, setCommentToEdit] = useState<{ id: string, type: 'egreso' | 'ingreso', comment: string } | null>(null);
 
@@ -549,19 +551,47 @@ export default function FinanzasMensualesPage() {
                 }
                 return true;
             })
-            .map(e => ({
-                ...e,
-                fecha: e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha)
-            }));
+            .map(e => {
+                const fechaRaw = e.fecha instanceof Timestamp ? e.fecha.toDate() : new Date(e.fecha);
+                let comS = e.comisionServicios || 0;
+                let comP = e.comisionProductos || 0;
+                let prop = e.propina || 0;
+                let commentClean = e.comentarios || '';
 
-        return manualEgresos.sort((a, b) => {
+                if (!comS && !comP && !prop && commentClean) {
+                    const matchS = commentClean.match(/Comisión Servicios: \$([0-9.,]+)/);
+                    const matchP = commentClean.match(/Comisión Productos: \$([0-9.,]+)/);
+                    const matchT = commentClean.match(/Propina: \$([0-9.,]+)/);
+                    const parseAmt = (val: string) => {
+                        let c = val.replace(/[^0-9.,]/g, '');
+                        if (c.match(/,\d{1,2}$/)) c = c.replace(/(.*),(.*)/, '$1.$2');
+                        return parseFloat(c.replace(/,/g, '')) || 0;
+                    };
+                    if (matchS) comS = parseAmt(matchS[1]);
+                    if (matchP) comP = parseAmt(matchP[1]);
+                    if (matchT) prop = parseAmt(matchT[1]);
+
+                    if (matchS || matchP || matchT) {
+                        commentClean = 'Auto Pago (Sistema)';
+                    }
+                }
+
+                return {
+                    ...e,
+                    fecha: fechaRaw,
+                    displayComS: comS,
+                    displayComP: comP,
+                    displayProp: prop,
+                    displayComment: commentClean
+                };
+            });
+
+        return manualEgresos.sort((a: any, b: any) => {
             const { key, direction } = egresosSortConfig;
             const dir = direction === 'asc' ? 1 : -1;
 
             if (key === 'fecha') {
-                const dateA = a.fecha instanceof Date ? a.fecha : new Date();
-                const dateB = b.fecha instanceof Date ? b.fecha : new Date();
-                return (dateA.getTime() - dateB.getTime()) * dir;
+                return (a.fecha.getTime() - b.fecha.getTime()) * dir;
             } else if (key === 'monto') {
                 return (a.monto - b.monto) * dir;
             } else if (key === 'concepto') {
@@ -575,6 +605,16 @@ export default function FinanzasMensualesPage() {
                     return id || '';
                 };
                 return getName(a.aQuien).localeCompare(getName(b.aQuien)) * dir;
+            } else if (key === 'comisionServicios') {
+                return (a.displayComS - b.displayComS) * dir;
+            } else if (key === 'comisionProductos') {
+                return (a.displayComP - b.displayComP) * dir;
+            } else if (key === 'propina') {
+                return (a.displayProp - b.displayProp) * dir;
+            } else if (key === 'comentarios') {
+                return (a.displayComment || '').localeCompare(b.displayComment || '') * dir;
+            } else if (key === 'quienPagaNombre') {
+                return (a.quienPagaNombre || '').localeCompare(b.quienPagaNombre || '') * dir;
             }
             return 0;
         });
@@ -601,6 +641,7 @@ export default function FinanzasMensualesPage() {
                     tipo: 'Salida (Entrega)',
                     concepto: e.concepto,
                     quien: e.aQuien,
+                    quienPaga: e.quienPagaNombre || 'No esp.',
                     monto: e.monto,
                     comentarios: e.comentarios,
                     color: 'text-primary' // Aceto (Blue)
@@ -631,6 +672,7 @@ export default function FinanzasMensualesPage() {
                     tipo: 'Entrada (Balance)',
                     concepto: i.concepto,
                     quien: quien,
+                    quienPaga: 'Sistema',
                     monto: i.monto,
                     comentarios: i.comentarios,
                     color: 'text-slate-500' // Secundario (Slate)
@@ -648,6 +690,14 @@ export default function FinanzasMensualesPage() {
                 return (a.monto - b.monto) * dir;
             } else if (key === 'tipo') {
                 return a.tipo.localeCompare(b.tipo) * dir;
+            } else if (key === 'concepto') {
+                return (a.concepto || '').localeCompare(b.concepto || '') * dir;
+            } else if (key === 'quien') {
+                return (a.quien || '').localeCompare(b.quien || '') * dir;
+            } else if (key === 'quienPaga') {
+                return (a.quienPaga || '').localeCompare(b.quienPaga || '') * dir;
+            } else if (key === 'comentarios') {
+                return (a.comentarios || '').localeCompare(b.comentarios || '') * dir;
             }
             return 0;
         });
@@ -670,6 +720,23 @@ export default function FinanzasMensualesPage() {
     }, [cashMovements, cashMovementsPage, cashMovementsPerPage]);
 
     const totalCashMovementsPages = Math.ceil(cashMovements.length / cashMovementsPerPage);
+
+    const adminSummaryData = useMemo(() => {
+        const localAdminIds = users?.filter(u => u.role === 'Administrador local').map(u => u.id) || [];
+        
+        const egresosAdmin = calculatedEgresos
+            .filter(e => e.quienPagaId && localAdminIds.includes(e.quienPagaId))
+            .reduce((sum, e) => sum + e.monto, 0);
+
+        const resultado = totalSalidas - totalEntradas - egresosAdmin;
+        
+        return {
+            totalSalidas,
+            totalEntradas,
+            egresosAdmin,
+            resultado
+        };
+    }, [calculatedEgresos, totalSalidas, totalEntradas, users]);
 
     const handleSaveComment = async () => {
         if (!commentToEdit) return;
@@ -1396,6 +1463,142 @@ export default function FinanzasMensualesPage() {
                     </Card>
                 </div>
 
+                {/* Tabla de Cálculo de Administradora Local */}
+                <Card className="my-8 overflow-hidden border-2 border-slate-200">
+                    <CardHeader 
+                        className="bg-slate-50/80 py-3 border-b cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setIsAdminBalanceCollapsed(!isAdminBalanceCollapsed)}
+                    >
+                        <CardTitle className="text-base flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <UserCircle className="h-5 w-5 text-primary" />
+                                Balance de Administradora Local
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider hidden sm:inline">Resumen Mensual de Efectivo</span>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    {isAdminBalanceCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+                                </Button>
+                            </div>
+                        </CardTitle>
+                    </CardHeader>
+                    {!isAdminBalanceCollapsed && (
+                        <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-slate-50/30 hover:bg-slate-50/30">
+                                    <TableHead className="text-center py-4">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Total Salidas Flow
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Efectivo total que ha salido de la caja según los movimientos informativos (lo que la administradora se lleva).</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-primary flex items-center gap-1 font-bold">
+                                                <ArrowUpRight className="h-3 w-3" /> Efectivo Retirado
+                                            </span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Total Entradas Flow
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Efectivo total que la administradora ha ingresado a la caja para cuadrar faltantes.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-slate-500 flex items-center gap-1 font-bold">
+                                                <ArrowDownLeft className="h-3 w-3" /> Efectivo Ingresado
+                                            </span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Egresos Pagados
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Gastos operativos o de insumos que la administradora pagó de su bolsillo o del efectivo retirado.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-slate-600 font-bold">Insumos / Otros</span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l bg-slate-100/50">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Estado de Cuenta
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Cálculo final: Salidas - Entradas - Egresos pagados. Determina si sobra dinero o si hay un adeudo.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-foreground font-bold">Resultado Final</span>
+                                        </div>
+                                    </TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell className="text-center py-6">
+                                        <span className="text-2xl font-bold text-primary">
+                                            ${adminSummaryData.totalSalidas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-center py-6 border-l">
+                                        <span className="text-2xl font-bold text-slate-500">
+                                            ${adminSummaryData.totalEntradas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-center py-6 border-l">
+                                        <span className="text-2xl font-bold text-slate-600">
+                                            ${adminSummaryData.egresosAdmin.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className={cn("text-center py-6 border-l bg-slate-100/30", adminSummaryData.resultado >= 0 ? "bg-green-50/30" : "bg-blue-50/30")}>
+                                        <div className="flex flex-col items-center">
+                                            <span className={cn("text-3xl font-black", adminSummaryData.resultado >= 0 ? "text-green-600" : "text-primary")}>
+                                                ${adminSummaryData.resultado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                            </span>
+                                            <span className="text-[10px] mt-1 font-bold uppercase">
+                                                {adminSummaryData.resultado >= 0 ? "A Favor Administrador Gral" : "A Favor Administradora Local"}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                    )}
+                </Card>
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <Card className="lg:col-span-5">
                         <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsIngresosCollapsed(!isIngresosCollapsed)}>
@@ -1553,10 +1756,31 @@ export default function FinanzasMensualesPage() {
                                                     A quién se entrega {egresosSortConfig.key === 'aQuien' && <ArrowUpDown className="h-4 w-4" />}
                                                 </Button>
                                             </TableHead>
-                                            <TableHead>Com. Servicio</TableHead>
-                                            <TableHead>Com. Producto</TableHead>
-                                            <TableHead>Propina</TableHead>
-                                            <TableHead>Comentarios</TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('comisionServicios')}>
+                                                    Com. Servicio {egresosSortConfig.key === 'comisionServicios' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('comisionProductos')}>
+                                                    Com. Producto {egresosSortConfig.key === 'comisionProductos' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('propina')}>
+                                                    Propina {egresosSortConfig.key === 'propina' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('comentarios')}>
+                                                    Comentarios {egresosSortConfig.key === 'comentarios' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
+                                            <TableHead>
+                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('quienPagaNombre')}>
+                                                    Pagado por {egresosSortConfig.key === 'quienPagaNombre' && <ArrowUpDown className="h-4 w-4" />}
+                                                </Button>
+                                            </TableHead>
                                             <TableHead>
                                                 <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('monto')}>
                                                     Total {egresosSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
@@ -1571,29 +1795,11 @@ export default function FinanzasMensualesPage() {
                                         ) : calculatedEgresos.length === 0 ? (
                                             <TableRow><TableCell colSpan={9} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
                                         ) : (
-                                            paginatedEgresos.map((egreso) => {
-                                                let comS = egreso.comisionServicios || 0;
-                                                let comP = egreso.comisionProductos || 0;
-                                                let prop = egreso.propina || 0;
-                                                let commentClean = egreso.comentarios || '';
-
-                                                if (!comS && !comP && !prop && commentClean) {
-                                                    const matchS = commentClean.match(/Comisión Servicios: \$([0-9.,]+)/);
-                                                    const matchP = commentClean.match(/Comisión Productos: \$([0-9.,]+)/);
-                                                    const matchT = commentClean.match(/Propina: \$([0-9.,]+)/);
-                                                    const parseAmt = (val: string) => {
-                                                        let c = val.replace(/[^0-9.,]/g, '');
-                                                        if (c.match(/,\d{1,2}$/)) c = c.replace(/(.*),(.*)/, '$1.$2');
-                                                        return parseFloat(c.replace(/,/g, '')) || 0;
-                                                    };
-                                                    if (matchS) comS = parseAmt(matchS[1]);
-                                                    if (matchP) comP = parseAmt(matchP[1]);
-                                                    if (matchT) prop = parseAmt(matchT[1]);
-
-                                                    if (matchS || matchP || matchT) {
-                                                        commentClean = 'Auto Pago (Sistema)';
-                                                    }
-                                                }
+                                            paginatedEgresos.map((egreso: any) => {
+                                                const comS = egreso.displayComS;
+                                                const comP = egreso.displayComP;
+                                                const prop = egreso.displayProp;
+                                                const commentClean = egreso.displayComment;
 
                                                 return (
                                                     <TableRow key={egreso.id}>
@@ -1604,6 +1810,7 @@ export default function FinanzasMensualesPage() {
                                                         <TableCell className="font-medium text-muted-foreground">{comP > 0 ? `$${comP.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
                                                         <TableCell className="font-medium text-muted-foreground">{prop > 0 ? `$${prop.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
                                                         <TableCell>{commentClean}</TableCell>
+                                                        <TableCell className="text-xs font-medium text-muted-foreground">{egreso.quienPagaNombre || '-'}</TableCell>
                                                         <TableCell className="font-extrabold text-primary">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                         <TableCell className="text-right">
                                                             {!egreso.id.startsWith('comm-') && (
@@ -1670,7 +1877,7 @@ export default function FinanzasMensualesPage() {
 
                 <div className="mt-8">
                     <Card>
-                        <CardHeader>
+                        <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsMovementsCollapsed(!isMovementsCollapsed)}>
                             <div className="flex items-center justify-between">
                                 <CardTitle className="flex items-center gap-2">
                                     <DollarSign className="h-5 w-5 text-primary" />
@@ -1689,7 +1896,7 @@ export default function FinanzasMensualesPage() {
                                         </Tooltip>
                                     </TooltipProvider>
                                 </CardTitle>
-                                <div className="flex gap-4">
+                                <div className="flex items-center gap-6">
                                     <div className="text-right">
                                         <p className="text-xs text-muted-foreground">Total Entradas</p>
                                         <p className="text-sm font-bold text-slate-500">${totalEntradas.toLocaleString('es-MX')}</p>
@@ -1698,10 +1905,14 @@ export default function FinanzasMensualesPage() {
                                         <p className="text-xs text-muted-foreground">Total Salidas</p>
                                         <p className="text-sm font-bold text-primary">${totalSalidas.toLocaleString('es-MX')}</p>
                                     </div>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                        {isMovementsCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+                                    </Button>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
+                        {!isMovementsCollapsed && (
+                            <CardContent>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -1715,29 +1926,47 @@ export default function FinanzasMensualesPage() {
                                                 Tipo {cashMovementsSortConfig.key === 'tipo' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
-                                        <TableHead>Concepto</TableHead>
-                                        <TableHead>Responsable / Destino</TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('concepto')}>
+                                                Concepto {cashMovementsSortConfig.key === 'concepto' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('quien')}>
+                                                Responsable / Destino {cashMovementsSortConfig.key === 'quien' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('quienPaga')}>
+                                                Pagado por {cashMovementsSortConfig.key === 'quienPaga' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
                                         <TableHead>
                                             <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('monto')}>
                                                 Monto {cashMovementsSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
-                                        <TableHead>Comentarios</TableHead>
+                                        <TableHead>
+                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('comentarios')}>
+                                                Comentarios {cashMovementsSortConfig.key === 'comentarios' && <ArrowUpDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableHead>
                                         <TableHead className="text-right w-[80px]">Opciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {egresosLoading || incomesManualLoading ? (
-                                        <TableRow><TableCell colSpan={7} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={8} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                     ) : cashMovements.length === 0 ? (
-                                        <TableRow><TableCell colSpan={7} className="text-center h-24">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={8} className="text-center h-24">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
                                     ) : (
                                         paginatedCashMovements.map((mov) => (
                                             <TableRow key={mov.id}>
                                                 <TableCell>{safeFormatDate(mov.fecha)}</TableCell>
                                                 <TableCell className="font-medium">{mov.tipo}</TableCell>
                                                 <TableCell>{mov.concepto}</TableCell>
-                                                <TableCell>{getNameFromId(mov.quien)}</TableCell>
+                                                <TableCell>{mov.quien}</TableCell>
+                                                <TableCell className="text-muted-foreground text-xs">{mov.quienPaga}</TableCell>
                                                 <TableCell className={cn("font-bold", mov.color)}>${mov.monto.toLocaleString('es-MX')}</TableCell>
                                                 <TableCell className="text-muted-foreground text-xs italic">{mov.comentarios || 'Sin comentario'}</TableCell>
                                                 <TableCell className="text-right">
@@ -1795,6 +2024,7 @@ export default function FinanzasMensualesPage() {
                                 </div>
                             )}
                         </CardContent>
+                        )}
                     </Card>
                 </div>
             </div>

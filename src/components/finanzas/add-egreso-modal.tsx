@@ -52,6 +52,7 @@ const egresoSchema = z.object({
     comisionServicios: z.coerce.number().optional(),
     comisionProductos: z.coerce.number().optional(),
     propina: z.coerce.number().optional(),
+    quienPagaId: z.string().min(1, 'Debes seleccionar quién realiza el pago.'),
 }).refine(data => {
     if (data.concepto === 'Otro') {
         return data.concepto_otro && data.concepto_otro.trim().length > 0;
@@ -116,6 +117,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
             comisionServicios: 0,
             comisionProductos: 0,
             propina: 0,
+            quienPagaId: '',
         },
     });
 
@@ -145,16 +147,13 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
             { id: 'otro', name: 'Otro', role: 'Categoría general' }
         ];
 
-        if (isAdmin) return [...filteredUsers, ...generic] as any[];
+        return [...filteredUsers, ...generic] as any[];
+    }, [users, localSeleccionadoId, usersLoading]);
 
-        const adminUsers = filteredUsers.filter(u =>
-            (u.role === 'Administrador general') ||
-            (u.role === 'Administrador local' && u.local_id === localSeleccionadoId)
-        );
-
-        return [...adminUsers, ...generic] as any[];
-
-    }, [isAdmin, users, localSeleccionadoId, usersLoading]);
+    const adminsDisponibles = useMemo(() => {
+        if (usersLoading || !users) return [];
+        return users.filter(u => u.role === 'Administrador general' || u.role === 'Administrador local');
+    }, [users, usersLoading]);
 
     useEffect(() => {
         const subscription = form.watch((value, { name }) => {
@@ -228,7 +227,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
                     comentarios: cleanComment,
                     comisionServicios: parsedComServ || 0,
                     comisionProductos: parsedComProd || 0,
-                    propina: parsedProp || 0
+                    propina: parsedProp || 0,
+                    quienPagaId: egreso.quienPagaId || (isAdmin ? user?.uid : '') || ''
                 });
             } else {
                 form.reset({
@@ -242,6 +242,7 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
                     comisionServicios: 0,
                     comisionProductos: 0,
                     propina: 0,
+                    quienPagaId: isAdmin ? user?.uid : '',
                 });
             }
         }
@@ -266,6 +267,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
             comentarios: data.comentarios,
             persona_entrega_id: user?.uid,
             persona_entrega_nombre: user?.displayName,
+            quienPagaId: data.quienPagaId,
+            quienPagaNombre: adminsDisponibles.find(a => a.id === data.quienPagaId)?.name || 'Desconocido',
             source,
             ...(isEditMode && egreso?.commission_payment_details ? { commission_payment_details: egreso.commission_payment_details } : {})
         };
@@ -504,6 +507,32 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
                                     />
                                 </div>
                             )}
+
+                            {/* Fila 4.5: Quién paga */}
+                            <FormField
+                                control={form.control}
+                                name="quienPagaId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Quién paga (Admin)</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading || !isAdmin}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecciona quién autoriza/paga" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {adminsDisponibles.map(admin => (
+                                                    <SelectItem key={admin.id} value={admin.id}>
+                                                        {admin.name} <span className="text-muted-foreground text-xs">({admin.role === 'Administrador general' ? 'Admin General' : 'Admin Local'})</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
                             {/* Fila 5: Comentarios */}
                             <FormField

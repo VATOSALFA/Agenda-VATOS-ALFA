@@ -52,7 +52,7 @@ const egresoSchema = z.object({
     comisionServicios: z.coerce.number().optional(),
     comisionProductos: z.coerce.number().optional(),
     propina: z.coerce.number().optional(),
-    quienPagaId: z.string().min(1, 'Debes seleccionar quién realiza el pago.'),
+    quienPagaId: z.string().optional(),
 }).refine(data => {
     if (data.concepto === 'Otro') {
         return data.concepto_otro && data.concepto_otro.trim().length > 0;
@@ -508,31 +508,33 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
                                 </div>
                             )}
 
-                            {/* Fila 4.5: Quién paga */}
-                            <FormField
-                                control={form.control}
-                                name="quienPagaId"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Quién paga (Admin)</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading || !isAdmin}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecciona quién autoriza/paga" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {adminsDisponibles.map(admin => (
-                                                    <SelectItem key={admin.id} value={admin.id}>
-                                                        {admin.name} <span className="text-muted-foreground text-xs">({admin.role === 'Administrador general' ? 'Admin General' : 'Admin Local'})</span>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            {/* Fila 4.5: Quién paga (Solo en Finanzas) */}
+                            {source === 'finanzas' && (
+                                <FormField
+                                    control={form.control}
+                                    name="quienPagaId"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center text-xs text-muted-foreground uppercase font-bold tracking-wide"><DollarSign className="mr-1 h-3 w-3" /> Quién paga (Admin)</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading || !isAdmin}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Selecciona quién autoriza/paga" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {adminsDisponibles.map(admin => (
+                                                        <SelectItem key={admin.id} value={admin.id}>
+                                                            {admin.name} <span className="text-muted-foreground text-xs">({admin.role === 'Administrador general' ? 'Admin General' : 'Admin Local'})</span>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
 
                             {/* Fila 5: Comentarios */}
                             <FormField

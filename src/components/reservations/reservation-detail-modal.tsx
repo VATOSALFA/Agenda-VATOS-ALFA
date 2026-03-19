@@ -306,10 +306,19 @@ export function ReservationDetailModal({
     const local = locales?.find(l => l.id === reservation.local_id);
     const locationStr = local ? `${local.name} (${local.address})` : 'VATOS ALFA Barber Shop';
 
+    let servicesText = '';
+    if (reservation.items && reservation.items.length > 0) {
+      servicesText = reservation.items.map(i => i.nombre || i.servicio).join(', ');
+    } else {
+      servicesText = (reservation as any).servicio || 'Servicio';
+    }
+
     const message = whatsappReminderTemplate
         .replace(/{nombre}/g, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{servicios}/g, servicesText)
         .replace(/{fecha}/g, dateStr)
         .replace(/{hora}/g, reservation.hora_inicio || '')
+        .replace(/{profesional}/g, reservation.professionalNames || 'N/A')
         .replace(/{ubicacion}/g, locationStr);
     
     return encodeURIComponent(message);

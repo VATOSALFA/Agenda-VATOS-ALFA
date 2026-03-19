@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product, User, IngresoManual } from '@/lib/types';
-import { where, Timestamp, doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { where, Timestamp, doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc, collection } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase-client';
 import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
@@ -100,13 +100,19 @@ const CurrencyInput = ({ value, onChange, className }: { value: number, onChange
 
     useEffect(() => {
         if (!isFocused) {
-            setLocalValue(value === 0 ? '0' : (value ? value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0'));
+            setLocalValue(value === 0 || value === undefined ? '' : value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
         }
     }, [value, isFocused]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value;
         const numberString = rawValue.replace(/[^0-9.]/g, '');
+
+        if (numberString === '') {
+            setLocalValue('');
+            onChange(0);
+            return;
+        }
 
         const parts = numberString.split('.');
         let cleanString = numberString;
@@ -115,14 +121,12 @@ const CurrencyInput = ({ value, onChange, className }: { value: number, onChange
         }
 
         let formattedStr = cleanString;
-        if (cleanString !== '') {
-            const split = cleanString.split('.');
-            let whole = split[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-            if (split.length > 1) {
-                formattedStr = `${whole}.${split[1]}`;
-            } else {
-                formattedStr = whole;
-            }
+        const split = cleanString.split('.');
+        let whole = split[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        if (split.length > 1) {
+            formattedStr = `${whole}.${split[1]}`;
+        } else {
+            formattedStr = whole;
         }
 
         setLocalValue(formattedStr);
@@ -137,12 +141,16 @@ const CurrencyInput = ({ value, onChange, className }: { value: number, onChange
             <Input
                 type="text"
                 className="pl-7"
+                placeholder="0"
                 value={localValue}
                 onChange={handleChange}
-                onFocus={() => setIsFocused(true)}
+                onFocus={() => {
+                    setIsFocused(true);
+                    if (value === 0) setLocalValue('');
+                }}
                 onBlur={() => {
                     setIsFocused(false);
-                    setLocalValue(value === 0 ? '0' : (value ? value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0'));
+                    setLocalValue(value === 0 || value === undefined ? '' : value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
                 }}
             />
         </div>
@@ -291,6 +299,7 @@ export default function FinanzasMensualesPage() {
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
+    const { data: liquidaciones, loading: liquidacionesLoading } = useFirestoreQuery<any>(`finanzas_mensuales/${monthName.toLowerCase()}_${selectedYear}/liquidaciones_admin`, `liq-${monthName}-${selectedYear}`);
 
 
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
@@ -311,8 +320,9 @@ export default function FinanzasMensualesPage() {
     const [isEgresosCollapsed, setIsEgresosCollapsed] = useState(true);
     const [isMovementsCollapsed, setIsMovementsCollapsed] = useState(false);
     const [isAdminBalanceCollapsed, setIsAdminBalanceCollapsed] = useState(false);
+    const [isLiquidacionModalOpen, setIsLiquidacionModalOpen] = useState(false);
     const [isEditingComment, setIsEditingComment] = useState(false);
-    const [commentToEdit, setCommentToEdit] = useState<{ id: string, type: 'egreso' | 'ingreso', comment: string } | null>(null);
+    const [commentToEdit, setCommentToEdit] = useState<{ id: string, type: 'egreso' | 'ingreso' | 'liquidacion', comment: string, monto?: number } | null>(null);
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -628,6 +638,7 @@ export default function FinanzasMensualesPage() {
         const movements: any[] = [];
         let totalEntradas = 0;
         let totalSalidas = 0;
+        let totalReembolsos = 0;
 
         // Add relevant Egresos (Entrega de efectivo)
         egresos.forEach(e => {
@@ -654,9 +665,14 @@ export default function FinanzasMensualesPage() {
             const comentarios = i.comentarios?.toLowerCase() || '';
             const concepto = i.concepto?.toLowerCase() || '';
 
-            if (concepto.includes('lo ingresó') || concepto.includes('lo ingreso') || concepto.includes('ajuste de caja') ||
-                comentarios.includes('lo ingresó') || comentarios.includes('lo ingreso') || comentarios.includes('ajuste de caja')) {
 
+            const isBalanceAjuste = concepto.includes('lo ingresó') || concepto.includes('lo ingreso') || concepto.includes('ajuste de caja') ||
+                comentarios.includes('lo ingresó') || comentarios.includes('lo ingreso') || comentarios.includes('ajuste de caja');
+            
+            if (isBalanceAjuste) {
+                totalEntradas += i.monto;
+
+                
                 let quien = 'Sistema';
                 if (concepto.includes('lo ingresó') || concepto.includes('lo ingreso')) {
                     quien = i.concepto?.replace(/lo ingres[oó]\s*/i, '').trim() || 'Sistema';
@@ -664,7 +680,6 @@ export default function FinanzasMensualesPage() {
                     quien = i.comentarios?.replace(/lo ingres[oó]\s*/i, '').trim() || 'Sistema';
                 }
 
-                totalEntradas += i.monto;
                 movements.push({
                     id: i.id,
                     dbType: 'ingreso',
@@ -675,9 +690,14 @@ export default function FinanzasMensualesPage() {
                     quienPaga: 'Sistema',
                     monto: i.monto,
                     comentarios: i.comentarios,
-                    color: 'text-slate-500' // Secundario (Slate)
+                    color: 'text-slate-500' 
                 });
             }
+        });
+
+        // Calculate Liquidaciones Directas total (but don't add to general movements table)
+        liquidaciones.forEach(l => {
+            totalReembolsos += l.monto;
         });
 
         const sorted = [...movements].sort((a, b) => {
@@ -702,10 +722,10 @@ export default function FinanzasMensualesPage() {
             return 0;
         });
 
-        return { movements: sorted, totalEntradas, totalSalidas };
+        return { movements: sorted, totalEntradas, totalSalidas, totalReembolsos };
     }, [egresos, egresosLoading, incomesManual, incomesManualLoading, cashMovementsSortConfig]);
 
-    const { movements: cashMovements, totalEntradas, totalSalidas } = cashMovementsData;
+    const { movements: cashMovements, totalEntradas, totalSalidas, totalReembolsos } = cashMovementsData;
 
     const handleCashMovementsSort = (key: string) => {
         setCashMovementsSortConfig(prev => ({
@@ -728,11 +748,12 @@ export default function FinanzasMensualesPage() {
             .filter(e => e.quienPagaId && localAdminIds.includes(e.quienPagaId))
             .reduce((sum, e) => sum + e.monto, 0);
 
-        const resultado = totalSalidas - totalEntradas - egresosAdmin;
+        const resultado = (totalSalidas + (totalReembolsos || 0)) - totalEntradas - egresosAdmin;
         
         return {
             totalSalidas,
             totalEntradas,
+            totalReembolsos,
             egresosAdmin,
             resultado
         };
@@ -741,11 +762,23 @@ export default function FinanzasMensualesPage() {
     const handleSaveComment = async () => {
         if (!commentToEdit) return;
         try {
-            const collectionName = commentToEdit.type === 'egreso' ? 'egresos' : 'ingresos_manuales';
-            const docRef = doc(db, collectionName, commentToEdit.id);
-            await updateDoc(docRef, {
+            let docRef;
+            if (commentToEdit.type === 'egreso') {
+                docRef = doc(db, 'egresos', commentToEdit.id);
+            } else if (commentToEdit.type === 'ingreso') {
+                docRef = doc(db, 'ingresos_manuales', commentToEdit.id);
+            } else {
+                docRef = doc(db, `finanzas_mensuales/${monthName.toLowerCase()}_${selectedYear}/liquidaciones_admin`, commentToEdit.id);
+            }
+
+            const updateData: any = {
                 comentarios: commentToEdit.comment
-            });
+            };
+            if (commentToEdit.type === 'liquidacion' && commentToEdit.monto !== undefined) {
+                updateData.monto = commentToEdit.monto;
+            }
+
+            await updateDoc(docRef, updateData);
             setIsEditingComment(false);
             setCommentToEdit(null);
             setQueryKey(prev => prev + 1);
@@ -758,6 +791,26 @@ export default function FinanzasMensualesPage() {
             toast({
                 title: "Error",
                 description: "No se pudo actualizar el comentario.",
+                variant: "destructive"
+            });
+        }
+    };
+
+    const handleDeleteLiquidacion = async (id: string) => {
+        if (!db) return;
+        try {
+            const docRef = doc(db, `finanzas_mensuales/${monthName.toLowerCase()}_${selectedYear}/liquidaciones_admin`, id);
+            await deleteDoc(docRef);
+            setQueryKey(prev => prev + 1);
+            toast({
+                title: "Liquidación eliminada",
+                description: "El registro del pago ha sido borrado.",
+            });
+        } catch (error) {
+            console.error("Error deleting liquidacion:", error);
+            toast({
+                title: "Error",
+                description: "No se pudo eliminar el registro.",
                 variant: "destructive"
             });
         }
@@ -1460,146 +1513,15 @@ export default function FinanzasMensualesPage() {
                                 <span className="font-medium">${display.egresos_propinas.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </CardContent>
-                    </Card>
-                </div>
+        
 
-                {/* Tabla de Cálculo de Administradora Local */}
-                <Card className="my-8 overflow-hidden border-2 border-slate-200">
-                    <CardHeader 
-                        className="bg-slate-50/80 py-3 border-b cursor-pointer hover:bg-slate-100 transition-colors"
-                        onClick={() => setIsAdminBalanceCollapsed(!isAdminBalanceCollapsed)}
-                    >
-                        <CardTitle className="text-base flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <UserCircle className="h-5 w-5 text-primary" />
-                                Balance de Administradora Local
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider hidden sm:inline">Resumen Mensual de Efectivo</span>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    {isAdminBalanceCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
-                                </Button>
-                            </div>
-                        </CardTitle>
-                    </CardHeader>
-                    {!isAdminBalanceCollapsed && (
-                        <CardContent className="p-0">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-slate-50/30 hover:bg-slate-50/30">
-                                    <TableHead className="text-center py-4">
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
-                                                Total Salidas Flow
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p className="max-w-xs text-[10px]">Efectivo total que ha salido de la caja según los movimientos informativos (lo que la administradora se lleva).</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </span>
-                                            <span className="text-primary flex items-center gap-1 font-bold">
-                                                <ArrowUpRight className="h-3 w-3" /> Efectivo Retirado
-                                            </span>
-                                        </div>
-                                    </TableHead>
-                                    <TableHead className="text-center py-4 border-l">
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
-                                                Total Entradas Flow
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p className="max-w-xs text-[10px]">Efectivo total que la administradora ha ingresado a la caja para cuadrar faltantes.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </span>
-                                            <span className="text-slate-500 flex items-center gap-1 font-bold">
-                                                <ArrowDownLeft className="h-3 w-3" /> Efectivo Ingresado
-                                            </span>
-                                        </div>
-                                    </TableHead>
-                                    <TableHead className="text-center py-4 border-l">
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
-                                                Egresos Pagados
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p className="max-w-xs text-[10px]">Gastos operativos o de insumos que la administradora pagó de su bolsillo o del efectivo retirado.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </span>
-                                            <span className="text-slate-600 font-bold">Insumos / Otros</span>
-                                        </div>
-                                    </TableHead>
-                                    <TableHead className="text-center py-4 border-l bg-slate-100/50">
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
-                                                Estado de Cuenta
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p className="max-w-xs text-[10px]">Cálculo final: Salidas - Entradas - Egresos pagados. Determina si sobra dinero o si hay un adeudo.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </span>
-                                            <span className="text-foreground font-bold">Resultado Final</span>
-                                        </div>
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableCell className="text-center py-6">
-                                        <span className="text-2xl font-bold text-primary">
-                                            ${adminSummaryData.totalSalidas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-center py-6 border-l">
-                                        <span className="text-2xl font-bold text-slate-500">
-                                            ${adminSummaryData.totalEntradas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-center py-6 border-l">
-                                        <span className="text-2xl font-bold text-slate-600">
-                                            ${adminSummaryData.egresosAdmin.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className={cn("text-center py-6 border-l bg-slate-100/30", adminSummaryData.resultado >= 0 ? "bg-green-50/30" : "bg-blue-50/30")}>
-                                        <div className="flex flex-col items-center">
-                                            <span className={cn("text-3xl font-black", adminSummaryData.resultado >= 0 ? "text-green-600" : "text-primary")}>
-                                                ${adminSummaryData.resultado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                            </span>
-                                            <span className="text-[10px] mt-1 font-bold uppercase">
-                                                {adminSummaryData.resultado >= 0 ? "A Favor Administrador Gral" : "A Favor Administradora Local"}
-                                            </span>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                    )}
+
                 </Card>
 
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
                     <Card className="lg:col-span-5">
                         <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsIngresosCollapsed(!isIngresosCollapsed)}>
                             <div className="flex items-center justify-between">
@@ -1878,14 +1800,14 @@ export default function FinanzasMensualesPage() {
                 <div className="mt-8">
                     <Card>
                         <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsMovementsCollapsed(!isMovementsCollapsed)}>
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="flex items-center gap-2">
-                                    <DollarSign className="h-5 w-5 text-primary" />
-                                    Movimientos de Flujo de Caja (Informativo)
+                            <div className="flex items-center justify-between gap-4">
+                                <CardTitle className="flex items-center gap-2 min-w-0 flex-1 text-lg">
+                                    <DollarSign className="h-5 w-5 text-primary flex-shrink-0" />
+                                    <span className="truncate sm:whitespace-normal">Movimientos de Flujo de Caja (Informativo)</span>
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help flex-shrink-0" />
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p className="max-w-xs text-xs">
@@ -1896,16 +1818,16 @@ export default function FinanzasMensualesPage() {
                                         </Tooltip>
                                     </TooltipProvider>
                                 </CardTitle>
-                                <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
                                     <div className="text-right">
-                                        <p className="text-xs text-muted-foreground">Total Entradas</p>
-                                        <p className="text-sm font-bold text-slate-500">${totalEntradas.toLocaleString('es-MX')}</p>
+                                        <p className="text-[10px] text-muted-foreground leading-none">Total Entradas</p>
+                                        <p className="text-xs sm:text-sm font-bold text-slate-500">${totalEntradas.toLocaleString('es-MX')}</p>
                                     </div>
-                                    <div className="text-right border-l pl-4">
-                                        <p className="text-xs text-muted-foreground">Total Salidas</p>
-                                        <p className="text-sm font-bold text-primary">${totalSalidas.toLocaleString('es-MX')}</p>
+                                    <div className="text-right border-l pl-3 sm:pl-4">
+                                        <p className="text-[10px] text-muted-foreground leading-none">Total Salidas</p>
+                                        <p className="text-xs sm:text-sm font-bold text-primary">${totalSalidas.toLocaleString('es-MX')}</p>
                                     </div>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                                         {isMovementsCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
                                     </Button>
                                 </div>
@@ -1936,11 +1858,7 @@ export default function FinanzasMensualesPage() {
                                                 Responsable / Destino {cashMovementsSortConfig.key === 'quien' && <ArrowUpDown className="h-4 w-4" />}
                                             </Button>
                                         </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('quienPaga')}>
-                                                Pagado por {cashMovementsSortConfig.key === 'quienPaga' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
+
                                         <TableHead>
                                             <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('monto')}>
                                                 Monto {cashMovementsSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
@@ -1956,9 +1874,9 @@ export default function FinanzasMensualesPage() {
                                 </TableHeader>
                                 <TableBody>
                                     {egresosLoading || incomesManualLoading ? (
-                                        <TableRow><TableCell colSpan={8} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={7} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                                     ) : cashMovements.length === 0 ? (
-                                        <TableRow><TableCell colSpan={8} className="text-center h-24">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={7} className="text-center h-24">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
                                     ) : (
                                         paginatedCashMovements.map((mov) => (
                                             <TableRow key={mov.id}>
@@ -1966,11 +1884,10 @@ export default function FinanzasMensualesPage() {
                                                 <TableCell className="font-medium">{mov.tipo}</TableCell>
                                                 <TableCell>{mov.concepto}</TableCell>
                                                 <TableCell>{mov.quien}</TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">{mov.quienPaga}</TableCell>
                                                 <TableCell className={cn("font-bold", mov.color)}>${mov.monto.toLocaleString('es-MX')}</TableCell>
                                                 <TableCell className="text-muted-foreground text-xs italic">{mov.comentarios || 'Sin comentario'}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setCommentToEdit({ id: mov.id, type: mov.dbType, comment: mov.comentarios || '' }); setIsEditingComment(true); }}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => { setCommentToEdit({ id: mov.id, type: mov.dbType, comment: mov.comentarios || '' }); setIsEditingComment(true); }}>
                                                         <FileEdit className="h-4 w-4" />
                                                     </Button>
                                                 </TableCell>
@@ -2027,6 +1944,244 @@ export default function FinanzasMensualesPage() {
                         )}
                     </Card>
                 </div>
+
+                {/* Tabla de Cálculo de Administradora Local */}
+                <Card className="my-8 overflow-hidden border-2 border-slate-200">
+                    <CardHeader 
+                        className="bg-slate-50/80 py-3 border-b cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setIsAdminBalanceCollapsed(!isAdminBalanceCollapsed)}
+                    >
+                        <CardTitle className="text-base flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <UserCircle className="h-5 w-5 text-primary" />
+                                Balance de Administradora Local
+                                <TooltipProvider>
+                                    <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help ml-1" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="max-w-xs text-sm font-normal text-center">
+                                                Cálculo informativo del flujo de efectivo acumulado por la administración local del negocio, considerando entregas de dinero y pagos realizados.
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                            </div>
+                            <div className="flex items-center gap-2 sm:gap-4">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={(e) => { e.stopPropagation(); setIsLiquidacionModalOpen(true); }} 
+                                    className="h-8 border-primary text-primary hover:bg-primary/5 flex items-center"
+                                >
+                                    <DollarSign className="mr-1 h-3 w-3" /> <span className="hidden sm:inline">Registrar Liquidación</span><span className="sm:hidden">Liquidar</span>
+                                </Button>
+                                <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider hidden md:inline ml-2">Resumen Mensual de Efectivo</span>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    {isAdminBalanceCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+                                </Button>
+                            </div>
+                        </CardTitle>
+                    </CardHeader>
+                    {!isAdminBalanceCollapsed && (
+                        <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-slate-50/30 hover:bg-slate-50/30">
+                                    <TableHead className="text-center py-4">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Total Salidas Flow
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Efectivo total que ha salido de la caja según los movimientos informativos (lo que la administradora se lleva).</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-primary flex items-center gap-1 font-bold">
+                                                <ArrowUpRight className="h-3 w-3" /> Efectivo Retirado
+                                            </span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Total Entradas Flow
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Efectivo total que la administradora ha ingresado a la caja para cuadrar faltantes.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-slate-500 flex items-center gap-1 font-bold">
+                                                <ArrowDownLeft className="h-3 w-3" /> Efectivo Ingresado
+                                            </span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Pagos / Reembolsos
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Dinero entregado por el Administrador General a la administradora local para saldar deudas del mes.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-secondary flex items-center gap-1 font-bold">
+                                                <DollarSign className="h-3 w-3" /> Liquidaciones
+                                            </span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Egresos Pagados
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Gastos operativos o de insumos que la administradora pagó de su bolsillo o del efectivo retirado.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-slate-600 font-bold">Insumos / Otros</span>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="text-center py-4 border-l bg-slate-100/50">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                                Estado de Cuenta
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p className="max-w-xs text-[10px]">Cálculo final: Salidas - Entradas - Egresos pagados. Determina si sobra dinero o si hay un adeudo.</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </span>
+                                            <span className="text-foreground font-bold">Resultado Final</span>
+                                        </div>
+                                    </TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell className="text-center py-6">
+                                        <span className="text-2xl font-bold text-primary">
+                                            ${adminSummaryData.totalSalidas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-center py-6 border-l">
+                                        <span className="text-2xl font-bold text-slate-500">
+                                            ${adminSummaryData.totalEntradas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-center py-6 border-l">
+                                        <span className="text-2xl font-bold text-secondary">
+                                            ${(adminSummaryData.totalReembolsos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-center py-6 border-l">
+                                        <span className="text-2xl font-bold text-slate-600">
+                                            ${adminSummaryData.egresosAdmin.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className={cn("text-center py-6 border-l bg-slate-100/30", adminSummaryData.resultado >= 0 ? "bg-slate-100/50" : "bg-blue-50/10")}>
+                                        <div className="flex flex-col items-center">
+                                            <span className={cn("text-3xl font-black", adminSummaryData.resultado >= 0 ? "text-primary/70" : "text-primary")}>
+                                                ${adminSummaryData.resultado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                            </span>
+                                            <span className="text-[10px] mt-1 font-bold uppercase">
+                                                {adminSummaryData.resultado >= 0 ? "A Favor Administrador Gral" : "A Favor Administradora Local"}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
+
+                        {/* Sub-tabla de detalle de liquidaciones */}
+                        <div className="border-t bg-slate-50/20 p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                                    <DollarSign className="h-4 w-4" /> Historial de Liquidaciones del mes
+                                </h4>
+                            </div>
+                            {liquidacionesLoading ? (
+                                <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary/30" /></div>
+                            ) : liquidaciones.length === 0 ? (
+                                <div className="text-center py-6 text-xs text-muted-foreground bg-white/50 border border-dashed rounded-md">
+                                    No se han registrado liquidaciones directas este mes.
+                                </div>
+                            ) : (
+                                <Table className="bg-white rounded-md shadow-sm border">
+                                    <TableHeader>
+                                        <TableRow className="bg-slate-50">
+                                            <TableHead className="w-[120px] h-9 text-xs font-bold">Fecha</TableHead>
+                                            <TableHead className="h-9 text-xs font-bold">Monto</TableHead>
+                                            <TableHead className="h-9 text-xs font-bold">Comentarios / Notas</TableHead>
+                                            <TableHead className="w-[100px] h-9 text-right text-xs font-bold">Opciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {liquidaciones.sort((a: any, b: any) => (b.fecha?.seconds || 0) - (a.fecha?.seconds || 0)).map((liq: any) => (
+                                            <TableRow key={liq.id} className="hover:bg-slate-50/50">
+                                                <TableCell className="text-xs whitespace-nowrap font-medium">{format(liq.fecha instanceof Timestamp ? liq.fecha.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}</TableCell>
+                                                <TableCell className="text-xs font-bold text-secondary">${liq.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
+                                                <TableCell className="text-xs italic text-muted-foreground">{liq.comentarios || 'Sin nota'}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 text-muted-foreground" 
+                                                            onClick={() => { setCommentToEdit({ id: liq.id, type: 'liquidacion', comment: liq.comentarios || '', monto: liq.monto }); setIsEditingComment(true); }}
+                                                        >
+                                                            <FileEdit className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 text-destructive hover:bg-destructive/10" 
+                                                            onClick={() => { if (confirm('¿Deseas eliminar este registro de liquidación?')) handleDeleteLiquidacion(liq.id); }}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </div>
+                    </CardContent>
+                    )}
+                </Card>
             </div>
 
             <AddEgresoModal
@@ -2252,14 +2407,25 @@ export default function FinanzasMensualesPage() {
                             Actualiza el comentario para este movimiento de caja.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
-                        <Label>Comentario</Label>
-                        <Input
-                            value={commentToEdit?.comment || ''}
-                            onChange={(e) => setCommentToEdit(prev => prev ? { ...prev, comment: e.target.value } : null)}
-                            placeholder="Escribe un comentario..."
-                            className="mt-2"
-                        />
+                    <div className="py-4 space-y-4">
+                        {commentToEdit?.type === 'liquidacion' && (
+                            <div className="space-y-2">
+                                <Label>Monto</Label>
+                                <CurrencyInput
+                                    value={commentToEdit.monto || 0}
+                                    onChange={(val) => setCommentToEdit(prev => prev ? { ...prev, monto: val } : null)}
+                                />
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label>Comentario / Nota</Label>
+                            <Input
+                                value={commentToEdit?.comment || ''}
+                                onChange={(e) => setCommentToEdit(prev => prev ? { ...prev, comment: e.target.value } : null)}
+                                placeholder="Escribe un comentario o nota..."
+                                className="mt-2"
+                            />
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditingComment(false)}>Cancelar</Button>
@@ -2267,6 +2433,77 @@ export default function FinanzasMensualesPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <AddLiquidacionModal
+                isOpen={isLiquidacionModalOpen}
+                onOpenChange={setIsLiquidacionModalOpen}
+                onSuccess={() => {
+                    setIsLiquidacionModalOpen(false);
+                    setQueryKey(prev => prev + 1);
+                    toast({ title: 'Liquidación registrada', description: 'El pago se ha guardado correctamente como control interno.' });
+                }}
+                monthYear={`${monthName.toLowerCase()}_${selectedYear}`}
+            />
         </>
     );
 }
+
+function AddLiquidacionModal({ isOpen, onOpenChange, onSuccess, monthYear }: { isOpen: boolean, onOpenChange: (val: boolean) => void, onSuccess: () => void, monthYear: string }) {
+    const [monto, setMonto] = useState(0);
+    const [comentarios, setComentarios] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSave = async () => {
+        if (monto <= 0) return;
+        setIsSaving(true);
+        try {
+            await setDoc(doc(collection(db, `finanzas_mensuales/${monthYear}/liquidaciones_admin`)), {
+                monto,
+                comentarios: comentarios || 'Liquidación de balance mensual',
+                fecha: Timestamp.now(),
+                monthYear
+            });
+            onSuccess();
+            setMonto(0);
+            setComentarios('');
+        } catch (error) {
+            console.error('Error saving liquidacion:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Registrar Pago a Administradora</DialogTitle>
+                    <DialogDescription>
+                        Este registro es de control interno y NO afecta los ingresos reportados en caja.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Monto a entregar</Label>
+                        <CurrencyInput value={monto} onChange={setMonto} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Comentarios / Nota</Label>
+                        <Input 
+                            placeholder="Ej. Depósito parcial, pago de adeudo, etc." 
+                            value={comentarios} 
+                            onChange={(e) => setComentarios(e.target.value)} 
+                        />
+                    </div>
+                </div>
+                <DialogFooter className="gap-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancelar</Button>
+                    <Button onClick={handleSave} disabled={isSaving || monto <= 0}>
+                        {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Confirmar Pago
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}

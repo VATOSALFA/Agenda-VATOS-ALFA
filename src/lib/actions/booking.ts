@@ -43,10 +43,27 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         dayName = format(parsedDate, 'eeee', { locale: es }).toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-        const scheduleDay = profData.schedule?.[dayName];
+        // 1.05 Check for Special Journeys (Manual Overrides)
+        const specialDaysSnap = await db.collection('jornadas_especiales')
+            .where('profesionalId', '==', professionalId)
+            .where('fecha', '==', date)
+            .get();
 
-        if (!scheduleDay || !scheduleDay.enabled) {
-            return { slots: [] }; // Day is closed
+        let effectiveScheduleStart = '';
+        let effectiveScheduleEnd = '';
+        let isSpecialJourney = false;
+        if (!specialDaysSnap.empty) {
+            const specialData = specialDaysSnap.docs[0].data();
+            effectiveScheduleStart = specialData.hora_inicio;
+            effectiveScheduleEnd = specialData.hora_fin;
+            isSpecialJourney = true;
+        } else {
+            const scheduleDay = profData.schedule?.[dayName];
+            if (!scheduleDay || !scheduleDay.enabled) {
+                return { slots: [] }; // Day is closed and no special journey
+            }
+            effectiveScheduleStart = scheduleDay.start;
+            effectiveScheduleEnd = scheduleDay.end;
         }
 
         // 1.0 Fetch Local Schedule to enforce bounds
@@ -61,8 +78,12 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         }
 
         const localScheduleDay = localData?.schedule?.[dayName];
-        if (!localScheduleDay || !localScheduleDay.enabled) {
-            return { slots: [] }; // Local is closed
+        
+        // If not a special journey, we must check if local is open
+        if (!isSpecialJourney) {
+            if (!localScheduleDay || !localScheduleDay.enabled) {
+                return { slots: [] }; // Local is closed and this isn't a special override
+            }
         }
 
         // Safe Time Parsing Helper
@@ -76,41 +97,49 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             return { h, m };
         };
 
-        const profStart = parseTimeSafe(scheduleDay.start);
-        const profEnd = parseTimeSafe(scheduleDay.end);
-        const localStart = parseTimeSafe(localScheduleDay.start);
-        const localEnd = parseTimeSafe(localScheduleDay.end);
+        const profStart = parseTimeSafe(effectiveScheduleStart);
+        const profEnd = parseTimeSafe(effectiveScheduleEnd);
+        
+        let finalStart = profStart;
+        let finalEnd = profEnd;
 
-        if (!profStart || !profEnd || !localStart || !localEnd) return { slots: [] }; // Invalid configuration
+        // If not special, intersect with local hours
+        if (!isSpecialJourney && localScheduleDay && localScheduleDay.enabled) {
+            const localStart = parseTimeSafe(localScheduleDay.start);
+            const localEnd = parseTimeSafe(localScheduleDay.end);
+            
+            if (profStart && profEnd && localStart && localEnd) {
+                const startM = Math.max(profStart.h * 60 + profStart.m, localStart.h * 60 + localStart.m);
+                const endM = Math.min(profEnd.h * 60 + profEnd.m, localEnd.h * 60 + localEnd.m);
+                finalStart = { h: Math.floor(startM / 60), m: startM % 60 };
+                finalEnd = { h: Math.floor(endM / 60), m: endM % 60 };
+            }
+        }
 
-        // Enforce boundaries
-        const pStartMins = profStart.h * 60 + profStart.m;
-        const pEndMins = profEnd.h * 60 + profEnd.m;
-        const lStartMins = localStart.h * 60 + localStart.m;
-        const lEndMins = localEnd.h * 60 + localEnd.m;
+        if (!finalStart || !finalEnd) return { slots: [] }; // Invalid configuration
 
-        const effectiveStartMins = Math.max(pStartMins, lStartMins);
-        const effectiveEndMins = Math.min(pEndMins, lEndMins);
+        const startTimeLimit = finalStart.h * 60 + finalStart.m;
+        const endTimeLimit = finalEnd.h * 60 + finalEnd.m;
 
-        if (effectiveStartMins >= effectiveEndMins) return { slots: [] };
-
-        const startT = { h: Math.floor(effectiveStartMins / 60), m: effectiveStartMins % 60 };
-        const endT = { h: Math.floor(effectiveEndMins / 60), m: effectiveEndMins % 60 };
+        if (startTimeLimit >= endTimeLimit) return { slots: [] };
 
         // 1.1 Add Breaks to Busy Intervals
         const busyIntervals: { start: number, end: number }[] = [];
 
-        if (scheduleDay.breaks && Array.isArray(scheduleDay.breaks)) {
-            scheduleDay.breaks.forEach((brk: any) => {
-                const s = parseTimeSafe(brk.start);
-                const e = parseTimeSafe(brk.end);
-                if (s && e) {
-                    busyIntervals.push({
-                        start: s.h * 60 + s.m,
-                        end: e.h * 60 + e.m
-                    });
-                }
-            });
+        if (!isSpecialJourney) {
+            const scheduleDay = profData.schedule?.[dayName];
+            if (scheduleDay?.breaks && Array.isArray(scheduleDay.breaks)) {
+                scheduleDay.breaks.forEach((brk: any) => {
+                    const s = parseTimeSafe(brk.start);
+                    const e = parseTimeSafe(brk.end);
+                    if (s && e) {
+                        busyIntervals.push({
+                            start: s.h * 60 + s.m,
+                            end: e.h * 60 + e.m
+                        });
+                    }
+                });
+            }
         }
 
         // 2. Get Busy Slots (Reservations)
@@ -158,9 +187,9 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             }
         });
 
-        // 4. Calculate Available Slots
-        const startObj = set(parsedDate, { hours: startT.h, minutes: startT.m, seconds: 0, milliseconds: 0 });
-        const endObj = set(parsedDate, { hours: endT.h, minutes: endT.m, seconds: 0, milliseconds: 0 });
+        // 3. Generate Available Slots
+        const startObj = set(parsedDate, { hours: finalStart.h, minutes: finalStart.m, seconds: 0, milliseconds: 0 });
+        const endObj = set(parsedDate, { hours: finalEnd.h, minutes: finalEnd.m, seconds: 0, milliseconds: 0 });
 
         // Fetch settings
         let minReservationBuffer = 60; // Minutes
@@ -179,7 +208,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
                 }
             }
         } catch (settingsError) {
-            console.warn("Could not load waiting settings, using defaults.", settingsError);
+            console.warn("Could not load setting, using defaults.", settingsError);
         }
 
         const availableSlots: string[] = [];
@@ -419,17 +448,36 @@ export async function createPublicReservation(data: any) {
                 return { error: `El profesional no realiza los siguientes servicios: ${unsupportedNames || 'Servicios no válidos para este profesional'}` };
             }
         }
+        // 1.05 Check for Special Journeys (Manual Overrides)
+        const specialDaysSnap = await db.collection('jornadas_especiales')
+            .where('profesionalId', '==', data.professionalId)
+            .where('fecha', '==', data.date)
+            .get();
 
-        const scheduleDay = profData?.schedule?.[dayName];
+        let profEffectiveStart = '';
+        let profEffectiveEnd = '';
+        let isSpecialJourney = false;
+        let profBreaks = [];
 
-        if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };
+        if (!specialDaysSnap.empty) {
+            const specialData = specialDaysSnap.docs[0].data();
+            profEffectiveStart = specialData.hora_inicio;
+            profEffectiveEnd = specialData.hora_fin;
+            isSpecialJourney = true;
+        } else {
+            const scheduleDay = profData?.schedule?.[dayName];
+            if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };
+            profEffectiveStart = scheduleDay.start;
+            profEffectiveEnd = scheduleDay.end;
+            profBreaks = scheduleDay.breaks || [];
+        }
 
         // 1.2 Validate against local shop's hours
         let localData = null;
         if (data.locationId && data.locationId !== 'default') {
             const localDoc = await db.collection('locales').doc(data.locationId).get();
             if (localDoc.exists) localData = localDoc.data();
-        } else if (profData.local_id) {
+        } else if (profData && profData.local_id) {
             const localDoc = await db.collection('locales').doc(profData.local_id).get();
             if (localDoc.exists) localData = localDoc.data();
         }
@@ -439,24 +487,31 @@ export async function createPublicReservation(data: any) {
         }
 
         const localScheduleDay = localData?.schedule?.[dayName];
-        if (!localScheduleDay || !localScheduleDay.enabled) return { error: 'La sucursal se encuentra cerrada este día.' };
+        if (!isSpecialJourney) {
+            if (!localScheduleDay || !localScheduleDay.enabled) return { error: 'La sucursal se encuentra cerrada este día.' };
+        }
 
-        const pStart = scheduleDay.start;
-        const pEnd = scheduleDay.end;
-        const lStart = localScheduleDay.start;
-        const lEnd = localScheduleDay.end;
+        const pStart = profEffectiveStart;
+        const pEnd = profEffectiveEnd;
+        
+        let combinedStart = pStart;
+        let combinedEnd = pEnd;
 
-        const effectiveStart = pStart > lStart ? pStart : lStart;
-        const effectiveEnd = pEnd < lEnd ? pEnd : lEnd;
+        if (!isSpecialJourney && localScheduleDay && localScheduleDay.enabled) {
+            const lStart = localScheduleDay.start;
+            const lEnd = localScheduleDay.end;
+            combinedStart = pStart > lStart ? pStart : lStart;
+            combinedEnd = pEnd < lEnd ? pEnd : lEnd;
+        }
 
         // Check working hours against unified bounds
-        if (startTimeStr < effectiveStart || endTimeStr > effectiveEnd) {
+        if (startTimeStr < combinedStart || endTimeStr > combinedEnd) {
             return { error: 'La hora seleccionada está fuera del horario laboral habilitado.' };
         }
 
         // Check Breaks
-        if (scheduleDay.breaks && Array.isArray(scheduleDay.breaks)) {
-            const isBreak = scheduleDay.breaks.some((brk: any) => {
+        if (!isSpecialJourney && profBreaks && Array.isArray(profBreaks)) {
+            const isBreak = profBreaks.some((brk: any) => {
                 return startTimeStr < brk.end && endTimeStr > brk.start;
             });
             if (isBreak) return { error: 'El horario coincide con el descanso del profesional.' };

@@ -90,6 +90,10 @@ service cloud.firestore {
     // 6. Business Logic (Sales, Clients, Finance)
     match /reservas/{document=**} { allow read, write: if isAuthenticated(); }
     match /bloqueos_horario/{document=**} { allow read, write: if isAuthenticated(); }
+    match /jornadas_especiales/{id} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     
     match /sales/{document=**} { allow read, write: if isAuthenticated(); }
     match /ventas/{document=**} { allow read, write: if isAuthenticated(); } // Added for Spanish collection name
@@ -112,6 +116,7 @@ service cloud.firestore {
     match /codigos_autorizacion/{document=**} { allow read, write: if isAuthenticated(); }
     match /egresos/{document=**} { allow read, write: if isAuthenticated(); }
     match /ingresos_manuales/{document=**} { allow read, write: if isAuthenticated(); }
+    match /liquidaciones_admin/{document=**} { allow read, write: if isAuthenticated(); }
     match /cortes_caja/{document=**} { allow read, write: if isAuthenticated(); }
     
     // Product Catalog (Spanish)

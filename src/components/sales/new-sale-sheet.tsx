@@ -103,7 +103,7 @@ interface CartItem {
 const saleSchema = (total: number) => z.object({
     cliente_id: z.string().min(1, 'Debes seleccionar un cliente.'),
     local_id: z.string().min(1, 'Debes seleccionar un local.'),
-    metodo_pago: z.string().min(1, 'Debes seleccionar un método de pago.'),
+    metodo_pago: total > 0 ? z.string().min(1, 'Debes seleccionar un método de pago.') : z.string().optional(),
     pago_efectivo: z.coerce.number().optional().default(0),
     pago_tarjeta: z.coerce.number().optional().default(0),
     pago_transferencia: z.coerce.number().optional().default(0),
@@ -1401,6 +1401,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 const saleDataToSave: any = {
                     ...data,
+                    metodo_pago: data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo'),
                     items: itemsToSave,
                     subtotal: subtotal,
                     descuento: {
@@ -1416,7 +1417,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     pago_estado: 'Pagado',
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
-                    monto_pagado_real: (isUpdate ? (existingSaleData.monto_pagado_real || 0) : 0) + amountBeingPaid,
+                    monto_pagado_real: (isUpdate ? (existingSaleData.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid,
                     saldo_pendiente: 0,
                     status: 'completed'
                 };
@@ -2048,7 +2049,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (paymentMethod === 'efectivo' && amountPaid < total)} onClick={(e) => {
+                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || (total > 0 && !paymentMethod) || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (paymentMethod === 'efectivo' && amountPaid < total)} onClick={(e) => {
                                         if (paymentMethod === 'efectivo' && amountPaid < total) {
                                             e.preventDefault();
                                             toast({

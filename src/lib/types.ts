@@ -246,6 +246,7 @@ export interface Sale {
     pagos_en_linea?: number;
   };
   professionalNames?: string; // transient
+  tipsPaidTo?: string[];
   tipPaid?: boolean;
   pago_estado?: string;
   monto_pagado_real?: number;

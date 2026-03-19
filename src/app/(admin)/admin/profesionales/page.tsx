@@ -146,7 +146,7 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
                         <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].start}</span>
                         <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].end}</span>
                       </>
-                      : <span className="col-span-2 text-right text-muted-foreground">Cerrado</span>
+                      : <span className="col-span-2 text-right text-muted-foreground">Descanso</span>
                     }
                   </li>
                 ))}

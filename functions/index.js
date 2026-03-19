@@ -1407,6 +1407,34 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
 
     console.log(`[Email-Pro] Sending to: ${recipientEmail}`);
 
+    // --- CC ADMINS SELECTION ---
+    const ccAdminsConfig = websiteSettings.ccAdminsConfig || {};
+    const bccEmails = [];
+
+    if (ccAdminsConfig.notifyGeneralAdmin) {
+      const genAdminsSnap = await db.collection('usuarios').where('role', '==', 'Administrador general').get();
+      genAdminsSnap.forEach(doc => {
+        const u = doc.data();
+        if (u.email && u.email.includes('@')) bccEmails.push(u.email);
+      });
+    }
+
+    if (ccAdminsConfig.notifyLocalAdmin && localId) {
+      const localAdminsSnap = await db.collection('usuarios')
+        .where('role', '==', 'Administrador local')
+        .where('local_id', '==', localId)
+        .get();
+      localAdminsSnap.forEach(doc => {
+        const u = doc.data();
+        if (u.email && u.email.includes('@')) bccEmails.push(u.email);
+      });
+    }
+
+    const uniqueBcc = [...new Set(bccEmails)];
+    if (uniqueBcc.length > 0) {
+      console.log(`[Email-Pro] Including BCC for admins: ${uniqueBcc.join(', ')}`);
+    }
+
     const showDate = profConfig.showDate !== false;
     const showTime = profConfig.showTime !== false;
     const showLocation = profConfig.showLocation !== false;
@@ -1500,6 +1528,7 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
     await resend.emails.send({
       from: `${senderName} <${senderEmail}>`,
       to: [recipientEmail],
+      bcc: uniqueBcc.length > 0 ? uniqueBcc : undefined,
       subject: `Nueva Cita - ${clientData.nombre || 'Cliente'}`,
       html: htmlContent,
     });

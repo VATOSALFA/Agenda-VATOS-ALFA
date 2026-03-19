@@ -93,6 +93,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
             const dataToSave = {
                 profesionalId: profesional.id,
                 profesionalName: profesional.name,
+                local_id: profesional.local_id,
                 fecha: format(day.date, 'yyyy-MM-dd'),
                 hora_inicio: day.start,
                 hora_fin: day.end,
@@ -124,15 +125,14 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Abrir día para {profesional.name}</DialogTitle>
+          <DialogTitle>Horario especial para {profesional.name}</DialogTitle>
           <DialogDescription>
             Agrega fechas y horarios especiales donde este profesional estará disponible.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
-            <div className="py-4 space-y-4">
+            <div className="py-2 space-y-4">
                 <div className="p-4 border rounded-lg space-y-4">
-                    <h4 className="font-semibold text-sm">Abrir el local en la siguiente fecha y horario</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                         <Controller
                             name="date"
@@ -142,10 +142,11 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                                     <Label>Fecha</Label>
                                     <Popover>
                                         <PopoverTrigger asChild>
-                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {field.value ? format(field.value, "PPP", { locale: es }) : <span>Selecciona fecha</span>}
+                                            <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal px-2 truncate", !field.value && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                                <span className="truncate">{field.value ? format(field.value, "dd 'de' MMM, yyyy", { locale: es }) : <span>Selecciona fecha</span>}</span>
                                             </Button>
+
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus/></PopoverContent>
                                     </Popover>

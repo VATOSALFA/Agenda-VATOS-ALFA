@@ -313,6 +313,9 @@ export default function AgendaView() {
     return locales.find(l => l.id === selectedLocalId) || locales[0];
   }, [selectedLocalId, locales]);
 
+
+  const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales', `special-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, ...(date ? [where('fecha', '==', format(date, 'yyyy-MM-dd'))] : []));
+
   const { timeSlots, startHour, endHour } = useMemo(() => {
     if (!selectedLocal || !selectedLocal.schedule) {
       return { timeSlots: [], startHour: 10, endHour: 21 };
@@ -320,25 +323,49 @@ export default function AgendaView() {
     const dayOfWeek = date ? format(date, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : 'lunes';
     const daySchedule = selectedLocal.schedule[dayOfWeek as keyof typeof selectedLocal.schedule] || selectedLocal.schedule.lunes;
 
-    if (!daySchedule.enabled) {
+    let sH = 10, sM = 0, eH = 21, eM = 0;
+    let anyEnabled = daySchedule.enabled;
+
+    if (daySchedule.enabled) {
+      [sH, sM] = daySchedule.start.split(':').map(Number);
+      [eH, eM] = daySchedule.end.split(':').map(Number);
+    }
+
+    // Check if any professional has a special journey today that might be outside local hours or if local is closed
+    specialJourneys.forEach(sj => {
+        const [sjStartH, sjStartM] = sj.hora_inicio.split(':').map(Number);
+        const [sjEndH, sjEndM] = sj.hora_fin.split(':').map(Number);
+        
+        if (!anyEnabled) {
+            sH = sjStartH; sM = sjStartM;
+            eH = sjEndH; eM = sjEndM;
+            anyEnabled = true;
+        } else {
+            if (sjStartH < sH || (sjStartH === sH && sjStartM < sM)) {
+                sH = sjStartH; sM = sjStartM;
+            }
+            if (sjEndH > eH || (sjEndH === eH && sjEndM > eM)) {
+                eH = sjEndH; eM = sjEndM;
+            }
+        }
+    });
+
+    if (!anyEnabled) {
       return { timeSlots: [], startHour: 10, endHour: 21 };
     }
 
-    const [startH, startM] = daySchedule.start.split(':').map(Number);
-    const [endH, endM] = daySchedule.end.split(':').map(Number);
-
     const slots = [];
-    let currentTime = set(new Date(), { hours: startH, minutes: startM, seconds: 0 });
-    const endTime = set(new Date(), { hours: endH, minutes: endM, seconds: 0 });
+    let currentTimeLoop = set(new Date(), { hours: sH, minutes: sM, seconds: 0 });
+    const endTime = set(new Date(), { hours: eH, minutes: eM, seconds: 0 });
 
-    while (currentTime < endTime) {
-      slots.push(format(currentTime, 'HH:mm'));
-      currentTime = addMinutes(currentTime, slotDurationMinutes);
+    while (currentTimeLoop < endTime) {
+      slots.push(format(currentTimeLoop, 'HH:mm'));
+      currentTimeLoop = addMinutes(currentTimeLoop, slotDurationMinutes);
     }
     slots.push(format(endTime, 'HH:mm'));
 
-    return { timeSlots: slots, startHour: startH, endHour: endH };
-  }, [date, selectedLocal, slotDurationMinutes]);
+    return { timeSlots: slots, startHour: sH, endHour: eH };
+  }, [date, selectedLocal, slotDurationMinutes, specialJourneys]);
 
 
   const reservationsQueryConstraint = useMemo(() => {
@@ -357,7 +384,7 @@ export default function AgendaView() {
 
   // Determine if we are in a 'critical' loading state (initial load or date change)
   // We exclude some non-critical loads if we want optimistic UI, but for now we block to prevent empty grid.
-  const isLoading = professionalsLoading || localesLoading || reservationsLoading || timeBlocksLoading;
+  const isLoading = professionalsLoading || localesLoading || reservationsLoading || timeBlocksLoading || specialJourneysLoading;
 
   // Non-blocking background loads (optional to block)
   // clientsLoading, usersLoading, productsLoading might take longer but don't prevent rendering the grid structure.
@@ -763,7 +790,20 @@ export default function AgendaView() {
   }
 
   const getDaySchedule = (barber: Profesional): ScheduleDay | null => {
-    if (!date || !barber.schedule) return null;
+    if (!date) return null;
+
+    // Check for Special Journey (override)
+    const sj = specialJourneys.find((s: any) => s.profesionalId === barber.id && s.fecha === format(date, 'yyyy-MM-dd'));
+    if (sj) {
+      return {
+        enabled: true,
+        start: sj.hora_inicio,
+        end: sj.hora_fin,
+        breaks: []
+      };
+    }
+
+    if (!barber.schedule) return null;
     const dayOfWeek = format(date, 'eeee', { locale: es })
       .toLowerCase()
       .normalize("NFD")
@@ -1100,7 +1140,7 @@ export default function AgendaView() {
                             key={`nw-${i}`}
                             top={top}
                             height={height}
-                            text="Día no laboral"
+                            text="Día libre"
                             onClick={(e) => handleNonWorkClick(e, barber.id)}
                           />
                         );

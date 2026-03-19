@@ -193,6 +193,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', undefined, where('__name__', '==', 'recordatorios'));
   const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', undefined, where('__name__', '==', 'agenda'));
+  const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales');
 
   const reminderSettings = reminderSettingsData?.[0];
   const agendaSettings = agendaSettingsData?.[0];
@@ -345,10 +346,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         (b as any).type === 'available'
       );
 
-      // Helper function to check if a specific time range is fully covered by an available block
+      const specialJourney = specialJourneys.find((sj: any) => 
+        sj.profesionalId === item.barbero_id && 
+        sj.fecha === formattedDate
+      );
+
+      // Helper function to check if a specific time range is fully covered by an available block or special journey
       const isRangeCovered = (start: string, end: string) => {
         if (start >= end) return true;
-        return availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin >= end);
+        const coveredByBlock = availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin >= end);
+        const coveredBySpecial = specialJourney && specialJourney.hora_inicio <= start && specialJourney.hora_fin >= end;
+        return coveredByBlock || coveredBySpecial;
       };
 
       // Check for 'block' blocks (overrides schedule)
@@ -368,7 +376,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (!agendaSettings?.resourceOverload) {
         if (!daySchedule || !daySchedule.enabled) {
           // If schedule is disabled, the entire reservation must be covered by a special schedule
-          if (!isRangeCovered(hora_inicio, hora_fin)) {
+          if (!specialJourney && !isRangeCovered(hora_inicio, hora_fin)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
@@ -405,8 +413,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
 
       if (!agendaSettings?.resourceOverload) {
-        // Check for breaks
-        if (daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
+        // Check for breaks (ignore breaks for special journeys)
+        if (!specialJourney && daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
           const breakConflict = daySchedule.breaks.some((brk: any) => {
             if (hora_inicio >= brk.end || hora_fin <= brk.start) return false; // No overlap
 
@@ -428,7 +436,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     });
     setAvailabilityErrors(errors);
     return allItemsValid;
-  }, [filteredProfessionals, allReservations, allTimeBlocks, isEditMode, initialData, agendaSettings]);
+  }, [filteredProfessionals, allReservations, allTimeBlocks, specialJourneys, isEditMode, initialData, agendaSettings]);
 
   useEffect(() => {
     if (initialData && form && services.length > 0) {

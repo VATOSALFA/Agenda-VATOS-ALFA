@@ -599,7 +599,11 @@ export default function CashBoxPage() {
 
                             const updateData: any = {};
                             if (modified) updateData.items = newItems;
-                            if (changes.unpayTip) updateData.tipPaid = false;
+                            if (changes.unpayTip) {
+                                const currentPaidTo = saleData.tipsPaidTo || [];
+                                updateData.tipsPaidTo = currentPaidTo.filter(id => id !== professionalId);
+                                if (updateData.tipsPaidTo.length === 0) updateData.tipPaid = false;
+                            }
 
                             if (Object.keys(updateData).length > 0) {
                                 batch.update(saleRef, updateData);
@@ -639,11 +643,12 @@ export default function CashBoxPage() {
                         if (modified) updateData.items = newItems;
 
                         // Revert tips if this professional is involved
-                        // Use heuristic: if professional is in the sale items item.barbero_id, assume they were part of the tip payout
-                        if (sale.tipPaid) {
+                        if (sale.tipPaid || (sale.tipsPaidTo && sale.tipsPaidTo.length > 0)) {
                             const isProfessionalInvolved = sale.items?.some(i => i.barbero_id === professionalId);
                             if (isProfessionalInvolved) {
-                                updateData.tipPaid = false;
+                                const currentPaidTo = sale.tipsPaidTo || [];
+                                updateData.tipsPaidTo = currentPaidTo.filter(id => id !== professionalId);
+                                if (updateData.tipsPaidTo.length === 0) updateData.tipPaid = false;
                             }
                         }
 

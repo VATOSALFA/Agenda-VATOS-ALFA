@@ -40,7 +40,7 @@ function CollapsibleCard({ title, description, children, defaultOpen = false, ac
                 <CollapsibleTrigger asChild>
                     <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors flex flex-row items-center justify-between space-y-0">
                         <div className="space-y-1.5 text-left pr-4">
-                            <CardTitle>{title}</CardTitle>
+                            <h3 className="font-semibold text-base">{title}</h3>
                             {description && <CardDescription>{description}</CardDescription>}
                         </div>
                         <div className="flex items-center gap-2">
@@ -112,6 +112,9 @@ export default function EmailsSettingsPage() {
             dailySummaryTime: '08:00',
             dailySummarySubject: 'Tu Agenda del Día',
             dailySummaryHeadline: 'Hola {nombre}, aquí está tu agenda programada para hoy.',
+            // CC Admins Config
+            notifyGeneralAdmin: false,
+            notifyLocalAdmin: false,
         }
     });
 
@@ -182,6 +185,11 @@ export default function EmailsSettingsPage() {
                         form.setValue('dailySummaryTime', data.dailySummaryConfig.time || '08:00');
                         form.setValue('dailySummarySubject', data.dailySummaryConfig.subject || 'Tu Agenda del Día');
                         form.setValue('dailySummaryHeadline', data.dailySummaryConfig.headline || 'Hola {nombre}, aquí está tu agenda programada para hoy.');
+                    }
+
+                    if (data.ccAdminsConfig) {
+                        form.setValue('notifyGeneralAdmin', data.ccAdminsConfig.notifyGeneralAdmin ?? false);
+                        form.setValue('notifyLocalAdmin', data.ccAdminsConfig.notifyLocalAdmin ?? false);
                     }
                 }
 
@@ -274,6 +282,10 @@ export default function EmailsSettingsPage() {
                     time: data.dailySummaryTime,
                     subject: data.dailySummarySubject,
                     headline: data.dailySummaryHeadline
+                },
+                ccAdminsConfig: {
+                    notifyGeneralAdmin: data.notifyGeneralAdmin,
+                    notifyLocalAdmin: data.notifyLocalAdmin
                 }
             }, { merge: true });
 
@@ -837,6 +849,41 @@ export default function EmailsSettingsPage() {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </CollapsibleCard>
+
+                    <CollapsibleCard
+                        title="¿Quieres recibir copia de los correos de confirmación de todos los profesionales?"
+                        description="Mantén un seguimiento de las citas recibiendo una copia de los correos enviados a los barberos."
+                    >
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="notifyGeneralAdmin" className="text-base">Administrador General</Label>
+                                    <p className="text-sm text-muted-foreground">Se enviará copia al administrador principal del sistema.</p>
+                                </div>
+                                <Controller
+                                    control={form.control}
+                                    name="notifyGeneralAdmin"
+                                    render={({ field }) => (
+                                        <Switch id="notifyGeneralAdmin" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
+                            
+                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="notifyLocalAdmin" className="text-base">Administradora del Local</Label>
+                                    <p className="text-sm text-muted-foreground">Se enviará copia a la persona encargada de la sucursal correspondiente.</p>
+                                </div>
+                                <Controller
+                                    control={form.control}
+                                    name="notifyLocalAdmin"
+                                    render={({ field }) => (
+                                        <Switch id="notifyLocalAdmin" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
                         </div>
                     </CollapsibleCard>
 

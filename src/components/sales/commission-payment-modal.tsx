@@ -99,10 +99,16 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             const allSellersInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
             const professionalsInSale = allSellersInSale.filter(id => id && professionalMap.has(id));
 
-            // Distribute tip among professionals in the sale, only if tip is not paid
-            if (saleTip > 0 && !(sale as any).tipPaid && professionalsInSale.length > 0) {
+            // Distribute tip among professionals in the sale, only if tip is not paid for this professional
+            if (saleTip > 0 && professionalsInSale.length > 0) {
                 const tipPerProfessional = saleTip / professionalsInSale.length;
                 professionalsInSale.forEach(profId => {
+                    // Check if tip has already been paid for this specific professional
+                    const isTipPaidForProf = sale.tipsPaidTo 
+                        ? sale.tipsPaidTo.includes(profId) 
+                        : (sale as any).tipPaid === true;
+                    if (isTipPaidForProf) return;
+
                     const professional = professionalMap.get(profId);
                     if (professional) {
                         if (!commissionsByProfessional[profId]) {
@@ -230,6 +236,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             const formattedDate = format(now.toDate(), "dd/MM/yyyy HH:mm", { locale: es });
 
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
+            const tipsToUpdate = new Map<string, Set<string>>();
+            const professionalMapForSave = new Map(professionals.map(p => [p.id, p]));
 
             for (const comm of professionalsToPay) {
                 const totalPayment = comm.totalCommission + comm.totalTips;
@@ -271,13 +279,34 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         batch.update(saleRef, { items: updatedSale.items });
                     });
 
-                    // Mark tips as paid
+                    // Collect tips to mark as paid
                     comm.tipSaleIds.forEach(saleId => {
-                        const saleRef = doc(db, 'ventas', saleId);
-                        batch.update(saleRef, { tipPaid: true });
+                        if (!tipsToUpdate.has(saleId)) {
+                            const originalSale = sales.find(s => s.id === saleId);
+                            tipsToUpdate.set(saleId, new Set(originalSale?.tipsPaidTo || []));
+                        }
+                        tipsToUpdate.get(saleId)!.add(comm.professionalId);
                     });
                 }
             }
+
+            // Apply all tip updates
+            tipsToUpdate.forEach((professionalIdsSet, saleId) => {
+                const saleRef = doc(db, 'ventas', saleId);
+                const professionalIds = Array.from(professionalIdsSet);
+                
+                // Determine if everyone in the sale has been paid for their tip
+                const originalSale = sales.find(s => s.id === saleId);
+                const allSellersInSale = Array.from(new Set(originalSale?.items?.map(i => i.barbero_id).filter(Boolean)));
+                const validProfessionalsIds = allSellersInSale.filter(id => id && professionalMapForSave.has(id));
+                
+                const isEveryonePaid = validProfessionalsIds.every(id => professionalIds.includes(id));
+
+                batch.update(saleRef, { 
+                    tipsPaidTo: professionalIds,
+                    tipPaid: isEveryonePaid
+                });
+            });
 
             await batch.commit();
 

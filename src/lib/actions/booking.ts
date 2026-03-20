@@ -666,6 +666,43 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
     const localData = localDoc.exists ? localDoc.data() : {};
     const clientData = clientDoc.exists ? clientDoc.data() : {};
 
+    // --- BUILD BCC LIST for CC Admins ---
+    const ccAdminsConfig = websiteSettings.ccAdminsConfig || {};
+    let resolvedBcc: string[] = [];
+
+    try {
+        const bccCollect: string[] = [];
+
+        if (ccAdminsConfig.notifyGeneralAdmin) {
+            const generalAdminsSnap = await db.collection('usuarios')
+                .where('role', '==', 'Administrador general')
+                .limit(5)
+                .get();
+            generalAdminsSnap.forEach((adminDoc: any) => {
+                const u = adminDoc.data();
+                if (u.email && u.email.includes('@')) bccCollect.push(u.email);
+            });
+        }
+
+        if (ccAdminsConfig.notifyLocalAdmin && reservation.local_id) {
+            const localAdminsSnap = await db.collection('usuarios')
+                .where('role', '==', 'Administrador local')
+                .where('local_id', '==', reservation.local_id)
+                .limit(5)
+                .get();
+            localAdminsSnap.forEach((adminDoc: any) => {
+                const u = adminDoc.data();
+                if (u.email && u.email.includes('@')) bccCollect.push(u.email);
+            });
+        }
+
+        // Remove duplicates and exclude the professional's own email
+        resolvedBcc = [...new Set(bccCollect)].filter(e => e !== professional.email);
+        console.log(`[Email-Pro] BCC list: ${resolvedBcc.join(', ') || 'empty'}`);
+    } catch (bccError) {
+        console.error('[Email-Pro] Error building BCC list:', bccError);
+    }
+
     // Determine Sender
     const senderName = empresaConfig.name || 'VATOS ALFA Barber Shop';
     const senderEmail = 'contacto@vatosalfa.com'; // Default verified
@@ -918,10 +955,12 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
         await resend.emails.send({
             from: fromEmail,
             to: professional.email,
+            bcc: resolvedBcc.length > 0 ? resolvedBcc : undefined,
             subject: subject,
             html: html
         });
-        console.log(`[Email] Professional confirmation sent to ${professional.email}`);
+        console.log(`[Email] Professional confirmation sent to ${professional.email}${resolvedBcc.length > 0 ? ` (BCC: ${resolvedBcc.join(', ')})` : ''}`);
+
     } else {
         console.log(`[Email] Skipping Professional Email. Email: ${professional.email}, Enabled: ${profConfig.enabled}`);
     }

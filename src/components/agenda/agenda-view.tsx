@@ -46,7 +46,7 @@ import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where, doc, updateDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
@@ -272,6 +272,27 @@ export default function AgendaView() {
 
   const [queryKey, setQueryKey] = useState(0);
   const onDataRefresh = () => setQueryKey(prev => prev + 1);
+
+  const [whatsappConfirmationAnimation, setWhatsappConfirmationAnimation] = useState(true);
+  const [whatsappReminderAnimation, setWhatsappReminderAnimation] = useState(true);
+
+  useEffect(() => {
+    if (!db) return;
+    const fetchSettings = async () => {
+      try {
+        const whatsappRef = doc(db, 'configuracion', 'whatsapp');
+        const snap = await getDoc(whatsappRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          setWhatsappConfirmationAnimation(data.whatsappConfirmationAnimation ?? true);
+          setWhatsappReminderAnimation(data.whatsappReminderAnimation ?? true);
+        }
+      } catch (e) {
+        console.error("Error fetching whatsapp settings", e);
+      }
+    };
+    fetchSettings();
+  }, [db]);
 
   // Helper for checking permissions
   const canSee = (permission: string) => {
@@ -982,6 +1003,20 @@ export default function AgendaView() {
                         </div>
                       </div>
                     </div>
+                    {/* Communication Alerts */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Alertas de comunicación</p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          <div className="w-5 h-5 rounded bg-blue-300/80 border-l-[3px] border-blue-500 flex-shrink-0 animate-pending-notification overflow-hidden relative" />
+                          <div className="flex flex-col">
+                            <span className="text-sm">Pendiente de notificación</span>
+                            <span className="text-[10px] text-muted-foreground leading-tight">Falta enviar confirmación o recordatorio (WhatsApp)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Other indicators */}
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Otros</p>
@@ -1280,7 +1315,11 @@ export default function AgendaView() {
                                 className={cn(
                                   "absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 overflow-hidden cursor-pointer select-none",
                                   event.color,
-                                  event.type === 'appointment' ? 'z-20' : 'z-10'
+                                  event.type === 'appointment' ? 'z-20' : 'z-10',
+                                  (event.type === 'appointment' && (
+                                    (whatsappConfirmationAnimation && !event.whatsappConfirmationSent) || 
+                                    (whatsappReminderAnimation && !event.whatsappReminderSent)
+                                  )) && "animate-pending-notification"
                                 )}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >

@@ -86,12 +86,11 @@ export const allPermissionCategories: PermissionCategory[] = [
         title: 'Administración',
         icon: Settings,
         permissions: [
-            { key: 'ver_administracion', label: 'Ver Administración' },
             { key: 'ver_profesionales', label: 'Ver Profesionales' },
             { key: 'ver_servicios', label: 'Ver Servicios' },
             { key: 'ver_comisiones', label: 'Ver Comisiones' },
-            { key: 'ver_ajustes', label: 'Ver Ajustes Generales' },
-            { key: 'editar_mensajes_whatsapp', label: 'Editar Mensajes de WhatsApp' },
+            { key: 'ver_ajustes', label: 'Ver Ajustes' },
+            { key: 'ver_nomina', label: 'Ver Nómina' },
         ]
     },
 
@@ -128,8 +127,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
             'ver_productos', 'ver_inventario', 'ver_movimiento_stock', 'ver_venta_productos',
             'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria',
             'ver_finanzas',
-            'ver_administracion',
-
+            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'ver_ajustes'
         ],
     },
     {

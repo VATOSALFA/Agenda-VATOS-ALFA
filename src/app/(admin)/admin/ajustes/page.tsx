@@ -40,6 +40,8 @@ interface AjustesSettings {
     // WhatsApp Settings
     whatsappMessageTemplate: string;
     whatsappReminderTemplate: string;
+    whatsappConfirmationAnimation: boolean;
+    whatsappReminderAnimation: boolean;
     
     // Advanced Features moved to /settings/features
 }
@@ -64,6 +66,8 @@ export default function AjustesPage() {
             }, {} as Record<string, { use: boolean; required: boolean }>),
             whatsappMessageTemplate: '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._',
             whatsappReminderTemplate: '¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_',
+            whatsappConfirmationAnimation: true,
+            whatsappReminderAnimation: true,
             /* Moved to settings/features
             enableMarketing: false,
             enableLoyaltyPoints: false,
@@ -112,6 +116,8 @@ export default function AjustesPage() {
                     }, {} as Record<string, { use: boolean; required: boolean }>),
                     whatsappMessageTemplate: whatsappData.whatsappMessageTemplate || '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._',
                     whatsappReminderTemplate: whatsappData.whatsappReminderTemplate || '¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_',
+                    whatsappConfirmationAnimation: whatsappData.whatsappConfirmationAnimation ?? true,
+                    whatsappReminderAnimation: whatsappData.whatsappReminderAnimation ?? true,
 
                     /* Moved to settings/features
                     enableMarketing: featuresData.enableMarketing ?? false,
@@ -198,8 +204,10 @@ export default function AjustesPage() {
             // 3. Save WhatsApp Settings
             const whatsappRef = doc(db, 'configuracion', 'whatsapp');
             await setDoc(whatsappRef, {
-                whatsappMessageTemplate: data.whatsappMessageTemplate,
-                whatsappReminderTemplate: data.whatsappReminderTemplate
+                whatsappMessageTemplate: data.whatsappMessageTemplate || '',
+                whatsappReminderTemplate: data.whatsappReminderTemplate || '',
+                whatsappConfirmationAnimation: data.whatsappConfirmationAnimation ?? true,
+                whatsappReminderAnimation: data.whatsappReminderAnimation ?? true
             }, { merge: true });
 
             /* Moved to settings/features
@@ -430,6 +438,37 @@ export default function AjustesPage() {
                                             />
                                             <span className="text-[10px] text-gray-400 self-end mt-1 uppercase">09:00</span>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr className="border-border my-6"/>
+
+                            <div>
+                                <h3 className="text-lg font-medium mb-2">Alertas Visuales en Agenda</h3>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    Configura las animaciones en la agenda (desvanecido) que indican cuando falta enviar un mensaje.
+                                </p>
+                                
+                                <div className="space-y-4 max-w-2xl">
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-base">Alerta de Confirmación Pendiente</Label>
+                                            <p className="text-sm text-muted-foreground">Animar la cita si no se ha enviado el mensaje de confirmación.</p>
+                                        </div>
+                                        <Controller name="whatsappConfirmationAnimation" control={form.control} render={({ field }) => (
+                                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                        )} />
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-base">Alerta de Recordatorio Pendiente</Label>
+                                            <p className="text-sm text-muted-foreground">Animar la cita si no se ha enviado el mensaje de recordatorio.</p>
+                                        </div>
+                                        <Controller name="whatsappReminderAnimation" control={form.control} render={({ field }) => (
+                                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                        )} />
                                     </div>
                                 </div>
                             </div>

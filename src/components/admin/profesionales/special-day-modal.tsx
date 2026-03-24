@@ -57,6 +57,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
   const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   const { control, handleSubmit, watch, reset } = useForm({
     defaultValues: {
@@ -140,7 +141,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                             render={({ field }) => (
                                 <div className="space-y-1">
                                     <Label>Fecha</Label>
-                                    <Popover>
+                                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                                         <PopoverTrigger asChild>
                                             <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal px-2 truncate", !field.value && "text-muted-foreground")}>
                                                 <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
@@ -148,7 +149,17 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                                             </Button>
 
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus/></PopoverContent>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calendar 
+                                                mode="single" 
+                                                selected={field.value} 
+                                                onSelect={(date) => {
+                                                    field.onChange(date);
+                                                    setIsCalendarOpen(false);
+                                                }} 
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
                                     </Popover>
                                 </div>
                             )}

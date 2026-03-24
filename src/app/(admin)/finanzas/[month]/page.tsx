@@ -9,6 +9,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, Edit, LineChart, TrendingUp, Sav
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -77,16 +78,16 @@ const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, classN
         <div className="flex items-center gap-2">
             <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
             {tooltipText && (
-                <TooltipProvider>
-                    <Tooltip delayDuration={300}>
-                        <TooltipTrigger asChild>
+                <Popover>
+                    
+                        <PopoverTrigger asChild>
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-3">
                             <p className="max-w-xs text-sm font-normal text-center">{tooltipText}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                        </PopoverContent>
+                    
+                </Popover>
             )}
             {children}
         </div>
@@ -164,16 +165,16 @@ function ResumenEgresoItem({ label, amount, tooltip }: { label: string, amount: 
             <span className="flex items-center">
                 {label}
                 {tooltip && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <HelpCircle className="h-3 w-3 inline-block ml-1 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>
+                    <Popover>
+                        
+                            <PopoverTrigger asChild>
+                                <HelpCircle className="h-4 w-4 inline-block ml-1 cursor-help" />
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-3">
                                 <p className="max-w-xs">{tooltip}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                            </PopoverContent>
+                        
+                    </Popover>
                 )}
             </span>
             <span className="font-semibold text-foreground">${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -318,8 +319,8 @@ export default function FinanzasMensualesPage() {
 
     const [isIngresosCollapsed, setIsIngresosCollapsed] = useState(true);
     const [isEgresosCollapsed, setIsEgresosCollapsed] = useState(true);
-    const [isMovementsCollapsed, setIsMovementsCollapsed] = useState(false);
-    const [isAdminBalanceCollapsed, setIsAdminBalanceCollapsed] = useState(false);
+    const [isMovementsCollapsed, setIsMovementsCollapsed] = useState(true);
+    const [isAdminBalanceCollapsed, setIsAdminBalanceCollapsed] = useState(true);
     const [isLiquidacionModalOpen, setIsLiquidacionModalOpen] = useState(false);
     const [isEditingComment, setIsEditingComment] = useState(false);
     const [commentToEdit, setCommentToEdit] = useState<{ id: string, type: 'egreso' | 'ingreso' | 'liquidacion', comment: string, monto?: number } | null>(null);
@@ -1446,16 +1447,16 @@ export default function FinanzasMensualesPage() {
                                         <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
                                             <span className="text-muted-foreground flex items-center">
                                                 Comisiones Servicios
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <HelpCircle className="h-3 w-3 inline-block ml-1 cursor-help" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
+                                                <Popover>
+                                                    
+                                                        <PopoverTrigger asChild>
+                                                            <HelpCircle className="h-4 w-4 inline-block ml-1 cursor-help" />
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80 p-3">
                                                             <p className="max-w-xs">Dinero pagado exclusivamente por comisión de servicios realizados por los profesionales.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                                        </PopoverContent>
+                                                    
+                                                </Popover>
                                             </span>
                                         </AccordionTrigger>
                                         <span className="font-semibold mr-4">${display.egresos_comisiones_servicios_total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -1499,16 +1500,16 @@ export default function FinanzasMensualesPage() {
                             <div className="flex justify-between items-center text-sm pt-2 mt-2 border-t text-muted-foreground">
                                 <span className="flex items-center">
                                     Propinas (Informativo)
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <HelpCircle className="h-3 w-3 inline-block ml-1 cursor-help" />
-                                            </TooltipTrigger>
-                                            <TooltipContent>
+                                    <Popover>
+                                        
+                                            <PopoverTrigger asChild>
+                                                <HelpCircle className="h-4 w-4 inline-block ml-1 cursor-help" />
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-80 p-3">
                                                 <p className="max-w-xs">Total de propinas pagadas realmente a los profesionales (egresos registrados en caja). No incluye propinas de ventas que aún no se han liquidado con el barbero.</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
+                                            </PopoverContent>
+                                        
+                                    </Popover>
                                 </span>
                                 <span className="font-medium">${display.egresos_propinas.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
@@ -1804,19 +1805,19 @@ export default function FinanzasMensualesPage() {
                                 <CardTitle className="flex items-center gap-2 min-w-0 flex-1 text-lg">
                                     <DollarSign className="h-5 w-5 text-primary flex-shrink-0" />
                                     <span className="truncate sm:whitespace-normal">Movimientos de Flujo de Caja (Informativo)</span>
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
+                                    <Popover>
+                                        
+                                            <PopoverTrigger asChild>
                                                 <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help flex-shrink-0" />
-                                            </TooltipTrigger>
-                                            <TooltipContent>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-80 p-3">
                                                 <p className="max-w-xs text-xs">
                                                     Registro de entregas de efectivo (sobrantes) y entradas de dinero (ajustes) para balancear la caja diaria.
                                                     Estos movimientos NO afectan la utilidad neta ya que son transferencias internas de efectivo.
                                                 </p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
+                                            </PopoverContent>
+                                        
+                                    </Popover>
                                 </CardTitle>
                                 <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
                                     <div className="text-right">
@@ -1955,18 +1956,16 @@ export default function FinanzasMensualesPage() {
                             <div className="flex items-center gap-2">
                                 <UserCircle className="h-5 w-5 text-primary" />
                                 Balance de Administradora Local
-                                <TooltipProvider>
-                                    <Tooltip delayDuration={300}>
-                                        <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Popover>
+                                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help ml-1" />
-                                        </TooltipTrigger>
-                                        <TooltipContent>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-80 p-3">
                                             <p className="max-w-xs text-sm font-normal text-center">
                                                 Cálculo informativo del flujo de efectivo acumulado por la administración local del negocio, considerando entregas de dinero y pagos realizados.
                                             </p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                                        </PopoverContent>
+                                    </Popover>
 
                             </div>
                             <div className="flex items-center gap-2 sm:gap-4">
@@ -1994,16 +1993,16 @@ export default function FinanzasMensualesPage() {
                                         <div className="flex flex-col items-center">
                                             <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
                                                 Total Salidas Flow
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
+                                                <Popover>
+                                                    
+                                                        <PopoverTrigger asChild>
                                                             <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80 p-3">
                                                             <p className="max-w-xs text-[10px]">Efectivo total que ha salido de la caja según los movimientos informativos (lo que la administradora se lleva).</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                                        </PopoverContent>
+                                                    
+                                                </Popover>
                                             </span>
                                             <span className="text-primary flex items-center gap-1 font-bold">
                                                 <ArrowUpRight className="h-3 w-3" /> Efectivo Retirado
@@ -2014,16 +2013,16 @@ export default function FinanzasMensualesPage() {
                                         <div className="flex flex-col items-center">
                                             <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
                                                 Total Entradas Flow
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
+                                                <Popover>
+                                                    
+                                                        <PopoverTrigger asChild>
                                                             <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80 p-3">
                                                             <p className="max-w-xs text-[10px]">Efectivo total que la administradora ha ingresado a la caja para cuadrar faltantes.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                                        </PopoverContent>
+                                                    
+                                                </Popover>
                                             </span>
                                             <span className="text-slate-500 flex items-center gap-1 font-bold">
                                                 <ArrowDownLeft className="h-3 w-3" /> Efectivo Ingresado
@@ -2034,16 +2033,16 @@ export default function FinanzasMensualesPage() {
                                         <div className="flex flex-col items-center">
                                             <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
                                                 Pagos / Reembolsos
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
+                                                <Popover>
+                                                    
+                                                        <PopoverTrigger asChild>
                                                             <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80 p-3">
                                                             <p className="max-w-xs text-[10px]">Dinero entregado por el Administrador General a la administradora local para saldar deudas del mes.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                                        </PopoverContent>
+                                                    
+                                                </Popover>
                                             </span>
                                             <span className="text-secondary flex items-center gap-1 font-bold">
                                                 <DollarSign className="h-3 w-3" /> Liquidaciones
@@ -2054,16 +2053,16 @@ export default function FinanzasMensualesPage() {
                                         <div className="flex flex-col items-center">
                                             <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
                                                 Egresos Pagados
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
+                                                <Popover>
+                                                    
+                                                        <PopoverTrigger asChild>
                                                             <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80 p-3">
                                                             <p className="max-w-xs text-[10px]">Gastos operativos o de insumos que la administradora pagó de su bolsillo o del efectivo retirado.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                                        </PopoverContent>
+                                                    
+                                                </Popover>
                                             </span>
                                             <span className="text-slate-600 font-bold">Insumos / Otros</span>
                                         </div>
@@ -2072,16 +2071,16 @@ export default function FinanzasMensualesPage() {
                                         <div className="flex flex-col items-center">
                                             <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
                                                 Estado de Cuenta
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
+                                                <Popover>
+                                                    
+                                                        <PopoverTrigger asChild>
                                                             <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-80 p-3">
                                                             <p className="max-w-xs text-[10px]">Cálculo final: Salidas - Entradas - Egresos pagados. Determina si sobra dinero o si hay un adeudo.</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                                        </PopoverContent>
+                                                    
+                                                </Popover>
                                             </span>
                                             <span className="text-foreground font-bold">Resultado Final</span>
                                         </div>

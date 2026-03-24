@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth, storage } from '@/lib/firebase-client';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -165,7 +165,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
+  const createSession = async (user: CustomUser) => {
+    // Only create session for non-clients (e.g. receptionists, admins)
+    if (user && user.role !== 'Cliente') {
+      try {
+        const sessionRef = await addDoc(collection(db, 'sesiones_trabajo'), {
+          empleado_id: user.uid,
+          empleado_nombre: user.displayName || user.email,
+          rol: user.role,
+          hora_entrada: serverTimestamp(),
+          hora_salida: null,
+          local_id: user.local_id || null,
+          estado: 'activa',
+          pagado: false
+        });
+        localStorage.setItem('current_session_id', sessionRef.id);
+      } catch (e) {
+        console.error("Error creating work session:", e);
+      }
+    }
+  };
+
+  const closeCurrentSession = async () => {
+    const activeSessionId = localStorage.getItem('current_session_id');
+    if (activeSessionId) {
+      try {
+        await updateDoc(doc(db, 'sesiones_trabajo', activeSessionId), {
+          hora_salida: serverTimestamp(),
+          estado: 'cerrada'
+        });
+        localStorage.removeItem('current_session_id');
+      } catch (e) {
+        console.error("Error closing work session:", e);
+      }
+    }
+  };
+
   const signOut = async () => {
+    await closeCurrentSession();
     await firebaseSignOut(auth);
     setUser(null);
     router.push('/login');
@@ -175,6 +212,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
     await setPersistence(auth, persistence);
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    
+    // Explicitly validate user and start session
+    try {
+      const customUser = await validateUserPermissions(userCredential.user);
+      await createSession(customUser);
+    } catch (error) {
+       console.error("User validation failed during sign in:", error);
+    }
+
     return userCredential.user;
   };
 
@@ -184,7 +230,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Explicitly validate user immediately to prevent inconsistent UI state
     try {
-      await validateUserPermissions(userCredential.user);
+      const customUser = await validateUserPermissions(userCredential.user);
+      await createSession(customUser);
     } catch (error) {
       // If validation fails, sign out and re-throw so the UI catches it
       await firebaseSignOut(auth);

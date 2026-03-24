@@ -104,6 +104,7 @@ const adminNavLinks = [
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
   { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
+  { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
 ];
 
 export default function Header() {
@@ -434,7 +435,7 @@ export default function Header() {
                         </AccordionItem>
                       )}
 
-                      {canSeeAny(['ver_administracion', 'ver_profesionales', 'ver_servicios', 'ver_comisiones']) && (
+                      {canSeeAny(adminNavLinks.map(l => l.permission!)) && (
                         <AccordionItem value="admin" className="border-b-0">
                           <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
                             Administración
@@ -442,7 +443,7 @@ export default function Header() {
                           <AccordionContent>
                             <div className="flex flex-col space-y-1 pt-1">
                               {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                                (canSee(permission!) || canSee('ver_administracion')) && (
+                                canSee(permission!) && (
                                   <Link
                                     key={href}
                                     href={href!}
@@ -610,7 +611,7 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-            {canSeeAny(['ver_administracion', 'ver_profesionales', 'ver_servicios', 'ver_comisiones']) && (
+            {canSeeAny(adminNavLinks.map(l => l.permission!)) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
@@ -624,7 +625,7 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="start">
                   {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                    (canSee(permission!) || canSee('ver_administracion')) && (
+                    canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
                         <Link href={href!}>
                           <Icon className="mr-2 h-4 w-4" />

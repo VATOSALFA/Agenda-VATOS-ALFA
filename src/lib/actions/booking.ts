@@ -4,6 +4,7 @@ import { getDb } from '@/lib/firebase-server';
 import { addMinutes, format, set, parse, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { randomUUID } from 'crypto';
 
 interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
@@ -52,11 +53,34 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         let effectiveScheduleStart = '';
         let effectiveScheduleEnd = '';
         let isSpecialJourney = false;
+        const syntheticBreaks: { start: string, end: string }[] = [];
+
+        // Helper specifically for safe parsing
+        const parseTimeSafe = (timeStr: any) => {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const parts = timeStr.split(':');
+            if (parts.length < 2) return null;
+            const h = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return null;
+            return { h, m };
+        };
+
         if (!specialDaysSnap.empty) {
-            const specialData = specialDaysSnap.docs[0].data();
-            effectiveScheduleStart = specialData.hora_inicio;
-            effectiveScheduleEnd = specialData.hora_fin;
+            const journeys = specialDaysSnap.docs.map(d => d.data());
+            // Sort journeys by start time
+            journeys.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+            
+            effectiveScheduleStart = journeys[0].hora_inicio;
+            effectiveScheduleEnd = journeys.reduce((latest, j) => j.hora_fin > latest ? j.hora_fin : latest, journeys[0].hora_fin);
             isSpecialJourney = true;
+            
+            // Build synthetic breaks for gaps between separate journeys
+            for (let i = 0; i < journeys.length - 1; i++) {
+                if (journeys[i].hora_fin < journeys[i+1].hora_inicio) {
+                    syntheticBreaks.push({ start: journeys[i].hora_fin, end: journeys[i+1].hora_inicio });
+                }
+            }
         } else {
             const scheduleDay = profData.schedule?.[dayName];
             if (!scheduleDay || !scheduleDay.enabled) {
@@ -85,17 +109,6 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
                 return { slots: [] }; // Local is closed and this isn't a special override
             }
         }
-
-        // Safe Time Parsing Helper
-        const parseTimeSafe = (timeStr: any) => {
-            if (!timeStr || typeof timeStr !== 'string') return null;
-            const parts = timeStr.split(':');
-            if (parts.length < 2) return null;
-            const h = parseInt(parts[0], 10);
-            const m = parseInt(parts[1], 10);
-            if (isNaN(h) || isNaN(m)) return null;
-            return { h, m };
-        };
 
         const profStart = parseTimeSafe(effectiveScheduleStart);
         const profEnd = parseTimeSafe(effectiveScheduleEnd);
@@ -140,6 +153,18 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
                     }
                 });
             }
+        } else {
+            // Add synthetic breaks from multiple special journeys
+            syntheticBreaks.forEach(brk => {
+                const s = parseTimeSafe(brk.start);
+                const e = parseTimeSafe(brk.end);
+                if (s && e) {
+                    busyIntervals.push({
+                        start: s.h * 60 + s.m,
+                        end: e.h * 60 + e.m
+                    });
+                }
+            });
         }
 
         // 2. Get Busy Slots (Reservations)
@@ -457,13 +482,21 @@ export async function createPublicReservation(data: any) {
         let profEffectiveStart = '';
         let profEffectiveEnd = '';
         let isSpecialJourney = false;
-        let profBreaks = [];
+        let profBreaks: {start: string, end: string}[] = [];
 
         if (!specialDaysSnap.empty) {
-            const specialData = specialDaysSnap.docs[0].data();
-            profEffectiveStart = specialData.hora_inicio;
-            profEffectiveEnd = specialData.hora_fin;
+            const journeys = specialDaysSnap.docs.map(d => d.data());
+            journeys.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+            
+            profEffectiveStart = journeys[0].hora_inicio;
+            profEffectiveEnd = journeys.reduce((latest, j) => j.hora_fin > latest ? j.hora_fin : latest, journeys[0].hora_fin);
             isSpecialJourney = true;
+            
+            for (let i = 0; i < journeys.length - 1; i++) {
+                if (journeys[i].hora_fin < journeys[i+1].hora_inicio) {
+                    profBreaks.push({ start: journeys[i].hora_fin, end: journeys[i+1].hora_inicio });
+                }
+            }
         } else {
             const scheduleDay = profData?.schedule?.[dayName];
             if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };
@@ -510,7 +543,7 @@ export async function createPublicReservation(data: any) {
         }
 
         // Check Breaks
-        if (!isSpecialJourney && profBreaks && Array.isArray(profBreaks)) {
+        if (profBreaks && Array.isArray(profBreaks)) {
             const isBreak = profBreaks.some((brk: any) => {
                 return startTimeStr < brk.end && endTimeStr > brk.start;
             });
@@ -582,11 +615,15 @@ export async function createPublicReservation(data: any) {
 
         const resRef = await db.collection('reservas').add(reservationData);
 
+        // Generate and store action token for email quick actions
+        const actionToken = randomUUID();
+        await db.collection('reservas').doc(resRef.id).update({ actionToken });
+
         // --- EMAIL NOTIFICATIONS ---
         let emailWarning = null;
         try {
             // Await execution to ensure delivery in Serverless environment (Next.js Server Actions)
-            await sendBookingConfirmation(reservationData, db, data.client.email, data.professionalId);
+            await sendBookingConfirmation({ ...reservationData, id: resRef.id, actionToken }, db, data.client.email, data.professionalId);
         } catch (emailError: any) {
             console.error("Failed to send confirmation emails:", emailError);
             emailWarning = `Email falló: ${emailError.message}`;
@@ -628,7 +665,14 @@ export async function sendManualBookingConfirmation(reservationId: string) {
 
         const professionalId = reservation.barbero_id || (reservation.items && reservation.items[0] ? reservation.items[0].barbero_id : '');
 
-        await sendBookingConfirmation(reservation, db, clientEmail, professionalId);
+        // Generate action token if missing (for quick action buttons)
+        let actionToken = reservation.actionToken;
+        if (!actionToken) {
+            actionToken = randomUUID();
+            await db.collection('reservas').doc(reservationId).update({ actionToken });
+        }
+
+        await sendBookingConfirmation({ ...reservation, id: reservationId, actionToken }, db, clientEmail, professionalId);
         return { success: true };
     } catch (e: any) {
         console.error("Manual Email Error:", e);
@@ -758,6 +802,19 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
         const showServices = clientConfig.showServices !== false;
         const yellowNote = websiteSettings.predefinedNotes || 'Favor de llegar 5 minutos antes de la hora de tu cita.';
 
+        const quickActions = websiteSettings.quickActionsConfig || {};
+        const isQuickActionsEnabled = quickActions.enabled === true;
+        const waPhone = localPhone.replace(/\D/g, '');
+        const appBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://vatosalfa.com';
+        const actionApiUrl = `${appBaseUrl}/api/cita/action`;
+        const confirmLink = reservation.actionToken
+            ? `${actionApiUrl}?token=${reservation.actionToken}&action=confirm`
+            : `https://wa.me/${waPhone}?text=${encodeURIComponent(`¡Hola! Confirmo mi cita para el ${dateStr} a las ${timeStr}.`)}`;
+        const rescheduleLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(`¡Hola! Requiero reagendar mi cita del ${dateStr} a las ${timeStr}.`)}`;
+        const cancelLink = reservation.actionToken
+            ? `${actionApiUrl}?token=${reservation.actionToken}&action=cancel`
+            : `https://wa.me/${waPhone}?text=${encodeURIComponent(`¡Hola! Deseo cancelar mi cita del ${dateStr} a las ${timeStr}.`)}`;
+
         const html = `
             <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 100%; padding: 20px; background-color: #f4f4f4;">
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
@@ -795,8 +852,20 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
                     </table>
 
                     <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
-                        ${yellowNote}
+                        ${yellowNote.replace(/\n/g, '<br/>')}
                     </div>
+
+                    ${isQuickActionsEnabled ? `
+                    <div style="margin-top: 25px; text-align: center;">
+                        <div style="display: block; width: 100%;">
+                            ${quickActions.showConfirm ? `
+                            <a href="${confirmLink}" style="display: inline-block; background-color: #22c55e; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-size: 11px; font-weight: bold; margin: 5px; font-family: 'Roboto', Arial, sans-serif;">CONFIRMAR</a>` : ''}
+                            ${quickActions.showReschedule ? `
+                            <a href="${rescheduleLink}" style="display: inline-block; background-color: #314177; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-size: 11px; font-weight: bold; margin: 5px; font-family: 'Roboto', Arial, sans-serif;">REAGENDAR</a>` : ''}
+                            ${quickActions.showCancel ? `
+                            <a href="${cancelLink}" style="display: inline-block; background-color: #ef4444; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-size: 11px; font-weight: bold; margin: 5px; font-family: 'Roboto', Arial, sans-serif;">CANCELAR</a>` : ''}
+                        </div>
+                    </div>` : ''}
 
                     <div style="margin-top: 25px; text-align: left;">
                         <div style="margin-bottom: 12px; padding-left: 2px;">
@@ -941,7 +1010,7 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
 
                         ${note ? `
                         <div style="background-color: #ffffff; color: #333; padding: 15px; border-radius: 8px; font-size: 0.9em; margin-top: 25px; text-align: center; border: 1px solid #000000;">
-                            ${note}
+                            ${note.replace(/\n/g, '<br/>')}
                         </div>` : ''}
                     </div>
                     

@@ -17,7 +17,7 @@ import { AddSenderModal } from '@/components/settings/emails/add-sender-modal';
 import { EmailPreview } from '@/components/settings/emails/email-preview';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Badge } from '@/components/ui/badge';
 import { Star } from 'lucide-react';
@@ -71,6 +71,13 @@ export default function EmailsSettingsPage() {
     const [editingSender, setEditingSender] = useState<Sender | null>(null);
     const [senderToDelete, setSenderToDelete] = useState<Sender | null>(null);
     const [isLoadingSenders, setIsLoadingSenders] = useState(true);
+    const [companyDetails, setCompanyDetails] = useState({
+        name: 'VATOS ALFA Barber Shop',
+        logo: 'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.appspot.com/o/empresa%2Flogo.png?alt=media',
+        phone: '442-123-4567',
+        address: 'Av. Cerro Sombrerete 1001',
+        secondaryColor: '#314177'
+    });
 
     const form = useForm({
         defaultValues: {
@@ -115,6 +122,16 @@ export default function EmailsSettingsPage() {
             // CC Admins Config
             notifyGeneralAdmin: false,
             notifyLocalAdmin: false,
+            // Quick Actions
+            enableQuickActions: false,
+            showConfirmAction: true,
+            showRescheduleAction: true,
+            showCancelAction: true,
+            // Reminder Quick Actions
+            enableReminderQuickActions: false,
+            showReminderConfirmAction: true,
+            showReminderRescheduleAction: true,
+            showReminderCancelAction: true,
         }
     });
 
@@ -123,6 +140,28 @@ export default function EmailsSettingsPage() {
             if (!db) return;
             setIsLoadingSenders(true);
             try {
+                // 0. Load Company Details for Preview
+                const empresaSnap = await getDocs(query(collection(db, 'empresa'), limit(1)));
+                if (!empresaSnap.empty) {
+                    const eData = empresaSnap.docs[0].data();
+                    setCompanyDetails(prev => ({
+                        ...prev,
+                        name: eData.name || prev.name,
+                        logo: eData.logo_url || prev.logo,
+                        secondaryColor: eData.theme?.secondaryColor || prev.secondaryColor
+                    }));
+                }
+
+                const localesSnap = await getDocs(query(collection(db, 'locales'), limit(1)));
+                if (!localesSnap.empty) {
+                    const lData = localesSnap.docs[0].data();
+                    setCompanyDetails(prev => ({
+                        ...prev,
+                        phone: lData.phone || prev.phone,
+                        address: lData.address || prev.address
+                    }));
+                }
+
                 // 1. Load Website Settings (Confirmation Note + Visibility Flags)
                 const websiteDoc = await getDoc(doc(db, 'settings', 'website'));
                 if (websiteDoc.exists()) {
@@ -190,6 +229,20 @@ export default function EmailsSettingsPage() {
                     if (data.ccAdminsConfig) {
                         form.setValue('notifyGeneralAdmin', data.ccAdminsConfig.notifyGeneralAdmin ?? false);
                         form.setValue('notifyLocalAdmin', data.ccAdminsConfig.notifyLocalAdmin ?? false);
+                    }
+
+                    if (data.quickActionsConfig) {
+                        form.setValue('enableQuickActions', data.quickActionsConfig.enabled ?? false);
+                        form.setValue('showConfirmAction', data.quickActionsConfig.showConfirm ?? true);
+                        form.setValue('showRescheduleAction', data.quickActionsConfig.showReschedule ?? true);
+                        form.setValue('showCancelAction', data.quickActionsConfig.showCancel ?? true);
+                    }
+
+                    if (data.reminderQuickActionsConfig) {
+                        form.setValue('enableReminderQuickActions', data.reminderQuickActionsConfig.enabled ?? false);
+                        form.setValue('showReminderConfirmAction', data.reminderQuickActionsConfig.showConfirm ?? true);
+                        form.setValue('showReminderRescheduleAction', data.reminderQuickActionsConfig.showReschedule ?? true);
+                        form.setValue('showReminderCancelAction', data.reminderQuickActionsConfig.showCancel ?? true);
                     }
                 }
 
@@ -286,6 +339,18 @@ export default function EmailsSettingsPage() {
                 ccAdminsConfig: {
                     notifyGeneralAdmin: data.notifyGeneralAdmin,
                     notifyLocalAdmin: data.notifyLocalAdmin
+                },
+                quickActionsConfig: {
+                    enabled: data.enableQuickActions,
+                    showConfirm: data.showConfirmAction,
+                    showReschedule: data.showRescheduleAction,
+                    showCancel: data.showCancelAction
+                },
+                reminderQuickActionsConfig: {
+                    enabled: data.enableReminderQuickActions,
+                    showConfirm: data.showReminderConfirmAction,
+                    showReschedule: data.showReminderRescheduleAction,
+                    showCancel: data.showReminderCancelAction
                 }
             }, { merge: true });
 
@@ -588,14 +653,65 @@ export default function EmailsSettingsPage() {
                                                     </p>
                                                 </div>
 
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="confirmWhatsappText">Texto botón WhatsApp</Label>
-                                                    <Input id="confirmWhatsappText" {...form.register('confirmWhatsappText')} />
+
+                                                <div className="pt-4 border-t space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <Label className="font-semibold">Acciones Rápidas (WhatsApp)</Label>
+                                                            <p className="text-[0.8rem] text-muted-foreground text-xs">Muestra botones interactivos para confirmar, reagendar o cancelar.</p>
+                                                        </div>
+                                                        <Controller
+                                                            name="enableQuickActions"
+                                                            control={form.control}
+                                                            render={({ field }) => (
+                                                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+
+                                                    {form.watch('enableQuickActions') && (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pl-4 pt-1">
+                                                            <div className="flex items-center space-x-2">
+                                                                <Controller
+                                                                    name="showConfirmAction"
+                                                                    control={form.control}
+                                                                    render={({ field }) => (
+                                                                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                    )}
+                                                                />
+                                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Confirmar</Label>
+                                                            </div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <Controller
+                                                                    name="showRescheduleAction"
+                                                                    control={form.control}
+                                                                    render={({ field }) => (
+                                                                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                    )}
+                                                                />
+                                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Reagendar</Label>
+                                                            </div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <Controller
+                                                                    name="showCancelAction"
+                                                                    control={form.control}
+                                                                    render={({ field }) => (
+                                                                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                    )}
+                                                                />
+                                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cancelar</Label>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <div className="space-y-2 mt-4 pt-4 border-t">
+                                                        <Label htmlFor="confirmWhatsappText">Texto botón WhatsApp</Label>
+                                                        <Input id="confirmWhatsappText" {...form.register('confirmWhatsappText')} />
+                                                    </div>
                                                 </div>
                                             </div>
 
                                             <div className="order-1 xl:order-2 xl:sticky xl:top-6">
-                                                <EmailPreview config={form.watch()} type="confirmation" />
+                                                <EmailPreview config={form.watch()} type="confirmation" companyDetails={companyDetails} />
                                             </div>
                                         </div>
                                     </div>
@@ -718,17 +834,67 @@ export default function EmailsSettingsPage() {
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="reminderFooterNote">Nota al pie (Recuadro)</Label>
-                                                <Input id="reminderFooterNote" {...form.register('reminderFooterNote')} />
+                                                                                                <Textarea id="reminderFooterNote" rows={3} {...form.register('reminderFooterNote')} />
+
                                             </div>
 
-                                            <div className="space-y-2">
+                                            <div className="space-y-4 pt-4 border-t border-dashed">
+                                                <div className="flex items-center justify-between">
+                                                    <Label htmlFor="enableReminderQuickActions" className="font-semibold text-primary">Acciones Rápidas (WhatsApp)</Label>
+                                                    <Controller
+                                                        name="enableReminderQuickActions"
+                                                        control={form.control}
+                                                        render={({ field }) => (
+                                                            <Switch id="enableReminderQuickActions" checked={field.value} onCheckedChange={field.onChange} />
+                                                        )}
+                                                    />
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Muestra botones interactivos para confirmar, reagendar o cancelar.</p>
+                                                
+                                                {form.watch('enableReminderQuickActions') && (
+                                                    <div className="flex flex-wrap gap-4 pt-2">
+                                                        <div className="flex items-center space-x-2">
+                                                            <Controller
+                                                                name="showReminderConfirmAction"
+                                                                control={form.control}
+                                                                render={({ field }) => (
+                                                                    <Switch id="show-reminder-confirm" checked={field.value} onCheckedChange={field.onChange} />
+                                                                )}
+                                                            />
+                                                            <Label htmlFor="show-reminder-confirm" className="text-[10px] uppercase font-bold text-muted-foreground cursor-pointer">Confirmar</Label>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <Controller
+                                                                name="showReminderRescheduleAction"
+                                                                control={form.control}
+                                                                render={({ field }) => (
+                                                                    <Switch id="show-reminder-reschedule" checked={field.value} onCheckedChange={field.onChange} />
+                                                                )}
+                                                            />
+                                                            <Label htmlFor="show-reminder-reschedule" className="text-[10px] uppercase font-bold text-muted-foreground cursor-pointer">Reagendar</Label>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <Controller
+                                                                name="showReminderCancelAction"
+                                                                control={form.control}
+                                                                render={({ field }) => (
+                                                                    <Switch id="show-reminder-cancel" checked={field.value} onCheckedChange={field.onChange} />
+                                                                )}
+                                                            />
+                                                            <Label htmlFor="show-reminder-cancel" className="text-[10px] uppercase font-bold text-muted-foreground cursor-pointer">Cancelar</Label>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-2 pt-2">
                                                 <Label htmlFor="reminderWhatsappText">Texto botón WhatsApp</Label>
                                                 <Input id="reminderWhatsappText" {...form.register('reminderWhatsappText')} />
                                             </div>
                                         </div>
 
                                         <div className="order-1 xl:order-2 xl:sticky xl:top-6">
-                                            <EmailPreview config={form.watch()} type="reminder" />
+                                            <EmailPreview config={form.watch()} type="reminder" companyDetails={companyDetails} />
                                         </div>
                                     </div>
                                 </div>
@@ -844,7 +1010,7 @@ export default function EmailsSettingsPage() {
                                         </div>
 
                                         <div className="order-1 xl:order-2 xl:sticky xl:top-6">
-                                            <EmailPreview config={form.watch()} type="professional" />
+                                            <EmailPreview config={form.watch()} type="professional" companyDetails={companyDetails} />
                                         </div>
                                     </div>
                                 </div>
@@ -956,7 +1122,7 @@ export default function EmailsSettingsPage() {
                                         </div>
 
                                         <div className="order-1 xl:order-2 xl:sticky xl:top-6">
-                                            <EmailPreview config={form.watch()} type="dailySummary" />
+                                            <EmailPreview config={form.watch()} type="dailySummary" companyDetails={companyDetails} />
                                         </div>
                                     </div>
                                 </div>

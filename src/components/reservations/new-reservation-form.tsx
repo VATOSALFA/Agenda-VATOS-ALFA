@@ -176,6 +176,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [isEditingClient, setIsEditingClient] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
   const [isProfessionalLocked, setIsProfessionalLocked] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -345,8 +346,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         b.fecha === formattedDate &&
         (b as any).type === 'available'
       );
-
-      const specialJourney = specialJourneys.find((sj: any) => 
+      const profSpecialJourneys = specialJourneys.filter((sj: any) => 
         sj.profesionalId === item.barbero_id && 
         sj.fecha === formattedDate
       );
@@ -355,7 +355,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const isRangeCovered = (start: string, end: string) => {
         if (start >= end) return true;
         const coveredByBlock = availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin >= end);
-        const coveredBySpecial = specialJourney && specialJourney.hora_inicio <= start && specialJourney.hora_fin >= end;
+        const coveredBySpecial = profSpecialJourneys.some((sj: any) => sj.hora_inicio <= start && sj.hora_fin >= end);
         return coveredByBlock || coveredBySpecial;
       };
 
@@ -376,7 +376,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (!agendaSettings?.resourceOverload) {
         if (!daySchedule || !daySchedule.enabled) {
           // If schedule is disabled, the entire reservation must be covered by a special schedule
-          if (!specialJourney && !isRangeCovered(hora_inicio, hora_fin)) {
+          if (!isRangeCovered(hora_inicio, hora_fin)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
@@ -414,7 +414,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       if (!agendaSettings?.resourceOverload) {
         // Check for breaks (ignore breaks for special journeys)
-        if (!specialJourney && daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
+        if (profSpecialJourneys.length === 0 && daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
           const breakConflict = daySchedule.breaks.some((brk: any) => {
             if (hora_inicio >= brk.end || hora_fin <= brk.start) return false; // No overlap
 
@@ -866,7 +866,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsClientModalOpen(true)}><Edit className="h-4 w-4" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}><Edit className="h-4 w-4" /></Button>
                           <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                         </div>
                       </div>
@@ -877,7 +877,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     <FormItem>
                       <div className="flex justify-between items-center">
                         <FormLabel>Cliente</FormLabel>
-                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
                           <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                         </Button>
                       </div>
@@ -1084,18 +1084,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       <Dialog open={isClientModalOpen} onOpenChange={(open) => {
         setIsClientModalOpen(open);
         if (!open) {
+          setIsEditingClient(false);
           setClientSearchTerm('');
         }
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>
+          <DialogHeader>
+            <DialogTitle>{isEditingClient && selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>
             <DialogDescription>
-              Completa la información para registrar un nuevo cliente en el sistema.
+              {isEditingClient && selectedClient ? 'Completa la información para actualizar al cliente en el sistema.' : 'Completa la información para registrar un nuevo cliente en el sistema.'}
             </DialogDescription>
           </DialogHeader>
           {isClientModalOpen && (
-            <NewClientForm onFormSubmit={handleClientCreated} client={selectedClient} initialName={clientSearchTerm} />
+            <NewClientForm onFormSubmit={(clientId) => { handleClientCreated(clientId); setIsEditingClient(false); }} client={isEditingClient ? selectedClient : null} initialName="" />
           )}
         </DialogContent>
       </Dialog>

@@ -119,6 +119,8 @@ service cloud.firestore {
     
     // Work Sessions (Nómina)
     match /sesiones_trabajo/{document=**} { allow read, write: if isAuthenticated(); }
+    match /pagos_nomina/{document=**} { allow read, write: if isAuthenticated(); }
+
 
     // DENY ALL OTHERS BY DEFAULT
     // No catch-all rule here.

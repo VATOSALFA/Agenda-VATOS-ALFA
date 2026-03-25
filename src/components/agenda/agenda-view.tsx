@@ -813,14 +813,41 @@ export default function AgendaView() {
   const getDaySchedule = (barber: Profesional): ScheduleDay | null => {
     if (!date) return null;
 
-    // Check for Special Journey (override)
-    const sj = specialJourneys.find((s: any) => s.profesionalId === barber.id && s.fecha === format(date, 'yyyy-MM-dd'));
-    if (sj) {
+    const dateStr = format(date, 'yyyy-MM-dd');
+
+    // Check for Special Journeys (there may be multiple on the same day)
+    const barberJourneys = specialJourneys.filter(
+      (s: any) => s.profesionalId === barber.id && s.fecha === dateStr
+    );
+
+    if (barberJourneys.length > 0) {
+      // Sort journeys by start time
+      const sorted = [...barberJourneys].sort((a: any, b: any) =>
+        a.hora_inicio.localeCompare(b.hora_inicio)
+      );
+
+      // Merge: overall start is the earliest, overall end is the latest
+      const overallStart = sorted[0].hora_inicio;
+      const overallEnd = sorted.reduce(
+        (latest: string, j: any) => (j.hora_fin > latest ? j.hora_fin : latest),
+        sorted[0].hora_fin
+      );
+
+      // Build break segments for gaps between consecutive journeys
+      const breaks: { start: string; end: string }[] = [];
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const currentEnd = sorted[i].hora_fin;
+        const nextStart = sorted[i + 1].hora_inicio;
+        if (currentEnd < nextStart) {
+          breaks.push({ start: currentEnd, end: nextStart });
+        }
+      }
+
       return {
         enabled: true,
-        start: sj.hora_inicio,
-        end: sj.hora_fin,
-        breaks: []
+        start: overallStart,
+        end: overallEnd,
+        breaks,
       };
     }
 
@@ -1316,10 +1343,13 @@ export default function AgendaView() {
                                   "absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 overflow-hidden cursor-pointer select-none",
                                   event.color,
                                   event.type === 'appointment' ? 'z-20' : 'z-10',
-                                  (event.type === 'appointment' && (
-                                    (whatsappConfirmationAnimation && !event.whatsappConfirmationSent) || 
-                                    (whatsappReminderAnimation && !event.whatsappReminderSent)
-                                  )) && "animate-pending-notification"
+                                  (event.type === 'appointment' &&
+                                    event.pago_estado !== 'Pagado' &&
+                                    event.estado !== 'No asiste' &&
+                                    event.estado !== 'En espera' && (
+                                      (whatsappConfirmationAnimation && !event.whatsappConfirmationSent) ||
+                                      (whatsappReminderAnimation && !event.whatsappReminderSent)
+                                    )) && "animate-pending-notification"
                                 )}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >

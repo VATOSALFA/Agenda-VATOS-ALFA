@@ -431,6 +431,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [clientSearchTerm, setClientSearchTerm] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [isEditingClient, setIsEditingClient] = useState<boolean>(false);
     const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
     const [clientQueryKey, setClientQueryKey] = useState(0);
     const [reservationId, setReservationId] = useState<string | undefined>(undefined);
@@ -546,10 +547,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     // Sync form with local state if needed (though we handle it in onChange)
     useEffect(() => {
         const formClient = form.getValues('cliente_id');
-        if (formClient && formClient !== selectedClientId) {
-            setSelectedClientId(formClient);
+        if (formClient !== selectedClientId) {
+            setSelectedClientId(formClient || '');
+            if (!formClient) setRedeemPoints(false); // Reset points redemption if client cleared
         }
-    }, [form.watch('cliente_id')]);
+    }, [form.watch('cliente_id'), selectedClientId]);
 
     useEffect(() => {
         if (mainTerminalId && terminals?.some(t => t.id === mainTerminalId)) {
@@ -1594,7 +1596,33 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
                                                             </div>
                                                         </div>
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors"
+                                                                onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
+                                                                title="Editar cliente"
+                                                            >
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    form.setValue('cliente_id', '');
+                                                                    setSelectedClientId('');
+                                                                    setRedeemPoints(false);
+                                                                }}
+                                                                title="Eliminar cliente"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                 </CardContent>
                                             </Card>
@@ -1603,7 +1631,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <FormItem>
                                                     <div className="flex justify-between items-center">
                                                         <FormLabel>Cliente *</FormLabel>
-                                                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
                                                             <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                                                         </Button>
                                                     </div>
@@ -1744,6 +1772,33 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 </p>
                                                             </div>
                                                         </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors"
+                                                                onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
+                                                                title="Editar cliente"
+                                                            >
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    form.setValue('cliente_id', '');
+                                                                    setSelectedClientId('');
+                                                                    setRedeemPoints(false);
+                                                                    setStep(1);
+                                                                }}
+                                                                title="Cambiar cliente"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
 
                                                     </div>
                                                 </CardContent>
@@ -1753,7 +1808,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <FormItem>
                                                     <div className="flex justify-between items-center">
                                                         <FormLabel>Cliente</FormLabel>
-                                                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setIsClientModalOpen(true)}>
+                                                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
                                                             <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
                                                         </Button>
                                                     </div>
@@ -2119,13 +2174,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
                 <DialogContent className="sm:max-w-lg" hideCloseButton>
                     <DialogHeader>
-                        <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+                        <DialogTitle>{isEditingClient && selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>
                         <DialogDescription>
-                            Completa la información para registrar un nuevo cliente en el sistema.
+                            {isEditingClient && selectedClient
+                                ? 'Completa la información para actualizar al cliente en el sistema.'
+                                : 'Completa la información para registrar un nuevo cliente en el sistema.'
+                            }
                         </DialogDescription>
                     </DialogHeader>
                     {isClientModalOpen && (
-                        <NewClientForm onFormSubmit={handleClientCreated} onCancel={() => setIsClientModalOpen(false)} initialName={clientSearchTerm} />
+                        <NewClientForm
+                            onFormSubmit={(clientId: string) => {
+                                handleClientCreated(clientId);
+                                setIsEditingClient(false);
+                            }}
+                            onCancel={() => { setIsClientModalOpen(false); setIsEditingClient(false); }}
+                            initialName=""
+                            client={isEditingClient ? selectedClient : null}
+                        />
                     )}
                 </DialogContent>
             </Dialog>

@@ -586,6 +586,11 @@ exports.checkAutomatedMessages = onSchedule({
   const client = twilio(accountSid, authToken);
   const fromNumber = `whatsapp:${fromNumberRaw.startsWith('+') ? fromNumberRaw : `+${fromNumberRaw}`}`;
 
+  // -- Load Website Configuration for Emails --
+  const websiteDoc = await db.collection('settings').doc('website').get();
+  const websiteSettings = websiteDoc.exists ? websiteDoc.data() : {};
+  const resend = new Resend(resendApiKey.value());
+
   /* 
    * Initializing Resend for future email usage
    * const resend = new Resend(resendApiKey.value()); 
@@ -707,6 +712,86 @@ exports.checkAutomatedMessages = onSchedule({
               });
               if (sent) {
                 await doc.ref.update({ reminderSent: true });
+              }
+
+              // --- EMAIL REMINDER ---
+              const reminderConfig = websiteSettings.reminderEmailConfig || {};
+              if (clientData.email && websiteSettings.enableReminderEmail !== false) {
+                  try {
+                      const emailConfigDoc = await db.collection('configuracion').doc('emails').get();
+                      const emailConfig = emailConfigDoc.exists ? emailConfigDoc.data() : {};
+                      const sender = (emailConfig.senders || []).find(s => s.isPrimary && s.confirmed) || { email: 'contacto@vatosalfa.com' };
+                      const fromEmail = `Agenda VATOS ALFA <${sender.email}>`;
+
+                      const headline = (websiteSettings.reminderHeadline || '¡{nombre}, recordatorio de tu cita!').replace('{nombre}', clientData.nombre || '');
+                      const subHeadline = websiteSettings.reminderSubHeadline || 'Reserva Agendada';
+                      const footerNote = (websiteSettings.reminderFooterNote || 'Te esperamos 5 minutos antes de tu cita.').replace(/\n/g, '<br/>');
+                      
+                      const dateParts = res.fecha.split('-');
+                      const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                      const dateFormatted = dateObj.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                      
+                      const quickActions = websiteSettings.reminderQuickActionsConfig || {};
+                      const isQuickActionsEnabled = quickActions.enabled === true;
+                      
+                      // Generate or reuse action token for direct actions
+                      let actionToken = res.actionToken;
+                      if (!actionToken) {
+                          actionToken = crypto.randomUUID();
+                          await doc.ref.update({ actionToken });
+                      }
+                      
+                      // Direct action links (Confirm/Cancel update the agenda directly)
+                      const appBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://vatosalfa.com';
+                      const actionApiUrl = `${appBaseUrl}/api/cita/action`;
+                      const confirmLink = `${actionApiUrl}?token=${actionToken}&action=confirm`;
+                      const cancelLink = `${actionApiUrl}?token=${actionToken}&action=cancel`;
+                      // Reagendar still uses WhatsApp (requires human interaction)
+                      const waPhone = (process.env.NEXT_PUBLIC_BUSINESS_PHONE || '').replace(/\D/g, '');
+                      const rescheduleLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(`¡Hola! Requiero reagendar mi cita del ${dateFormatted} a las ${res.hora_inicio}.`)}`;
+
+                      const html = `
+                        <div style="font-family: Arial, sans-serif; color: #333; max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #eee;">
+                            <div style="background-color: #ffffff; padding: 25px 20px 10px 20px; text-align: center;">
+                                <img src="https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.appspot.com/o/empresa%2Flogo.png?alt=media" alt="VATOS ALFA" style="width: 100%; max-width: 250px; height: auto;" />
+                            </div>
+                            <div style="padding: 25px;">
+                                <h2 style="color: #333; text-align: center; margin-top: 5px; margin-bottom: 5px; font-weight: 700; font-size: 22px;">${headline}</h2>
+                                <p style="text-align: center; color: #999; font-size: 14px; margin-bottom: 25px;">${subHeadline}</p>
+                                
+                                <div style="margin-bottom: 20px; text-align: center; font-weight: bold; font-size: 18px;">${res.servicio || 'Servicio'}</div>
+
+                                <div style="margin-bottom: 15px; color: #555;">📅 ${dateFormatted}</div>
+                                <div style="margin-bottom: 25px; color: #555;">⏰ ${res.hora_inicio}</div>
+
+                                <div style="background-color: #f9f9f9; color: #333; padding: 15px; border-radius: 8px; font-size: 14px; margin-top: 20px; text-align: center; border: 1px solid #ddd;">
+                                    ${footerNote}
+                                </div>
+
+                                ${isQuickActionsEnabled ? `
+                                <div style="margin-top: 25px; text-align: center;">
+                                    <div style="display: block; width: 100%;">
+                                        ${quickActions.showConfirm ? `
+                                        <a href="${confirmLink}" style="display: inline-block; background-color: #22c55e; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-size: 11px; font-weight: bold; margin: 5px;">CONFIRMAR</a>` : ''}
+                                        ${quickActions.showReschedule ? `
+                                        <a href="${rescheduleLink}" style="display: inline-block; background-color: #314177; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-size: 11px; font-weight: bold; margin: 5px;">REAGENDAR</a>` : ''}
+                                        ${quickActions.showCancel ? `
+                                        <a href="${cancelLink}" style="display: inline-block; background-color: #ef4444; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-size: 11px; font-weight: bold; margin: 5px;">CANCELAR</a>` : ''}
+                                    </div>
+                                </div>` : ''}
+                            </div>
+                        </div>`;
+
+                      await resend.emails.send({
+                          from: fromEmail,
+                          to: clientData.email,
+                          subject: (websiteSettings.reminderSubject || 'Recordatorio de Cita').replace('{cliente}', clientData.nombre || ''),
+                          html: html
+                      });
+                      console.log(`Reminder email sent to ${clientData.email}`);
+                  } catch (emailError) {
+                      console.error(`Failed to send reminder email to ${clientData.email}:`, emailError);
+                  }
               }
             }
           }

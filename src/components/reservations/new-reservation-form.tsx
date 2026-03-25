@@ -1090,7 +1090,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-          <DialogHeader>
             <DialogTitle>{isEditingClient && selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>
             <DialogDescription>
               {isEditingClient && selectedClient ? 'Completa la información para actualizar al cliente en el sistema.' : 'Completa la información para registrar un nuevo cliente en el sistema.'}

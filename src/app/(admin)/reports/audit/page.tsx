@@ -12,7 +12,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Search, ShieldAlert, ShieldCheck, Info, Loader2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, ShieldAlert, ShieldCheck, Info, Loader2, Download, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
 import { AuditLogEntry } from '@/lib/audit-logger';
@@ -29,6 +29,7 @@ export default function AuditPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
 
     const { data: logs, loading: logsLoading } = useFirestoreQuery<AuditLogEntry & { id: string }>('audit_logs');
     const { data: usersData, loading: usersLoading } = useFirestoreQuery<any>('usuarios');
@@ -80,8 +81,59 @@ export default function AuditPage() {
             );
         }
 
+        // 5. Apply Sorting
+        filtered.sort((a, b) => {
+            const { key, direction } = sortConfig;
+            const dir = direction === 'asc' ? 1 : -1;
+
+            if (key === 'fecha') {
+                const dateA = a.timestamp?.seconds || 0;
+                const dateB = b.timestamp?.seconds || 0;
+                return (dateA - dateB) * dir;
+            }
+
+            let valA = '';
+            let valB = '';
+
+            if (key === 'usuario') {
+                valA = a.userName.toLowerCase();
+                valB = b.userName.toLowerCase();
+            } else if (key === 'rol') {
+                valA = (a.userRole || userRolesMap.get(a.userId) || '').toLowerCase();
+                valB = (b.userRole || userRolesMap.get(b.userId) || '').toLowerCase();
+            } else if (key === 'accion') {
+                valA = a.action.toLowerCase();
+                valB = b.action.toLowerCase();
+            } else if (key === 'detalles') {
+                valA = a.details.toLowerCase();
+                valB = b.details.toLowerCase();
+            }
+
+            return valA.localeCompare(valB) * dir;
+        });
+
         return filtered;
-    }, [logs, dateRange, severityFilter, searchTerm]);
+    }, [logs, dateRange, severityFilter, searchTerm, sortConfig, userRolesMap]);
+
+    const handleSort = (key: string) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const SortableHeader = ({ label, sortKey, className }: { label: string; sortKey: string; className?: string }) => (
+        <TableHead className={cn(className)}>
+            <Button
+                variant="ghost"
+                className="h-auto p-0 font-bold hover:bg-transparent flex items-center gap-1"
+                onClick={() => handleSort(sortKey)}
+            >
+                {label}
+                <ArrowUpDown className={cn("h-3 w-3", sortConfig.key === sortKey ? "text-primary" : "text-muted-foreground/30")} />
+            </Button>
+        </TableHead>
+    );
 
     useEffect(() => {
         setCurrentPage(1);
@@ -205,11 +257,11 @@ export default function AuditPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[180px]">Fecha</TableHead>
-                                <TableHead className="w-[150px]">Usuario</TableHead>
-                                <TableHead className="w-[150px]">Rol</TableHead>
-                                <TableHead className="w-[250px]">Acción/Código</TableHead>
-                                <TableHead>Detalles</TableHead>
+                                <SortableHeader label="Fecha" sortKey="fecha" className="w-[180px]" />
+                                <SortableHeader label="Usuario" sortKey="usuario" className="w-[150px]" />
+                                <SortableHeader label="Rol" sortKey="rol" className="w-[150px]" />
+                                <SortableHeader label="Acción/Código" sortKey="accion" className="w-[250px]" />
+                                <SortableHeader label="Detalles" sortKey="detalles" />
                             </TableRow>
                         </TableHeader>
                         <TableBody>

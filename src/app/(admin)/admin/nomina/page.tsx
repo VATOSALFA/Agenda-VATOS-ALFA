@@ -93,6 +93,8 @@ export default function NominaPage() {
     const [tarifaHora, setTarifaHora] = useState(35.5);
     const [loading, setLoading] = useState(true);
     const [sessions, setSessions] = useState<WorkSession[]>([]);
+    const [manualHours, setManualHours] = useState<Record<string, number>>({}); // Manual adjustment for each employee
+    const [roundHours, setRoundHours] = useState(true); // Default to true as per user interest
 
     // Payment modal state
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -225,13 +227,51 @@ export default function NominaPage() {
             }
         });
 
-        return Object.entries(grouped).map(([id, data]) => ({
-            id,
-            ...data,
-            totalHoras: data.totalMinutos / 60,
-            totalPagar: (data.totalMinutos / 60) * tarifaHora
-        })).filter(u => u.roles.includes('Recepcionista') || u.roles.includes('Administrador local'));
-    }, [sessions, tarifaHora]);
+        return Object.entries(grouped).map(([id, data]) => {
+            const calculatedHorasReal = data.totalMinutos / 60;
+            
+            // Rounding logic: 
+            // 0-19m -> 0
+            // 20-49m -> 30m (0.5)
+            // 50-59m -> 60m (1.0)
+            let calculatedHoras = calculatedHorasReal;
+            if (roundHours) {
+                const hoursOnly = Math.floor(data.totalMinutos / 60);
+                const minsOnly = data.totalMinutos % 60;
+                let adjustedMins = 0;
+                if (minsOnly >= 20 && minsOnly < 50) adjustedMins = 30;
+                else if (minsOnly >= 50) adjustedMins = 60;
+                calculatedHoras = hoursOnly + (adjustedMins / 60);
+            }
+
+            // Use manual hours if provided, otherwise use calculated
+            const activeHoras = manualHours[id] !== undefined ? manualHours[id] : calculatedHoras;
+
+            return {
+                id,
+                ...data,
+                totalHorasCalculadas: calculatedHoras,
+                totalHorasReal: calculatedHorasReal,
+                totalHoras: activeHoras,
+                totalPagar: activeHoras * tarifaHora,
+                isManual: manualHours[id] !== undefined
+            };
+        }).filter(u => u.roles.includes('Recepcionista'));
+    }, [sessions, tarifaHora, manualHours, roundHours]);
+
+    // Handle manual hour change
+    const handleManualHoursChange = (employeeId: string, hours: string) => {
+        const value = hours === '' ? undefined : parseFloat(hours);
+        setManualHours(prev => {
+            const newManual = { ...prev };
+            if (value === undefined) {
+                delete newManual[employeeId];
+            } else {
+                newManual[employeeId] = value;
+            }
+            return newManual;
+        });
+    };
 
     // Open payment modal for a single employee
     const handleOpenPayment = (employee: typeof groupedData[0]) => {
@@ -304,6 +344,11 @@ export default function NominaPage() {
             });
 
             setIsPaymentModalOpen(false);
+            setManualHours(prev => {
+                const updated = { ...prev };
+                delete updated[payingEmployee.id];
+                return updated;
+            });
             setPayingEmployee(null);
             setSelectedPayerId('');
             setQueryKey(prev => prev + 1);
@@ -436,15 +481,27 @@ export default function NominaPage() {
                         />
                     </div>
                     {sessions.length > 0 && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIsResetModalOpen(true)}
-                            className="text-muted-foreground"
-                        >
-                            <RotateCcw className="mr-2 h-4 w-4" />
-                            Reiniciar contador
-                        </Button>
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-background shadow-sm">
+                                <Label htmlFor="round-toggle" className="text-xs font-medium cursor-pointer">Redondeo 30m</Label>
+                                <input
+                                    id="round-toggle"
+                                    type="checkbox"
+                                    className="accent-primary h-4 w-4 cursor-pointer"
+                                    checked={roundHours}
+                                    onChange={(e) => setRoundHours(e.target.checked)}
+                                />
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsResetModalOpen(true)}
+                                className="text-muted-foreground"
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Reiniciar contador
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>
@@ -525,12 +582,47 @@ export default function NominaPage() {
                                                 <TableCell>{employee.roles.join(', ')}</TableCell>
                                                 <TableCell>{getLocalName(employee.local_id)}</TableCell>
                                                 <TableCell className="text-right">
-                                                    {employee.totalHoras.toFixed(2)} hrs
-                                                    {employee.unpaidSessions > 0 && (
-                                                        <span className="text-xs text-muted-foreground block">
-                                                            ({employee.unpaidSessions} sesiones)
-                                                        </span>
-                                                    )}
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <div className="flex items-center gap-1">
+                                                            <Input
+                                                                type="number"
+                                                                className={cn(
+                                                                    "w-20 h-8 text-right px-2 font-medium",
+                                                                    employee.isManual && "border-primary bg-primary/5"
+                                                                )}
+                                                                value={employee.totalHoras.toString()}
+                                                                onChange={(e) => handleManualHoursChange(employee.id, e.target.value)}
+                                                                onBlur={(e) => {
+                                                                    // If input is empty or invalid on blur, reset to calculated
+                                                                    if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                                                                        handleManualHoursChange(employee.id, '');
+                                                                    }
+                                                                }}
+                                                                step="0.01"
+                                                            />
+                                                            <span className="text-xs font-normal text-muted-foreground mr-1">hrs</span>
+                                                        </div>
+                                                        {employee.isManual && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-auto p-0 text-[10px] text-primary hover:bg-transparent"
+                                                                onClick={() => handleManualHoursChange(employee.id, '')}
+                                                            >
+                                                                Restaurar ({employee.totalHorasCalculadas.toFixed(2)})
+                                                            </Button>
+                                                        )}
+                                                        {!employee.isManual && roundHours && (
+                                                            <span className="text-[10px] text-primary/70">
+                                                                Real: {employee.totalHorasReal.toFixed(2)} hrs
+                                                            </span>
+                                                        )}
+                                                        {employee.unpaidSessions > 0 && (
+                                                            <span className="text-[10px] text-muted-foreground italic">
+                                                                Basado en {employee.unpaidSessions} sesiones
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="text-right font-semibold">
                                                     ${employee.totalPagar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

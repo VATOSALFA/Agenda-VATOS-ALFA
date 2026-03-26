@@ -72,8 +72,9 @@ const statusOptions = [
   { status: 'Confirmado', color: 'bg-yellow-500', label: 'Confirmado' },
   { status: 'Asiste', color: 'bg-pink-500', label: 'Asiste' },
   { status: 'No asiste', color: 'bg-orange-500', label: 'No Asistió' },
-  { status: 'Pendiente', color: 'bg-red-500', label: 'Pendiente' },
+  { status: 'Pendiente', color: 'bg-red-500', label: 'Pendiente de Pago' },
   { status: 'En espera', color: 'bg-green-500', label: 'En Espera' },
+  { status: 'Cancelado', color: 'bg-gray-400', label: 'Cancelado' },
 ];
 
 export function ReservationDetailModal({
@@ -392,11 +393,13 @@ export function ReservationDetailModal({
               <Badge variant={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid' ? 'default' : 'secondary'} className={cn(
                 reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' :
                   reservation.pago_estado === 'deposit_paid' ? 'bg-orange-100 text-orange-800' :
-                    'bg-yellow-100 text-yellow-800'
+                    reservation.estado === 'Cancelado' ? 'bg-gray-100 text-gray-800' :
+                      'bg-yellow-100 text-yellow-800'
               )}>
-                {reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' :
-                  reservation.pago_estado === 'deposit_paid' ? 'Anticipo Pagado' :
-                    reservation.pago_estado}
+                {reservation.estado === 'Cancelado' ? 'Reserva Cancelada' :
+                  reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' :
+                    reservation.pago_estado === 'deposit_paid' ? 'Anticipo Pagado' :
+                      reservation.pago_estado}
               </Badge>
             </div>
 
@@ -489,10 +492,16 @@ export function ReservationDetailModal({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        onClick={() => onUpdateStatus(reservation.id, status)}
+                        onClick={() => {
+                          if (status === 'Cancelado') {
+                            handleCancelClick();
+                          } else {
+                            onUpdateStatus(reservation.id, status);
+                          }
+                        }}
                         className={cn(
-                          'h-8 w-8 rounded-full border-2 transition-all',
-                          reservation.estado === status ? 'border-primary scale-110' : 'border-transparent opacity-50 hover:opacity-100',
+                          'h-6 w-6 rounded-full border-2 transition-all',
+                          reservation.estado === status ? 'border-primary ring-2 ring-primary ring-offset-2 scale-110' : 'border-transparent opacity-50 hover:opacity-100',
                           color
                         )}
                       />

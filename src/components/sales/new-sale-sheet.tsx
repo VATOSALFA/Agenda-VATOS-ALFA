@@ -906,6 +906,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     if (newStock < 0) throw new Error(`Stock insuficiente para ${itemInfo.nombre}. Requerido: ${qtyNeeded}, Disponible: ${currentStock}`);
 
                     transaction.update(ref, { stock: newStock });
+
+                    // Log movement
+                    const movementRef = doc(collection(db, 'movimientos_inventario'));
+                    const clientFullName = selectedClient ? `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim() : 'Cliente';
+                    const selectedLocal = locales.find(l => l.id === formData.local_id);
+
+                    transaction.set(movementRef, {
+                        date: Timestamp.now(),
+                        local_id: formData.local_id,
+                        product_id: ref.id,
+                        presentation_id: (productData as any).presentation_id || 'default',
+                        from: currentStock,
+                        to: newStock,
+                        cause: 'Venta',
+                        staff_id: user?.uid || 'unknown',
+                        comment: `Venta (Terminal) a ${clientFullName}`,
+                        product_name: productData.nombre,
+                        staff_name: user?.displayName || user?.email || 'Desconocido',
+                        local_name: selectedLocal?.name || 'Local',
+                        concepto: `Registrar venta: ${clientFullName}`
+                    });
                 }
 
                 // B. Preparar items
@@ -933,8 +954,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         commissionPaid: item.commissionPaid
                     };
                 });
-
-                const formData = form.getValues();
 
                 // C. Objeto de Venta
                 const saleDataToSave: any = {
@@ -1129,10 +1148,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         const productRef = doc(db, 'productos', item.id);
                         const productDoc = await transaction.get(productRef);
                         if (productDoc.exists()) {
-                            const currentStock = productDoc.data().stock || 0;
-                            // Aseguramos que es número
+                            const productData = productDoc.data() as Product;
+                            const currentStock = productData.stock || 0;
                             const qtyToRestore = Number(item.cantidad) || 0;
-                            transaction.update(productRef, { stock: currentStock + qtyToRestore });
+                            const newStock = currentStock + qtyToRestore;
+                            transaction.update(productRef, { stock: newStock });
+
+                            // Log movement for cancellation
+                            const movementRef = doc(collection(db, 'movimientos_inventario'));
+                            const selectedLocal = locales.find(l => l.id === saleData.local_id);
+                            const clientName = (saleData as any).cliente_id ? (clients.find(c => c.id === saleData.cliente_id)?.nombre || 'Cliente') : 'Cliente';
+
+                            transaction.set(movementRef, {
+                                date: Timestamp.now(),
+                                local_id: saleData.local_id,
+                                product_id: productRef.id,
+                                presentation_id: (productData as any).presentation_id || 'default',
+                                from: currentStock,
+                                to: newStock,
+                                cause: 'Cancelación de venta',
+                                staff_id: 'system',
+                                comment: `Venta cancelada/revertida`,
+                                product_name: productData.nombre,
+                                staff_name: 'Sistema',
+                                local_name: selectedLocal?.name || 'Local',
+                                concepto: `Cancelación de venta: ${clientName}`
+                            });
                         }
                     }
                 }
